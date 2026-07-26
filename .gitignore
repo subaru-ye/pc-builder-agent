@@ -4,6 +4,17 @@ docs/ai-agent-book/
 # 环境与密钥
 .env
 
+# Go 构建产物(go.sum 必须入库,勿加)
+bin/
+*.exe
+*.test
+*.out
+
+# Python(P1 起 scripts/ 使用)
+.venv/
+__pycache__/
+*.pyc
+
 # OS
 .DS_Store
 Thumbs.db

@@ -1,0 +1,44 @@
+# P0 本地基础设施:PG16+pgvector / Redis7(mvp.md §4.2)
+#
+# 裁定记录(2026-07-26,文档未写死、实施时裁定):
+# - 宿主端口用 15432/16379:本机原生 PostgreSQL 17 与 Redis 服务开机自启,
+#   常驻占用 5432/6379,故不用默认端口;容器内端口不变。
+# - 账号/密码/库名统一 pcbuilder,仅本地开发用。
+# - db/init 下的 SQL 仅在数据卷**首次初始化**时执行;改动 init SQL 后需
+#   `docker compose down -v` 销毁卷再 up 才会重跑(P0 无数据,销毁无代价)。
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: pcbuilder-pg
+    environment:
+      POSTGRES_USER: pcbuilder
+      POSTGRES_PASSWORD: pcbuilder
+      POSTGRES_DB: pcbuilder
+    ports:
+      - "15432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pcbuilder -d pcbuilder"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7
+    container_name: pcbuilder-redis
+    ports:
+      - "16379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
+  redisdata:

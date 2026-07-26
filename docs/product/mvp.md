@@ -155,7 +155,7 @@
 
 ### 4.1 依赖清单
 
-- **服务端(Go 1.24+)**:google.golang.org/adk(ADK-Go)、a2a-go、pgx + pgvector-go、go-redis;测试用标准库 testing(golden set 由 `go test` 驱动)。
+- **服务端(Go 1.26+)**:google.golang.org/adk(ADK-Go)、a2a-go、pgx + pgvector-go、go-redis;测试用标准库 testing(golden set 由 `go test` 驱动)。
 - **数据管道(Python 3.12+,一次性脚本)**:uv、dbgpu、pandas、openai SDK(调百炼兼容端点生成 embedding)。
 
 **版本以实现当日官方文档为准,首装跑通后回填 [技术选型](../tech/技术选型.md) 的版本锁定表**;本文不写死任何 import 路径或 API 签名(ADK-Go/a2a-go 迭代快)。选型依据见技术选型 ADR-001~005。

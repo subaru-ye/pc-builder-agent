@@ -2,7 +2,7 @@
 
 > 对话式 DIY 装机助手:说清预算和用途,得到**保证兼容**、**带日期化报价**、**可多轮修改**的装机配置单。
 >
-> 个人学习向项目,目标技术栈:多 Agent 流水线 + A2A 协议 + 记忆基座。当前状态:文档设计已完成,MVP 开发中(P0 环境搭建)。
+> 个人学习向项目,目标技术栈:多 Agent 流水线 + A2A 协议 + 记忆基座。当前状态:MVP 开发中(P1 数据底座与规则引擎)。
 
 ## 为什么做
 
@@ -57,12 +57,23 @@
 
 ## 快速启动
 
-> 🚧 MVP P0 完成后回填(预期:`docker compose up -d` 拉起 PG+Redis,`go run ./cmd/host` 启动服务并打开 dev UI)。
+前置:Go 1.26+、Docker Desktop(WSL2 后端)、阿里百炼 API key。
+
+```bash
+docker compose up -d        # PG → localhost:15432,Redis → localhost:16379(非默认端口,避让本机原生服务)
+```
+
+复制 `.env.example` 为 `.env`,填入 `DASHSCOPE_API_KEY`;若创建 key 时控制台显示了工作空间专属「OpenAI 兼容地址」,一并填入 `DASHSCOPE_BASE_URL`。
+
+```bash
+go run ./cmd/host                # console 模式,快速验证模型连通
+go run ./cmd/host web api webui  # Web UI(三个子命令缺一不可):http://localhost:8080
+```
 
 ## MVP 进度
 
 - [x] 产品调研 / 设计方案 / PRD / MVP 计划 / 技术选型
-- [ ] P0 环境与骨架
+- [x] P0 环境与骨架
 - [ ] P1 数据底座与规则引擎
 - [ ] P2 单进程三 Agent 流水线
 - [ ] P3 pgvector 语义选件
@@ -78,4 +89,4 @@
 
 ## License
 
-[MIT](LICENSE)(建仓时请替换 LICENSE 中的版权人占位)
+[MIT](LICENSE)

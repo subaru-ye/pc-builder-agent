@@ -24,6 +24,7 @@ import (
 
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
 	"github.com/subaru-ye/pc-builder-agent/internal/dotenv"
+	"github.com/subaru-ye/pc-builder-agent/internal/redisstore"
 )
 
 // 模型分档(ADR-004:型号只写代码常量):初筛低价档留在 host;生成旗舰档迁 cmd/buildsvc。
@@ -86,9 +87,17 @@ func main() {
 		log.Fatalf("装配 host 流水线失败: %v", err)
 	}
 
+	// P6:会话热上下文迁 Redis(带 TTL、两进程共享),让 kill host 重启后同一会话可续;
+	// 无 REDIS_ADDR 时降级回退进程内 InMemory(见 redisstore.Open)。
+	backend := redisstore.Open(ctx)
+	defer func() { _ = backend.Close() }()
+
 	log.Printf("[host] 已接线 A2A 远程服务:%s", buildsvcURL)
 	l := full.NewLauncher()
-	config := &launcher.Config{AgentLoader: agent.NewSingleLoader(root)}
+	config := &launcher.Config{
+		AgentLoader:    agent.NewSingleLoader(root),
+		SessionService: backend.SessionService(),
+	}
 	if err := l.Execute(ctx, config, os.Args[1:]); err != nil {
 		log.Fatalf("运行失败: %v\n\n%s", err, l.CommandLineSyntax())
 	}

@@ -21,11 +21,11 @@ import (
 
 	"google.golang.org/adk/v2/model/openaimodel"
 	"google.golang.org/adk/v2/runner"
-	"google.golang.org/adk/v2/session"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
 	"github.com/subaru-ye/pc-builder-agent/internal/dotenv"
 	"github.com/subaru-ye/pc-builder-agent/internal/embedding"
+	"github.com/subaru-ye/pc-builder-agent/internal/redisstore"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
@@ -75,8 +75,15 @@ func main() {
 		log.Fatalf("创建生成模型失败: %v", err)
 	}
 
-	// P3 语义检索的查询向量化客户端(与 cmd/embedparts 同模型/同维度)。
-	embedder := embedding.NewClient(baseURL, apiKey, embedding.DefaultModel, store.EmbeddingDims)
+	// P6:会话热上下文 + embedding 缓存统一过 Redis(无 REDIS_ADDR 时降级,见 redisstore.Open)。
+	backend := redisstore.Open(ctx)
+	defer func() { _ = backend.Close() }()
+
+	// P3 语义检索的查询向量化客户端(与 cmd/embedparts 同模型/同维度),外包一层 Redis 缓存。
+	embedder := backend.WrapEmbedder(
+		embedding.NewClient(baseURL, apiKey, embedding.DefaultModel, store.EmbeddingDims),
+		embedding.DefaultModel,
+	)
 
 	root, err := pipeline.NewRemote(pipeline.Config{
 		BuilderModel:  builderModel,
@@ -107,13 +114,13 @@ func main() {
 		Capabilities:       a2a.AgentCapabilities{Streaming: true},
 	}
 
-	// A2A 执行器:把根 agent 包成远程执行器。会话按 contextID 映射到进程内
-	// InMemoryService,让 build_state 跨轮持久(P6 再迁 Redis)。
+	// A2A 执行器:把根 agent 包成远程执行器。会话按 contextID 映射到 Redis 会话服务
+	// (与 host 共享同一 Redis),让 build_state 跨轮持久、kill host 重启后能按同一 contextID 续上。
 	executor := adka2a.NewExecutor(adka2a.ExecutorConfig{
 		RunnerConfig: runner.Config{
 			AppName:        root.Name(),
 			Agent:          root,
-			SessionService: session.InMemoryService(),
+			SessionService: backend.SessionService(),
 		},
 	})
 

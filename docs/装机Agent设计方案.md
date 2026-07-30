@@ -89,33 +89,142 @@
 }
 ```
 
+### 四.1 P1 校验契约(2026-07-28 冻结)
+
+P1 闭环:`手写 BuildSelection JSON → PostgreSQL 解析零件真值 → ResolvedBuild → 12 条纯 Go 规则 → ValidationReport`。本节是 P1 契约的唯一出处,由 `internal/schemas` 实现;字段变更先改本节再改代码。
+
+```jsonc
+// BuildSelection —— P1 CLI 输入(P2 起由生成 Agent 产出,取代上文 BuildDraft 的 parts 口径)
+{
+  "schema_version": 1,
+  "build_ref": "build_demo_001",
+  "parts": {
+    "cpu": "amd-ryzen5-7500f",
+    "motherboard": "msi-b650m-mortar-wifi",
+    "memory": "kingston-fury-beast-ddr5-6000-16gx2",
+    "ssd": [{"sku": "samsung-990pro-1tb", "quantity": 1}],   // 数组,quantity 必须为正整数
+    "gpu": "asus-dual-rtx4070s",                              // 必须显式给 SKU 或 null(核显点亮)
+    "psu": "seasonic-focus-gx-750",
+    "case": "fractal-north",
+    "cooler": "thermalright-pa120-se"
+  }
+}
+```
+
+- 除 `gpu` 外其余七类为必选部件,缺失属于 **schema error**(解码即失败),不进入规则层;只有零件内部字段缺失才产生 `unknown`。
+- 严格 JSON 解码:未知字段、非法枚举、非正数量均为输入错误。
+
+**ResolvedBuild**:store 层按 SKU 从 PostgreSQL 展开的规格真值,是规则引擎的唯一输入。Canonical 字段字典:
+
+| 品类 | 字段 | 类型 / 单位 |
+|---|---|---|
+| cpu | `socket` | string? |
+| cpu | `supported_chipsets` | string[]?(集合) |
+| cpu | `has_igpu` | bool? |
+| cpu | `tdp_w` | int?(W) |
+| gpu | `length_mm` | int?(mm) |
+| gpu | `tdp_w` | int?(W) |
+| gpu | `power_connectors` | connector[]?(集合,multiset) |
+| motherboard | `socket` | string? |
+| motherboard | `chipset` | string? |
+| motherboard | `memory_generation` | string?(如 `ddr5`) |
+| motherboard | `memory_speed_max_mts` | int?(MT/s) |
+| motherboard | `form_factor` | `atx\|matx\|itx`? |
+| motherboard | `m2_slots` | int? |
+| memory | `generation` | string? |
+| memory | `speed_mts` | int?(MT/s,额定) |
+| ssd | `form_factor` | `m2\|sata_2_5`?(每条目另带 quantity) |
+| psu | `wattage_w` | int?(W,额定) |
+| psu | `power_connectors` | connector[]?(集合,multiset) |
+| case | `gpu_length_max_mm` | int?(mm) |
+| case | `cooler_height_max_mm` | int?(mm,风冷限高) |
+| case | `supported_form_factors` | (`atx\|matx\|itx`)[]?(集合) |
+| case | `radiator_sizes_mm` | int[]?(集合,如 240/280/360) |
+| cooler | `type` | `air\|aio`? |
+| cooler | `height_mm` | int?(mm,type=air 用) |
+| cooler | `radiator_size_mm` | int?(mm,type=aio 用) |
+| cooler | `cooling_capacity_w` | int?(W,解热能力) |
+
+**null 语义与单位**:标量 `null` = 未知;集合 `null` = 未知,空集合 `[]` = 已知为空。单位统一为整数 mm / W / MT/s,不出现浮点与复合单位。
+
+**供电接口枚举**:只保留 `pcie_8pin` 与 `pcie_16pin`;12VHPWR / 12V-2×6 一律归一为 `pcie_16pin`;不推断转接线或一分二,按 multiset 包含判定(规则 #10)。
+
+```jsonc
+// ValidationReport(P1 版,取代上文示意中的 status/detail 口径;quote/perf P2 起接入)
+{
+  "build_ref": "build_demo_001",
+  "overall_status": "pass|review|fail",
+  "checks": [
+    {
+      "rule_id": "SOCKET_MATCH",
+      "outcome": "pass|fail|unknown",
+      "severity": "none|warning|error",       // pass → none;fail → 规则级别;unknown → none
+      "observed": {"cpu_socket": "AM5", "motherboard_socket": "AM5"},  // 稳定键值,golden 可比对
+      "missing_fields": [],                    // 排序后的缺失字段(unknown 时非空)
+      "detail": "..."                          // 自然语言,不进 golden 断言
+    }
+  ]
+}
+```
+
+**报告聚合**:存在 error 级 fail → `fail`;否则存在 warning 级 fail 或任一 unknown → `review`;全部 pass 才是 `pass`。
+
+**规则接口(Go,`internal/rules`)**:12 条规则按固定顺序全部执行、不短路;Go error 仅表示输入结构非法,规则判定结果一律进 CheckResult。
+
+```go
+type Rule interface {
+    ID() schemas.RuleID
+    Check(schemas.ResolvedBuild) schemas.CheckResult
+}
+
+func NewDefaultEngine() *Engine
+func (e *Engine) Validate(schemas.ResolvedBuild) (schemas.ValidationReport, error)
+```
+
 ## 五、兼容性规则表(校验 Agent 初版)
 
-| # | 规则 | 级别 |
-|---|---|---|
-| 1 | CPU 插槽 == 主板插槽(AM5/LGA1851) | 错误 |
-| 2 | 主板芯片组 ∈ CPU 支持列表 | 错误 |
-| 3 | 内存代数(DDR5)== 主板支持 | 错误 |
-| 4 | 内存频率 > 主板标称上限 | 警告 |
-| 5 | 显卡长度 ≤ 机箱显卡限长 | 错误 |
-| 6 | 散热器高度 ≤ 机箱限高;水冷排尺寸 ∈ 机箱支持位 | 错误 |
-| 7 | 电源功率 ≥ 整机估算负载 × 1.3(余量 30%) | 警告(<1.15 错误) |
-| 8 | 主板板型 ∈ 机箱支持板型 | 错误 |
-| 9 | SSD 数量 ≤ 主板 M.2 槽位 | 错误 |
-| 10 | 显卡供电接口(12V-2×6/8pin×N)⊆ 电源提供 | 错误 |
-| 11 | CPU 无核显且无独显 → 点不亮 | 错误 |
-| 12 | 散热器解热能力(TDP)≥ CPU 功耗档 | 警告 |
+规则 ID 于 2026-07-28 随 P1 契约冻结,执行顺序 = 表内顺序:
+
+| # | 规则 ID | 规则 | 级别 |
+|---|---|---|---|
+| 1 | `SOCKET_MATCH` | CPU 插槽 == 主板插槽(AM5/LGA1851) | 错误 |
+| 2 | `CHIPSET_SUPPORT` | 主板芯片组 ∈ CPU 支持列表 | 错误 |
+| 3 | `MEMORY_GENERATION` | 内存代数(DDR5)== 主板支持 | 错误 |
+| 4 | `MEMORY_SPEED` | 内存额定频率 > 主板标称上限 | 警告 |
+| 5 | `GPU_CLEARANCE` | 显卡长度 ≤ 机箱显卡限长 | 错误 |
+| 6 | `COOLER_CLEARANCE` | 风冷:散热器高度 ≤ 机箱限高;AIO:冷排尺寸 ∈ 机箱支持位 | 错误 |
+| 7 | `PSU_HEADROOM` | 电源功率 / 估算负载:≥1.30 通过;[1.15,1.30) 警告;<1.15 错误 | 警告/错误 |
+| 8 | `FORM_FACTOR_SUPPORT` | 主板板型 ∈ 机箱支持板型 | 错误 |
+| 9 | `M2_SLOT_CAPACITY` | M.2 SSD 数量合计 ≤ 主板 M.2 槽位 | 错误 |
+| 10 | `GPU_POWER_CONNECTORS` | 显卡供电接口 multiset ⊆ 电源提供 | 错误 |
+| 11 | `DISPLAY_OUTPUT` | CPU 无核显且无独显 → 点不亮 | 错误 |
+| 12 | `COOLER_THERMAL_CAPACITY` | 散热器解热能力(W)≥ CPU TDP | 警告 |
+
+**功耗公式(#7,冻结)**:估算负载 = CPU TDP + GPU TDP(`gpu:null` 时为 0)+ 100W 固定余项;比较用整数交叉相乘(如 `psu_w × 100 ≥ load_w × 130`),不引入浮点。上限比较类规则(#4/#5/#6/#12)等于边界即通过/不告警。
 
 ## 六、数据层设计
 
-**PostgreSQL(主库,含 pgvector 扩展)**
+**P1 冻结表结构(2026-07-28,由 Goose 编号迁移管理)**——P1 只建三张表,P3/P4 表与 embedding 列到对应阶段再加:
+
 ```
-parts        (sku PK, category, brand, model, specs JSONB, embedding vector)   -- 零件库,specs 按品类放参数
-prices       (id PK, sku FK, price_cny, source, captured_at)                   -- 报价快照,只增不改
-requirements (id PK, session_id, spec JSONB, created_at)
+parts           (sku PK, category CHECK(八类:cpu|gpu|motherboard|memory|ssd|psu|case|cooler),
+                 brand, model, schema_version, specs JSONB, source_meta JSONB,
+                 active, created_at, updated_at)
+price_snapshots (id PK, snapshot_date UNIQUE, file_sha256 UNIQUE, imported_at)
+prices          (snapshot_id FK, sku FK, price_cny NUMERIC(10,2), source,
+                 UNIQUE(snapshot_id, sku))
+```
+
+- `parts.specs` 存 四.1 的 canonical 字段(按品类),`source_meta` 存每字段来源;缺失字段保留 null 入库,不编造。
+- 价格按批次快照:一个 CSV 文件 = 一个 `price_snapshots` 批次(同批日期一致,SHA256 幂等),`prices` 只增不改;不同文件覆盖同日期则失败。
+
+**长期表设计(P3/P4 落地,保留为方向)**
+```
+parts.embedding vector                                                          -- P3 加列:pgvector 语义选件
+requirements (id PK, session_id, spec JSONB, created_at)                        -- P4
 builds       (id PK, parent_id FK nullable, requirement_id FK, parts JSONB,
-              validation JSONB, quote JSONB, created_at)                       -- 版本树:parent_id 串起 v1→v2
-sessions     (id PK, user_id, profile JSONB, created_at)                       -- 用户画像(偏好沉淀)
+              validation JSONB, quote JSONB, created_at)                        -- P4 版本树:parent_id 串起 v1→v2
+sessions     (id PK, user_id, profile JSONB, created_at)                        -- 阶段 3 用户画像
 ```
 - **pgvector 用途**:`parts.embedding` 来自"型号+评测要点摘要"文本;支撑"安静/颜值/白色海景房"类模糊语义选件。
 - **Redis**:会话热上下文(当前 RequirementSpec 与 build 草稿)、Agent 间短时状态、LLM 结果缓存。

@@ -74,7 +74,7 @@ go run ./cmd/host web api webui  # Web UI(三个子命令缺一不可):http://lo
 
 - [x] 产品调研 / 设计方案 / PRD / MVP 计划 / 技术选型
 - [x] P0 环境与骨架
-- [ ] P1 数据底座与规则引擎
+- [x] P1 数据底座与规则引擎
 - [ ] P2 单进程三 Agent 流水线
 - [ ] P3 pgvector 语义选件
 - [ ] P4 版本快照与增量改单

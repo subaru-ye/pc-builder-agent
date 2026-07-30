@@ -31,7 +31,7 @@ go build ./... && go vet ./...
 - **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
 - **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。
 - **schema 单一出处**:`internal/schemas` 定义一份,字段变更回写设计方案 §四,不在代码里静默漂移。
-- 当前进度:P0 完成;下一步 P1(数据导入 + 规则引擎 + golden set,开工前扫工程实践指引 §九 P1 检查单)。
+- 当前进度:P1 完成(数据管道 + 迁移/导入 CLI + 规则引擎含 20 组 golden);下一步 P2(单进程三 Agent 流水线,开工前扫工程实践指引 §九 P2 检查单)。
 
 ## 已知环境坑(Windows)
 

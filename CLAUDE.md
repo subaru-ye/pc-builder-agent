@@ -25,7 +25,7 @@ go build ./... && go vet ./...
 | docs/tech/P2-流水线设计.md | P2 实现层:编排拓扑 / 提示词 SOP / tool 契约 / Loop 控制(schema 口径仍以设计方案 §四 为准) |
 | docs/tech/P3-语义选件设计.md | P3 实现层:embedding 素材与文本 / 语义检索路径 / search_parts_semantic 契约 |
 | docs/tech/P4-版本快照与增量改单设计.md | P4 实现层:builds/requirements 版本表 / ChangeRequest 意图解析 / 锁定校验 / cmd/builds 回放·diff·导出 |
-| docs/tech/P4-版本快照与增量改单设计.md | P4 实现层:builds/requirements 版本表 / ChangeRequest 意图解析 / 锁定校验 / cmd/builds 回放·diff·导出 |
+| docs/tech/P5-A2A单跳拆分设计.md | P5 实现层:buildsvc A2A 远程服务(生成+校验)/ host 初筛远程消费方 / 出站只传三样 + 入站 schema 校验 / contextID 会话映射 |
 | docs/tech/技术选型.md | 栈级决策(ADR)+ 版本锁定表 |
 | docs/tech/工程实践指引.md | 各阶段开工前扫对应小节;评审对照 §九检查单 |
 
@@ -35,7 +35,7 @@ go build ./... && go vet ./...
 - **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
 - **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。
 - **schema 单一出处**:`internal/schemas` 定义一份,字段变更回写设计方案 §四,不在代码里静默漂移。
-- 当前进度:P4 完成(版本快照与增量改单:迁移 00004 版本表、ChangeRequest 意图解析、确定性锁定校验、cmd/builds 回放·diff·导出;DoD 用例 C/D/E v1→v2→v3 回放通过、v1→v3 diff 正确、导出含快照日期与免责边界、用例 A 回归 pass;设计见 docs/tech/P4-版本快照与增量改单设计.md)。下一步 P5。
+- 当前进度:P5 完成(A2A 单跳拆分:cmd/buildsvc 把生成+校验流水线包装为独立进程 A2A 远程服务、cmd/host 改为初筛 + A2A 远程消费方、出站 trimToPayload 只传三样、入站 ingest schema 校验、contextID 跨轮会话映射;DoD 用例 G 双进程端到端与 P4 一致、跨进程 A2A 消息 contextID 一致且 schema 校验通过、用例 C/D/E 版本树 v1←v2←v3 不退化、用例 A 回归 pass;设计见 docs/tech/P5-A2A单跳拆分设计.md)。下一步 P6。
 
 ## 已知环境坑(Windows)
 

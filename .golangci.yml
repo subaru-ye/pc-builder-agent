@@ -1,0 +1,24 @@
+# golangci-lint v2.12.2(版本锁定见 docs/tech/技术选型.md 回填表;CI 与本地保持同版本)。
+# 配置格式为 golangci-lint v2 schema。
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - depguard
+  settings:
+    depguard:
+      rules:
+        # internal/rules 零 LLM 隔离(CLAUDE.md 工程纪律):
+        # 只允许标准库与 internal/schemas,禁止 ADK、模型 SDK、pgx、Redis、agents、store。
+        rules-zero-llm:
+          list-mode: strict
+          files:
+            - "**/internal/rules/**"
+          allow:
+            - $gostd
+            - github.com/subaru-ye/pc-builder-agent/internal/schemas
+
+formatters:
+  enable:
+    - gofmt

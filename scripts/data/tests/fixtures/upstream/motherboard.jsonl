@@ -1,0 +1,5 @@
+{"name":"Asus PRIME B650-PLUS WIFI","price":159.99,"socket":"AM5","form_factor":"ATX","max_memory":192,"memory_slots":4,"color":"Black / Silver"}
+{"name":"MSI MAG B650 TOMAHAWK WIFI","price":189.42,"socket":"AM5","form_factor":"ATX","max_memory":256,"memory_slots":4,"color":"Black"}
+{"name":"MSI B650M MORTAR WIFI","price":179.99,"socket":"AM5","form_factor":"Micro ATX","max_memory":256,"memory_slots":4,"color":"Black"}
+{"name":"Gigabyte B650I AORUS ULTRA","price":229.99,"socket":"AM5","form_factor":"Mini ITX","max_memory":128,"memory_slots":2,"color":"Black"}
+{"name":"Fake EATX Board","price":399.99,"socket":"LGA1700","form_factor":"EATX","max_memory":256,"memory_slots":8,"color":"Black"}

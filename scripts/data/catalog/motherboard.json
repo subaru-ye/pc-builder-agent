@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "category": "motherboard",
+  "notes": "socket/form_factor 来自 pc-part-dataset 锁定快照;chipset/memory_generation/memory_speed_max_mts/m2_slots 为人工 override,逐板核验厂商官方规格页(ref)。memory_speed_max_mts 取官方标称最高 OC 档;各硬件版本标称不一时记 null。",
+  "entries": [
+    {
+      "sku": "mb-msi-b550m-pro-vdh-wifi",
+      "brand": "MSI",
+      "model": "B550M PRO-VDH WIFI",
+      "upstream_name": "MSI B550M PRO-VDH WIFI",
+      "override": {"chipset": "B550", "memory_generation": "ddr4", "memory_speed_max_mts": 4400, "m2_slots": 2},
+      "ref": "https://www.msi.com/Motherboard/B550M-PRO-VDH-WIFI/Specification"
+    },
+    {
+      "sku": "mb-msi-b550-tomahawk",
+      "brand": "MSI",
+      "model": "MAG B550 TOMAHAWK",
+      "upstream_name": "MSI MAG B550 TOMAHAWK",
+      "override": {"chipset": "B550", "memory_generation": "ddr4", "memory_speed_max_mts": 5100, "m2_slots": 2},
+      "ref": "https://www.msi.com/Motherboard/MAG-B550-TOMAHAWK/Specification"
+    },
+    {
+      "sku": "mb-gb-b550-aorus-elite-v2",
+      "brand": "Gigabyte",
+      "model": "B550 AORUS ELITE V2",
+      "upstream_name": "Gigabyte B550 AORUS ELITE V2",
+      "override": {"chipset": "B550", "memory_generation": "ddr4", "memory_speed_max_mts": 4733, "m2_slots": 2},
+      "ref": "https://www.gigabyte.com/Motherboard/B550-AORUS-ELITE-V2-rev-10-11/sp"
+    },
+    {
+      "sku": "mb-msi-pro-a620m-e",
+      "brand": "MSI",
+      "model": "PRO A620M-E",
+      "upstream_name": "MSI PRO A620M-E",
+      "override": {"chipset": "A620", "memory_generation": "ddr5", "memory_speed_max_mts": 6800, "m2_slots": 1},
+      "ref": "https://www.msi.com/Motherboard/pro-a620m-e/Specification"
+    },
+    {
+      "sku": "mb-asrock-b650m-hdv-m2",
+      "brand": "ASRock",
+      "model": "B650M-HDV/M.2",
+      "upstream_name": "ASRock B650M-HDV/M.2",
+      "override": {"chipset": "B650", "memory_generation": "ddr5", "memory_speed_max_mts": 7200, "m2_slots": 2},
+      "ref": "https://www.asrock.com/mb/AMD/B650M-HDVM.2/index.asp"
+    },
+    {
+      "sku": "mb-msi-b650m-mortar-wifi",
+      "brand": "MSI",
+      "model": "MAG B650M MORTAR WIFI",
+      "upstream_name": "MSI MAG B650M MORTAR WIFI",
+      "override": {"chipset": "B650", "memory_generation": "ddr5", "memory_speed_max_mts": 7600, "m2_slots": 2},
+      "ref": "https://www.msi.com/Motherboard/MAG-B650M-MORTAR-WIFI/Specification"
+    },
+    {
+      "sku": "mb-msi-b650-tomahawk-wifi",
+      "brand": "MSI",
+      "model": "MAG B650 TOMAHAWK WIFI",
+      "upstream_name": "MSI MAG B650 TOMAHAWK WIFI",
+      "override": {"chipset": "B650", "memory_generation": "ddr5", "memory_speed_max_mts": 7600, "m2_slots": 3},
+      "ref": "https://www.msi.com/Motherboard/MAG-B650-TOMAHAWK-WIFI/Specification"
+    },
+    {
+      "sku": "mb-gb-b650-aorus-elite-ax",
+      "brand": "Gigabyte",
+      "model": "B650 AORUS ELITE AX",
+      "upstream_name": "Gigabyte B650 AORUS ELITE AX",
+      "override": {"chipset": "B650", "memory_generation": "ddr5", "memory_speed_max_mts": null, "m2_slots": 3},
+      "ref": "https://www.gigabyte.com/Motherboard/B650-AORUS-ELITE-AX-rev-10-11",
+      "note": "rev 1.0/1.1 与 1.2 内存标称不一(6666/8000),记未知"
+    },
+    {
+      "sku": "mb-gb-b650i-aorus-ultra",
+      "brand": "Gigabyte",
+      "model": "B650I AORUS ULTRA",
+      "upstream_name": "Gigabyte B650I AORUS ULTRA",
+      "override": {"chipset": "B650", "memory_generation": "ddr5", "memory_speed_max_mts": 7200, "m2_slots": 3},
+      "ref": "https://www.gigabyte.com/Motherboard/B650I-AORUS-ULTRA"
+    },
+    {
+      "sku": "mb-asus-b650e-f-strix",
+      "brand": "Asus",
+      "model": "ROG STRIX B650E-F GAMING WIFI",
+      "upstream_name": "Asus ROG STRIX B650E-F GAMING WIFI",
+      "override": {"chipset": "B650E", "memory_generation": "ddr5", "memory_speed_max_mts": 6400, "m2_slots": 3},
+      "ref": "https://rog.asus.com/uk/motherboards/rog-strix/rog-strix-b650e-f-gaming-wifi-model/"
+    },
+    {
+      "sku": "mb-msi-b850-tomahawk-max",
+      "brand": "MSI",
+      "model": "MAG B850 TOMAHAWK MAX WIFI",
+      "upstream_name": "MSI MAG B850 TOMAHAWK MAX WIFI",
+      "override": {"chipset": "B850", "memory_generation": "ddr5", "memory_speed_max_mts": 8400, "m2_slots": 4},
+      "ref": "https://www.techpowerup.com/review/msi-mag-b850-tomahawk-max-wi-fi/"
+    },
+    {
+      "sku": "mb-gb-x870-eagle-wifi7",
+      "brand": "Gigabyte",
+      "model": "X870 EAGLE WIFI7",
+      "upstream_name": "Gigabyte X870 EAGLE WIFI7",
+      "override": {"chipset": "X870", "memory_generation": "ddr5", "memory_speed_max_mts": 8200, "m2_slots": 3},
+      "ref": "https://www.gigabyte.com/Motherboard/X870-EAGLE-WIFI7-rev-1x/sp"
+    },
+    {
+      "sku": "mb-msi-h610m-g-ddr4",
+      "brand": "MSI",
+      "model": "PRO H610M-G DDR4",
+      "upstream_name": "MSI PRO H610M-G DDR4",
+      "override": {"chipset": "H610", "memory_generation": "ddr4", "memory_speed_max_mts": 3200, "m2_slots": 1},
+      "ref": "https://www.msi.com/Motherboard/PRO-H610M-G-DDR4/Specification"
+    },
+    {
+      "sku": "mb-msi-b760m-a-wifi-ddr4",
+      "brand": "MSI",
+      "model": "PRO B760M-A WIFI DDR4",
+      "upstream_name": "MSI PRO B760M-A WIFI DDR4",
+      "override": {"chipset": "B760", "memory_generation": "ddr4", "memory_speed_max_mts": 5333, "m2_slots": 2},
+      "ref": "https://www.msi.com/Motherboard/PRO-B760M-A-WIFI-DDR4/Specification"
+    },
+    {
+      "sku": "mb-msi-b760m-a-wifi",
+      "brand": "MSI",
+      "model": "PRO B760M-A WIFI",
+      "upstream_name": "MSI PRO B760M-A WIFI",
+      "override": {"chipset": "B760", "memory_generation": "ddr5", "memory_speed_max_mts": 6800, "m2_slots": 2},
+      "ref": "https://www.msi.com/Motherboard/PRO-B760M-A-WIFI/Specification"
+    },
+    {
+      "sku": "mb-gb-b760-gaming-x-ax",
+      "brand": "Gigabyte",
+      "model": "B760 GAMING X AX",
+      "upstream_name": "Gigabyte B760 GAMING X AX",
+      "override": {"chipset": "B760", "memory_generation": "ddr5", "memory_speed_max_mts": 7600, "m2_slots": 3},
+      "ref": "https://www.gigabyte.com/Motherboard/B760-GAMING-X-AX-rev-1x/sp"
+    },
+    {
+      "sku": "mb-msi-z790-p-wifi",
+      "brand": "MSI",
+      "model": "PRO Z790-P WIFI",
+      "upstream_name": "MSI PRO Z790-P WIFI",
+      "override": {"chipset": "Z790", "memory_generation": "ddr5", "memory_speed_max_mts": 7000, "m2_slots": 4},
+      "ref": "https://www.msi.com/Motherboard/PRO-Z790-P-WIFI/Specification"
+    },
+    {
+      "sku": "mb-msi-b860m-a-wifi",
+      "brand": "MSI",
+      "model": "PRO B860M-A WIFI",
+      "upstream_name": "MSI PRO B860M-A WIFI",
+      "override": {"chipset": "B860", "memory_generation": "ddr5", "memory_speed_max_mts": 8800, "m2_slots": 3},
+      "ref": "https://www.msi.com/Motherboard/PRO-B860M-A-WIFI"
+    },
+    {
+      "sku": "mb-msi-b860-tomahawk-wifi",
+      "brand": "MSI",
+      "model": "MAG B860 TOMAHAWK WIFI",
+      "upstream_name": "MSI MAG B860 TOMAHAWK WIFI",
+      "override": {"chipset": "B860", "memory_generation": "ddr5", "memory_speed_max_mts": 9200, "m2_slots": 3},
+      "ref": "https://www.msi.com/Motherboard/MAG-B860-TOMAHAWK-WIFI/Specification"
+    },
+    {
+      "sku": "mb-msi-z890-tomahawk-wifi",
+      "brand": "MSI",
+      "model": "MAG Z890 TOMAHAWK WIFI",
+      "upstream_name": "MSI MAG Z890 TOMAHAWK WIFI",
+      "override": {"chipset": "Z890", "memory_generation": "ddr5", "memory_speed_max_mts": 9200, "m2_slots": 4},
+      "ref": "https://www.msi.com/Motherboard/MAG-Z890-TOMAHAWK-WIFI/Specification"
+    }
+  ]
+}

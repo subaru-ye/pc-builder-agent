@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "comment": "P1 上游数据来源锁:适配器只允许读取此处锁定的版本,升级须改本文件并重跑完整率报告",
+  "sources": [
+    {
+      "name": "pc-part-dataset",
+      "kind": "git",
+      "url": "https://github.com/docyx/pc-part-dataset",
+      "commit": "c52a04ca9465c83997ed335f7767b09a2005dd26",
+      "usage": "八类零件 JSON 唯一来源;丢弃美元价格字段"
+    },
+    {
+      "name": "dbgpu",
+      "kind": "pypi",
+      "package": "dbgpu",
+      "version": "2025.12",
+      "usage": "GPU 芯片级 TDP/接口兜底;优先级低于人工 override 与 pc-part 产品字段"
+    }
+  ]
+}

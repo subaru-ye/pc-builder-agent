@@ -1,0 +1,213 @@
+{
+  "schema_version": 1,
+  "category": "psu",
+  "notes": [
+    "D4c 电源目录:20 SKU,650W-1000W 主流全/半模组段位。",
+    "上游仅有 wattage(wattage_w 直接映射),power_connectors 全部人工 override + ref(计划 D4c 要求)。",
+    "power_connectors 语义:PSU 原生 GPU 供电接口清单;12VHPWR/12V-2x6 归一为 pcie_16pin,6+2 pin 计 pcie_8pin。",
+    "接口数以 Cybenetics 实验室报告的 Connector Count (Total) 为准,官方页仅写线缆数时以报告修正;",
+    "be quiet! 两系列与 Toughpower GF3 上游同名多瓦数行,upstream_match 用 wattage 消歧;MAG A850GL 黑白双行用 color。"
+  ],
+  "entries": [
+    {
+      "sku": "psu-corsair-rm750e",
+      "brand": "Corsair",
+      "model": "RM750e (2023) 750W 80+ Gold",
+      "upstream_name": "Corsair RM750e (2023)",
+      "upstream_match": {},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_16pin"]},
+      "ref": "https://www.cybenetics.com/evaluations/psus/2089/ch/",
+      "note": "Cybenetics 报告:6+2 pin PCIe x3(单头线)+ 12+4 pin 12VHPWR 600W x1"
+    },
+    {
+      "sku": "psu-corsair-rm850e",
+      "brand": "Corsair",
+      "model": "RM850e (2023) 850W 80+ Gold",
+      "upstream_name": "Corsair RM850e (2023)",
+      "upstream_match": {},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_16pin"]},
+      "ref": "https://www.cybenetics.com/evaluations/psus/2088/",
+      "note": "Cybenetics 报告:6+2 pin PCIe x3 + 12+4 pin 12VHPWR 600W x1"
+    },
+    {
+      "sku": "psu-corsair-rm850x-2021",
+      "brand": "Corsair",
+      "model": "RM850x (2021) 850W 80+ Gold",
+      "upstream_name": "Corsair RM850x (2021)",
+      "upstream_match": {},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_8pin"]},
+      "ref": "https://gzhls.at/blob/ldb/b/7/2/3/312a8d0ea6f16d7678ac997ae4906d7019f6.pdf",
+      "note": "Cybenetics 报告:6+2 pin PCIe 线 x2 每线双头,共 4 接口;无 12VHPWR(官方页 3x cable 为混淆项,以报告为准)"
+    },
+    {
+      "sku": "psu-corsair-cx650m",
+      "brand": "Corsair",
+      "model": "CX650M (2021) 650W 80+ Bronze",
+      "upstream_name": "Corsair CX650M (2021)",
+      "upstream_match": {},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin"]},
+      "ref": "https://www.cybenetics.com/evaluations/psus/1808/",
+      "note": "Cybenetics 报告:6+2 pin PCIe x2;半模组无 12VHPWR"
+    },
+    {
+      "sku": "psu-corsair-rm1000x-2021",
+      "brand": "Corsair",
+      "model": "RM1000x (2021) 1000W 80+ Gold",
+      "upstream_name": "Corsair RM1000x (2021)",
+      "upstream_match": {},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_8pin"]},
+      "ref": "https://www.cybenetics.com/evaluations/psus/1798/",
+      "note": "Cybenetics 报告:6+2 pin PCIe 线 x3 每线双头,共 6 接口;2021 版无 12VHPWR"
+    },
+    {
+      "sku": "psu-corsair-hx1000i-2022",
+      "brand": "Corsair",
+      "model": "HX1000i (2022) 1000W 80+ Platinum",
+      "upstream_name": "Corsair HX1000i (2022)",
+      "upstream_match": {},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_16pin"]},
+      "ref": "https://hwbusters.com/psus/corsair-hx1000i-review/",
+      "note": "hwbusters 实测 + 官方页(cp-9020259-na):6+2 pin x6 + 原生 12VHPWR 600W x1"
+    },
+    {
+      "sku": "psu-seasonic-focus-gx750-atx30",
+      "brand": "SeaSonic",
+      "model": "FOCUS GX-750 ATX 3.0 750W 80+ Gold",
+      "upstream_name": "SeaSonic FOCUS GX-750 ATX 3.0",
+      "upstream_match": {},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_16pin"]},
+      "ref": "https://www.cybenetics.com/evaluations/psus/2333/",
+      "note": "Cybenetics 报告:6+2 pin 单头线 x2 + 12+4 pin 600W x1(seasonic.com 403,以报告为准)"
+    },
+    {
+      "sku": "psu-seasonic-focus-gx850-atx30",
+      "brand": "SeaSonic",
+      "model": "FOCUS GX-850 ATX 3.0 850W 80+ Gold",
+      "upstream_name": "SeaSonic FOCUS GX-850 ATX 3.0",
+      "upstream_match": {},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_16pin"]},
+      "ref": "https://www.techpowerup.com/review/seasonic-focus-gx-atx-3-0-850-w/2.html",
+      "note": "TechPowerUp 实测:6+2 pin x3 + 12+4 pin 600W x1"
+    },
+    {
+      "sku": "psu-seasonic-vertex-gx1000",
+      "brand": "SeaSonic",
+      "model": "VERTEX GX-1000 1000W 80+ Gold",
+      "upstream_name": "SeaSonic VERTEX GX-1000",
+      "upstream_match": {},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_16pin"]},
+      "ref": "https://www.cybenetics.com/evaluations/psus/2111/cn/",
+      "note": "Cybenetics 报告:6+2 pin 单头线 x3 + 12+4 pin 600W x1"
+    },
+    {
+      "sku": "psu-msi-mag-a650bn",
+      "brand": "MSI",
+      "model": "MAG A650BN 650W 80+ Bronze",
+      "upstream_name": "MSI MAG A650BN",
+      "upstream_match": {},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin"]},
+      "ref": "https://www.msi.com/Power-Supply/MAG-A650BN/Specification",
+      "note": "官方规格:PCIe 6+2 pin x2;非模组无 12VHPWR"
+    },
+    {
+      "sku": "psu-msi-mag-a750gl",
+      "brand": "MSI",
+      "model": "MAG A750GL PCIE5 750W 80+ Gold",
+      "upstream_name": "MSI MAG A750GL PCIE5",
+      "upstream_match": {},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_16pin"]},
+      "ref": "https://www.cybenetics.com/evaluations/psus/2356/",
+      "note": "Cybenetics 报告:6+2 pin 单头线 x1 + 双头线 x1(共 3 接口)+ 12+4 pin 600W x1(官方页仅写线数,以报告修正)"
+    },
+    {
+      "sku": "psu-msi-mag-a850gl",
+      "brand": "MSI",
+      "model": "MAG A850GL PCIE5 850W 80+ Gold",
+      "upstream_name": "MSI MAG A850GL PCIE5",
+      "upstream_match": {"color": "Black"},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_16pin"]},
+      "ref": "https://www.msi.com/Power-Supply/MAG-A850GL-PCIE5",
+      "note": "官方规格:PCIe 6+2 pin x4 + 12VHPWR 600W x1;上游黑白双行取 Black"
+    },
+    {
+      "sku": "psu-msi-mpg-a850g",
+      "brand": "MSI",
+      "model": "MPG A850G PCIE5 850W 80+ Gold",
+      "upstream_name": "MSI MPG A850G PCIE5",
+      "upstream_match": {},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_16pin"]},
+      "ref": "https://www.cybenetics.com/evaluations/psus/2404/",
+      "note": "Cybenetics 报告:原生 6+2 pin x4 + 12+4 pin 600W x1"
+    },
+    {
+      "sku": "psu-tt-gf3-750",
+      "brand": "Thermaltake",
+      "model": "Toughpower GF3 750W TT Premium 80+ Gold",
+      "upstream_name": "Thermaltake Toughpower GF3 TT Premium",
+      "upstream_match": {"wattage": 750},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_16pin"]},
+      "ref": "https://latam.thermaltake.com/toughpower-gf3-750w-gold-tt-premium-edition.html",
+      "note": "官方线材表:PCIe 6+2 双头线 x2(共 4 接口)+ 12+4 pin 12VHPWR x1;同名多瓦数行用 wattage 消歧"
+    },
+    {
+      "sku": "psu-tt-gf3-850",
+      "brand": "Thermaltake",
+      "model": "Toughpower GF3 850W TT Premium 80+ Gold",
+      "upstream_name": "Thermaltake Toughpower GF3 TT Premium",
+      "upstream_match": {"wattage": 850},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_16pin"]},
+      "ref": "https://aphnetworks.com/reports/thermaltake-toughpower-gf3-850w/2",
+      "note": "APH Networks 实测:PCIe 6+2 双头线 x2(共 4 接口)+ 12VHPWR 450W x1"
+    },
+    {
+      "sku": "psu-bq-pp12m-750",
+      "brand": "be quiet!",
+      "model": "Pure Power 12 M 750W 80+ Gold",
+      "upstream_name": "be quiet! Pure Power 12 M",
+      "upstream_match": {"wattage": 750},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_16pin"]},
+      "ref": "https://www.bequiet.com/en/powersupply/4078",
+      "note": "官方技术表:PCI-e 6+2 pin x2 + 12V-2x6 线 x1(600W)"
+    },
+    {
+      "sku": "psu-bq-pp12m-850",
+      "brand": "be quiet!",
+      "model": "Pure Power 12 M 850W 80+ Gold",
+      "upstream_name": "be quiet! Pure Power 12 M",
+      "upstream_match": {"wattage": 850},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_16pin"]},
+      "ref": "https://www.bequiet.com/en/powersupply/4072",
+      "note": "官方技术表:PCI-e 6+2 pin x4 + 12V-2x6 线 x1(600W)"
+    },
+    {
+      "sku": "psu-bq-sp12-750",
+      "brand": "be quiet!",
+      "model": "Straight Power 12 750W 80+ Platinum",
+      "upstream_name": "be quiet! Straight Power 12",
+      "upstream_match": {"wattage": 750},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_16pin"]},
+      "ref": "https://www.bequiet.com/en/powersupply/4102",
+      "note": "官方技术表:PCI-e 6+2 pin x4 + 12V-2x6 线 x1(600W)"
+    },
+    {
+      "sku": "psu-bq-sp12-1000",
+      "brand": "be quiet!",
+      "model": "Straight Power 12 1000W 80+ Platinum",
+      "upstream_name": "be quiet! Straight Power 12",
+      "upstream_match": {"wattage": 1000},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_16pin"]},
+      "ref": "https://www.bequiet.com/en/powersupply/4104",
+      "note": "官方技术表:PCI-e 6+2 pin x4 + 12V-2x6 线 x1(600W)"
+    },
+    {
+      "sku": "psu-gb-ud850gm-pg5",
+      "brand": "Gigabyte",
+      "model": "UD850GM PG5 (rev. 2.0) 850W 80+ Gold",
+      "upstream_name": "Gigabyte UD850GM PG5 (rev. 2.0)",
+      "upstream_match": {},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_8pin", "pcie_16pin"]},
+      "ref": "https://www.digitec.ch/en/s1/product/gigabyte-ud850gm-pg5-850-w-power-supply-pc-24235759",
+      "note": "digitec 规格页:PCIe 6+2 双头线 x2(共 4 接口)+ 12VHPWR x1(gigabyte.com /sp 403)"
+    }
+  ]
+}

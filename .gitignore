@@ -10,10 +10,19 @@ bin/
 *.test
 *.out
 
+# 本地工具链(golangci-lint 等,go install 定向 GOBIN 产物)
+.tools/
+
 # Python(P1 起 scripts/ 使用)
 .venv/
 __pycache__/
 *.pyc
+
+# 上游原始大文件快照(锁定 commit 可随时重拉,不入库)
+scripts/data/upstream/
+
+# 覆盖率脚本生成产物
+scripts/data/_cov.json
 
 # OS
 .DS_Store

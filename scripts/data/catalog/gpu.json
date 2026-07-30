@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "category": "gpu",
+  "chipset_map": {
+    "GeForce RTX 3060 12GB": "GeForce RTX 3060 12 GB",
+    "GeForce RTX 4060": "GeForce RTX 4060",
+    "GeForce RTX 4060 Ti": "GeForce RTX 4060 Ti 8 GB",
+    "GeForce RTX 4070": "GeForce RTX 4070",
+        "GeForce RTX 4070 SUPER": "GeForce RTX 4070 SUPER",
+    "GeForce RTX 4070 Ti SUPER": "GeForce RTX 4070 Ti SUPER",
+    "GeForce RTX 4080 SUPER": "GeForce RTX 4080 SUPER",
+    "GeForce RTX 5060": "GeForce RTX 5060",
+    "GeForce RTX 5060 Ti": "GeForce RTX 5060 Ti 16 GB",
+    "GeForce RTX 5070": "GeForce RTX 5070",
+    "GeForce RTX 5070 Ti": "GeForce RTX 5070 Ti",
+    "GeForce RTX 5080": "GeForce RTX 5080",
+    "Radeon RX 6600": "Radeon RX 6600",
+    "Radeon RX 7600": "Radeon RX 7600",
+    "Radeon RX 7700 XT": "Radeon RX 7700 XT",
+    "Radeon RX 7800 XT": "Radeon RX 7800 XT",
+    "Radeon RX 7900 XT": "Radeon RX 7900 XT",
+    "Radeon RX 9060 XT": "Radeon RX 9060 XT 16 GB",
+    "Radeon RX 9070 XT": "Radeon RX 9070 XT",
+    "Arc B580": "Arc B580"
+  },
+  "entries": [
+    {
+      "sku": "gpu-msi-3060-ventus2x",
+      "brand": "MSI",
+      "model": "GeForce RTX 3060 VENTUS 2X 12G",
+      "upstream_name": "MSI GeForce RTX 3060 Ventus 2X 12G",
+      "upstream_match": {"chipset": "GeForce RTX 3060 12GB"},
+      "override": {"power_connectors": ["pcie_8pin"]},
+      "ref": "https://www.msi.com/Graphics-Card/GeForce-RTX-3060-VENTUS-2X-12G-OC/Specification",
+      "note": "官方规格 8-pin x1(卡长 235mm 与上游一致);dbgpu 公版 12-pin 不适用 AIC 卡"
+    },
+    {
+      "sku": "gpu-msi-4060-ventus2x-black",
+      "brand": "MSI",
+      "model": "GeForce RTX 4060 VENTUS 2X BLACK OC",
+      "upstream_name": "MSI VENTUS 2X BLACK OC",
+      "upstream_match": {"chipset": "GeForce RTX 4060"},
+      "override": {"power_connectors": ["pcie_8pin"]},
+      "ref": "https://www.msi.com/Graphics-Card/GeForce-RTX-4060-VENTUS-2X-BLACK-8G-OC/Specification",
+      "note": "官方规格 8-pin x1;dbgpu 公版 12-pin 不适用 AIC 卡"
+    },
+    {
+      "sku": "gpu-asus-4060ti-dual-evo",
+      "brand": "Asus",
+      "model": "Dual GeForce RTX 4060 Ti EVO OC 8GB",
+      "upstream_name": "Asus DUAL EVO OC",
+      "upstream_match": {"chipset": "GeForce RTX 4060 Ti", "memory": 8},
+      "override": {"power_connectors": ["pcie_8pin"]},
+      "ref": "https://www.asus.com/motherboards-components/graphics-cards/dual/dual-rtx4060ti-o8g-evo/techspec/",
+      "note": "官方规格 1x 8-pin(dbgpu 公版 16-pin,AIC 实卡不同)"
+    },
+    {
+      "sku": "gpu-gb-4070-windforce",
+      "brand": "Gigabyte",
+      "model": "GeForce RTX 4070 WINDFORCE OC 12G",
+      "upstream_name": "Gigabyte WINDFORCE OC",
+      "upstream_match": {"chipset": "GeForce RTX 4070"},
+      "override": {"power_connectors": ["pcie_16pin"]},
+      "ref": "https://www.gigabyte.com/Graphics-Card/GV-N4070WF3OC-12GD-rev-11/sp",
+      "note": "Rev 1.x 为 16 Pin x1(V2 版改 8-pin,与上游 261mm 对应的是 Rev 1.x)"
+    },
+    {
+      "sku": "gpu-msi-4070s-ventus2x",
+      "brand": "MSI",
+      "model": "GeForce RTX 4070 SUPER 12G VENTUS 2X OC",
+      "upstream_name": "MSI VENTUS 2X OC",
+      "upstream_match": {"chipset": "GeForce RTX 4070 SUPER", "color": "Black"},
+      "override": {"power_connectors": ["pcie_16pin"]},
+      "ref": "https://www.msi.com/Graphics-Card/GeForce-RTX-4070-SUPER-12G-VENTUS-2X-OC/Specification",
+      "note": "官方规格 16-pin x1,242mm 与上游一致"
+    },
+    {
+      "sku": "gpu-asus-4070tis-tuf",
+      "brand": "Asus",
+      "model": "TUF Gaming GeForce RTX 4070 Ti SUPER 16GB OC",
+      "upstream_name": "Asus TUF GAMING OC",
+      "upstream_match": {"chipset": "GeForce RTX 4070 Ti SUPER", "color": "Black"},
+      "override": {"power_connectors": ["pcie_16pin"]},
+      "ref": "https://www.asus.com/us/motherboards-components/graphics-cards/tuf-gaming/tuf-rtx4070tis-o16g-gaming/techspec/",
+      "note": "官方规格 1x 16-pin,305mm 与上游一致"
+    },
+    {
+      "sku": "gpu-asus-4080s-tuf",
+      "brand": "Asus",
+      "model": "TUF Gaming GeForce RTX 4080 SUPER 16GB OC",
+      "upstream_name": "Asus TUF GAMING OC",
+      "upstream_match": {"chipset": "GeForce RTX 4080 SUPER"},
+      "override": {"power_connectors": ["pcie_16pin"]},
+      "ref": "https://www.asus.com/motherboards-components/graphics-cards/tuf-gaming/tuf-rtx4080s-o16g-gaming/techspec/",
+      "note": "官方规格 1x 16-pin"
+    },
+    {
+      "sku": "gpu-gb-5060-windforce",
+      "brand": "Gigabyte",
+      "model": "GeForce RTX 5060 WINDFORCE OC 8G",
+      "upstream_name": "Gigabyte WINDFORCE OC",
+      "upstream_match": {"chipset": "GeForce RTX 5060"},
+      "override": {"power_connectors": ["pcie_8pin"]},
+      "ref": "https://www.gigabyte.com/Graphics-Card/GV-N5060WF2OC-8GD/sp",
+      "note": "官方规格 8 Pin x1"
+    },
+    {
+      "sku": "gpu-gb-5060ti-windforce-16g",
+      "brand": "Gigabyte",
+      "model": "GeForce RTX 5060 Ti WINDFORCE OC 16G",
+      "upstream_name": "Gigabyte WINDFORCE OC",
+      "upstream_match": {"chipset": "GeForce RTX 5060 Ti", "memory": 16},
+      "override": {"power_connectors": ["pcie_8pin"]},
+      "ref": "https://www.gigabyte.com/Graphics-Card/GV-N506TWF2OC-16GD/sp",
+      "note": "官方规格 8 Pin x1"
+    },
+    {
+      "sku": "gpu-gb-5070-windforce-sff",
+      "brand": "Gigabyte",
+      "model": "GeForce RTX 5070 WINDFORCE OC SFF 12G",
+      "upstream_name": "Gigabyte WINDFORCE OC SFF",
+      "upstream_match": {"chipset": "GeForce RTX 5070"},
+      "override": {"power_connectors": ["pcie_16pin"]},
+      "ref": "https://www.gigabyte.com/Graphics-Card/GV-N5070WF3OC-12GD/sp",
+      "note": "官方规格 16 Pin x1(12V-2x6 归一为 pcie_16pin)"
+    },
+    {
+      "sku": "gpu-msi-5070ti-ventus3x",
+      "brand": "MSI",
+      "model": "GeForce RTX 5070 Ti 16G VENTUS 3X OC",
+      "upstream_name": "MSI VENTUS 3X OC",
+      "upstream_match": {"chipset": "GeForce RTX 5070 Ti"},
+      "override": {"power_connectors": ["pcie_16pin"]},
+      "ref": "https://www.msi.com/Graphics-Card/GeForce-RTX-5070-Ti-16G-VENTUS-3X-OC/Specification",
+      "note": "官方规格 16-pin x1,303mm 与上游一致"
+    },
+    {
+      "sku": "gpu-gb-5080-gaming",
+      "brand": "Gigabyte",
+      "model": "GeForce RTX 5080 GAMING OC 16G",
+      "upstream_name": "Gigabyte GAMING OC",
+      "upstream_match": {"chipset": "GeForce RTX 5080"},
+      "override": {"power_connectors": ["pcie_16pin"]},
+      "ref": "https://www.gigabyte.com/Graphics-Card/GV-N5080GAMING-OC-16GD/sp",
+      "note": "官方规格 16 pin x1"
+    },
+    {
+      "sku": "gpu-sapphire-6600-pulse",
+      "brand": "Sapphire",
+      "model": "PULSE Radeon RX 6600 8GB",
+      "upstream_name": "Sapphire PULSE",
+      "upstream_match": {"chipset": "Radeon RX 6600"},
+      "override": {"power_connectors": ["pcie_8pin"]},
+      "ref": "https://www.sapphiretech.com/en/consumer/pulse-radeon-rx-6600-8g-gddr6",
+      "note": "官方系统需求 1x 8-pin"
+    },
+    {
+      "sku": "gpu-sapphire-7600-pulse",
+      "brand": "Sapphire",
+      "model": "PULSE Radeon RX 7600 8GB",
+      "upstream_name": "Sapphire PULSE",
+      "upstream_match": {"chipset": "Radeon RX 7600"},
+      "override": {"power_connectors": ["pcie_8pin"]},
+      "ref": "https://www.sapphiretech.com/en/consumer/pulse-radeon-rx-7600-8g-gddr6",
+      "note": "官方系统需求 1x 8-pin"
+    },
+    {
+      "sku": "gpu-sapphire-7700xt-pulse",
+      "brand": "Sapphire",
+      "model": "PULSE Radeon RX 7700 XT 12GB",
+      "upstream_name": "Sapphire PULSE",
+      "upstream_match": {"chipset": "Radeon RX 7700 XT"},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin"]},
+      "ref": "https://www.sapphiretech.com/en/consumer/pulse-radeon-rx-7700-xt-12g-gddr6",
+      "note": "官方系统需求 2x 8-pin"
+    },
+    {
+      "sku": "gpu-sapphire-7800xt-pulse",
+      "brand": "Sapphire",
+      "model": "PULSE Radeon RX 7800 XT 16GB",
+      "upstream_name": "Sapphire PULSE",
+      "upstream_match": {"chipset": "Radeon RX 7800 XT"},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin"]},
+      "ref": "https://www.sapphiretech.com/en/consumer/pulse-radeon-rx-7800-xt-16g-gddr6",
+      "note": "官方系统需求 2x 8-pin"
+    },
+    {
+      "sku": "gpu-sapphire-7900xt-pulse",
+      "brand": "Sapphire",
+      "model": "PULSE Radeon RX 7900 XT 20GB",
+      "upstream_name": "Sapphire PULSE",
+      "upstream_match": {"chipset": "Radeon RX 7900 XT"},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin"]},
+      "ref": "https://www.sapphiretech.com/en/consumer/pulse-radeon-rx-7900-xt-20g-gddr6",
+      "note": "官方系统需求 2x 8-pin"
+    },
+    {
+      "sku": "gpu-sapphire-9060xt-pulse-16g",
+      "brand": "Sapphire",
+      "model": "PULSE Radeon RX 9060 XT 16GB OC",
+      "upstream_name": "Sapphire PULSE",
+      "upstream_match": {"chipset": "Radeon RX 9060 XT", "memory": 16},
+      "override": {"power_connectors": ["pcie_8pin"]},
+      "ref": "https://www.sapphiretech.com/en/consumer/pulse-radeon-rx-9060-xt-16g-gddr6",
+      "note": "官方系统需求 1x 8-pin;dbgpu 该芯片无公版卡长,长度取上游产品行"
+    },
+    {
+      "sku": "gpu-sapphire-9070xt-pulse",
+      "brand": "Sapphire",
+      "model": "PULSE Radeon RX 9070 XT 16GB",
+      "upstream_name": "Sapphire PULSE",
+      "upstream_match": {"chipset": "Radeon RX 9070 XT"},
+      "override": {"power_connectors": ["pcie_8pin", "pcie_8pin"]},
+      "ref": "https://www.sapphiretech.com/en/consumer/pulse-radeon-rx-9070-xt-16g-gddr6",
+      "note": "官方系统需求 2x 8-pin;dbgpu 该芯片无公版卡长,长度取上游产品行"
+    },
+    {
+      "sku": "gpu-intel-b580-le",
+      "brand": "Intel",
+      "model": "Arc B580 Limited Edition 12GB",
+      "upstream_name": "Intel Limited Edition",
+      "upstream_match": {"chipset": "Arc B580"},
+      "override": {"power_connectors": ["pcie_8pin"]},
+      "ref": "https://www.igorslab.de/en/intel-arc-b580-in-teardown-board-topology-power-consumption-with-load-peaks-and-a-putty-mod/",
+      "note": "LE 公版 1x 8-pin(拆解核验;Intel 官方要求 8-pin PCIe 线),与 dbgpu 芯片层一致"
+    }
+  ]
+}

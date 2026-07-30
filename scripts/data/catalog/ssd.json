@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "category": "ssd",
+  "notes": [
+    "D4b SSD 目录:20 SKU,m2(14)与 sata_2_5(6)。",
+    "错误级字段 form_factor 来自上游(M.2-xxxx -> m2,2.5 -> sata_2_5),无需人工 override。",
+    "同名多容量/多形态行用 upstream_match 的 capacity(+form_factor)消歧;",
+    "带散热片版本(w/Heatsink)上游是独立 name,不会混入。"
+  ],
+  "entries": [
+    {
+      "sku": "ssd-samsung-970evoplus-1tb",
+      "brand": "Samsung",
+      "model": "970 EVO Plus 1TB NVMe M.2",
+      "upstream_name": "Samsung 970 Evo Plus",
+      "upstream_match": {"capacity": 1000},
+      "override": {}
+    },
+    {
+      "sku": "ssd-samsung-980pro-1tb",
+      "brand": "Samsung",
+      "model": "980 PRO 1TB NVMe M.2",
+      "upstream_name": "Samsung 980 Pro",
+      "upstream_match": {"capacity": 1000},
+      "override": {}
+    },
+    {
+      "sku": "ssd-samsung-990pro-2tb",
+      "brand": "Samsung",
+      "model": "990 PRO 2TB NVMe M.2",
+      "upstream_name": "Samsung 990 Pro",
+      "upstream_match": {"capacity": 2000},
+      "override": {}
+    },
+    {
+      "sku": "ssd-samsung-870evo-1tb",
+      "brand": "Samsung",
+      "model": "870 EVO 1TB SATA 2.5\"",
+      "upstream_name": "Samsung 870 Evo",
+      "upstream_match": {"capacity": 1000},
+      "override": {}
+    },
+    {
+      "sku": "ssd-samsung-870qvo-2tb",
+      "brand": "Samsung",
+      "model": "870 QVO 2TB SATA 2.5\"",
+      "upstream_name": "Samsung 870 QVO",
+      "upstream_match": {"capacity": 2000},
+      "override": {}
+    },
+    {
+      "sku": "ssd-wd-sn580-1tb",
+      "brand": "Western Digital",
+      "model": "WD Blue SN580 1TB NVMe M.2",
+      "upstream_name": "Western Digital Blue SN580",
+      "upstream_match": {"capacity": 1000},
+      "override": {}
+    },
+    {
+      "sku": "ssd-wd-sn770-1tb",
+      "brand": "Western Digital",
+      "model": "WD_BLACK SN770 1TB NVMe M.2",
+      "upstream_name": "Western Digital Black SN770",
+      "upstream_match": {"capacity": 1000},
+      "override": {}
+    },
+    {
+      "sku": "ssd-wd-sn850x-2tb",
+      "brand": "Western Digital",
+      "model": "WD_BLACK SN850X 2TB NVMe M.2",
+      "upstream_name": "Western Digital WD_Black SN850X",
+      "upstream_match": {"capacity": 2000},
+      "override": {}
+    },
+    {
+      "sku": "ssd-wd-sa510-1tb",
+      "brand": "Western Digital",
+      "model": "WD Blue SA510 1TB SATA 2.5\"",
+      "upstream_name": "Western Digital Blue SA510",
+      "upstream_match": {"capacity": 1000, "form_factor": 2.5},
+      "override": {}
+    },
+    {
+      "sku": "ssd-crucial-p3plus-1tb",
+      "brand": "Crucial",
+      "model": "P3 Plus 1TB NVMe M.2",
+      "upstream_name": "Crucial P3 Plus",
+      "upstream_match": {"capacity": 1000},
+      "override": {}
+    },
+    {
+      "sku": "ssd-crucial-p5plus-1tb",
+      "brand": "Crucial",
+      "model": "P5 Plus 1TB NVMe M.2",
+      "upstream_name": "Crucial P5 Plus",
+      "upstream_match": {"capacity": 1000},
+      "override": {}
+    },
+    {
+      "sku": "ssd-crucial-t500-2tb",
+      "brand": "Crucial",
+      "model": "T500 2TB NVMe M.2",
+      "upstream_name": "Crucial T500",
+      "upstream_match": {"capacity": 2000},
+      "override": {}
+    },
+    {
+      "sku": "ssd-crucial-mx500-1tb",
+      "brand": "Crucial",
+      "model": "MX500 1TB SATA 2.5\"",
+      "upstream_name": "Crucial MX500",
+      "upstream_match": {"capacity": 1000, "form_factor": 2.5},
+      "override": {}
+    },
+    {
+      "sku": "ssd-crucial-bx500-1tb",
+      "brand": "Crucial",
+      "model": "BX500 1TB SATA 2.5\"",
+      "upstream_name": "Crucial BX500",
+      "upstream_match": {"capacity": 1000},
+      "override": {}
+    },
+    {
+      "sku": "ssd-kingston-kc3000-1tb",
+      "brand": "Kingston",
+      "model": "KC3000 1024GB NVMe M.2",
+      "upstream_name": "Kingston KC3000",
+      "upstream_match": {"capacity": 1024},
+      "override": {}
+    },
+    {
+      "sku": "ssd-kingston-nv2-1tb",
+      "brand": "Kingston",
+      "model": "NV2 1TB NVMe M.2",
+      "upstream_name": "Kingston NV2",
+      "upstream_match": {"capacity": 1000},
+      "override": {}
+    },
+    {
+      "sku": "ssd-kingston-a400-480gb",
+      "brand": "Kingston",
+      "model": "A400 480GB SATA 2.5\"",
+      "upstream_name": "Kingston A400",
+      "upstream_match": {"capacity": 480, "form_factor": 2.5},
+      "override": {}
+    },
+    {
+      "sku": "ssd-adata-legend800-1tb",
+      "brand": "ADATA",
+      "model": "LEGEND 800 1TB NVMe M.2",
+      "upstream_name": "ADATA Legend 800",
+      "upstream_match": {"capacity": 1000},
+      "override": {}
+    },
+    {
+      "sku": "ssd-adata-s70blade-1tb",
+      "brand": "ADATA",
+      "model": "XPG GAMMIX S70 Blade 1TB NVMe M.2",
+      "upstream_name": "ADATA XPG GAMMIX S70 Blade",
+      "upstream_match": {"capacity": 1000},
+      "override": {}
+    },
+    {
+      "sku": "ssd-intel-670p-1tb",
+      "brand": "Intel",
+      "model": "670p 1TB NVMe M.2",
+      "upstream_name": "Intel 670p",
+      "upstream_match": {"capacity": 1000},
+      "override": {}
+    }
+  ]
+}

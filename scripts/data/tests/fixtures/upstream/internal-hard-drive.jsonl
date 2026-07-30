@@ -1,0 +1,5 @@
+{"name":"Samsung 990 Pro","price":149.99,"capacity":2000,"price_per_gb":0.075,"type":"SSD","cache":2048,"form_factor":"M.2-2280","interface":"M.2 PCIe 4.0 X4"}
+{"name":"Crucial P3 Plus","price":56.95,"capacity":1000,"price_per_gb":0.057,"type":"SSD","cache":null,"form_factor":"M.2-2280","interface":"M.2 PCIe 4.0 X4"}
+{"name":"Crucial P3 Plus","price":113.95,"capacity":2000,"price_per_gb":0.057,"type":"SSD","cache":null,"form_factor":"M.2-2280","interface":"M.2 PCIe 4.0 X4"}
+{"name":"Samsung 870 Evo","price":89.99,"capacity":1000,"price_per_gb":0.09,"type":"SSD","cache":1024,"form_factor":"2.5","interface":"SATA 6.0 Gb/s"}
+{"name":"Seagate BarraCuda","price":49.99,"capacity":2000,"price_per_gb":0.025,"type":7200,"cache":256,"form_factor":"3.5","interface":"SATA 6.0 Gb/s"}

@@ -1,0 +1,313 @@
+{
+  "schema_version": 1,
+  "category": "cooler",
+  "notes": [
+    "D4d 散热器目录:20 SKU(10 风冷 + 10 一体水冷),覆盖主流塔式/双塔/240/280/360 冷排。",
+    "type/height_mm/radiator_size_mm 全部人工 override,取自厂商官网规格页(ref);上游 size 候选不作为唯一依据。",
+    "cooling_capacity_w 为 warning 级字段:官方标称 TDP 时记数值,官方规格页无标称(Noctua/Thermalright/Cooler Master/AIO 多数)时显式记 null。",
+    "风冷 radiator_size_mm 记 null;水冷 height_mm(冷头高度不构成塔高限制)记 null。",
+    "Hyper 212 Black Edition 官方高度 158.8mm,canonical 整数字段向上取整为 159(保守,兼容性判断更严)。"
+  ],
+  "entries": [
+    {
+      "sku": "cooler-noctua-nh-d15",
+      "brand": "Noctua",
+      "model": "NH-D15",
+      "upstream_name": "Noctua NH-D15",
+      "upstream_match": {},
+      "override": {
+        "type": "air",
+        "height_mm": 168,
+        "radiator_size_mm": null,
+        "cooling_capacity_w": null
+      },
+      "ref": "https://noctua.at/en/products/nh-d15/specifications",
+      "note": "官方规格:总高 168mm(含风扇;不含风扇 160mm);Noctua 不标称 TDP,记 null"
+    },
+    {
+      "sku": "cooler-noctua-nh-u12s",
+      "brand": "Noctua",
+      "model": "NH-U12S",
+      "upstream_name": "Noctua NH-U12S",
+      "upstream_match": {},
+      "override": {
+        "type": "air",
+        "height_mm": 158,
+        "radiator_size_mm": null,
+        "cooling_capacity_w": null
+      },
+      "ref": "https://noctua.at/en/products/nh-u12s/specifications",
+      "note": "官方规格:高 158mm;Noctua 不标称 TDP,记 null"
+    },
+    {
+      "sku": "cooler-thermalright-pa120se",
+      "brand": "Thermalright",
+      "model": "Peerless Assassin 120 SE",
+      "upstream_name": "Thermalright Peerless Assassin 120 SE",
+      "upstream_match": {"color": "Black / Silver"},
+      "override": {
+        "type": "air",
+        "height_mm": 155,
+        "radiator_size_mm": null,
+        "cooling_capacity_w": null
+      },
+      "ref": "https://www.thermalright.com/product/peerless-assassin-120-se/",
+      "note": "官方规格:L125×W110×H155mm;官方无 TDP 标称,记 null;标准银黑款(另有纯黑行)"
+    },
+    {
+      "sku": "cooler-thermalright-ps120se",
+      "brand": "Thermalright",
+      "model": "Phantom Spirit 120 SE",
+      "upstream_name": "Thermalright Phantom Spirit 120 SE",
+      "upstream_match": {},
+      "override": {
+        "type": "air",
+        "height_mm": 154,
+        "radiator_size_mm": null,
+        "cooling_capacity_w": null
+      },
+      "ref": "https://www.thermalright.com/product/phantom-spirit-120-se/",
+      "note": "官方规格:L110×W125×H154mm;官方无 TDP 标称,记 null"
+    },
+    {
+      "sku": "cooler-deepcool-ak620",
+      "brand": "Deepcool",
+      "model": "AK620",
+      "upstream_name": "Deepcool AK620",
+      "upstream_match": {"color": "Black / Silver"},
+      "override": {
+        "type": "air",
+        "height_mm": 160,
+        "radiator_size_mm": null,
+        "cooling_capacity_w": 260
+      },
+      "ref": "https://global.deepcool.com/products/Cooling/cpuaircoolers/AK620-High-Performance-CPU-Cooler/2021/13067.shtml",
+      "note": "官方规格:129×138×160mm,标称 TDP 260W;标准款(另有 White 行)"
+    },
+    {
+      "sku": "cooler-deepcool-ag400",
+      "brand": "Deepcool",
+      "model": "AG400",
+      "upstream_name": "Deepcool AG400",
+      "upstream_match": {},
+      "override": {
+        "type": "air",
+        "height_mm": 150,
+        "radiator_size_mm": null,
+        "cooling_capacity_w": 220
+      },
+      "ref": "https://www.deepcool.com/products/Cooling/cpuaircoolers/GAMMAXX-AG400-Single-Tower-CPU-Cooler-1851-1700-AM5/2024/15898.shtml",
+      "note": "官方规格:125×92×150mm,标称 TDP 220W"
+    },
+    {
+      "sku": "cooler-coolermaster-hyper212-black",
+      "brand": "Cooler Master",
+      "model": "Hyper 212 Black Edition",
+      "upstream_name": "Cooler Master Hyper 212 Black Edition",
+      "upstream_match": {"color": "Black"},
+      "override": {
+        "type": "air",
+        "height_mm": 159,
+        "radiator_size_mm": null,
+        "cooling_capacity_w": null
+      },
+      "ref": "https://www.coolermaster.com/en-global/products/hyper-212-black-edition/",
+      "note": "官方规格:123×77×158.8mm,高度向上取整 159;官方页无 TDP 标称,记 null"
+    },
+    {
+      "sku": "cooler-bequiet-dark-rock-pro-4",
+      "brand": "be quiet!",
+      "model": "Dark Rock Pro 4",
+      "upstream_name": "be quiet! Dark Rock Pro 4",
+      "upstream_match": {},
+      "override": {
+        "type": "air",
+        "height_mm": 163,
+        "radiator_size_mm": null,
+        "cooling_capacity_w": 250
+      },
+      "ref": "https://www.bequiet.com/en/cpucooler/1378",
+      "note": "官方规格:121×136×163mm,标称 TDP 250W"
+    },
+    {
+      "sku": "cooler-bequiet-dark-rock-pro-5",
+      "brand": "be quiet!",
+      "model": "Dark Rock Pro 5",
+      "upstream_name": "be quiet! Dark Rock Pro 5",
+      "upstream_match": {},
+      "override": {
+        "type": "air",
+        "height_mm": 168,
+        "radiator_size_mm": null,
+        "cooling_capacity_w": 270
+      },
+      "ref": "https://www.bequiet.com/en/cpucooler/4466",
+      "note": "官方规格:145×136×168mm,标称 TDP 270W"
+    },
+    {
+      "sku": "cooler-deepcool-assassin-iv",
+      "brand": "Deepcool",
+      "model": "ASSASSIN IV",
+      "upstream_name": "Deepcool ASSASSIN IV",
+      "upstream_match": {"color": "Black"},
+      "override": {
+        "type": "air",
+        "height_mm": 164,
+        "radiator_size_mm": null,
+        "cooling_capacity_w": null
+      },
+      "ref": "https://www.deepcool.com/products/Cooling/cpuaircoolers/Assassin-IV-Premium-CPU-Air-Cooler-1851-1700-AM5/2024/17129.shtml",
+      "note": "官方规格:144×147×164mm;官方规格表无 TDP 数值,记 null;黑色款(另有 White 行)"
+    },
+    {
+      "sku": "cooler-arctic-lf2-240",
+      "brand": "Arctic",
+      "model": "Liquid Freezer II 240",
+      "upstream_name": "ARCTIC Liquid Freezer II 240",
+      "upstream_match": {},
+      "override": {
+        "type": "aio",
+        "height_mm": null,
+        "radiator_size_mm": 240,
+        "cooling_capacity_w": null
+      },
+      "ref": "https://www.arctic.de/en/Liquid-Freezer-II-240/ACFRE00046B",
+      "note": "官方规格:240mm 冷排(277×120×38mm);官方无 TDP 标称,记 null"
+    },
+    {
+      "sku": "cooler-arctic-lf3-240",
+      "brand": "Arctic",
+      "model": "Liquid Freezer III 240",
+      "upstream_name": "ARCTIC Liquid Freezer III 240",
+      "upstream_match": {},
+      "override": {
+        "type": "aio",
+        "height_mm": null,
+        "radiator_size_mm": 240,
+        "cooling_capacity_w": null
+      },
+      "ref": "https://www.arctic.de/us/Liquid-Freezer-III-240/ACFRE00134A",
+      "note": "官方规格:240mm 冷排(277×120×38mm);官方无 TDP 标称,记 null"
+    },
+    {
+      "sku": "cooler-arctic-lf3-360",
+      "brand": "Arctic",
+      "model": "Liquid Freezer III 360",
+      "upstream_name": "ARCTIC Liquid Freezer III 360",
+      "upstream_match": {"color": "Black"},
+      "override": {
+        "type": "aio",
+        "height_mm": null,
+        "radiator_size_mm": 360,
+        "cooling_capacity_w": null
+      },
+      "ref": "https://www.arctic.de/en/Liquid-Freezer-III-360/ACFRE00136A",
+      "note": "官方规格:360mm 冷排(398×120×38mm);官方无 TDP 标称,记 null"
+    },
+    {
+      "sku": "cooler-corsair-h100i-elite-capellix-xt",
+      "brand": "Corsair",
+      "model": "iCUE H100i ELITE CAPELLIX XT",
+      "upstream_name": "Corsair iCUE H100i ELITE CAPELLIX XT",
+      "upstream_match": {"color": "Black"},
+      "override": {
+        "type": "aio",
+        "height_mm": null,
+        "radiator_size_mm": 240,
+        "cooling_capacity_w": null
+      },
+      "ref": "https://www.corsair.com/us/en/p/cpu-coolers/cw-9060068-ww/icue-h100i-elite-capellix-xt-liquid-cpu-cooler-cw-9060068-ww",
+      "note": "官方产品页:240mm 冷排;官方无 TDP 标称,记 null;黑色款(另有 White 行)"
+    },
+    {
+      "sku": "cooler-corsair-h150i-elite-capellix-xt",
+      "brand": "Corsair",
+      "model": "iCUE H150i ELITE CAPELLIX XT",
+      "upstream_name": "Corsair iCUE H150i ELITE CAPELLIX XT",
+      "upstream_match": {"color": "Black"},
+      "override": {
+        "type": "aio",
+        "height_mm": null,
+        "radiator_size_mm": 360,
+        "cooling_capacity_w": null
+      },
+      "ref": "https://www.corsair.com/us/en/p/cpu-coolers/cw-9060070-ww/icue-h150i-elite-capellix-xt-liquid-cpu-cooler-cw-9060070-ww",
+      "note": "官方产品页:360mm 冷排;官方无 TDP 标称,记 null;黑色款(另有 White 行)"
+    },
+    {
+      "sku": "cooler-nzxt-kraken-240",
+      "brand": "NZXT",
+      "model": "Kraken 240",
+      "upstream_name": "NZXT Kraken 240",
+      "upstream_match": {},
+      "override": {
+        "type": "aio",
+        "height_mm": null,
+        "radiator_size_mm": 240,
+        "cooling_capacity_w": null
+      },
+      "ref": "https://nzxt.com/en-intl/products/kraken-240",
+      "note": "官方产品页:240mm 一体式水冷(配 LCD 显示屏);官方无 TDP 标称,记 null"
+    },
+    {
+      "sku": "cooler-nzxt-kraken-x63",
+      "brand": "NZXT",
+      "model": "Kraken X63",
+      "upstream_name": "NZXT Kraken X63",
+      "upstream_match": {},
+      "override": {
+        "type": "aio",
+        "height_mm": null,
+        "radiator_size_mm": 280,
+        "cooling_capacity_w": null
+      },
+      "ref": "https://support.nzxt.com/hc/en-us/articles/37948576723355-Kraken-X3-Series-Specs",
+      "note": "官方 X3 系列规格表:X63 冷排 143×315×30mm(280mm 规格,2×140mm 风扇);官方无 TDP 标称,记 null"
+    },
+    {
+      "sku": "cooler-deepcool-lt520",
+      "brand": "Deepcool",
+      "model": "LT520",
+      "upstream_name": "Deepcool LT520",
+      "upstream_match": {},
+      "override": {
+        "type": "aio",
+        "height_mm": null,
+        "radiator_size_mm": 240,
+        "cooling_capacity_w": null
+      },
+      "ref": "https://www.deepcool.com/products/Cooling/cpuliquidcoolers/LT520-240mm-Liquid-CPU-Cooler-1851-1700-AM5/2024/16271.shtml",
+      "note": "官方规格:240mm 冷排(282×120×27mm);官方规格表无 TDP 数值,记 null"
+    },
+    {
+      "sku": "cooler-msi-mag-coreliquid-e360",
+      "brand": "MSI",
+      "model": "MAG CORELIQUID E360",
+      "upstream_name": "MSI MAG CORELIQUID E360",
+      "upstream_match": {},
+      "override": {
+        "type": "aio",
+        "height_mm": null,
+        "radiator_size_mm": 360,
+        "cooling_capacity_w": null
+      },
+      "ref": "https://www.msi.com/Liquid-Cooling/MAG-CORELIQUID-E360/Specification",
+      "note": "官方规格:Radiator Size 360mm(394×119.2×27mm);官方无 TDP 标称,记 null"
+    },
+    {
+      "sku": "cooler-thermalright-frozen-prism-240",
+      "brand": "Thermalright",
+      "model": "Frozen Prism 240 (Black)",
+      "upstream_name": "Thermalright Frozen Prism",
+      "upstream_match": {"color": "Black", "size": 240},
+      "override": {
+        "type": "aio",
+        "height_mm": null,
+        "radiator_size_mm": 240,
+        "cooling_capacity_w": null
+      },
+      "ref": "https://www.thermalright.com/product/frozen-prism-240-black/",
+      "note": "官方规格:240mm 冷排;官方无 TDP 标称,记 null;{color:Black,size:240} 判别(另有 Black/360 与 ARGB 行)"
+    }
+  ]
+}

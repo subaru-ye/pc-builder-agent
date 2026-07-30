@@ -1,0 +1,313 @@
+{
+  "schema_version": 1,
+  "category": "case",
+  "notes": [
+    "D4d 机箱目录:20 SKU,覆盖 ATX 中塔/mATX/ITX 主流散热风道箱。",
+    "上游 case 行不含限长/限高/板型/冷排字段,四个 canonical 字段全部人工 override,数据取自厂商官网规格页(ref)。",
+    "supported_form_factors 仅收 canonical 枚举(atx/matx/itx);上游或官网标注的 E-ATX/SSI-EEB 支持不在枚举内,忽略并在 note 注明。",
+    "radiator_sizes_mm 为该箱任意安装位可容纳的冷排规格去重集合;安装位互斥关系不建模(P1 规则只做尺寸包含判断)。",
+    "TD500 Mesh V2 上游黑色行 color 为 null,用 upstream_match {\"color\": null} 精确判别(find() 语义为 r.get(k)==v)。"
+  ],
+  "entries": [
+    {
+      "sku": "case-fractal-north",
+      "brand": "Fractal Design",
+      "model": "North (Black, TG Dark)",
+      "upstream_name": "Fractal Design North",
+      "upstream_match": {"color": "Black", "side_panel": "Tempered Glass"},
+      "override": {
+        "gpu_length_max_mm": 355,
+        "cooler_height_max_mm": 170,
+        "supported_form_factors": ["atx", "matx", "itx"],
+        "radiator_sizes_mm": [120, 140, 240, 280, 360]
+      },
+      "ref": "https://www.fractal-design.com/products/cases/north/north/black-tg-dark/",
+      "note": "官方规格:GPU 355mm/散热器 170mm;前置最大 360、顶置最大 240、后置 120 冷排"
+    },
+    {
+      "sku": "case-fractal-meshify-2-compact",
+      "brand": "Fractal Design",
+      "model": "Meshify 2 Compact (Black, TG Dark Tint)",
+      "upstream_name": "Fractal Design Meshify 2 Compact",
+      "upstream_match": {},
+      "override": {
+        "gpu_length_max_mm": 341,
+        "cooler_height_max_mm": 169,
+        "supported_form_factors": ["atx", "matx", "itx"],
+        "radiator_sizes_mm": [120, 240, 280, 360]
+      },
+      "ref": "https://www.fractal-design.com/products/cases/meshify/meshify-2-compact/black-tg-dark-tint/",
+      "note": "官方规格:GPU 341mm(装前风扇)/散热器 169mm;前 360/280、顶 240、后 120、底 120"
+    },
+    {
+      "sku": "case-fractal-define-7",
+      "brand": "Fractal Design",
+      "model": "Define 7 (Black, Solid)",
+      "upstream_name": "Fractal Design Define 7",
+      "upstream_match": {"color": "Black"},
+      "override": {
+        "gpu_length_max_mm": 445,
+        "cooler_height_max_mm": 185,
+        "supported_form_factors": ["atx", "matx", "itx"],
+        "radiator_sizes_mm": [120, 280, 360, 420]
+      },
+      "ref": "https://www.fractal-design.com/products/cases/define/define-7/black-solid/",
+      "note": "官方规格:GPU 445mm(开放布局)/散热器 185mm;前 360/280、顶 420/360、后 120、底 280;官网另标 E-ATX 支持,不在枚举内忽略"
+    },
+    {
+      "sku": "case-fractal-pop-air",
+      "brand": "Fractal Design",
+      "model": "Pop Air (Black, TG Clear Tint)",
+      "upstream_name": "Fractal Design Pop Air",
+      "upstream_match": {"color": "Black", "side_panel": "Tempered Glass"},
+      "override": {
+        "gpu_length_max_mm": 405,
+        "cooler_height_max_mm": 170,
+        "supported_form_factors": ["atx", "matx", "itx"],
+        "radiator_sizes_mm": [120, 140, 240, 280]
+      },
+      "ref": "https://www.fractal-design.com/products/cases/pop/pop-air/black-tg-clear-tint/",
+      "note": "官方规格:GPU 405mm/散热器 170mm;前置最大 280、顶置最大 240、后置 120"
+    },
+    {
+      "sku": "case-fractal-torrent",
+      "brand": "Fractal Design",
+      "model": "Torrent (Black, Solid)",
+      "upstream_name": "Fractal Design Torrent",
+      "upstream_match": {"color": "Black", "side_panel": null},
+      "override": {
+        "gpu_length_max_mm": 423,
+        "cooler_height_max_mm": 188,
+        "supported_form_factors": ["atx", "matx", "itx"],
+        "radiator_sizes_mm": [120, 140, 240, 280, 360, 420]
+      },
+      "ref": "https://www.fractal-design.com/products/cases/torrent/torrent/black-solid/",
+      "note": "官方规格:GPU 423mm(装前风扇)/散热器 188mm;前置最大 420、底置最大 420、后置 120/140;官网另标 E-ATX/SSI-EEB,不在枚举内忽略"
+    },
+    {
+      "sku": "case-fractal-terra",
+      "brand": "Fractal Design",
+      "model": "Terra (Graphite)",
+      "upstream_name": "Fractal Design Terra",
+      "upstream_match": {"color": "Black / Brown"},
+      "override": {
+        "gpu_length_max_mm": 322,
+        "cooler_height_max_mm": 77,
+        "supported_form_factors": ["itx"],
+        "radiator_sizes_mm": [120]
+      },
+      "ref": "https://www.fractal-design.com/products/cases/terra/terra/graphite/",
+      "note": "官方规格:GPU 322mm/散热器 77mm(可调隔板中位);侧置 120 冷排;ITX 专用"
+    },
+    {
+      "sku": "case-lianli-lancool-216",
+      "brand": "Lian Li",
+      "model": "LANCOOL 216 (Black)",
+      "upstream_name": "Lian Li LANCOOL 216",
+      "upstream_match": {},
+      "override": {
+        "gpu_length_max_mm": 392,
+        "cooler_height_max_mm": 180,
+        "supported_form_factors": ["atx", "matx", "itx"],
+        "radiator_sizes_mm": [240, 280, 360]
+      },
+      "ref": "https://lian-li.com/product/lancool-216/",
+      "note": "官方规格:GPU 392mm/散热器 180mm;前/顶 360/280/240、底 240;官网另标 E-ATX(宽度受限),不在枚举内忽略"
+    },
+    {
+      "sku": "case-lianli-o11-dynamic-evo",
+      "brand": "Lian Li",
+      "model": "O11 Dynamic EVO (Black)",
+      "upstream_name": "Lian Li O11 Dynamic EVO",
+      "upstream_match": {"color": "Black"},
+      "override": {
+        "gpu_length_max_mm": 426,
+        "cooler_height_max_mm": 167,
+        "supported_form_factors": ["atx", "matx", "itx"],
+        "radiator_sizes_mm": [280, 360]
+      },
+      "ref": "https://lian-li.com/product/o11-dynamic-evo/",
+      "note": "官方规格:GPU 426mm/散热器 167mm;顶/侧 360/280、底 360;官网另标 E-ATX(宽度<280mm),不在枚举内忽略"
+    },
+    {
+      "sku": "case-lianli-a3-matx",
+      "brand": "Lian Li",
+      "model": "A3-mATX (Black)",
+      "upstream_name": "Lian Li A3-mATX",
+      "upstream_match": {"color": "Black"},
+      "override": {
+        "gpu_length_max_mm": 415,
+        "cooler_height_max_mm": 165,
+        "supported_form_factors": ["matx", "itx"],
+        "radiator_sizes_mm": [240, 280, 360]
+      },
+      "ref": "https://lian-li.com/product/a3-matx/",
+      "note": "官方规格:GPU 415mm(无底风扇)/散热器 165mm;顶 360/240、侧 360/280/240、底 240"
+    },
+    {
+      "sku": "case-coolermaster-td500-mesh-v2",
+      "brand": "Cooler Master",
+      "model": "MasterBox TD500 Mesh V2 (Black)",
+      "upstream_name": "Cooler Master MasterBox TD500 Mesh V2",
+      "upstream_match": {"color": null},
+      "override": {
+        "gpu_length_max_mm": 410,
+        "cooler_height_max_mm": 165,
+        "supported_form_factors": ["atx", "matx", "itx"],
+        "radiator_sizes_mm": [120, 140, 240, 280, 360]
+      },
+      "ref": "https://www.coolermaster.com/en-global/products/masterbox-td500-mesh-v2/",
+      "note": "官方规格:GPU 410mm/散热器 165mm;顶/前 120~360、后 120;上游黑色行 color 为 null,以此判别;官网另标 E-ATX(≤12x13),忽略"
+    },
+    {
+      "sku": "case-coolermaster-nr200p",
+      "brand": "Cooler Master",
+      "model": "MasterBox NR200P (Black)",
+      "upstream_name": "Cooler Master MasterBox NR200P",
+      "upstream_match": {"color": "Black"},
+      "override": {
+        "gpu_length_max_mm": 330,
+        "cooler_height_max_mm": 155,
+        "supported_form_factors": ["itx"],
+        "radiator_sizes_mm": [120, 140, 240, 280]
+      },
+      "ref": "https://www.coolermaster.com/en-global/products/masterbox-nr200p/",
+      "note": "官方规格:GPU 330mm/散热器 155mm(玻璃侧板 153mm);侧 120/140/240/280、底 120/240;ITX/Mini-DTX 专用"
+    },
+    {
+      "sku": "case-bequiet-pure-base-500dx",
+      "brand": "be quiet!",
+      "model": "Pure Base 500DX (Black)",
+      "upstream_name": "be quiet! Pure Base 500DX",
+      "upstream_match": {"color": "Black"},
+      "override": {
+        "gpu_length_max_mm": 369,
+        "cooler_height_max_mm": 190,
+        "supported_form_factors": ["atx", "matx", "itx"],
+        "radiator_sizes_mm": [120, 140, 240, 280, 360]
+      },
+      "ref": "https://www.bequiet.com/en/case/1854",
+      "note": "官方规格:GPU 369mm/散热器 190mm;前 120/140/240/280/360、顶 120/240、后 120/140"
+    },
+    {
+      "sku": "case-bequiet-shadow-base-800-fx",
+      "brand": "be quiet!",
+      "model": "Shadow Base 800 FX (Black)",
+      "upstream_name": "be quiet! Shadow Base 800 FX",
+      "upstream_match": {"color": "Black"},
+      "override": {
+        "gpu_length_max_mm": 430,
+        "cooler_height_max_mm": 180,
+        "supported_form_factors": ["atx", "matx", "itx"],
+        "radiator_sizes_mm": [120, 140, 240, 280, 360, 420]
+      },
+      "ref": "https://www.bequiet.com/en/case/4483",
+      "note": "官方规格:GPU 430mm/散热器 180mm;顶/前 120~420、后 120;官网另标 E-ATX,不在枚举内忽略"
+    },
+    {
+      "sku": "case-montech-air-903-max",
+      "brand": "Montech",
+      "model": "AIR 903 MAX (Black)",
+      "upstream_name": "Montech AIR 903 MAX",
+      "upstream_match": {"color": "Black"},
+      "override": {
+        "gpu_length_max_mm": 400,
+        "cooler_height_max_mm": 180,
+        "supported_form_factors": ["atx", "matx", "itx"],
+        "radiator_sizes_mm": [120, 140, 240, 280, 360]
+      },
+      "ref": "https://www.montechpc.com/air-903-max",
+      "note": "官方规格:GPU 400mm/散热器 180mm;顶/前最大 360 冷排;官网另标 E-ATX/SSI-EEB,不在枚举内忽略;Mini-ITX 官方支持列表含之"
+    },
+    {
+      "sku": "case-nzxt-h5-flow-2024",
+      "brand": "NZXT",
+      "model": "H5 Flow (2024, Black)",
+      "upstream_name": "NZXT H5 Flow (2024)",
+      "upstream_match": {"color": "Black"},
+      "override": {
+        "gpu_length_max_mm": 410,
+        "cooler_height_max_mm": 170,
+        "supported_form_factors": ["atx", "matx", "itx"],
+        "radiator_sizes_mm": [120, 140, 240, 280, 360]
+      },
+      "ref": "https://support.nzxt.com/hc/en-us/articles/40225168535451-H5-Flow-2024-Specs",
+      "note": "官方规格:GPU 410mm/散热器 170mm;顶最大 240(280 需低内存)、前最大 360"
+    },
+    {
+      "sku": "case-nzxt-h6-flow-2023",
+      "brand": "NZXT",
+      "model": "H6 Flow (2023, Black)",
+      "upstream_name": "NZXT H6 Flow",
+      "upstream_match": {"color": "Black"},
+      "override": {
+        "gpu_length_max_mm": 365,
+        "cooler_height_max_mm": 163,
+        "supported_form_factors": ["atx", "matx", "itx"],
+        "radiator_sizes_mm": [120, 240, 280, 360]
+      },
+      "ref": "https://support.nzxt.com/hc/en-us/articles/40183529624347-H6-Flow-2023-Specs",
+      "note": "官方规格:GPU 365mm/散热器 163mm;顶最大 360、后 120"
+    },
+    {
+      "sku": "case-nzxt-h7-flow-2024",
+      "brand": "NZXT",
+      "model": "H7 Flow (2024, Black)",
+      "upstream_name": "NZXT H7 Flow (2024)",
+      "upstream_match": {"color": "Black"},
+      "override": {
+        "gpu_length_max_mm": 410,
+        "cooler_height_max_mm": 185,
+        "supported_form_factors": ["atx", "matx", "itx"],
+        "radiator_sizes_mm": [120, 140, 240, 280, 360, 420]
+      },
+      "ref": "https://support.nzxt.com/hc/en-us/articles/40379376386203-H7-Flow-2024-Specs",
+      "note": "官方规格:GPU 410mm/散热器 185mm;前最大 420、顶最大 360、后 120/140;官网另标 E-ATX,不在枚举内忽略"
+    },
+    {
+      "sku": "case-corsair-4000d-airflow",
+      "brand": "Corsair",
+      "model": "4000D Airflow (Black)",
+      "upstream_name": "Corsair 4000D Airflow",
+      "upstream_match": {"color": "Black", "side_panel": "Tinted Tempered Glass"},
+      "override": {
+        "gpu_length_max_mm": 360,
+        "cooler_height_max_mm": 170,
+        "supported_form_factors": ["atx", "matx", "itx"],
+        "radiator_sizes_mm": [120, 240, 280, 360]
+      },
+      "ref": "https://www.corsair.com/us/en/p/pc-cases/cc-9011200-ww/4000d-airflow-tempered-glass-mid-tower-atx-case-black-cc-9011200-ww",
+      "note": "官方规格:GPU 360mm/散热器 170mm;前 360/280/240、顶 280、后 120;官网另标 E-ATX(≤305mm 宽),不在枚举内忽略"
+    },
+    {
+      "sku": "case-corsair-5000d-airflow",
+      "brand": "Corsair",
+      "model": "5000D Airflow (Black)",
+      "upstream_name": "Corsair 5000D AIRFLOW",
+      "upstream_match": {"color": "Black"},
+      "override": {
+        "gpu_length_max_mm": 420,
+        "cooler_height_max_mm": 170,
+        "supported_form_factors": ["atx", "matx", "itx"],
+        "radiator_sizes_mm": [120, 240, 280, 360]
+      },
+      "ref": "https://www.corsair.com/us/en/p/pc-cases/cc-9011210-ww/5000d-airflow-tempered-glass-mid-tower-atx-pc-case-black-cc-9011210-ww",
+      "note": "官方规格:GPU 420mm/散热器 170mm;前 360/280/240、侧 360/280/240、顶 360(官方文案 360mm push/pull in the roof)、后 120;官网另标 E-ATX,忽略"
+    },
+    {
+      "sku": "case-asus-prime-ap201",
+      "brand": "Asus",
+      "model": "Prime AP201 (Black, Mesh)",
+      "upstream_name": "Asus Prime AP201",
+      "upstream_match": {"color": "Black", "side_panel": "Mesh"},
+      "override": {
+        "gpu_length_max_mm": 338,
+        "cooler_height_max_mm": 170,
+        "supported_form_factors": ["matx", "itx"],
+        "radiator_sizes_mm": [120, 140, 240, 280, 360]
+      },
+      "ref": "https://www.asus.com/motherboards-components/cases/prime/asus-prime-ap201-microatx-case/techspec/",
+      "note": "官方规格:GPU 338mm/散热器 170mm;顶 360/280/240/140/120、后 120;mATX/ITX 专用"
+    }
+  ]
+}

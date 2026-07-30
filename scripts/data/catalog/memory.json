@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "category": "memory",
+  "notes": [
+    "D4b 内存目录:20 SKU,覆盖 ddr4(8)与 ddr5(12)主流双通道套装。",
+    "错误级字段 generation 与 warning 字段 speed_mts 均来自上游 speed=[代际, MT/s],无需人工 override。",
+    "上游同名行多(同名不同频率/时序/容量组合/颜色),upstream_match 用 speed+cas_latency+modules/color 消歧;",
+    "剩余多行若去掉美元价格字段后完全一致,find() 视为同一条。"
+  ],
+  "entries": [
+    {
+      "sku": "mem-corsair-lpx-16-3200",
+      "brand": "Corsair",
+      "model": "Vengeance LPX 16GB (2x8GB) DDR4-3200 CL16",
+      "upstream_name": "Corsair Vengeance LPX 16 GB",
+      "upstream_match": {"speed": [4, 3200], "cas_latency": 16, "modules": [2, 8], "color": "Black / Yellow"},
+      "override": {}
+    },
+    {
+      "sku": "mem-corsair-lpx-32-3600",
+      "brand": "Corsair",
+      "model": "Vengeance LPX 32GB (2x16GB) DDR4-3600 CL18",
+      "upstream_name": "Corsair Vengeance LPX 32 GB",
+      "upstream_match": {"speed": [4, 3600], "cas_latency": 18, "modules": [2, 16], "color": "Black / Yellow"},
+      "override": {}
+    },
+    {
+      "sku": "mem-kingston-beast-16-3200-d4",
+      "brand": "Kingston",
+      "model": "FURY Beast 16GB (2x8GB) DDR4-3200 CL16",
+      "upstream_name": "Kingston FURY Beast 16 GB",
+      "upstream_match": {"speed": [4, 3200], "cas_latency": 16, "modules": [2, 8], "color": "Black"},
+      "override": {}
+    },
+    {
+      "sku": "mem-kingston-beast-32-3600-d4",
+      "brand": "Kingston",
+      "model": "FURY Beast 32GB (2x16GB) DDR4-3600 CL18",
+      "upstream_name": "Kingston FURY Beast 32 GB",
+      "upstream_match": {"speed": [4, 3600], "cas_latency": 18, "modules": [2, 16], "color": "Black"},
+      "override": {}
+    },
+    {
+      "sku": "mem-gskill-ripjawsv-16-3600",
+      "brand": "G.Skill",
+      "model": "Ripjaws V 16GB (2x8GB) DDR4-3600 CL18",
+      "upstream_name": "G.Skill Ripjaws V 16 GB",
+      "upstream_match": {"speed": [4, 3600], "cas_latency": 18, "modules": [2, 8], "color": "Black"},
+      "override": {}
+    },
+    {
+      "sku": "mem-gskill-ripjawsv-32-3200",
+      "brand": "G.Skill",
+      "model": "Ripjaws V 32GB (2x16GB) DDR4-3200 CL16",
+      "upstream_name": "G.Skill Ripjaws V 32 GB",
+      "upstream_match": {"speed": [4, 3200], "cas_latency": 16, "modules": [2, 16], "color": "Black"},
+      "override": {}
+    },
+    {
+      "sku": "mem-crucial-ballistix-16-3200",
+      "brand": "Crucial",
+      "model": "Ballistix 16GB (2x8GB) DDR4-3200 CL16",
+      "upstream_name": "Crucial Ballistix 16 GB",
+      "upstream_match": {"speed": [4, 3200], "cas_latency": 16, "color": "Black"},
+      "override": {}
+    },
+    {
+      "sku": "mem-team-delta-32-3200-d4",
+      "brand": "TEAMGROUP",
+      "model": "T-Force Delta RGB 32GB (2x16GB) DDR4-3200 CL16",
+      "upstream_name": "TEAMGROUP T-Force Delta RGB 32 GB",
+      "upstream_match": {"speed": [4, 3200], "cas_latency": 16, "modules": [2, 16], "color": "Black"},
+      "override": {}
+    },
+    {
+      "sku": "mem-kingston-beast-16-5200",
+      "brand": "Kingston",
+      "model": "FURY Beast 16GB (2x8GB) DDR5-5200 CL40",
+      "upstream_name": "Kingston FURY Beast 16 GB",
+      "upstream_match": {"speed": [5, 5200], "cas_latency": 40, "color": "Black"},
+      "override": {}
+    },
+    {
+      "sku": "mem-kingston-beast-16-6000",
+      "brand": "Kingston",
+      "model": "FURY Beast 16GB (2x8GB) DDR5-6000 CL30",
+      "upstream_name": "Kingston FURY Beast 16 GB",
+      "upstream_match": {"speed": [5, 6000], "cas_latency": 30, "modules": [2, 8], "color": "Black"},
+      "override": {}
+    },
+    {
+      "sku": "mem-kingston-beast-32-5600",
+      "brand": "Kingston",
+      "model": "FURY Beast 32GB (2x16GB) DDR5-5600 CL36",
+      "upstream_name": "Kingston FURY Beast 32 GB",
+      "upstream_match": {"speed": [5, 5600], "cas_latency": 36, "color": "Black"},
+      "override": {}
+    },
+    {
+      "sku": "mem-kingston-beast-32-6000",
+      "brand": "Kingston",
+      "model": "FURY Beast 32GB (2x16GB) DDR5-6000 CL30",
+      "upstream_name": "Kingston FURY Beast 32 GB",
+      "upstream_match": {"speed": [5, 6000], "cas_latency": 30, "modules": [2, 16], "color": "Black"},
+      "override": {}
+    },
+    {
+      "sku": "mem-corsair-veng-32-6000",
+      "brand": "Corsair",
+      "model": "Vengeance 32GB (2x16GB) DDR5-6000 CL30",
+      "upstream_name": "Corsair Vengeance 32 GB",
+      "upstream_match": {"speed": [5, 6000], "cas_latency": 30, "color": "Black / Gray"},
+      "override": {}
+    },
+    {
+      "sku": "mem-corsair-veng-rgb-32-6000",
+      "brand": "Corsair",
+      "model": "Vengeance RGB 32GB (2x16GB) DDR5-6000 CL36",
+      "upstream_name": "Corsair Vengeance RGB 32 GB",
+      "upstream_match": {"speed": [5, 6000], "cas_latency": 36, "color": "Black"},
+      "override": {}
+    },
+    {
+      "sku": "mem-gskill-z5-rgb-32-6400",
+      "brand": "G.Skill",
+      "model": "Trident Z5 RGB 32GB (2x16GB) DDR5-6400 CL32",
+      "upstream_name": "G.Skill Trident Z5 RGB 32 GB",
+      "upstream_match": {"speed": [5, 6400], "cas_latency": 32, "color": "Black"},
+      "override": {}
+    },
+    {
+      "sku": "mem-gskill-z5neo-rgb-32-6000",
+      "brand": "G.Skill",
+      "model": "Trident Z5 Neo RGB 32GB (2x16GB) DDR5-6000 CL30",
+      "upstream_name": "G.Skill Trident Z5 Neo RGB 32 GB",
+      "upstream_match": {"speed": [5, 6000], "cas_latency": 30, "color": "Black"},
+      "override": {}
+    },
+    {
+      "sku": "mem-gskill-flarex5-32-6000",
+      "brand": "G.Skill",
+      "model": "Flare X5 32GB (2x16GB) DDR5-6000 CL30",
+      "upstream_name": "G.Skill Flare X5 32 GB",
+      "upstream_match": {"speed": [5, 6000], "cas_latency": 30, "color": "Black"},
+      "override": {}
+    },
+    {
+      "sku": "mem-gskill-s5-32-6000",
+      "brand": "G.Skill",
+      "model": "Ripjaws S5 32GB (2x16GB) DDR5-6000 CL30",
+      "upstream_name": "G.Skill Ripjaws S5 32 GB",
+      "upstream_match": {"speed": [5, 6000], "cas_latency": 30, "color": "Black"},
+      "override": {}
+    },
+    {
+      "sku": "mem-adata-lancer-32-5200",
+      "brand": "ADATA",
+      "model": "XPG LANCER 32GB (2x16GB) DDR5-5200 CL38",
+      "upstream_name": "ADATA XPG LANCER 32 GB",
+      "upstream_match": {"speed": [5, 5200], "cas_latency": 38},
+      "override": {}
+    },
+    {
+      "sku": "mem-team-delta-32-6000-white",
+      "brand": "TEAMGROUP",
+      "model": "T-Force Delta RGB 32GB (2x16GB) DDR5-6000 CL30 White",
+      "upstream_name": "TEAMGROUP T-Force Delta RGB 32 GB",
+      "upstream_match": {"speed": [5, 6000], "cas_latency": 30, "color": "White"},
+      "override": {}
+    }
+  ]
+}

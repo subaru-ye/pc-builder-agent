@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "category": "cpu",
+  "notes": "socket 与 supported_chipsets 为人工 override,依据 AMD/Intel 官方 CPU 支持列表;has_igpu/tdp_w 来自 pc-part-dataset 锁定快照(graphics/tdp 字段)。芯片组列表只收 P1 目录可能用到的桌面芯片组全集,按平台固定。",
+  "entries": [
+    {
+      "sku": "cpu-r5-5500",
+      "brand": "AMD",
+      "model": "Ryzen 5 5500",
+      "upstream_name": "AMD Ryzen 5 5500",
+      "override": {"socket": "AM4", "supported_chipsets": ["A520", "B450", "B550", "X470", "X570"]}
+    },
+    {
+      "sku": "cpu-r5-5600",
+      "brand": "AMD",
+      "model": "Ryzen 5 5600",
+      "upstream_name": "AMD Ryzen 5 5600",
+      "override": {"socket": "AM4", "supported_chipsets": ["A520", "B450", "B550", "X470", "X570"]}
+    },
+    {
+      "sku": "cpu-r7-5700x",
+      "brand": "AMD",
+      "model": "Ryzen 7 5700X",
+      "upstream_name": "AMD Ryzen 7 5700X",
+      "override": {"socket": "AM4", "supported_chipsets": ["A520", "B450", "B550", "X470", "X570"]}
+    },
+    {
+      "sku": "cpu-r5-7500f",
+      "brand": "AMD",
+      "model": "Ryzen 5 7500F",
+      "upstream_name": "AMD Ryzen 5 7500F",
+      "override": {"socket": "AM5", "supported_chipsets": ["A620", "B650", "B650E", "X670", "X670E", "B850", "X870", "X870E"]}
+    },
+    {
+      "sku": "cpu-r5-7600",
+      "brand": "AMD",
+      "model": "Ryzen 5 7600",
+      "upstream_name": "AMD Ryzen 5 7600",
+      "override": {"socket": "AM5", "supported_chipsets": ["A620", "B650", "B650E", "X670", "X670E", "B850", "X870", "X870E"]}
+    },
+    {
+      "sku": "cpu-r5-7600x",
+      "brand": "AMD",
+      "model": "Ryzen 5 7600X",
+      "upstream_name": "AMD Ryzen 5 7600X",
+      "override": {"socket": "AM5", "supported_chipsets": ["A620", "B650", "B650E", "X670", "X670E", "B850", "X870", "X870E"]}
+    },
+    {
+      "sku": "cpu-r7-7700",
+      "brand": "AMD",
+      "model": "Ryzen 7 7700",
+      "upstream_name": "AMD Ryzen 7 7700",
+      "override": {"socket": "AM5", "supported_chipsets": ["A620", "B650", "B650E", "X670", "X670E", "B850", "X870", "X870E"]}
+    },
+    {
+      "sku": "cpu-r7-7800x3d",
+      "brand": "AMD",
+      "model": "Ryzen 7 7800X3D",
+      "upstream_name": "AMD Ryzen 7 7800X3D",
+      "override": {"socket": "AM5", "supported_chipsets": ["A620", "B650", "B650E", "X670", "X670E", "B850", "X870", "X870E"]}
+    },
+    {
+      "sku": "cpu-r9-7900",
+      "brand": "AMD",
+      "model": "Ryzen 9 7900",
+      "upstream_name": "AMD Ryzen 9 7900",
+      "override": {"socket": "AM5", "supported_chipsets": ["A620", "B650", "B650E", "X670", "X670E", "B850", "X870", "X870E"]}
+    },
+    {
+      "sku": "cpu-r5-9600x",
+      "brand": "AMD",
+      "model": "Ryzen 5 9600X",
+      "upstream_name": "AMD Ryzen 5 9600X",
+      "override": {"socket": "AM5", "supported_chipsets": ["A620", "B650", "B650E", "X670", "X670E", "B850", "X870", "X870E"]}
+    },
+    {
+      "sku": "cpu-r7-9700x",
+      "brand": "AMD",
+      "model": "Ryzen 7 9700X",
+      "upstream_name": "AMD Ryzen 7 9700X",
+      "override": {"socket": "AM5", "supported_chipsets": ["A620", "B650", "B650E", "X670", "X670E", "B850", "X870", "X870E"]}
+    },
+    {
+      "sku": "cpu-r7-9800x3d",
+      "brand": "AMD",
+      "model": "Ryzen 7 9800X3D",
+      "upstream_name": "AMD Ryzen 7 9800X3D",
+      "override": {"socket": "AM5", "supported_chipsets": ["A620", "B650", "B650E", "X670", "X670E", "B850", "X870", "X870E"]}
+    },
+    {
+      "sku": "cpu-r9-9900x",
+      "brand": "AMD",
+      "model": "Ryzen 9 9900X",
+      "upstream_name": "AMD Ryzen 9 9900X",
+      "override": {"socket": "AM5", "supported_chipsets": ["A620", "B650", "B650E", "X670", "X670E", "B850", "X870", "X870E"]}
+    },
+    {
+      "sku": "cpu-i3-12100f",
+      "brand": "Intel",
+      "model": "Core i3-12100F",
+      "upstream_name": "Intel Core i3-12100F",
+      "override": {"socket": "LGA1700", "supported_chipsets": ["H610", "B660", "H670", "Z690", "B760", "H770", "Z790"]}
+    },
+    {
+      "sku": "cpu-i5-12400f",
+      "brand": "Intel",
+      "model": "Core i5-12400F",
+      "upstream_name": "Intel Core i5-12400F",
+      "override": {"socket": "LGA1700", "supported_chipsets": ["H610", "B660", "H670", "Z690", "B760", "H770", "Z790"]}
+    },
+    {
+      "sku": "cpu-i5-12600k",
+      "brand": "Intel",
+      "model": "Core i5-12600K",
+      "upstream_name": "Intel Core i5-12600K",
+      "override": {"socket": "LGA1700", "supported_chipsets": ["H610", "B660", "H670", "Z690", "B760", "H770", "Z790"]}
+    },
+    {
+      "sku": "cpu-i5-13400f",
+      "brand": "Intel",
+      "model": "Core i5-13400F",
+      "upstream_name": "Intel Core i5-13400F",
+      "override": {"socket": "LGA1700", "supported_chipsets": ["H610", "B660", "H670", "Z690", "B760", "H770", "Z790"]}
+    },
+    {
+      "sku": "cpu-i5-14600kf",
+      "brand": "Intel",
+      "model": "Core i5-14600KF",
+      "upstream_name": "Intel Core i5-14600KF",
+      "override": {"socket": "LGA1700", "supported_chipsets": ["H610", "B660", "H670", "Z690", "B760", "H770", "Z790"]}
+    },
+    {
+      "sku": "cpu-i7-14700k",
+      "brand": "Intel",
+      "model": "Core i7-14700K",
+      "upstream_name": "Intel Core i7-14700K",
+      "override": {"socket": "LGA1700", "supported_chipsets": ["H610", "B660", "H670", "Z690", "B760", "H770", "Z790"]}
+    },
+    {
+      "sku": "cpu-ultra5-245k",
+      "brand": "Intel",
+      "model": "Core Ultra 5 245K",
+      "upstream_name": "Intel Core Ultra 5 245K",
+      "override": {"socket": "LGA1851", "supported_chipsets": ["H810", "B860", "Z890"]}
+    }
+  ]
+}

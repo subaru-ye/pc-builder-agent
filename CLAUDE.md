@@ -23,6 +23,7 @@ go build ./... && go vet ./...
 | docs/product/mvp.md | MVP 范围与 P0–P6 阶段(短期执行唯一依据) |
 | docs/装机Agent设计方案.md | 架构 / A2A schema / 规则表 / 表结构 |
 | docs/tech/P2-流水线设计.md | P2 实现层:编排拓扑 / 提示词 SOP / tool 契约 / Loop 控制(schema 口径仍以设计方案 §四 为准) |
+| docs/tech/P3-语义选件设计.md | P3 实现层:embedding 素材与文本 / 语义检索路径 / search_parts_semantic 契约 |
 | docs/tech/技术选型.md | 栈级决策(ADR)+ 版本锁定表 |
 | docs/tech/工程实践指引.md | 各阶段开工前扫对应小节;评审对照 §九检查单 |
 
@@ -32,7 +33,7 @@ go build ./... && go vet ./...
 - **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
 - **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。
 - **schema 单一出处**:`internal/schemas` 定义一份,字段变更回写设计方案 §四,不在代码里静默漂移。
-- 当前进度:P1 完成(数据管道 + 迁移/导入 CLI + 规则引擎含 20 组 golden);下一步 P2(单进程三 Agent 流水线,开工前扫工程实践指引 §九 P2 检查单)。
+- 当前进度:P2 完成(三 Agent 流水线,用例 A 端到端 pass,Pass@3=3/3);进行中 P3(pgvector 语义选件,设计见 docs/tech/P3-语义选件设计.md)。
 
 ## 已知环境坑(Windows)
 

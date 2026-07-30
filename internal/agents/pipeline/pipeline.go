@@ -21,11 +21,12 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
-// Config 流水线装配参数:两档模型(初筛低价 / 生成旗舰)+ 数据层。
+// Config 流水线装配参数:两档模型(初筛低价 / 生成旗舰)+ 数据层 + 查询向量化。
 type Config struct {
 	ScreeningModel model.LLM
 	BuilderModel   model.LLM
 	Store          *store.Store
+	QueryEmbedder  tools.QueryEmbedder // P3 语义检索的 query 向量化(host 注入端点实现)
 }
 
 // New 装配完整流水线根 agent(挂给 launcher)。
@@ -36,12 +37,19 @@ func New(cfg Config) (agent.Agent, error) {
 	if cfg.Store == nil {
 		return nil, fmt.Errorf("pipeline: Store 不能为空")
 	}
+	if cfg.QueryEmbedder == nil {
+		return nil, fmt.Errorf("pipeline: QueryEmbedder 不能为空")
+	}
 
 	node := validate.New(cfg.Store)
 
 	searchTool, err := tools.NewSearchParts(cfg.Store)
 	if err != nil {
 		return nil, fmt.Errorf("pipeline: 构造 search_parts 失败: %w", err)
+	}
+	semanticTool, err := tools.NewSearchPartsSemantic(cfg.QueryEmbedder, cfg.Store)
+	if err != nil {
+		return nil, fmt.Errorf("pipeline: 构造 search_parts_semantic 失败: %w", err)
 	}
 	validateTool, err := tools.NewValidateBuild(node)
 	if err != nil {
@@ -68,7 +76,7 @@ func New(cfg Config) (agent.Agent, error) {
 		Model:                    cfg.BuilderModel,
 		Description:              "生成 Agent:按 RequirementSpec 用 search_parts 从零件库选件,产出 BuildDraft JSON。",
 		Instruction:              builderInstruction,
-		Tools:                    []tool.Tool{searchTool, validateTool},
+		Tools:                    []tool.Tool{searchTool, semanticTool, validateTool},
 		OutputKey:                stateKeyBuildDraft,
 		DisallowTransferToParent: true,
 		DisallowTransferToPeers:  true,

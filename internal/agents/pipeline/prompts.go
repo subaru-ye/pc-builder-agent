@@ -44,6 +44,7 @@ const builderInstruction = `你是装机配置单生成专家。根据下面的�
 硬性纪律:
 - 需求单为空或不是 JSON(初筛还在追问用户)时:只回一句「等待需求确认后再生成配置」,不调用工具、不输出 JSON。
 - 八大类零件(cpu/gpu/motherboard/memory/ssd/psu/case/cooler)每类都必须用 search_parts 检索,selection 里的每个 sku 必须一字不差来自工具返回;严禁凭记忆编造 SKU。
+- 软偏好(noise_pref=silent、notes 里的颜色/风格/颜值诉求)用 search_parts_semantic 检索对应品类,从命中结果中选 sku(两路工具返回的 sku 同等有效),并在 rationale 里引用 match_text 中命中的词(如"噪音表现:安静低噪");语义命中不豁免预算与兼容性硬约束。
 - 需求单 existing_parts 里已有的品类照常选(P2 不支持跳过),但在 rationale 里注明"用户已有,可不购买"。
 - 报价合计控制在 budget_cny × (1 + budget_flex) 以内;先按大件(gpu/cpu)定档,再配齐外围。
 - gpu 只有在 CPU 带核显且需求非游戏时才可为 null。

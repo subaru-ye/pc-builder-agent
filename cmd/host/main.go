@@ -17,6 +17,7 @@ import (
 
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
 	"github.com/subaru-ye/pc-builder-agent/internal/dotenv"
+	"github.com/subaru-ye/pc-builder-agent/internal/embedding"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
@@ -65,10 +66,14 @@ func main() {
 		log.Fatalf("创建生成模型失败: %v", err)
 	}
 
+	// P3 语义检索的查询向量化客户端(与 cmd/embedparts 同模型/同维度)。
+	embedder := embedding.NewClient(baseURL, apiKey, embedding.DefaultModel, store.EmbeddingDims)
+
 	root, err := pipeline.New(pipeline.Config{
 		ScreeningModel: screeningModel,
 		BuilderModel:   builderModel,
 		Store:          st,
+		QueryEmbedder:  embedder,
 	})
 	if err != nil {
 		log.Fatalf("装配流水线失败: %v", err)

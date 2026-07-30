@@ -29,7 +29,7 @@ type Config struct {
 	QueryEmbedder  tools.QueryEmbedder // P3 语义检索的 query 向量化(host 注入端点实现)
 }
 
-// New 装配完整流水线根 agent(挂给 launcher)。
+// New 装配完整单进程流水线根 agent(挂给 launcher;集成测试与 P5 前的默认形态)。
 func New(cfg Config) (agent.Agent, error) {
 	if cfg.ScreeningModel == nil || cfg.BuilderModel == nil {
 		return nil, fmt.Errorf("pipeline: ScreeningModel/BuilderModel 不能为空")
@@ -41,24 +41,34 @@ func New(cfg Config) (agent.Agent, error) {
 		return nil, fmt.Errorf("pipeline: QueryEmbedder 不能为空")
 	}
 
-	node := validate.New(cfg.Store)
-
-	searchTool, err := tools.NewSearchParts(cfg.Store)
+	screening, err := newScreeningAgent(cfg.ScreeningModel)
 	if err != nil {
-		return nil, fmt.Errorf("pipeline: 构造 search_parts 失败: %w", err)
+		return nil, err
 	}
-	semanticTool, err := tools.NewSearchPartsSemantic(cfg.QueryEmbedder, cfg.Store)
+	prep, loop, err := newBuildCore(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("pipeline: 构造 search_parts_semantic 失败: %w", err)
-	}
-	validateTool, err := tools.NewValidateBuild(node)
-	if err != nil {
-		return nil, fmt.Errorf("pipeline: 构造 validate_build 失败: %w", err)
+		return nil, err
 	}
 
+	root, err := sequentialagent.New(sequentialagent.Config{
+		AgentConfig: agent.Config{
+			Name:        "pc_builder_pipeline",
+			Description: "装机配置单流水线:需求初筛 → 改单预处理 → 选件生成 → 兼容性校验与报价。",
+			SubAgents:   []agent.Agent{screening, prep, loop},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("pipeline: 构造 Sequential 失败: %w", err)
+	}
+	return root, nil
+}
+
+// newScreeningAgent 初筛 Agent(低价档):自然语言 → RequirementSpec/ChangeRequest JSON。
+// 单进程 New 与 P5 host 的 NewScreening 共用,型号常量由调用方(host)注入。
+func newScreeningAgent(m model.LLM) (agent.Agent, error) {
 	screening, err := llmagent.New(llmagent.Config{
 		Name:                     "requirement_agent",
-		Model:                    cfg.ScreeningModel,
+		Model:                    m,
 		Description:              "初筛 Agent:把用户自然语言装机需求整理成 RequirementSpec JSON,信息不足时追问。",
 		Instruction:              screeningInstruction,
 		OutputKey:                stateKeyRequirementSpec,
@@ -67,6 +77,26 @@ func New(cfg Config) (agent.Agent, error) {
 	})
 	if err != nil {
 		return nil, fmt.Errorf("pipeline: 构造初筛 Agent 失败: %w", err)
+	}
+	return screening, nil
+}
+
+// newBuildCore 生成+校验半程(改单预处理 prep + Loop(生成→校验)):单进程 New
+// 与 P5 buildsvc 的 NewRemote 共用。持有旗舰档模型、Store、QueryEmbedder。
+func newBuildCore(cfg Config) (prep, loop agent.Agent, err error) {
+	node := validate.New(cfg.Store)
+
+	searchTool, err := tools.NewSearchParts(cfg.Store)
+	if err != nil {
+		return nil, nil, fmt.Errorf("pipeline: 构造 search_parts 失败: %w", err)
+	}
+	semanticTool, err := tools.NewSearchPartsSemantic(cfg.QueryEmbedder, cfg.Store)
+	if err != nil {
+		return nil, nil, fmt.Errorf("pipeline: 构造 search_parts_semantic 失败: %w", err)
+	}
+	validateTool, err := tools.NewValidateBuild(node)
+	if err != nil {
+		return nil, nil, fmt.Errorf("pipeline: 构造 validate_build 失败: %w", err)
 	}
 
 	// 生成 Agent 挂 validate_build 供输出前自查,但最终判定仍由 validator_agent
@@ -82,20 +112,20 @@ func New(cfg Config) (agent.Agent, error) {
 		DisallowTransferToPeers:  true,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("pipeline: 构造生成 Agent 失败: %w", err)
+		return nil, nil, fmt.Errorf("pipeline: 构造生成 Agent 失败: %w", err)
 	}
 
 	validator, err := newValidatorAgent(node, cfg.Store)
 	if err != nil {
-		return nil, fmt.Errorf("pipeline: 构造校验节点失败: %w", err)
+		return nil, nil, fmt.Errorf("pipeline: 构造校验节点失败: %w", err)
 	}
 
-	prep, err := newChangePrepAgent()
+	prep, err = newChangePrepAgent()
 	if err != nil {
-		return nil, fmt.Errorf("pipeline: 构造改单预处理节点失败: %w", err)
+		return nil, nil, fmt.Errorf("pipeline: 构造改单预处理节点失败: %w", err)
 	}
 
-	loop, err := loopagent.New(loopagent.Config{
+	loop, err = loopagent.New(loopagent.Config{
 		MaxIterations: maxLoopRounds,
 		AgentConfig: agent.Config{
 			Name:        "build_loop",
@@ -104,18 +134,7 @@ func New(cfg Config) (agent.Agent, error) {
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("pipeline: 构造 Loop 失败: %w", err)
+		return nil, nil, fmt.Errorf("pipeline: 构造 Loop 失败: %w", err)
 	}
-
-	root, err := sequentialagent.New(sequentialagent.Config{
-		AgentConfig: agent.Config{
-			Name:        "pc_builder_pipeline",
-			Description: "装机配置单流水线:需求初筛 → 改单预处理 → 选件生成 → 兼容性校验与报价。",
-			SubAgents:   []agent.Agent{screening, prep, loop},
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("pipeline: 构造 Sequential 失败: %w", err)
-	}
-	return root, nil
+	return prep, loop, nil
 }

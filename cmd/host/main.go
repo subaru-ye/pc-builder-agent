@@ -6,17 +6,17 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"log"
 	"os"
-	"strings"
 
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/agent/llmagent"
 	"google.golang.org/adk/v2/cmd/launcher"
 	"google.golang.org/adk/v2/cmd/launcher/full"
 	"google.golang.org/adk/v2/model/openaimodel"
+
+	"github.com/subaru-ye/pc-builder-agent/internal/dotenv"
 )
 
 // 低价档 chat 模型,型号以本常量为准,不写进文档(技术选型 ADR-004)。
@@ -29,7 +29,7 @@ const defaultBaseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 func main() {
 	ctx := context.Background()
 
-	loadDotEnv(".env")
+	dotenv.Load(".env")
 
 	apiKey := os.Getenv("DASHSCOPE_API_KEY")
 	if apiKey == "" {
@@ -62,31 +62,5 @@ func main() {
 	config := &launcher.Config{AgentLoader: agent.NewSingleLoader(a)}
 	if err := l.Execute(ctx, config, os.Args[1:]); err != nil {
 		log.Fatalf("运行失败: %v\n\n%s", err, l.CommandLineSyntax())
-	}
-}
-
-// loadDotEnv 从仓库根的 .env 读取 KEY=VALUE 并注入环境(Windows 无 source .env 等价物)。
-// 已存在的环境变量优先;文件不存在时静默跳过。
-func loadDotEnv(path string) {
-	f, err := os.Open(path)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		k, v, ok := strings.Cut(line, "=")
-		if !ok {
-			continue
-		}
-		k, v = strings.TrimSpace(k), strings.TrimSpace(v)
-		if os.Getenv(k) == "" {
-			os.Setenv(k, v)
-		}
 	}
 }

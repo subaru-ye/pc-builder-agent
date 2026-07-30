@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -270,6 +271,129 @@ func TestPriceSnapshots(t *testing.T) {
 		_, err := s.SnapshotByDate(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
 		if !errors.Is(err, ErrSnapshotNotFound) {
 			t.Errorf("应为 ErrSnapshotNotFound,得到 %v", err)
+		}
+	})
+}
+
+// candidateExtraSQL 在共享夹具基础上补一批 AM5 CPU(含一个无价件与一个异平台/异品牌件),
+// 专用于 Candidates 的过滤/排序/截断/价格降级场景。价格入 2026-07-27 快照。
+const candidateExtraSQL = `
+INSERT INTO parts (sku, category, brand, model, specs) VALUES
+('cpu-am5-cheap','cpu','AMD','R5 cheap',
+ '{"socket":"AM5","supported_chipsets":["B650"],"has_igpu":true,"tdp_w":65}'),
+('cpu-am5-mid','cpu','AMD','R7 mid',
+ '{"socket":"AM5","supported_chipsets":["B650"],"has_igpu":false,"tdp_w":105}'),
+('cpu-am5-high','cpu','AMD','R9 high',
+ '{"socket":"AM5","supported_chipsets":["X670"],"has_igpu":false,"tdp_w":170}'),
+('cpu-am5-nopr','cpu','AMD','R5 noprice',
+ '{"socket":"AM5","supported_chipsets":["B650"],"has_igpu":true,"tdp_w":65}'),
+('cpu-intel','cpu','Intel','i5-14600K',
+ '{"socket":"LGA1700","supported_chipsets":["B760"],"has_igpu":true,"tdp_w":125}');
+
+INSERT INTO prices (snapshot_id, sku, price_cny, source)
+SELECT id, v.sku, v.price, 'jd' FROM price_snapshots, (VALUES
+ ('cpu-am5-cheap', 800.00), ('cpu-am5-mid', 1500.00),
+ ('cpu-am5-high', 2500.00), ('cpu-intel', 1000.00)
+) AS v(sku, price) WHERE snapshot_date = '2026-07-27';
+`
+
+func TestCandidates(t *testing.T) {
+	s := setupStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, candidateExtraSQL); err != nil {
+		t.Fatalf("灵入候选夹具失败: %v", err)
+	}
+	// 活跃 AM5 CPU 按价升序(NULLS LAST):cheap 800 / 7600 1299 / mid 1500 / high 2500 / nopr 无价。
+	skus := func(r CandidateResult) []string {
+		out := make([]string, len(r.Candidates))
+		for i, c := range r.Candidates {
+			out[i] = c.SKU
+		}
+		return out
+	}
+
+	t.Run("socket 过滤 + 价升序 + 无价排末", func(t *testing.T) {
+		r, err := s.Candidates(ctx, CandidateQuery{Category: schemas.CategoryCPU, Socket: "AM5", TopN: 10})
+		if err != nil {
+			t.Fatalf("Candidates 失败: %v", err)
+		}
+		want := []string{"cpu-am5-cheap", "cpu-r5-7600", "cpu-am5-mid", "cpu-am5-high", "cpu-am5-nopr"}
+		if !reflect.DeepEqual(skus(r), want) {
+			t.Errorf("顺序错误: got %v want %v", skus(r), want)
+		}
+		if r.Truncated != 0 {
+			t.Errorf("Truncated = %d, want 0", r.Truncated)
+		}
+		if r.SnapshotDate == nil || !r.SnapshotDate.Equal(time.Date(2026, 7, 27, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("SnapshotDate = %v, want 2026-07-27", r.SnapshotDate)
+		}
+		if r.Candidates[0].PriceCNY == nil || *r.Candidates[0].PriceCNY != "800.00" {
+			t.Errorf("首件价 = %v, want 800.00", r.Candidates[0].PriceCNY)
+		}
+		last := r.Candidates[len(r.Candidates)-1]
+		if last.SKU != "cpu-am5-nopr" || last.PriceCNY != nil {
+			t.Errorf("无价件应排末且价为 nil: %+v", last)
+		}
+	})
+
+	t.Run("top_n 截断如实回报", func(t *testing.T) {
+		r, err := s.Candidates(ctx, CandidateQuery{Category: schemas.CategoryCPU, Socket: "AM5", TopN: 2})
+		if err != nil {
+			t.Fatalf("Candidates 失败: %v", err)
+		}
+		if !reflect.DeepEqual(skus(r), []string{"cpu-am5-cheap", "cpu-r5-7600"}) {
+			t.Errorf("前两条错误: %v", skus(r))
+		}
+		if r.Truncated != 3 {
+			t.Errorf("Truncated = %d, want 3(共 5 取 2)", r.Truncated)
+		}
+	})
+
+	t.Run("price_max 剔除无价与超价", func(t *testing.T) {
+		max := 1400
+		r, err := s.Candidates(ctx, CandidateQuery{Category: schemas.CategoryCPU, Socket: "AM5", PriceMaxCNY: &max, TopN: 10})
+		if err != nil {
+			t.Fatalf("Candidates 失败: %v", err)
+		}
+		if !reflect.DeepEqual(skus(r), []string{"cpu-am5-cheap", "cpu-r5-7600"}) {
+			t.Errorf("price_max=1400 应仅余两件(无价件被剔): %v", skus(r))
+		}
+		if r.Truncated != 0 {
+			t.Errorf("Truncated = %d, want 0", r.Truncated)
+		}
+	})
+
+	t.Run("brand 不区分大小写", func(t *testing.T) {
+		r, err := s.Candidates(ctx, CandidateQuery{Category: schemas.CategoryCPU, Brand: "intel", TopN: 10})
+		if err != nil {
+			t.Fatalf("Candidates 失败: %v", err)
+		}
+		if !reflect.DeepEqual(skus(r), []string{"cpu-intel"}) {
+			t.Errorf("brand=intel 应仅命中 Intel 件: %v", skus(r))
+		}
+	})
+
+	t.Run("case form_factor 数组包含", func(t *testing.T) {
+		r, err := s.Candidates(ctx, CandidateQuery{Category: schemas.CategoryCase, FormFactor: "itx", TopN: 10})
+		if err != nil {
+			t.Fatalf("Candidates 失败: %v", err)
+		}
+		if !reflect.DeepEqual(skus(r), []string{"case-air"}) {
+			t.Errorf("case 支持 itx 应命中 case-air: %v", skus(r))
+		}
+	})
+
+	t.Run("非法查询返回 ErrInvalidQuery", func(t *testing.T) {
+		bad := []CandidateQuery{
+			{Category: schemas.CategoryGPU, Socket: "AM5", TopN: 5},     // socket 不适用于 gpu
+			{Category: schemas.CategoryCPU, TopN: 0},                    // top_n 非正
+			{Category: "widget", TopN: 5},                               // 非法品类
+			{Category: schemas.CategoryCPU, FormFactor: "atx", TopN: 5}, // form_factor 不适用于 cpu
+		}
+		for _, q := range bad {
+			if _, err := s.Candidates(ctx, q); !errors.Is(err, ErrInvalidQuery) {
+				t.Errorf("%+v 应为 ErrInvalidQuery,得到 %v", q, err)
+			}
 		}
 	})
 }

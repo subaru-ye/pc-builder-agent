@@ -5,8 +5,10 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -20,6 +22,9 @@ var ErrUnknownSKU = errors.New("未知 SKU")
 
 // ErrSnapshotNotFound 指定日期没有价格快照批次。
 var ErrSnapshotNotFound = errors.New("价格快照不存在")
+
+// ErrInvalidQuery 结构化候选检索的入参非法(品类/过滤条件/top_n),用 errors.Is 判别。
+var ErrInvalidQuery = errors.New("候选检索入参非法")
 
 // Store 基于 pgxpool 的只读访问器。
 type Store struct {
@@ -203,4 +208,168 @@ func (s *Store) PricesBySnapshot(ctx context.Context, snapshotID int64) ([]Price
 		return nil, fmt.Errorf("store: 遍历价格失败: %w", err)
 	}
 	return out, nil
+}
+
+// CandidateQuery 结构化候选检索的硬约束条件(设计方案 P2 流水线设计 §4.1)。
+// 只接受结构化条件,不接自然语言;软偏好(安静/颜值)留 P3 语义路径。
+// 零值字段 = 不约束该维度;可选条件的适用品类见各字段注释,跨品类设置属非法查询。
+type CandidateQuery struct {
+	Category         schemas.Category // 必填,八大类枚举
+	Brand            string           // 可选,品牌不区分大小写精确匹配
+	Socket           string           // 可选,仅 cpu/motherboard(specs->>'socket')
+	FormFactor       string           // 可选,仅 motherboard(板型)/case(支持板型数组包含)
+	MemoryGeneration string           // 可选,仅 memory(generation)/motherboard(memory_generation)
+	PriceMinCNY      *int             // 可选,最新快照价 >= 此值(含);nil = 不约束
+	PriceMaxCNY      *int             // 可选,最新快照价 <= 此值(含);nil = 不约束
+	TopN             int              // 必填,返回上限(>0)
+}
+
+// Candidate 单个候选件:销售/型号元信息 + canonical specs 原文 + 最新快照价。
+type Candidate struct {
+	SKU      string
+	Brand    string
+	Model    string
+	Category schemas.Category
+	Specs    json.RawMessage // canonical 规格原文,供生成 Agent 读关键参数
+	PriceCNY *string         // nil = 最新快照无此 SKU 价(精确十进制文本,读取层不转浮点)
+}
+
+// CandidateResult 候选检索结果:已截断列表 + 被截断条数 + 报价所用快照日期。
+type CandidateResult struct {
+	Candidates   []Candidate
+	Truncated    int        // 超出 top_n 被截断的条数(严禁静默截断,如实告知)
+	SnapshotDate *time.Time // 报价所用快照日期;nil = 库内无任何快照
+}
+
+// Candidates 按硬约束从 parts 表结构化过滤候选件,关联最新快照价,按价升序返回前 top_n 条。
+// 过滤全走 SQL(零 LLM);超出 top_n 的部分在 Truncated 如实回报,绝不静默丢弃。
+// 库内无快照时价格均为 nil;若同时设了价格约束则返回 ErrSnapshotNotFound。
+func (s *Store) Candidates(ctx context.Context, q CandidateQuery) (CandidateResult, error) {
+	if err := q.validate(); err != nil {
+		return CandidateResult{}, err
+	}
+
+	// 报价基准:最新快照。库内无快照时价格列全 nil;但若带价格约束则无法判定,如实报错。
+	var (
+		snapID   int64
+		snapDate *time.Time
+	)
+	snap, err := s.LatestSnapshot(ctx)
+	switch {
+	case err == nil:
+		snapID = snap.ID
+		d := snap.SnapshotDate
+		snapDate = &d
+	case errors.Is(err, ErrSnapshotNotFound):
+		if q.PriceMinCNY != nil || q.PriceMaxCNY != nil {
+			return CandidateResult{}, fmt.Errorf("store: 库内无价格快照,无法按价格过滤: %w", err)
+		}
+	default:
+		return CandidateResult{}, err
+	}
+
+	// 共享 WHERE:$1 固定为快照 id(供 JOIN 使用),其余条件从 $2 起。
+	args := []any{snapID}
+	ph := func(v any) string {
+		args = append(args, v)
+		return fmt.Sprintf("$%d", len(args))
+	}
+	conds := []string{"p.active", "p.category = " + ph(string(q.Category))}
+	if q.Brand != "" {
+		conds = append(conds, "p.brand ILIKE "+ph(q.Brand))
+	}
+	if q.Socket != "" {
+		conds = append(conds, "p.specs->>'socket' = "+ph(q.Socket))
+	}
+	if q.FormFactor != "" {
+		if q.Category == schemas.CategoryCase {
+			// 机箱 supported_form_factors 为 JSONB 数组,用 ? 判定包含。
+			conds = append(conds, "p.specs->'supported_form_factors' ? "+ph(q.FormFactor))
+		} else {
+			conds = append(conds, "p.specs->>'form_factor' = "+ph(q.FormFactor))
+		}
+	}
+	if q.MemoryGeneration != "" {
+		if q.Category == schemas.CategoryMotherboard {
+			conds = append(conds, "p.specs->>'memory_generation' = "+ph(q.MemoryGeneration))
+		} else {
+			conds = append(conds, "p.specs->>'generation' = "+ph(q.MemoryGeneration))
+		}
+	}
+	if q.PriceMinCNY != nil {
+		conds = append(conds, "pr.price_cny >= "+ph(*q.PriceMinCNY))
+	}
+	if q.PriceMaxCNY != nil {
+		conds = append(conds, "pr.price_cny <= "+ph(*q.PriceMaxCNY))
+	}
+
+	where := strings.Join(conds, " AND ")
+	from := "FROM parts p LEFT JOIN prices pr ON pr.sku = p.sku AND pr.snapshot_id = $1 WHERE " + where
+
+	// 先 COUNT 全量命中(与 SELECT 同 WHERE),再取 top_n 行,Truncated = total - 返回数。
+	var total int
+	if err := s.pool.QueryRow(ctx, "SELECT count(*) "+from, args...).Scan(&total); err != nil {
+		return CandidateResult{}, fmt.Errorf("store: 统计候选总数失败: %w", err)
+	}
+
+	selectSQL := "SELECT p.sku, p.brand, p.model, p.category, p.specs, pr.price_cny::text " +
+		from + " ORDER BY pr.price_cny ASC NULLS LAST, p.sku LIMIT " + ph(q.TopN)
+	rows, err := s.pool.Query(ctx, selectSQL, args...)
+	if err != nil {
+		return CandidateResult{}, fmt.Errorf("store: 查询候选失败: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Candidate
+	for rows.Next() {
+		var c Candidate
+		if err := rows.Scan(&c.SKU, &c.Brand, &c.Model, &c.Category, &c.Specs, &c.PriceCNY); err != nil {
+			return CandidateResult{}, fmt.Errorf("store: 读取候选行失败: %w", err)
+		}
+		out = append(out, c)
+	}
+	if err := rows.Err(); err != nil {
+		return CandidateResult{}, fmt.Errorf("store: 遍历候选失败: %w", err)
+	}
+
+	return CandidateResult{Candidates: out, Truncated: total - len(out), SnapshotDate: snapDate}, nil
+}
+
+// validate 校验候选检索入参:品类合法、top_n 为正、价格区间一致、可选条件适用于对应品类。
+func (q CandidateQuery) validate() error {
+	if !validCategory(q.Category) {
+		return fmt.Errorf("%w: 非法品类 %q", ErrInvalidQuery, q.Category)
+	}
+	if q.TopN <= 0 {
+		return fmt.Errorf("%w: top_n 必须为正整数,得到 %d", ErrInvalidQuery, q.TopN)
+	}
+	if q.PriceMinCNY != nil && *q.PriceMinCNY < 0 {
+		return fmt.Errorf("%w: price_min 不得为负,得到 %d", ErrInvalidQuery, *q.PriceMinCNY)
+	}
+	if q.PriceMaxCNY != nil && *q.PriceMaxCNY <= 0 {
+		return fmt.Errorf("%w: price_max 必须为正,得到 %d", ErrInvalidQuery, *q.PriceMaxCNY)
+	}
+	if q.PriceMinCNY != nil && q.PriceMaxCNY != nil && *q.PriceMinCNY > *q.PriceMaxCNY {
+		return fmt.Errorf("%w: price_min %d > price_max %d", ErrInvalidQuery, *q.PriceMinCNY, *q.PriceMaxCNY)
+	}
+	if q.Socket != "" && q.Category != schemas.CategoryCPU && q.Category != schemas.CategoryMotherboard {
+		return fmt.Errorf("%w: socket 过滤仅适用于 cpu/motherboard,得到 %q", ErrInvalidQuery, q.Category)
+	}
+	if q.FormFactor != "" && q.Category != schemas.CategoryMotherboard && q.Category != schemas.CategoryCase {
+		return fmt.Errorf("%w: form_factor 过滤仅适用于 motherboard/case,得到 %q", ErrInvalidQuery, q.Category)
+	}
+	if q.MemoryGeneration != "" && q.Category != schemas.CategoryMemory && q.Category != schemas.CategoryMotherboard {
+		return fmt.Errorf("%w: memory_generation 过滤仅适用于 memory/motherboard,得到 %q", ErrInvalidQuery, q.Category)
+	}
+	return nil
+}
+
+// validCategory 判定是否为八大类之一。
+func validCategory(c schemas.Category) bool {
+	for _, known := range schemas.AllCategories {
+		if c == known {
+			return true
+		}
+	}
+	return false
 }

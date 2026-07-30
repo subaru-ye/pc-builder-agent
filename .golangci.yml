@@ -18,6 +18,17 @@ linters:
           allow:
             - $gostd
             - github.com/subaru-ye/pc-builder-agent/internal/schemas
+        # 校验 Agent 同为零 LLM 边界(设计方案 §三.3):只允许标准库 + schemas/rules/store,
+        # 禁止 ADK、模型 SDK 等;数据访问仅经 store,规则判定仅经 rules。
+        validate-agent-zero-llm:
+          list-mode: strict
+          files:
+            - "**/internal/agents/validate/**"
+          allow:
+            - $gostd
+            - github.com/subaru-ye/pc-builder-agent/internal/schemas
+            - github.com/subaru-ye/pc-builder-agent/internal/rules
+            - github.com/subaru-ye/pc-builder-agent/internal/store
 
 formatters:
   enable:

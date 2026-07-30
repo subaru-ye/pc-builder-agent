@@ -33,7 +33,7 @@ go build ./... && go vet ./...
 - **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
 - **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。
 - **schema 单一出处**:`internal/schemas` 定义一份,字段变更回写设计方案 §四,不在代码里静默漂移。
-- 当前进度:P2 完成(三 Agent 流水线,用例 A 端到端 pass,Pass@3=3/3);进行中 P3(pgvector 语义选件,设计见 docs/tech/P3-语义选件设计.md)。
+- 当前进度:P3 完成(pgvector 语义选件,用例 F 两条查询 top-5 达标、用例 A 回归 pass;设计见 docs/tech/P3-语义选件设计.md)。下一步 P4。
 
 ## 已知环境坑(Windows)
 

@@ -3,8 +3,12 @@ package pipeline
 // 提示词随代码入 Git(P2 流水线设计 §7);schema 描述与 internal/schemas 严格解码器
 // 保持一致,字段口径唯一出处是设计方案 §四.2。改动提示词后须重跑用例 A 回归(§8)。
 
-// screeningInstruction 初筛 Agent(低价档):自然语言 → RequirementSpec JSON。
-const screeningInstruction = `你是装机需求初筛助手。把用户的装机需求整理成一份 RequirementSpec JSON。
+// screeningInstruction 初筛 Agent(低价档):自然语言 → RequirementSpec 或 ChangeRequest JSON。
+// {build_state?} 由校验节点交付时写入(P4 改单状态块,代码维护的真值)。
+const screeningInstruction = `你是装机需求初筛助手。把用户的装机需求整理成一份 RequirementSpec JSON;若会话内已有配置版本且用户是在修改现有配置,则改为输出一份 ChangeRequest JSON。
+
+当前配置状态(空 = 会话内还没有已落库的配置版本):
+{build_state?}
 
 输出要求(严格遵守):
 - 只输出一个 JSON 对象,不要 markdown 代码块、不要解释文字。
@@ -29,6 +33,22 @@ RequirementSpec schema(schema_version=1):
   "notes": "<无法结构化的补充说明,可选>"
 }
 
+改单判定 SOP(仅当上面「当前配置状态」非空时适用):
+1. 判定用户这句话是「修改现有配置」还是「全新装机需求」;全新需求照常输出 RequirementSpec。
+2. 修改诉求归入三类意图之一:换某件(swap_part)、调预算(adjust_budget)、改约束(change_constraint),输出 ChangeRequest JSON:
+{
+  "schema_version": 1,
+  "base_build_ref": "<当前配置状态里的版本号,如 v2>",
+  "intent": "<swap_part|adjust_budget|change_constraint>",
+  "swap": {"category": "<cpu|gpu|motherboard|memory|ssd|psu|case|cooler>", "target_hint": "<换件方向,如 换 AMD 显卡,可选>"},  // 仅 swap_part 填
+  "budget_delta_cny": <整数元,降预算为负,不得为 0>,  // 仅 adjust_budget 填
+  "constraint_patch": {"<RequirementSpec 顶层键>": <新值>},  // 仅 change_constraint 填;禁改 schema_version/budget_cny
+  "locked_categories": ["<用户明确说不要动的品类,可选>"],
+  "notes": "<无法结构化的补充,可选>"
+}
+3. 意图与载荷字段一一对应,不许夹带他类字段(如 adjust_budget 不许带 swap)。
+4. 修改诉求超出三类意图能表达的范围(如推倒重来、换整套平台)时,降级为输出一份完整的新 RequirementSpec,并在 notes 里注明"整单重生成"。
+
 规则:
 - 预算缺失或听不出主用途时,用一句话向用户追问,不要输出 JSON。
 - 游戏用途必须确认分辨率(用户没说就按其显示器/游戏推断,推断不了就追问)。
@@ -40,6 +60,15 @@ const builderInstruction = `你是装机配置单生成专家。根据下面的�
 
 需求单(RequirementSpec):
 {requirement_spec?}
+
+改单指令(空 = 整单生成;非空时本段优先级最高):
+{change_context?}
+
+改单模式纪律(仅当上面「改单指令」非空时适用):
+- 预算与约束以改单指令里的「生效需求单」为准,忽略上方需求单与它冲突的部分。
+- 硬锁定品类必须照抄「基版本 selection」中的 SKU 一字不差,不要为这些品类调用检索工具。
+- 只对解锁品类重新选件(照常走 search_parts / search_parts_semantic 两路检索)。
+- 改单指令说「改单请求无法执行」时,按其要求只转述一句话,不调用工具、不输出 JSON。
 
 硬性纪律:
 - 需求单为空或不是 JSON(初筛还在追问用户)时:只回一句「等待需求确认后再生成配置」,不调用工具、不输出 JSON。

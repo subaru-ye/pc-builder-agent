@@ -33,12 +33,16 @@ const maxLoopRounds = 3
 const validatorAgentName = "validator_agent"
 
 // verdict 校验节点单轮裁决:message 进会话历史(回喂生成 Agent 或面向用户交付);
-// escalate=true 让 LoopAgent 出栈(三停止条件之一命中)。
+// escalate=true 让 LoopAgent 出栈(三停止条件之一命中);deliver=true 表示本轮交付
+// 有效配置(pass/review),需落库为新版本(P4),draft/res 为落库素材。
 type verdict struct {
 	message    string // 空则本轮不产出文本(如无草稿可校验时静默出栈)
 	reportJSON string // 非空则写入 validation_report 状态键
 	selection  string // 非空则更新 pipeline_last_selection
 	escalate   bool
+	deliver    bool
+	draft      schemas.BuildDraft
+	res        validate.Result
 }
 
 // decide 校验节点决策核心(纯函数,可无 ADK 单测)。
@@ -48,8 +52,9 @@ type verdict struct {
 //   - 连续两轮完全相同 selection → 死循环,立即出栈;
 //   - 轮数用尽 → 带最后一版报告如实出栈,不展示假成功(§5 熔断纪律);
 //   - 其他错误(DB 不可达等)→ 不可恢复,立即熔断;
+//   - 改单模式下硬锁定品类被改动 → 确定性锁定校验打回(FR-402,不靠提示词),计入轮数;
 //   - pass/review → 交付配置单 + 报价 + 快照日期,出栈。
-func decide(ctx context.Context, eval tools.BuildEvaluator, draftText, lastSelection string, round int) verdict {
+func decide(ctx context.Context, eval tools.BuildEvaluator, draftText, lastSelection string, round int, chg *changeCtx) verdict {
 	finalRound := round >= maxLoopRounds
 
 	draft, err := extractBuildDraft(draftText)
@@ -70,6 +75,40 @@ func decide(ctx context.Context, eval tools.BuildEvaluator, draftText, lastSelec
 	}
 
 	selKey := canonicalSelection(draft.Selection)
+
+	// P4 锁定校验(先于规则引擎):硬锁定品类必须照抄基版本 SKU。
+	if chg != nil && len(chg.Locked) > 0 && len(chg.BaseSelection) > 0 {
+		viol, err := lockedViolations(chg.Locked, chg.BaseSelection, draft.Selection)
+		if err != nil {
+			return verdict{
+				message:  fmt.Sprintf("校验节点内部错误(锁定比对失败),流水线熔断:%v", err),
+				escalate: true,
+			}
+		}
+		if len(viol) > 0 {
+			detail := strings.Join(viol, ";")
+			switch {
+			case selKey == lastSelection:
+				return verdict{
+					message:   "连续两轮提交了完全相同的配置且仍改动锁定品类,判定死循环,终止流水线。违规项:" + detail,
+					selection: selKey,
+					escalate:  true,
+				}
+			case finalRound:
+				return verdict{
+					message:   fmt.Sprintf("改单失败:第 %d/%d 轮仍改动了硬锁定品类(%s),重试轮数用尽,如实终止。", round, maxLoopRounds, detail),
+					selection: selKey,
+					escalate:  true,
+				}
+			default:
+				return verdict{
+					message:   fmt.Sprintf("锁定校验未通过(第 %d/%d 轮):%s。硬锁定品类必须照抄基版本 selection 中的 SKU 一字不差,只对解锁品类重新选件。", round, maxLoopRounds, detail),
+					selection: selKey,
+				}
+			}
+		}
+	}
+
 	res, err := eval.Evaluate(ctx, draft.Selection)
 	if err != nil {
 		if errors.Is(err, store.ErrUnknownSKU) {
@@ -114,6 +153,9 @@ func decide(ctx context.Context, eval tools.BuildEvaluator, draftText, lastSelec
 			reportJSON: string(reportJSON),
 			selection:  selKey,
 			escalate:   true,
+			deliver:    true,
+			draft:      draft,
+			res:        res,
 		}
 	}
 
@@ -259,10 +301,161 @@ func stateInt(st session.State, key string) int {
 	return 0
 }
 
+// BuildSaver 版本落库接口(*store.Store 实现;单测可 fake)。
+type BuildSaver interface {
+	SaveBuildVersion(ctx context.Context, p store.SaveBuildVersionParams) (store.SavedBuild, error)
+}
+
+// loadChangeCtx 读 prep 节点写入的改单上下文;缺失或非法按 nil(无上下文)。
+func loadChangeCtx(st session.State) *changeCtx {
+	raw := stateString(st, stateKeyChangeCtx)
+	if raw == "" {
+		return nil
+	}
+	var c changeCtx
+	if err := json.Unmarshal([]byte(raw), &c); err != nil {
+		return nil
+	}
+	return &c
+}
+
+// draftWireJSON BuildDraft → 设计方案 §四.2 wire 格式 JSON(落库用)。
+func draftWireJSON(d schemas.BuildDraft) json.RawMessage {
+	m := map[string]any{
+		"schema_version":  d.SchemaVersion,
+		"requirement_ref": d.RequirementRef,
+		"build_ref":       d.BuildRef,
+		"selection":       json.RawMessage(selectionWireJSON(d.Selection)),
+	}
+	if d.Rationale != nil {
+		m["rationale"] = d.Rationale
+	}
+	if d.BudgetAllocation != nil {
+		m["budget_allocation"] = d.BudgetAllocation
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
+// changeIntentLabel 版本历史摘要里的意图标签。
+func changeIntentLabel(change json.RawMessage) string {
+	if len(change) == 0 {
+		return "整单生成"
+	}
+	var w struct {
+		Intent string `json:"intent"`
+	}
+	if err := json.Unmarshal(change, &w); err != nil || w.Intent == "" {
+		return "改单"
+	}
+	return w.Intent
+}
+
+// remainingCNY 预算余额 = budget - total(按分整数运算,不用浮点);解不动返回空串。
+func remainingCNY(budgetCNY int, total string) string {
+	if budgetCNY <= 0 || total == "" {
+		return ""
+	}
+	neg := strings.HasPrefix(total, "-")
+	s := strings.TrimPrefix(total, "-")
+	intPart, frac := s, ""
+	if i := strings.IndexByte(s, '.'); i >= 0 {
+		intPart, frac = s[:i], s[i+1:]
+	}
+	for len(frac) < 2 {
+		frac += "0"
+	}
+	if len(frac) > 2 {
+		return ""
+	}
+	var yuan, fen int
+	if _, err := fmt.Sscanf(intPart, "%d", &yuan); err != nil {
+		return ""
+	}
+	if _, err := fmt.Sscanf(frac, "%d", &fen); err != nil {
+		return ""
+	}
+	totalFen := yuan*100 + fen
+	if neg {
+		totalFen = -totalFen
+	}
+	remain := budgetCNY*100 - totalFen
+	sign := ""
+	if remain < 0 {
+		sign = "-"
+		remain = -remain
+	}
+	return fmt.Sprintf("%s%d.%02d", sign, remain/100, remain%100)
+}
+
+// persistVersion 交付分支的版本落库 + 状态块更新(P4 设计 §3/§5)。
+// 返回交付文本后缀与新 build_state JSON(落库失败时后缀如实报错、状态块不更新)。
+func persistVersion(ctx context.Context, saver BuildSaver, sessionID string, chg *changeCtx, v verdict, prevStateJSON string) (string, string) {
+	if chg == nil || (len(chg.ActiveSpec) == 0 && chg.ReuseReqID == nil) {
+		return "\n注意:配置有效但版本落库失败(缺少需求上下文,change_prep 未运行),本版本未计入版本树。", ""
+	}
+
+	quoteJSON, err := json.Marshal(v.res.Quote)
+	if err != nil {
+		return fmt.Sprintf("\n注意:配置有效但版本落库失败(报价序列化:%v),本版本未计入版本树。", err), ""
+	}
+	saved, err := saver.SaveBuildVersion(ctx, store.SaveBuildVersionParams{
+		SessionID:       sessionID,
+		ParentID:        chg.ParentBuildID,
+		RequirementID:   chg.ReuseReqID,
+		RequirementSpec: chg.ActiveSpec,
+		Change:          chg.Change,
+		Draft:           draftWireJSON(v.draft),
+		Validation:      json.RawMessage(v.reportJSON),
+		Quote:           quoteJSON,
+	})
+	if err != nil {
+		return fmt.Sprintf("\n注意:配置有效但版本落库失败(%v),本版本未计入版本树。", err), ""
+	}
+
+	// 状态块更新:代码维护的真值,下一轮改单的基准。
+	spec := chg.ActiveSpec
+	budget := 0
+	if rs, err := schemas.DecodeRequirementSpec(spec); err == nil {
+		budget = rs.BudgetCNY
+	}
+	var history []string
+	if prevStateJSON != "" {
+		var prev buildState
+		if err := json.Unmarshal([]byte(prevStateJSON), &prev); err == nil {
+			history = prev.History
+		}
+	}
+	history = append(history, fmt.Sprintf("v%d(%s)合计 ¥%s", saved.Version, changeIntentLabel(chg.Change), v.res.Quote.TotalCNY))
+
+	bs := buildState{
+		SessionID:          sessionID,
+		Version:            saved.Version,
+		BuildID:            saved.ID,
+		RequirementID:      saved.RequirementID,
+		Spec:               spec,
+		Selection:          selectionWireJSON(v.draft.Selection),
+		TotalCNY:           v.res.Quote.TotalCNY,
+		SnapshotDate:       v.res.Quote.SnapshotDate,
+		BudgetCNY:          budget,
+		BudgetRemainingCNY: remainingCNY(budget, v.res.Quote.TotalCNY),
+		History:            history,
+	}
+	bsJSON, err := json.Marshal(bs)
+	if err != nil {
+		return fmt.Sprintf("\n已落库:版本 v%d(会话 %s)。注意:状态块序列化失败(%v),后续改单可能受影响。", saved.Version, sessionID, err), ""
+	}
+	return fmt.Sprintf("\n已落库:版本 v%d(会话 %s)。", saved.Version, sessionID), string(bsJSON)
+}
+
 // newValidatorAgent 把确定性校验核心包装成 ADK 自定义 Run agent(Loop 内第二子节点)。
 // 事件同时承载:文本(进会话历史回喂生成 Agent / 面向用户)、StateDelta(轮数/报告/
-// 上轮 selection)、Escalate(命中停止条件时让 LoopAgent 出栈)。
-func newValidatorAgent(eval tools.BuildEvaluator) (agent.Agent, error) {
+// 上轮 selection/状态块)、Escalate(命中停止条件时让 LoopAgent 出栈);
+// 交付分支同步落库新版本(P4,落库失败要响不静默)。
+func newValidatorAgent(eval tools.BuildEvaluator, saver BuildSaver) (agent.Agent, error) {
 	return agent.New(agent.Config{
 		Name:        validatorAgentName,
 		Description: "确定性校验节点:P1 规则引擎 + 最新快照报价,结论覆盖上游任何 Agent 自评。",
@@ -270,10 +463,11 @@ func newValidatorAgent(eval tools.BuildEvaluator) (agent.Agent, error) {
 			return func(yield func(*session.Event, error) bool) {
 				st := ictx.Session().State()
 				round := stateInt(st, stateKeyRound) + 1
+				chg := loadChangeCtx(st)
 				v := decide(ictx, eval,
 					stateString(st, stateKeyBuildDraft),
 					stateString(st, stateKeyLastSelection),
-					round)
+					round, chg)
 
 				delta := map[string]any{stateKeyRound: round}
 				if v.reportJSON != "" {
@@ -281,6 +475,14 @@ func newValidatorAgent(eval tools.BuildEvaluator) (agent.Agent, error) {
 				}
 				if v.selection != "" {
 					delta[stateKeyLastSelection] = v.selection
+				}
+				if v.deliver {
+					suffix, bsJSON := persistVersion(ictx, saver, ictx.Session().ID(), chg, v,
+						stateString(st, stateKeyBuildState))
+					v.message += suffix
+					if bsJSON != "" {
+						delta[stateKeyBuildState] = bsJSON
+					}
 				}
 
 				ev := &session.Event{

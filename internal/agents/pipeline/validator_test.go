@@ -76,7 +76,7 @@ func failResult() validate.Result {
 
 func TestDecideNoDraftEscalatesSilently(t *testing.T) {
 	for _, draft := range []string{"", "等待需求确认后再生成配置", "```\n```"} {
-		v := decide(context.Background(), &fakeEval{}, draft, "", 1)
+		v := decide(context.Background(), &fakeEval{}, draft, "", 1, nil)
 		if !v.escalate || v.message != "" {
 			t.Errorf("draft=%q: 无草稿应静默出栈, 得到 %+v", draft, v)
 		}
@@ -84,7 +84,7 @@ func TestDecideNoDraftEscalatesSilently(t *testing.T) {
 }
 
 func TestDecideSchemaErrorFeedsBack(t *testing.T) {
-	v := decide(context.Background(), &fakeEval{}, `{"schema_version": 2}`, "", 1)
+	v := decide(context.Background(), &fakeEval{}, `{"schema_version": 2}`, "", 1, nil)
 	if v.escalate {
 		t.Error("schema 错非末轮不应出栈")
 	}
@@ -94,7 +94,7 @@ func TestDecideSchemaErrorFeedsBack(t *testing.T) {
 }
 
 func TestDecideSchemaErrorFinalRoundEscalates(t *testing.T) {
-	v := decide(context.Background(), &fakeEval{}, `{"schema_version": 2}`, "", maxLoopRounds)
+	v := decide(context.Background(), &fakeEval{}, `{"schema_version": 2}`, "", maxLoopRounds, nil)
 	if !v.escalate || !strings.Contains(v.message, "轮数用尽") {
 		t.Errorf("末轮 schema 错应如实终止, 得到 %+v", v)
 	}
@@ -102,7 +102,7 @@ func TestDecideSchemaErrorFinalRoundEscalates(t *testing.T) {
 
 func TestDecideUnknownSKUFeedsBack(t *testing.T) {
 	f := &fakeEval{err: fmt.Errorf("store: %w", store.ErrUnknownSKU)}
-	v := decide(context.Background(), f, draftJSON, "", 1)
+	v := decide(context.Background(), f, draftJSON, "", 1, nil)
 	if v.escalate {
 		t.Error("未知 SKU 非末轮不应出栈")
 	}
@@ -113,8 +113,8 @@ func TestDecideUnknownSKUFeedsBack(t *testing.T) {
 
 func TestDecideUnknownSKURepeatedSelectionIsDeadLoop(t *testing.T) {
 	f := &fakeEval{err: fmt.Errorf("store: %w", store.ErrUnknownSKU)}
-	first := decide(context.Background(), f, draftJSON, "", 1)
-	second := decide(context.Background(), f, draftJSON, first.selection, 2)
+	first := decide(context.Background(), f, draftJSON, "", 1, nil)
+	second := decide(context.Background(), f, draftJSON, first.selection, 2, nil)
 	if !second.escalate || !strings.Contains(second.message, "死循环") {
 		t.Errorf("重复 selection 应判死循环出栈, 得到 %+v", second)
 	}
@@ -122,7 +122,7 @@ func TestDecideUnknownSKURepeatedSelectionIsDeadLoop(t *testing.T) {
 
 func TestDecideUnrecoverableErrorBreaksCircuit(t *testing.T) {
 	f := &fakeEval{err: errors.New("dial tcp: 数据库不可达")}
-	v := decide(context.Background(), f, draftJSON, "", 1)
+	v := decide(context.Background(), f, draftJSON, "", 1, nil)
 	if !v.escalate || !strings.Contains(v.message, "熔断") {
 		t.Errorf("DB 错误应立即熔断, 得到 %+v", v)
 	}
@@ -130,7 +130,7 @@ func TestDecideUnrecoverableErrorBreaksCircuit(t *testing.T) {
 
 func TestDecidePassDelivers(t *testing.T) {
 	f := &fakeEval{res: passResult()}
-	v := decide(context.Background(), f, draftJSON, "", 1)
+	v := decide(context.Background(), f, draftJSON, "", 1, nil)
 	if !v.escalate {
 		t.Error("pass 应出栈交付")
 	}
@@ -153,14 +153,14 @@ func TestDecideReviewDeliversWithNotes(t *testing.T) {
 	res.Report.Checks = []schemas.CheckResult{
 		check(schemas.RuleMemorySpeed, schemas.OutcomeFail, schemas.SeverityWarning, "内存超主板标称频率"),
 	}
-	v := decide(context.Background(), &fakeEval{res: res}, draftJSON, "", 1)
+	v := decide(context.Background(), &fakeEval{res: res}, draftJSON, "", 1, nil)
 	if !v.escalate || !strings.Contains(v.message, "review") || !strings.Contains(v.message, "内存超主板标称频率") {
 		t.Errorf("review 应交付并列注意项, 得到 %+v", v)
 	}
 }
 
 func TestDecideFailFeedsBackFailedChecks(t *testing.T) {
-	v := decide(context.Background(), &fakeEval{res: failResult()}, draftJSON, "", 1)
+	v := decide(context.Background(), &fakeEval{res: failResult()}, draftJSON, "", 1, nil)
 	if v.escalate {
 		t.Error("fail 非末轮不应出栈")
 	}
@@ -171,15 +171,15 @@ func TestDecideFailFeedsBackFailedChecks(t *testing.T) {
 
 func TestDecideFailRepeatedSelectionIsDeadLoop(t *testing.T) {
 	f := &fakeEval{res: failResult()}
-	first := decide(context.Background(), f, draftJSON, "", 1)
-	second := decide(context.Background(), f, draftJSON, first.selection, 2)
+	first := decide(context.Background(), f, draftJSON, "", 1, nil)
+	second := decide(context.Background(), f, draftJSON, first.selection, 2, nil)
 	if !second.escalate || !strings.Contains(second.message, "死循环") {
 		t.Errorf("重复 selection 应判死循环出栈, 得到 %+v", second)
 	}
 }
 
 func TestDecideFailFinalRoundDeliversFailureReport(t *testing.T) {
-	v := decide(context.Background(), &fakeEval{res: failResult()}, draftJSON, "", maxLoopRounds)
+	v := decide(context.Background(), &fakeEval{res: failResult()}, draftJSON, "", maxLoopRounds, nil)
 	if !v.escalate || !strings.Contains(v.message, "轮数用尽") || !strings.Contains(v.message, "SOCKET_MATCH") {
 		t.Errorf("末轮 fail 应带失败报告如实出栈, 得到 %+v", v)
 	}
@@ -188,7 +188,7 @@ func TestDecideFailFinalRoundDeliversFailureReport(t *testing.T) {
 func TestDecideStripsCodeFence(t *testing.T) {
 	fenced := "```json\n" + draftJSON + "\n```"
 	f := &fakeEval{res: passResult()}
-	v := decide(context.Background(), f, fenced, "", 1)
+	v := decide(context.Background(), f, fenced, "", 1, nil)
 	if !v.escalate || f.gotSel.CPU != "amd-ryzen5-7500f" {
 		t.Errorf("应容忍 markdown 围栏, 得到 %+v", v)
 	}
@@ -198,7 +198,7 @@ func TestDecideExtractsDraftFromMixedText(t *testing.T) {
 	// Pass@k 回归发现的真实失败模式:思考文字(含花括号碎片与无关 JSON)+ BuildDraft 混排。
 	mixed := "预算分配 {gpu: 45%} 如下。参考需求 {\"budget_cny\": 8000} 完成选件。\n" + draftJSON + "\n以上是最终配置。"
 	f := &fakeEval{res: passResult()}
-	v := decide(context.Background(), f, mixed, "", 1)
+	v := decide(context.Background(), f, mixed, "", 1, nil)
 	if !v.escalate || f.gotSel.CPU != "amd-ryzen5-7500f" {
 		t.Errorf("应从混排文本提取 BuildDraft, 得到 %+v", v)
 	}

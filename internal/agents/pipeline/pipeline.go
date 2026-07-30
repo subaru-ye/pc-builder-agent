@@ -1,6 +1,6 @@
-// Package pipeline 装配 P2 单进程三 Agent 流水线(P2 流水线设计 §2 拓扑,冻结):
+// Package pipeline 装配单进程流水线(P2 流水线设计 §2 拓扑 + P4 改单预处理):
 //
-//	Sequential(初筛 llmagent → Loop(生成 llmagent → 校验确定性节点), max=3)
+//	Sequential(初筛 llmagent → 改单预处理确定性节点 → Loop(生成 llmagent → 校验确定性节点), max=3)
 //
 // 模型实例由 cmd/host 注入(型号常量只写在 host,ADR-004),本包不 import 模型 SDK;
 // 提示词见 prompts.go(随代码入 Git,改动后须重跑用例 A 回归)。
@@ -85,9 +85,14 @@ func New(cfg Config) (agent.Agent, error) {
 		return nil, fmt.Errorf("pipeline: 构造生成 Agent 失败: %w", err)
 	}
 
-	validator, err := newValidatorAgent(node)
+	validator, err := newValidatorAgent(node, cfg.Store)
 	if err != nil {
 		return nil, fmt.Errorf("pipeline: 构造校验节点失败: %w", err)
+	}
+
+	prep, err := newChangePrepAgent()
+	if err != nil {
+		return nil, fmt.Errorf("pipeline: 构造改单预处理节点失败: %w", err)
 	}
 
 	loop, err := loopagent.New(loopagent.Config{
@@ -105,8 +110,8 @@ func New(cfg Config) (agent.Agent, error) {
 	root, err := sequentialagent.New(sequentialagent.Config{
 		AgentConfig: agent.Config{
 			Name:        "pc_builder_pipeline",
-			Description: "装机配置单流水线:需求初筛 → 选件生成 → 兼容性校验与报价。",
-			SubAgents:   []agent.Agent{screening, loop},
+			Description: "装机配置单流水线:需求初筛 → 改单预处理 → 选件生成 → 兼容性校验与报价。",
+			SubAgents:   []agent.Agent{screening, prep, loop},
 		},
 	})
 	if err != nil {

@@ -24,7 +24,7 @@ func seedEmbeddings(t *testing.T, s *Store, byIdx map[string]int) {
 	for sku, idx := range byIdx {
 		_, err := s.pool.Exec(ctx,
 			`UPDATE parts SET embedding = $1::vector, embedding_text = $2 WHERE sku = $3`,
-			vectorLiteral(unitVec(idx)), "合成文本 "+sku, sku)
+			VectorLiteral(unitVec(idx)), "合成文本 "+sku, sku)
 		if err != nil {
 			t.Fatalf("写入 %s embedding 失败: %v", sku, err)
 		}
@@ -154,8 +154,8 @@ func TestSemanticCandidatesNoSnapshot(t *testing.T) {
 
 // TestVectorLiteral 向量字面量编码与 PG 往返一致。
 func TestVectorLiteral(t *testing.T) {
-	got := vectorLiteral([]float32{0.5, -1, 0})
+	got := VectorLiteral([]float32{0.5, -1, 0})
 	if got != "[0.5,-1,0]" {
-		t.Errorf("vectorLiteral = %q, want [0.5,-1,0]", got)
+		t.Errorf("VectorLiteral = %q, want [0.5,-1,0]", got)
 	}
 }

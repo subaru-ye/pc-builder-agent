@@ -78,7 +78,7 @@ func (s *Store) SemanticCandidates(ctx context.Context, q SemanticQuery) (Semant
 		return SemanticResult{}, fmt.Errorf("store: 统计语义候选总数失败: %w", err)
 	}
 
-	args = append(args, vectorLiteral(q.QueryEmbedding))
+	args = append(args, VectorLiteral(q.QueryEmbedding))
 	vecPh := len(args)
 	args = append(args, q.TopN)
 	selectSQL := fmt.Sprintf("SELECT p.sku, p.brand, p.model, p.category, p.specs, COALESCE(p.embedding_text, ''), "+
@@ -120,9 +120,9 @@ func (q SemanticQuery) validate() error {
 	return nil
 }
 
-// vectorLiteral 把向量编码为 pgvector 文本字面量("[0.1,0.2,…]"),经 ::vector 转换。
-// 160 SKU 量级不引入 pgvector-go 依赖(技术选型版本锁定表有记)。
-func vectorLiteral(v []float32) string {
+// VectorLiteral 把向量编码为 pgvector 文本字面量("[0.1,0.2,…]"),经 ::vector 转换。
+// 本包查询与 cmd/embedparts 写入共用同一编码;160 SKU 量级不引入 pgvector-go。
+func VectorLiteral(v []float32) string {
 	var b strings.Builder
 	b.Grow(len(v)*10 + 2)
 	b.WriteByte('[')

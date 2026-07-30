@@ -192,6 +192,16 @@ func decodeStrict(data []byte, v any) error {
 	return nil
 }
 
+// unmarshalString 将 JSON 值解码为字符串,失败时用 field 名产出可读错误;
+// 供各枚举类型的 UnmarshalJSON 复用。
+func unmarshalString(b []byte, field string) (string, error) {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return "", fmt.Errorf("%s 必须为字符串: %w", field, err)
+	}
+	return s, nil
+}
+
 // requirePositive 校验标量存在时必须为正整数(单位 mm/W/MT/s 均为正数)。
 func requirePositive(field string, v *int) error {
 	if v != nil && *v <= 0 {

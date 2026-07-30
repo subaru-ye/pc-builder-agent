@@ -70,9 +70,16 @@ func DecodeBuildSelection(data []byte) (BuildSelection, error) {
 		return BuildSelection{}, fmt.Errorf("build selection: 缺少 parts")
 	}
 
+	return resolvePartsWire(w.Parts, *w.BuildRef)
+}
+
+// resolvePartsWire 校验 parts 线上格式并展开为 BuildSelection(附 buildRef)。
+// DecodeBuildSelection(P1 CLI 输入)与 DecodeBuildDraft(P2 生成 Agent 产出)
+// 复用同一套 parts 契约:七类必选、gpu 显式 SKU 或 null、ssd 为正数量数组。
+func resolvePartsWire(parts *selectionPartsWire, buildRef string) (BuildSelection, error) {
 	out := BuildSelection{
-		SchemaVersion: *w.SchemaVersion,
-		BuildRef:      *w.BuildRef,
+		SchemaVersion: BuildSelectionSchemaVersion,
+		BuildRef:      buildRef,
 	}
 
 	// 七类必选部件:键必须存在且为非空字符串 SKU。
@@ -81,12 +88,12 @@ func DecodeBuildSelection(data []byte) (BuildSelection, error) {
 		raw  json.RawMessage
 		dst  *string
 	}{
-		{"cpu", w.Parts.CPU, &out.CPU},
-		{"motherboard", w.Parts.Motherboard, &out.Motherboard},
-		{"memory", w.Parts.Memory, &out.Memory},
-		{"psu", w.Parts.PSU, &out.PSU},
-		{"case", w.Parts.Case, &out.Case},
-		{"cooler", w.Parts.Cooler, &out.Cooler},
+		{"cpu", parts.CPU, &out.CPU},
+		{"motherboard", parts.Motherboard, &out.Motherboard},
+		{"memory", parts.Memory, &out.Memory},
+		{"psu", parts.PSU, &out.PSU},
+		{"case", parts.Case, &out.Case},
+		{"cooler", parts.Cooler, &out.Cooler},
 	}
 	for _, r := range required {
 		if r.raw == nil {
@@ -103,10 +110,10 @@ func DecodeBuildSelection(data []byte) (BuildSelection, error) {
 	}
 
 	// SSD:必选,{sku, quantity} 数组,至少一条。
-	if w.Parts.SSD == nil {
+	if parts.SSD == nil {
 		return BuildSelection{}, fmt.Errorf("build selection: 必选部件 ssd 缺失")
 	}
-	if err := decodeStrict(w.Parts.SSD, &out.SSDs); err != nil {
+	if err := decodeStrict(parts.SSD, &out.SSDs); err != nil {
 		return BuildSelection{}, fmt.Errorf("build selection: ssd 必须为 {sku,quantity} 数组: %w", err)
 	}
 	if len(out.SSDs) == 0 {
@@ -122,14 +129,14 @@ func DecodeBuildSelection(data []byte) (BuildSelection, error) {
 	}
 
 	// GPU:键必须显式存在;值为 SKU 字符串或 null。
-	if w.Parts.GPU == nil {
+	if parts.GPU == nil {
 		return BuildSelection{}, fmt.Errorf("build selection: gpu 必须显式为 SKU 或 null(键不可缺失)")
 	}
-	if string(w.Parts.GPU) == "null" {
+	if string(parts.GPU) == "null" {
 		out.GPU = nil
 	} else {
 		var sku string
-		if err := json.Unmarshal(w.Parts.GPU, &sku); err != nil {
+		if err := json.Unmarshal(parts.GPU, &sku); err != nil {
 			return BuildSelection{}, fmt.Errorf("build selection: gpu 必须为 SKU 字符串或 null: %w", err)
 		}
 		if sku == "" {

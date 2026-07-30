@@ -207,3 +207,27 @@ func (s *Store) Sessions(ctx context.Context) ([]SessionSummary, error) {
 	}
 	return out, nil
 }
+
+// PartNames 按 SKU 批量查「品牌 型号」展示名(cmd/builds export 配置表用);
+// 未收录的 SKU 不在结果里,由调用方优雅降级(只展示 SKU)。
+func (s *Store) PartNames(ctx context.Context, skus []string) (map[string]string, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT sku, brand || ' ' || model FROM parts WHERE sku = ANY($1)`, skus)
+	if err != nil {
+		return nil, fmt.Errorf("store: 查询零件名称失败: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string]string, len(skus))
+	for rows.Next() {
+		var sku, name string
+		if err := rows.Scan(&sku, &name); err != nil {
+			return nil, fmt.Errorf("store: 读取零件名称失败: %w", err)
+		}
+		out[sku] = name
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store: 遍历零件名称失败: %w", err)
+	}
+	return out, nil
+}

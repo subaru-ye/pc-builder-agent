@@ -24,6 +24,8 @@ go build ./... && go vet ./...
 | docs/装机Agent设计方案.md | 架构 / A2A schema / 规则表 / 表结构 |
 | docs/tech/P2-流水线设计.md | P2 实现层:编排拓扑 / 提示词 SOP / tool 契约 / Loop 控制(schema 口径仍以设计方案 §四 为准) |
 | docs/tech/P3-语义选件设计.md | P3 实现层:embedding 素材与文本 / 语义检索路径 / search_parts_semantic 契约 |
+| docs/tech/P4-版本快照与增量改单设计.md | P4 实现层:builds/requirements 版本表 / ChangeRequest 意图解析 / 锁定校验 / cmd/builds 回放·diff·导出 |
+| docs/tech/P4-版本快照与增量改单设计.md | P4 实现层:builds/requirements 版本表 / ChangeRequest 意图解析 / 锁定校验 / cmd/builds 回放·diff·导出 |
 | docs/tech/技术选型.md | 栈级决策(ADR)+ 版本锁定表 |
 | docs/tech/工程实践指引.md | 各阶段开工前扫对应小节;评审对照 §九检查单 |
 
@@ -33,7 +35,7 @@ go build ./... && go vet ./...
 - **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
 - **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。
 - **schema 单一出处**:`internal/schemas` 定义一份,字段变更回写设计方案 §四,不在代码里静默漂移。
-- 当前进度:P3 完成(pgvector 语义选件,用例 F 两条查询 top-5 达标、用例 A 回归 pass;设计见 docs/tech/P3-语义选件设计.md)。下一步 P4。
+- 当前进度:P4 完成(版本快照与增量改单:迁移 00004 版本表、ChangeRequest 意图解析、确定性锁定校验、cmd/builds 回放·diff·导出;DoD 用例 C/D/E v1→v2→v3 回放通过、v1→v3 diff 正确、导出含快照日期与免责边界、用例 A 回归 pass;设计见 docs/tech/P4-版本快照与增量改单设计.md)。下一步 P5。
 
 ## 已知环境坑(Windows)
 

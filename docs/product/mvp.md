@@ -123,7 +123,7 @@
 
 - 交付:初筛/生成/校验三 Agent,Sequential + Loop 编排;生成 Agent 用**纯 SQL 结构化过滤**选件;校验 Agent 将 P1 引擎包装为 tool;Loop 最大重试轮数与熔断
 - DoD:dev UI 输入「8000 元 2K 玩黑神话」,一轮对话产出全 pass 配置单 + 人话解释报告(用例 A)
-- 引用:Agent 职责与消息流见设计方案 §三;RequirementSpec/BuildDraft/ValidationReport schema 见 §四(`internal/schemas` Go struct + 校验实现)
+- 引用:Agent 职责与消息流见设计方案 §三;RequirementSpec/BuildDraft/ValidationReport schema 见 §四(`internal/schemas` Go struct + 校验实现);编排拓扑/提示词 SOP/tool 契约/Loop 控制见 [P2 流水线设计](../tech/P2-流水线设计.md)
 - 不做:pgvector、版本落库、A2A
 
 ### 3.4 P3 pgvector 语义选件

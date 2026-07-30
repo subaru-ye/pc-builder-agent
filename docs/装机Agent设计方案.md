@@ -181,6 +181,51 @@ func NewDefaultEngine() *Engine
 func (e *Engine) Validate(schemas.ResolvedBuild) (schemas.ValidationReport, error)
 ```
 
+### 四.2 P2 流水线契约(2026-07-30 冻结)
+
+P2 把 §三 的三 Agent 串成端到端流水线,新增两份 schema:`RequirementSpec`(初筛 → 生成)与 `BuildDraft`(生成 → 校验)。本节是这两份契约的唯一出处,由 `internal/schemas` 实现;字段变更先改本节再改代码。落地拆解、提示词 SOP、tool 契约、Loop 参数见 [P2 流水线设计](tech/P2-流水线设计.md)(实现层,不改本节口径)。
+
+**衔接关系**:`BuildDraft.selection` 复用 §四.1 的 `BuildSelection` parts 口径(SKU 引用);校验 Agent 从 `selection` 走 `store.ResolveBuild → 12 条规则`,得到 §四.1 的 `ValidationReport`。`rationale` 与 `budget_allocation` 是生成 Agent 的自报信息,**纯展示、不进规则层、不进 golden 断言**(工程实践指引 §四.1:真值不采信模型自报)。
+
+```jsonc
+// RequirementSpec —— 初筛 → 生成(MVP 单一主用途,use_case 为单对象而非数组,见 mvp.md §2.2)
+{
+  "schema_version": 1,
+  "budget_cny": 8000,                                          // 必填,正整数(元)
+  "budget_flex": 0.1,                                          // 预算弹性比例 [0,0.3],缺省 0.1
+  "use_case": {
+    "type": "gaming|productivity|general",                     // 单一主用途
+    "titles": ["黑神话"],                                      // gaming 可选,给目标游戏/软件名
+    "resolution": "1080p|2K|4K",                              // gaming 必填
+    "fps_target": 144                                          // gaming 可选,正整数
+  },
+  "size_pref": "atx|matx|itx|any",                            // 缺省 any
+  "noise_pref": "silent|normal|any",                          // 缺省 any
+  "brand_pref": {"cpu": "any|intel|amd", "gpu": "any|nvidia|amd"},  // MVP 数据仅 AM5,cpu 实际恒 amd
+  "existing_parts": ["ssd"],                                   // 已有件品类(不重复购买),八类枚举子集
+  "priority": ["gpu", "cpu"],                                  // 预算倾斜优先级,八类枚举子集
+  "notes": "..."                                               // 自由文本补充
+}
+```
+
+- `budget_cny` 缺失或非正 → schema error(初筛 Agent 必须问齐预算才产出)。
+- `use_case.type=gaming` 时 `resolution` 必填;其余字段可缺省。严格 JSON 解码,未知字段/非法枚举即输入错误。
+
+```jsonc
+// BuildDraft —— 生成 → 校验(生成 Agent 的结构化产出)
+{
+  "schema_version": 1,
+  "requirement_ref": "req_xxx",                               // 关联的 RequirementSpec
+  "build_ref": "build_xxx",
+  "selection": { /* §四.1 BuildSelection 的 parts 口径:各品类 SKU / gpu 可 null */ },
+  "rationale": {"cpu": "...", "gpu": "...", "...": "..."},      // 每件一句理由,纯展示
+  "budget_allocation": {"gpu": 0.42, "cpu": 0.18, "...": 0.0}  // 生成 Agent 自报分配,纯展示
+}
+```
+
+- `selection` 解码与约束完全等同 §四.1(七类必选、gpu 显式 SKU 或 null、ssd 为 `{sku,quantity}` 数组)。
+- `rationale`/`budget_allocation` 为可选装饰字段:校验 Agent 忽略其内容,仅在出口翻译时透传给用户;缺失不影响校验。
+
 ## 五、兼容性规则表(校验 Agent 初版)
 
 规则 ID 于 2026-07-28 随 P1 契约冻结,执行顺序 = 表内顺序:

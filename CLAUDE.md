@@ -22,6 +22,7 @@ go build ./... && go vet ./...
 | docs/product/PRD.md | 产品长期方向 |
 | docs/product/mvp.md | MVP 范围与 P0–P6 阶段(短期执行唯一依据) |
 | docs/装机Agent设计方案.md | 架构 / A2A schema / 规则表 / 表结构 |
+| docs/tech/P2-流水线设计.md | P2 实现层:编排拓扑 / 提示词 SOP / tool 契约 / Loop 控制(schema 口径仍以设计方案 §四 为准) |
 | docs/tech/技术选型.md | 栈级决策(ADR)+ 版本锁定表 |
 | docs/tech/工程实践指引.md | 各阶段开工前扫对应小节;评审对照 §九检查单 |
 

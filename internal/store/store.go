@@ -1,5 +1,6 @@
 // Package store P1 PostgreSQL 读取层:按 SKU 从 parts 展开 ResolvedBuild、
-// 读取指定价格快照。只读不写(导入走 Python 数据管道);规则包(internal/rules)
+// 读取指定价格快照。parts/prices 只读不写(导入走离线 cmd);P4 起版本表
+// (requirements/builds)有运行时写路径(versions.go)。规则包(internal/rules)
 // 不得依赖本包(depguard 强制),依赖方向恒为 cli → store → schemas。
 package store
 

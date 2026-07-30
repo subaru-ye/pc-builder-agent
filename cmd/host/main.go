@@ -24,7 +24,7 @@ import (
 // 型号以本常量为准,不写进文档(技术选型 ADR-004)。
 const (
 	screeningModelName = "qwen-flash"
-	builderModelName   = "qwen-max"
+	builderModelName   = "qwen3.7-max"
 )
 
 // 百炼 OpenAI 兼容端点(公共默认);工作空间专属 Host 用 DASHSCOPE_BASE_URL 覆盖。

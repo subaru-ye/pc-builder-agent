@@ -52,13 +52,11 @@ type verdict struct {
 func decide(ctx context.Context, eval tools.BuildEvaluator, draftText, lastSelection string, round int) verdict {
 	finalRound := round >= maxLoopRounds
 
-	text := stripCodeFence(draftText)
-	if !strings.HasPrefix(text, "{") {
+	draft, err := extractBuildDraft(draftText)
+	if errors.Is(err, errNoDraft) {
 		// 生成 Agent 没有产出 JSON(需求未确认等),没有可校验对象,流水线本轮结束。
 		return verdict{escalate: true}
 	}
-
-	draft, err := schemas.DecodeBuildDraft([]byte(text))
 	if err != nil {
 		if finalRound {
 			return verdict{
@@ -201,21 +199,37 @@ func canonicalSelection(sel schemas.BuildSelection) string {
 	return string(b)
 }
 
-// stripCodeFence 容忍生成 Agent 违反"不要代码块"守则的 markdown 围栏输出。
-func stripCodeFence(s string) string {
-	t := strings.TrimSpace(s)
-	if !strings.HasPrefix(t, "```") {
-		return t
+// errNoDraft 草稿文本里找不到任何 JSON 对象(初筛追问/生成 Agent 等待需求的纯文本)。
+var errNoDraft = errors.New("pipeline: 草稿中无 JSON 对象")
+
+// extractBuildDraft 从生成 Agent 的输出文本中提取 BuildDraft:容忍 markdown
+// 围栏与思考文字混排(Pass@k 回归发现的真实失败模式)——逐个尝试文本里的
+// 顶层 JSON 对象,返回第一个能通过严格解码的;都通不过则报第一个 schema 错
+// (回喂给生成 Agent),完全没有 JSON 对象则报 errNoDraft。
+func extractBuildDraft(text string) (schemas.BuildDraft, error) {
+	var firstErr error
+	for i := 0; i < len(text); i++ {
+		if text[i] != '{' {
+			continue
+		}
+		dec := json.NewDecoder(strings.NewReader(text[i:]))
+		var raw json.RawMessage
+		if err := dec.Decode(&raw); err != nil {
+			continue // 这个 '{' 不是合法 JSON 起点,逐字节前进
+		}
+		draft, err := schemas.DecodeBuildDraft(raw)
+		if err == nil {
+			return draft, nil
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+		i += int(dec.InputOffset()) - 1 // 跳过整个已解析对象,避免重复尝试内层 '{'
 	}
-	t = strings.TrimPrefix(t, "```")
-	if i := strings.Index(t, "\n"); i >= 0 {
-		t = t[i+1:] // 去掉围栏首行的语言标签(如 json)
-	} else {
-		return ""
+	if firstErr != nil {
+		return schemas.BuildDraft{}, firstErr
 	}
-	t = strings.TrimSpace(t)
-	t = strings.TrimSuffix(t, "```")
-	return strings.TrimSpace(t)
+	return schemas.BuildDraft{}, errNoDraft
 }
 
 // stateString 读会话状态里的字符串键;缺失或类型不符按空串(可选键语义)。

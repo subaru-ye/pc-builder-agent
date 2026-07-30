@@ -194,17 +194,28 @@ func TestDecideStripsCodeFence(t *testing.T) {
 	}
 }
 
-func TestStripCodeFence(t *testing.T) {
-	cases := []struct{ in, want string }{
-		{"{\"a\":1}", "{\"a\":1}"},
-		{"```json\n{\"a\":1}\n```", "{\"a\":1}"},
-		{"```\n{\"a\":1}\n```", "{\"a\":1}"},
-		{"  {\"a\":1}  ", "{\"a\":1}"},
-		{"```", ""},
+func TestDecideExtractsDraftFromMixedText(t *testing.T) {
+	// Pass@k 回归发现的真实失败模式:思考文字(含花括号碎片与无关 JSON)+ BuildDraft 混排。
+	mixed := "预算分配 {gpu: 45%} 如下。参考需求 {\"budget_cny\": 8000} 完成选件。\n" + draftJSON + "\n以上是最终配置。"
+	f := &fakeEval{res: passResult()}
+	v := decide(context.Background(), f, mixed, "", 1)
+	if !v.escalate || f.gotSel.CPU != "amd-ryzen5-7500f" {
+		t.Errorf("应从混排文本提取 BuildDraft, 得到 %+v", v)
 	}
-	for _, c := range cases {
-		if got := stripCodeFence(c.in); got != c.want {
-			t.Errorf("stripCodeFence(%q) = %q, want %q", c.in, got, c.want)
-		}
+	if !strings.Contains(v.message, "pass") {
+		t.Errorf("应正常交付, 得到 %q", v.message)
+	}
+}
+
+func TestExtractBuildDraft(t *testing.T) {
+	if _, err := extractBuildDraft("等待需求确认后再生成配置"); !errors.Is(err, errNoDraft) {
+		t.Errorf("纯文本应报 errNoDraft, 得到 %v", err)
+	}
+	if _, err := extractBuildDraft("说明 {\"schema_version\": 2} 结束"); err == nil || errors.Is(err, errNoDraft) {
+		t.Errorf("只有非法 draft 时应报 schema 错, 得到 %v", err)
+	}
+	draft, err := extractBuildDraft("前缀 {不是JSON} " + draftJSON)
+	if err != nil || draft.BuildRef != "build_001" {
+		t.Errorf("应跳过非法片段提取 draft, 得到 %+v, %v", draft, err)
 	}
 }

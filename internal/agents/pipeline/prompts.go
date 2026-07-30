@@ -50,7 +50,7 @@ const builderInstruction = `你是装机配置单生成专家。根据下面的�
 - 校验反馈(上一轮 validator_agent 的消息)里列出的失败项必须定向修复:换掉冲突零件,而不是从头乱换。
 
 输出要求(严格遵守):
-- 只输出一个 BuildDraft JSON 对象,不要 markdown 代码块、不要解释文字。
+- 只输出一个 BuildDraft JSON 对象,不要 markdown 代码块、不要解释文字、不要把思考/分析过程写进回复。
 - BuildDraft schema(schema_version=1):
 {
   "schema_version": 1,

@@ -2,7 +2,7 @@
 
 > 对话式 DIY 装机助手:说清预算和用途,得到**保证兼容**、**带日期化报价**、**可多轮修改**的装机配置单。
 >
-> 个人学习向项目,目标技术栈:多 Agent 流水线 + A2A 协议 + 记忆基座。当前状态:MVP P0–P6 已完成并于 2026-08-09 通过封板验收。
+> 个人学习向项目,目标技术栈:多 Agent 流水线 + A2A 协议 + 记忆基座。当前状态:MVP P0–P6 已封板,P7 产品 API 与 P8 Web 配置工作台已完成。
 
 ## 为什么做
 
@@ -40,7 +40,7 @@
 | 数据层 | PostgreSQL 16 + pgvector、Redis 7(pgx / go-redis) |
 | 模型 | 阿里百炼 Qwen(OpenAI 兼容端点,chat 分档 + embedding) |
 | 数据管道 | Python(pc-part-dataset / dbgpu 导入、embedding 生成) |
-| 客户端 | MVP:ADK-Go 内置 dev UI;阶段 1:Next.js + React |
+| 客户端 | MVP:ADK-Go 内置 dev UI;阶段 1:Next.js 16 + React 19 |
 
 选型理由与取舍记录见 [docs/tech/技术选型.md](docs/tech/技术选型.md)(ADR 形式)。
 
@@ -81,9 +81,15 @@ go run ./cmd/buildsvc  # 终端 1:启动「生成 + 校验」A2A 服务(http://l
 go run ./cmd/host web --write-timeout=10m api --sse-write-timeout=10m webui
 # 浏览器访问 http://localhost:8080/ui/
 
-# 终端 3:P7 产品 API(不依赖浏览器,供 curl 与后续 Next.js 使用)
+# 终端 3:P7 产品 API
 go run ./cmd/api
 # 存活/完整就绪检查:http://localhost:8082/healthz 和 /readyz
+
+# 终端 4:P8 Web 配置工作台
+cd web
+pnpm install --frozen-lockfile
+pnpm dev
+# 浏览器访问 http://localhost:3000
 ```
 
 ## MVP 进度
@@ -97,13 +103,13 @@ go run ./cmd/api
 - [x] P5 A2A 单跳拆分
 - [x] P6 Redis 会话层与 embedding 缓存
 - [x] P7 产品 API 与会话状态机
-- [ ] P8 Web 配置工作台
+- [x] P8 Web 配置工作台
 - [ ] P9 分享与导出
 - [ ] P10 评测与发布准备
 
 2026-08-09 封板验收结果:PostgreSQL/pgvector/Redis 真实集成测试无跳过;Python 数据流水线 104 项测试通过;用例 A–H 全部验证,包括全 pass 配单、语义召回、v1→v3 回放/diff/Markdown 导出、A2A schema/contextID 以及 kill host 后从 Redis 恢复同一会话继续改单。
 
-阶段 1 的 P7 已实现并通过真实环境验收:新增 `cmd/api :8082`、匿名产品会话、需求确认状态机、后台 run、Redis SSE、版本读取、diff 与 Markdown 导出。P8 Next.js 前端尚未实现,因此当前图形界面仍只有 ADK dev UI;下一步按[阶段 1 实现指导](docs/product/stage1.md)开发 Web 配置工作台。
+阶段 1 的 P7/P8 已实现:P7 提供 `cmd/api :8082`、匿名产品会话、需求确认状态机、后台 run、Redis SSE、版本读取、diff 与 Markdown 导出;P8 提供 Next.js 匿名工作台、需求编辑确认、SSE 恢复、配置与 12 条校验、历史版本、任意版本 diff、Markdown 下载及桌面/平板/手机布局。前端确定性测试覆盖 375/768/1440 三种视口并通过 axe serious/critical 门禁。下一步进入 P9 分享与公开只读页。
 
 ## 免责声明
 

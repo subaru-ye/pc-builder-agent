@@ -9,6 +9,8 @@ docker compose up -d             # PG → localhost:15432,Redis → localhost:16
 go run ./cmd/migrate up          # 应用 PostgreSQL 编号迁移
 go run ./cmd/buildsvc            # 终端 1:A2A 生成+校验服务
 go run ./cmd/host web --write-timeout=10m api --sse-write-timeout=10m webui  # 终端 2:ADK dev UI,http://localhost:8080/ui/
+go run ./cmd/api                 # 终端 3:产品 API,http://localhost:8082
+cd web && pnpm dev               # 终端 4:产品 Web,http://localhost:3000
 go build ./... && go vet ./...
 ```
 
@@ -43,7 +45,7 @@ go build ./... && go vet ./...
 - **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
 - **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。
 - **schema 单一出处**:`internal/schemas` 定义一份,字段变更回写设计方案 §四,不在代码里静默漂移。
-- 当前进度:MVP P0–P6 已完成并于 2026-08-09 封板验收通过;P7 产品 API 与会话状态机已实现。P8–P10 尚未实现,当前图形界面仍只有 ADK dev UI。下一步先读 stage1.md、P8 专题和设计上下文,Web 必须调用 `cmd/api :8082` 的产品契约,不得绕过产品 API 直连 ADK/A2A。
+- 当前进度:MVP P0–P6 已封板;P7 产品 API 与 P8 Web 配置工作台已实现。产品入口为 `web/` 的 Next.js 工作台,ADK dev UI 继续只作调试入口。下一步按 stage1.md 与 P9 专题实现不可变版本分享,不得把分享业务规则放进 Next.js 或绕过 `cmd/api :8082`。
 
 ## 已知环境坑(Windows)
 

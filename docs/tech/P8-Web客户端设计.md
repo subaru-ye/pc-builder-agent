@@ -1,6 +1,6 @@
 # P8 Web 配置工作台 — 实现设计
 
-> 状态:规划冻结,尚未实现。产品流程以 stage1.md 为准;API 只认 docs/api/openapi.yaml。
+> 状态:已实现,确定性验收通过。产品流程以 stage1.md 为准;API 只认 docs/api/openapi.yaml。
 
 ## 1. 产品与视觉命题
 
@@ -283,3 +283,25 @@ SSE 增量不直接伪造完整 BuildView。Zustand 不跨浏览器刷新持久�
 - 375/768/1440 视口截图回归。
 - axe 无严重/高等级问题;仅键盘可完成主路径。
 - 人为断网、Redis degraded、buildsvc 503、10 分钟 timeout 均有可恢复 UI。
+
+## 12. 实现与验收记录
+
+2026-08-09 完成 `web/` 实现,未修改 Go API、数据库迁移、Agent schema、A2A schema 或 `cmd/builds` 参数。实际交付包括:
+
+- `/` 匿名会话入口、最近会话和只填充不发送的示例。
+- `/s/[session_id]` 对话/配置工作台、完整 RequirementSpec 编辑与确认、运行状态和 Redis degraded 提示。
+- fetch + ReadableStream SSE,支持拆包、多行 data、心跳、Last-Event-ID、跨重连去重、1/2/5/10/15 秒退避、30/60 秒提示和 410 轮询恢复。
+- 八类配件、12 条后端规则、三条免责、历史版本、任意两版 diff 和直接 Markdown 导出。
+- 42/58 桌面双栏、平板/手机单面板切换、44px 触控目标、可见焦点和 reduced motion。
+
+依赖以 `web/package.json` 与 `pnpm-lock.yaml` 为准。TypeScript 实际锁定为 5.9.3,原因是计划中的 7.0.2 与当前 ESLint/OpenAPI 生成工具的 peer dependency 不兼容;这不改变 strict 模式或产品契约。`openapi-zod-client` 对 RequirementSpec 内嵌 `if/then` 会降级为 unknown,因此实现仅为 `use_case` 补充由同一 OpenAPI 枚举派生的 discriminated union,其余字段仍使用生成 schema。
+
+确定性验收结果:
+
+- `pnpm lint`、`pnpm typecheck`、`pnpm api:check`、`pnpm test --run`、`pnpm build` 通过。
+- Vitest 3 个测试文件、6 项测试通过。
+- Playwright 在 1440、768、375 三种视口完成需求确认到配置/校验主路径,3 项测试通过。
+- axe serious/critical 为 0;测试过程中修正了次级文字对比度和滚动区键盘焦点。
+- 真实环境完成「8000 元 2K 玩黑神话」→编辑确认→全 pass v1→「降 500」v2→重启 API→「换成 A 卡」v3;页面恢复、Redis A2A context、v1→v3 diff 与 Markdown 下载均通过。
+- 验收发现并修复空 `WEB_ALLOWED_ORIGIN` 会误拒绝 Next.js 同源 rewrite 的 P7 缺陷;现在空值默认采用 `PUBLIC_WEB_BASE_URL` 的 origin,精确覆盖行为保持不变。
+- 真实验收曾主动停止一台早于免费模型配置提交启动的旧 buildsvc,对应 run 按 `upstream_unavailable` 失败且 UI 成功恢复重试。最终 v1–v3 均由当前锁定的免费额度模型配置完成。百炼免费额度与账单变化仍需账号持有人在控制台人工核对。

@@ -48,12 +48,13 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
         await waitPhase(page, sessionID, "ready", 1);
         const build = await apiJSON<BuildView>(page, `/api/v1/sessions/${sessionID}/builds/1`);
         const budget = build.requirement.budget_cny;
+        const budgetFlex = build.requirement.budget_flex ?? 0.1;
         const total = Number(build.quote.total_cny);
         return trialResult(sessionID, "ready", [1], build, {
           requirement_confirmed: true,
           version_v1: build.summary.version === 1 && build.summary.parent_version == null,
           validation_pass: build.validation.overall_status === "pass",
-          budget_within_flex: Math.abs(total - budget) <= budget * build.requirement.budget_flex,
+          budget_within_flex: Math.abs(total - budget) <= budget * budgetFlex,
         });
       });
       recordTrial(report, l1, save);
@@ -245,7 +246,8 @@ function trialResult(sessionID: string, finalPhase: string, versions: number[], 
 function recordTrial(report: LiveReport, trial: Trial, save: () => void) {
   report.trials.push(trial);
   save();
-  expect(Object.values(trial.assertions).every(Boolean), `${trial.scenario}/${trial.repetition} assertions`).toBeTruthy();
+  const failedAssertions = Object.entries(trial.assertions).filter(([, passed]) => !passed).map(([name]) => name);
+  expect(failedAssertions, `${trial.scenario}/${trial.repetition} failed assertions`).toEqual([]);
   expect(trial.first_progress_ms, `${trial.scenario}/${trial.repetition} first progress`).toBeLessThanOrEqual(1000);
   expect(trial.max_sse_gap_ms, `${trial.scenario}/${trial.repetition} SSE gap`).toBeLessThanOrEqual(30_000);
   expect(trial.total_ms, `${trial.scenario}/${trial.repetition} total`).toBeLessThanOrEqual(600_000);

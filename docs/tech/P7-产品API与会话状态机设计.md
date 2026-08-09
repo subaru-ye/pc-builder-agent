@@ -1,6 +1,6 @@
 # P7 产品 API 与会话状态机 — 实现设计
 
-> 状态:规划冻结,尚未实现。阶段范围与退出标准以 stage1.md 为准;HTTP 线格式以 docs/api/openapi.yaml 为准。
+> 状态:已实现并完成真实环境验收。阶段范围与退出标准以 stage1.md 为准;HTTP 线格式以 docs/api/openapi.yaml 为准。P9 分享 handler 仍按计划不在本阶段注册。
 
 ## 1. 目标与非目标
 
@@ -234,3 +234,16 @@ healthz 只表示进程存活。readyz 检查 PostgreSQL、Redis 和 buildsvc ag
 - 真实环境完成确认需求→v1→改单 v2,且 cmd/host 原有恢复用例继续通过。
 
 P7 完成时,浏览器尚未存在也能用 curl 或契约测试完成整条产品 API 路径。
+
+## 11. 实现与验收记录(2026-08-09)
+
+- `internal/hostruntime` 已供 `cmd/host` 与 `cmd/api` 复用;四份核心 schema、A2A 契约和 `cmd/builds` 参数未改变。
+- 迁移 `00005_p7_web_product.sql` 已建立产品会话、消息、run 与 P9 预留分享表;历史 builds 不增加外键。
+- 产品状态机、10 分钟后台执行、可恢复 error、启动中断回收、contextID 恢复前检查均已实现。
+- Redis Stream 和进程内降级事件存储已实现;SSE 支持重放、`Last-Event-ID`、15 秒心跳和 410 过期响应。
+- `internal/presenter` 已由 CLI 与 API 共用,统一金额、版本树、diff 和 Markdown 口径。
+- P7 注册除分享以外的产品接口;三个分享接口留到 P9,当前访问返回路由级 404。
+- Docker PostgreSQL/Redis 均 healthy,迁移版本为 5;带 `PG_TEST_DSN`/`REDIS_TEST_ADDR` 的 Go 全包测试、`go vet`、Python 104 项和 Redocly 均通过。
+- curl 实测完成需求整理→确认→全 pass v1→“降 500”v2→重启 API→同一会话“换成 A 卡”v3;版本树、v1→v3 diff 和 Markdown 均通过。
+- 精确删除该测试会话的 buildsvc Redis session 后,后续改单返回 409 `context_expired`,版本数保持不变。
+- 真实验收发现并修复两项缺陷:join 查询未限定 run 列导致终态读取 500;A2A 自动 contextID 与 Web session ID 不同导致版本不可见。修复后产品匿名入口固定使用 Web session ID,dev UI 的既有自动 contextID 行为保持不变。

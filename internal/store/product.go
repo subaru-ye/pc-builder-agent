@@ -178,7 +178,8 @@ const agentRunColumns = `id::text, session_id, client_request_id::text, kind, st
 
 func (s *Store) RunByOwner(ctx context.Context, ownerID, runID string) (AgentRun, error) {
 	r, err := scanAgentRun(s.pool.QueryRow(ctx, `
-		SELECT `+agentRunColumns+` FROM agent_runs r
+		SELECT r.id::text, r.session_id, r.client_request_id::text, r.kind, r.status,
+		       r.error, r.started_at, r.finished_at FROM agent_runs r
 		JOIN web_sessions s ON s.id = r.session_id
 		WHERE r.id = $1 AND s.owner_id = $2`, runID, ownerID))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -188,6 +189,31 @@ func (s *Store) RunByOwner(ctx context.Context, ownerID, runID string) (AgentRun
 		return AgentRun{}, fmt.Errorf("store: 查询运行失败: %w", err)
 	}
 	return r, nil
+}
+
+// MessageRunByRequest 在执行上下文预检前识别消息重试；相同 key 不同文本仍返回冲突。
+func (s *Store) MessageRunByRequest(ctx context.Context, ownerID, sessionID, requestID, text string) (AgentRun, bool, error) {
+	var r AgentRun
+	var oldText string
+	err := s.pool.QueryRow(ctx, `
+		SELECT r.id::text, r.session_id, r.client_request_id::text, r.kind, r.status,
+		       r.error, r.started_at, r.finished_at, m.content
+		FROM agent_runs r
+		JOIN web_sessions s ON s.id = r.session_id
+		JOIN web_messages m ON m.session_id = r.session_id AND m.client_message_id = r.client_request_id
+		WHERE r.session_id = $1 AND r.client_request_id = $2 AND s.owner_id = $3`,
+		sessionID, requestID, ownerID).Scan(&r.ID, &r.SessionID, &r.ClientRequestID, &r.Kind,
+		&r.Status, &r.Error, &r.StartedAt, &r.FinishedAt, &oldText)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return AgentRun{}, false, nil
+	}
+	if err != nil {
+		return AgentRun{}, false, fmt.Errorf("store: 查询消息幂等运行失败: %w", err)
+	}
+	if oldText != text {
+		return AgentRun{}, false, ErrIdempotencyConflict
+	}
+	return r, true, nil
 }
 
 func (s *Store) ActiveRun(ctx context.Context, sessionID string) (*AgentRun, error) {

@@ -47,6 +47,20 @@ func TestProductSessionRunLifecycle(t *testing.T) {
 	if err != nil || duplicate || r.Kind != RunScreening {
 		t.Fatalf("启动 screening 失败:run=%+v duplicate=%v err=%v", r, duplicate, err)
 	}
+	ownedRun, err := s.RunByOwner(ctx, owner, run1)
+	if err != nil || ownedRun.ID != run1 {
+		t.Fatalf("按所有者读取 run 失败:run=%+v err=%v", ownedRun, err)
+	}
+	if _, err := s.RunByOwner(ctx, "other-owner", run1); !errors.Is(err, ErrRunNotFound) {
+		t.Fatalf("越权读取 run 应返回 not found,得到 %v", err)
+	}
+	byRequest, found, err := s.MessageRunByRequest(ctx, owner, sessionID, messageKey, "8000 元 2K 玩黑神话")
+	if err != nil || !found || byRequest.ID != run1 {
+		t.Fatalf("预检前读取幂等 run 失败:run=%+v found=%v err=%v", byRequest, found, err)
+	}
+	if _, _, err := s.MessageRunByRequest(ctx, owner, sessionID, messageKey, "不同文本"); !errors.Is(err, ErrIdempotencyConflict) {
+		t.Fatalf("预检前同 key 不同文本应冲突,得到 %v", err)
+	}
 	repeatedRun, duplicate, err := s.StartMessageRun(ctx, StartMessageRunParams{
 		OwnerID: owner, SessionID: sessionID, RequestID: messageKey, RunID: "00000000-0000-4000-8000-000000000099",
 		MessageID: "00000000-0000-4000-8000-000000000098", Text: "8000 元 2K 玩黑神话", Title: "ignored",

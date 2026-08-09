@@ -31,6 +31,7 @@ type ProductStore interface {
 	WebMessages(context.Context, string) ([]store.WebMessage, error)
 	ActiveRun(context.Context, string) (*store.AgentRun, error)
 	RunByOwner(context.Context, string, string) (store.AgentRun, error)
+	MessageRunByRequest(context.Context, string, string, string, string) (store.AgentRun, bool, error)
 	ReplacePendingRequirement(context.Context, string, string, json.RawMessage) error
 	StartMessageRun(context.Context, store.StartMessageRunParams) (store.AgentRun, bool, error)
 	StartConfirmRun(context.Context, store.StartConfirmRunParams) (store.AgentRun, json.RawMessage, bool, error)
@@ -108,6 +109,11 @@ func (s *Service) ReplaceRequirement(ctx context.Context, ownerID, sessionID str
 }
 
 func (s *Service) StartMessage(ctx context.Context, ownerID, sessionID, requestID, text string) (StartResult, error) {
+	if existing, found, err := s.store.MessageRunByRequest(ctx, ownerID, sessionID, requestID, text); err != nil {
+		return StartResult{}, err
+	} else if found {
+		return StartResult{Run: existing, Duplicate: true}, nil
+	}
 	ws, err := s.store.WebSessionByOwner(ctx, ownerID, sessionID)
 	if err != nil {
 		return StartResult{}, err
@@ -250,7 +256,7 @@ func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID s
 	s.progress(ctx, r.ID, "remote_processing", "正在生成并校验配置", 2)
 	before, _, err := s.store.LatestBuildVersion(ctx, r.SessionID)
 	if err != nil {
-		s.failFromError(ctx, r, err, recoveryFor(r.Kind), "")
+		s.failInternal(ctx, r, recoveryFor(r.Kind), "")
 		return
 	}
 	result, err := s.agent.Remote(ctx, ownerID, r.SessionID, payload)
@@ -261,7 +267,7 @@ func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID s
 	s.progress(ctx, r.ID, "finalizing", "正在保存最终结果", 3)
 	after, found, err := s.store.LatestBuildVersion(ctx, r.SessionID)
 	if err != nil {
-		s.failFromError(ctx, r, err, recoveryFor(r.Kind), result.Text)
+		s.failInternal(ctx, r, recoveryFor(r.Kind), result.Text)
 		return
 	}
 	if !found || after != before+1 {
@@ -317,6 +323,11 @@ func (s *Service) failFromError(ctx context.Context, r store.AgentRun, err error
 	}
 	s.fail(ctx, r, NewProblem("upstream_unavailable", "Agent 服务不可用", 503,
 		"上游 Agent 暂时不可用，请稍后使用新请求重试。", r.ID), recovery, assistant)
+}
+
+func (s *Service) failInternal(ctx context.Context, r store.AgentRun, recovery store.SessionPhase, assistant string) {
+	s.fail(ctx, r, NewProblem("internal_error", "服务内部错误", 500,
+		"配置版本状态无法核对，请稍后使用新请求重试。", r.ID), recovery, assistant)
 }
 
 func (s *Service) fail(ctx context.Context, r store.AgentRun, problem Problem,

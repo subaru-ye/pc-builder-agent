@@ -56,3 +56,14 @@ func TestSanitizeInferredBrandPrefsLeavesChangeRequestUntouched(t *testing.T) {
 		t.Fatalf("payload 被修改:\n got: %s\nwant: %s", got, payload)
 	}
 }
+
+func TestIsProductOwnerID(t *testing.T) {
+	if !isProductOwnerID("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA") {
+		t.Fatal("32-byte base64url owner 应识别为产品匿名身份")
+	}
+	for _, value := range []string{"", "user", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"} {
+		if isProductOwnerID(value) {
+			t.Fatalf("%q 不应识别为产品匿名身份", value)
+		}
+	}
+}

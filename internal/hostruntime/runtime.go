@@ -4,6 +4,7 @@ package hostruntime
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -118,7 +119,9 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 
 // trimToPayload 发送前把 A2A 消息裁成唯一一条结构化载荷 JSON：
 // ADK 默认转发自上次远程响应以来的会话事件，本回调只保留 RequirementSpec/
-// ChangeRequest，且不修改 ContextID。
+// ChangeRequest。产品 API 的匿名 owner 是固定 256-bit base64url 值；对该入口把
+// ContextID 固定为 Web session ID，使 buildsvc 落库版本和产品会话使用同一 session_id。
+// dev UI 的普通 user ID 保持既有 A2A 自动 contextID 行为。
 func trimToPayload(ctx agent.Context, req *a2a.SendMessageRequest) (*session.Event, error) {
 	if req == nil || req.Message == nil {
 		return nil, nil
@@ -136,9 +139,17 @@ func trimToPayload(ctx agent.Context, req *a2a.SendMessageRequest) (*session.Eve
 		payload = sanitized
 		log.Printf("[host] 初筛纠偏:移除用户未明确指定的 CPU/GPU 品牌偏好")
 	}
+	if isProductOwnerID(ctx.UserID()) {
+		req.Message.ContextID = ctx.SessionID()
+	}
 	log.Printf("[host] A2A 出站:contextID=%s 载荷类型=%s", req.Message.ContextID, pipeline.PayloadKind(payload))
 	req.Message.Parts = a2a.ContentParts{a2a.NewTextPart(string(payload))}
 	return nil, nil
+}
+
+func isProductOwnerID(value string) bool {
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	return err == nil && len(decoded) == 32
 }
 
 // sanitizeInferredBrandPrefs 防止初筛模型把用途、静音或风格偏好误推成品牌偏好。

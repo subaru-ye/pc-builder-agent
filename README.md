@@ -80,6 +80,10 @@ go run ./cmd/buildsvc  # 终端 1:启动「生成 + 校验」A2A 服务(http://l
 # 终端 2:启动初筛 host + dev UI;语义选件可能超过 ADK 默认写超时,故统一放宽到 10 分钟
 go run ./cmd/host web --write-timeout=10m api --sse-write-timeout=10m webui
 # 浏览器访问 http://localhost:8080/ui/
+
+# 终端 3:P7 产品 API(不依赖浏览器,供 curl 与后续 Next.js 使用)
+go run ./cmd/api
+# 存活/完整就绪检查:http://localhost:8082/healthz 和 /readyz
 ```
 
 ## MVP 进度
@@ -92,10 +96,14 @@ go run ./cmd/host web --write-timeout=10m api --sse-write-timeout=10m webui
 - [x] P4 版本快照与增量改单
 - [x] P5 A2A 单跳拆分
 - [x] P6 Redis 会话层与 embedding 缓存
+- [x] P7 产品 API 与会话状态机
+- [ ] P8 Web 配置工作台
+- [ ] P9 分享与导出
+- [ ] P10 评测与发布准备
 
 2026-08-09 封板验收结果:PostgreSQL/pgvector/Redis 真实集成测试无跳过;Python 数据流水线 104 项测试通过;用例 A–H 全部验证,包括全 pass 配单、语义召回、v1→v3 回放/diff/Markdown 导出、A2A schema/contextID 以及 kill host 后从 Redis 恢复同一会话继续改单。
 
-阶段 1(P7–P10)已完成文档规划,尚未实现产品 API 或 Next.js 前端。后续按[阶段 1 实现指导](docs/product/stage1.md)依次开发,当前可运行界面仍是 ADK dev UI。
+阶段 1 的 P7 已实现并通过真实环境验收:新增 `cmd/api :8082`、匿名产品会话、需求确认状态机、后台 run、Redis SSE、版本读取、diff 与 Markdown 导出。P8 Next.js 前端尚未实现,因此当前图形界面仍只有 ADK dev UI;下一步按[阶段 1 实现指导](docs/product/stage1.md)开发 Web 配置工作台。
 
 ## 免责声明
 

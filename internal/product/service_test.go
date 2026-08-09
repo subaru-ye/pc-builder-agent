@@ -53,6 +53,27 @@ func (f *fakeProductStore) RunByOwner(_ context.Context, _ string, id string) (s
 	defer f.mu.Unlock()
 	return f.runs[id], nil
 }
+func (f *fakeProductStore) MessageRunByRequest(_ context.Context, owner, session, request, text string) (store.AgentRun, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if owner != f.session.OwnerID || session != f.session.ID {
+		return store.AgentRun{}, false, nil
+	}
+	for _, run := range f.runs {
+		if run.ClientRequestID != request {
+			continue
+		}
+		for _, message := range f.messages {
+			if message.RunID != nil && *message.RunID == run.ID && message.Role == "user" {
+				if message.Content != text {
+					return store.AgentRun{}, false, store.ErrIdempotencyConflict
+				}
+				return run, true, nil
+			}
+		}
+	}
+	return store.AgentRun{}, false, nil
+}
 func (f *fakeProductStore) ReplacePendingRequirement(_ context.Context, _, _ string, spec json.RawMessage) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -221,6 +242,22 @@ func TestServiceContextExpired(t *testing.T) {
 	var problem Problem
 	if !errors.As(err, &problem) || problem.Code != "context_expired" {
 		t.Fatalf("应返回 context_expired,得到 %T %v", err, err)
+	}
+}
+
+func TestServiceDuplicateMessagePrecedesContextCheck(t *testing.T) {
+	st := newFakeProductStore()
+	st.session.Phase = store.PhaseReady
+	requestID := "00000000-0000-4000-8000-000000000004"
+	runID := "00000000-0000-4000-8000-000000000005"
+	st.runs[runID] = store.AgentRun{ID: runID, SessionID: st.session.ID, ClientRequestID: requestID,
+		Kind: store.RunChange, Status: store.RunSucceeded}
+	st.messages = append(st.messages, store.WebMessage{Role: "user", Content: "换成 A 卡", RunID: &runID})
+	agent := &fakeAgent{store: st, contextAvailable: false}
+	svc, _ := NewService(context.Background(), st, agent, newFakeSink())
+	result, err := svc.StartMessage(context.Background(), "owner-1", "session-1", requestID, "换成 A 卡")
+	if err != nil || !result.Duplicate || result.Run.ID != runID {
+		t.Fatalf("幂等重试应先于 context 检查:result=%+v err=%v", result, err)
 	}
 }
 

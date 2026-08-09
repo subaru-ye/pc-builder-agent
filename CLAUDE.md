@@ -43,7 +43,7 @@ go build ./... && go vet ./...
 - **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
 - **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。
 - **schema 单一出处**:`internal/schemas` 定义一份,字段变更回写设计方案 §四,不在代码里静默漂移。
-- 当前进度:MVP P0–P6 已完成并于 2026-08-09 封板验收通过。阶段 1(P7–P10)的产品 API、Web、分享与评测指导文档已规划,实现尚未开始;当前可运行界面仍是 ADK dev UI。开始 P7 前先读 stage1.md 和 P7 专题,不得直接写页面绕过产品 API。
+- 当前进度:MVP P0–P6 已完成并于 2026-08-09 封板验收通过;P7 产品 API 与会话状态机已实现。P8–P10 尚未实现,当前图形界面仍只有 ADK dev UI。下一步先读 stage1.md、P8 专题和设计上下文,Web 必须调用 `cmd/api :8082` 的产品契约,不得绕过产品 API 直连 ADK/A2A。
 
 ## 已知环境坑(Windows)
 

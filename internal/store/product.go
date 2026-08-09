@@ -504,9 +504,10 @@ func (s *Store) InterruptRunning(ctx context.Context, problem json.RawMessage) (
 			return nil, fmt.Errorf("store: 读取遗留运行失败: %w", err)
 		}
 		recovery := PhaseCollecting
-		if r.Kind == RunBuild {
+		switch r.Kind {
+		case RunBuild:
 			recovery = PhaseRequirementReady
-		} else if r.Kind == RunChange {
+		case RunChange:
 			recovery = PhaseReady
 		}
 		out = append(out, InterruptedRun{AgentRun: r, RecoveryPhase: recovery})

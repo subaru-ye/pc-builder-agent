@@ -57,5 +57,4 @@ func renderExport(row buildRow, names map[string]string) (string, error) {
 }
 
 func parseFen(value string) (int, bool) { return presenter.ParseFen(value) }
-func formatFen(fen int) string          { return presenter.FormatFen(fen) }
 func signedFen(fen int) string          { return presenter.SignedFen(fen) }

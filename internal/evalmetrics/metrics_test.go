@@ -32,7 +32,10 @@ func TestRecordDisabledAndRedacted(t *testing.T) {
 }
 
 func TestFingerprintStableAndSeparated(t *testing.T) {
-	if Fingerprint("a") != Fingerprint("a") || Fingerprint("a") == Fingerprint("b") {
+	first := Fingerprint("a")
+	second := Fingerprint("a")
+	other := Fingerprint("b")
+	if first != second || first == other {
 		t.Fatal("指纹应稳定且隔离")
 	}
 }

@@ -153,7 +153,7 @@ func collectAgentText(seq func(func(*session.Event, error) bool), author string)
 			return true
 		}
 		if ev.ErrorMessage != "" {
-			runErr = fmt.Errorf("Agent 执行失败:%s", ev.ErrorMessage)
+			runErr = fmt.Errorf("agent 执行失败:%s", ev.ErrorMessage)
 			return false
 		}
 		if ev.Partial || ev.Content == nil || (author != "" && ev.Author != author) {
@@ -174,7 +174,7 @@ func collectAgentText(seq func(func(*session.Event, error) bool), author string)
 		return "", runErr
 	}
 	if last == "" {
-		return "", fmt.Errorf("Agent 未返回面向用户的文本")
+		return "", fmt.Errorf("agent 未返回面向用户的文本")
 	}
 	return last, nil
 }

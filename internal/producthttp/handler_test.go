@@ -123,6 +123,28 @@ func TestCreateSessionSetsAnonymousCookie(t *testing.T) {
 	}
 }
 
+func TestCORSDefaultsToPublicWebOrigin(t *testing.T) {
+	api, _ := newTestAPI(t, runevents.NewMemory())
+	for name, tc := range map[string]struct {
+		origin string
+		want   int
+	}{
+		"public web origin": {origin: "http://localhost:3000", want: http.StatusCreated},
+		"other origin":      {origin: "http://127.0.0.1:3000", want: http.StatusForbidden},
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/sessions", nil)
+			req.Header.Set("Origin", tc.origin)
+			req.Header.Set("Idempotency-Key", uuid.NewString())
+			rec := httptest.NewRecorder()
+			api.Handler().ServeHTTP(rec, req)
+			if rec.Code != tc.want {
+				t.Fatalf("origin=%q status=%d body=%s", tc.origin, rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestMessageRequiresUUIDAndStrictJSON(t *testing.T) {
 	api, service := newTestAPI(t, runevents.NewMemory())
 	service.session.OwnerID = strings.Repeat("A", 43)

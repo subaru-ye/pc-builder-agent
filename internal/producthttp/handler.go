@@ -83,6 +83,9 @@ func New(service ProductService, builds BuildPresenter, events runevents.Store, 
 	if err != nil || u.Scheme == "" || u.Host == "" {
 		return nil, fmt.Errorf("product http: PUBLIC_WEB_BASE_URL 无效:%q", cfg.PublicWebBaseURL)
 	}
+	if cfg.AllowedOrigin == "" {
+		cfg.AllowedOrigin = u.Scheme + "://" + u.Host
+	}
 	return &API{
 		service: service, builds: builds, events: events, db: db, redis: redis, cfg: cfg,
 		secure: u.Scheme == "https", client: &http.Client{Timeout: 2 * time.Second},

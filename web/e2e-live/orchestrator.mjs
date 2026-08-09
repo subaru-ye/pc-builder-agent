@@ -20,8 +20,19 @@ const childEnv = {
   SHARE_TOKEN_SECRET: randomBytes(32).toString("base64url"),
 };
 const goCommand = process.platform === "win32" ? "go.exe" : "go";
-const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const executableSuffix = process.platform === "win32" ? ".exe" : "";
 const children = new Map();
+
+function buildGoBinary(name, packagePath) {
+  const binary = join(artifactDir, `${name}${executableSuffix}`);
+  const result = spawnSync(goCommand, ["build", "-o", binary, packagePath], {
+    cwd: root,
+    env: childEnv,
+    stdio: "inherit",
+  });
+  if (result.status !== 0) throw new Error(`${name} 构建失败: exit ${result.status}`);
+  return binary;
+}
 
 function start(name, command, args, cwd) {
   if (isChildRunning(children.get(name))) throw new Error(`${name} 已在运行`);
@@ -76,15 +87,19 @@ async function restartAPI() {
   while (isChildRunning(children.get("api")) && Date.now() < deadline) {
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
   }
-  start("api", goCommand, ["run", "./cmd/api"], root);
+  start("api", apiBinary, [], root);
   await waitFor("http://127.0.0.1:8082/readyz");
 }
 
-start("buildsvc", goCommand, ["run", "./cmd/buildsvc"], root);
+const buildsvcBinary = buildGoBinary("buildsvc", "./cmd/buildsvc");
+const apiBinary = buildGoBinary("api", "./cmd/api");
+const nextEntrypoint = join(web, "node_modules", "next", "dist", "bin", "next");
+
+start("buildsvc", buildsvcBinary, [], root);
 await waitFor("http://127.0.0.1:8081/.well-known/agent-card.json");
-start("api", goCommand, ["run", "./cmd/api"], root);
+start("api", apiBinary, [], root);
 await waitFor("http://127.0.0.1:8082/readyz");
-start("web", pnpmCommand, ["dev", "--hostname", "127.0.0.1"], web);
+start("web", process.execPath, [nextEntrypoint, "dev", "--hostname", "127.0.0.1"], web);
 await waitFor("http://127.0.0.1:3000");
 
 const server = createServer(async (request, response) => {

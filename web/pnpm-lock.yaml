@@ -11,6 +11,9 @@ importers:
       '@hookform/resolvers':
         specifier: 5.7.1
         version: 5.7.1(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.2.8))(zod@4.4.3)
+      '@pdfmergy-embedpdf/fonts-sc':
+        specifier: 2.6.5
+        version: 2.6.5
       '@tanstack/react-query':
         specifier: 5.101.4
         version: 5.101.4(react@19.2.8)
@@ -803,6 +806,9 @@ packages:
 
   '@oxc-project/types@0.143.0':
     resolution: {integrity: sha512-u6JZdLBTLotrNC9Vd6vPssINdzcCzleKAH6EJKImQb7GtYvX5keN2dxkoK44stCc4tffE6QQRtZTXVSzsLUlWA==}
+
+  '@pdfmergy-embedpdf/fonts-sc@2.6.5':
+    resolution: {integrity: sha512-856e6p5HDDDWySEws2L07exfjWTmolLOSZbwuSvqPU8NMszHckmEOZNdGuXa2nJjddDtnwkTeHLmhBf3JAqR0g==}
 
   '@playwright/test@1.62.1':
     resolution: {integrity: sha512-DTcUc8qii+cpHvtOwggMtBRMjKZHXYWdw8syRYu2vtzuq4Wxphqq4NfCs5Zt44L6mA8rfDfj+PHnxFc/FeK6mQ==}
@@ -5635,6 +5641,8 @@ snapshots:
   '@nolyfill/is-core-module@1.0.39': {}
 
   '@oxc-project/types@0.143.0': {}
+
+  '@pdfmergy-embedpdf/fonts-sc@2.6.5': {}
 
   '@playwright/test@1.62.1':
     dependencies:

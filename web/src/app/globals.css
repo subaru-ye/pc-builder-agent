@@ -12,7 +12,7 @@
   --color-popover: var(--surface-3);
   --color-popover-foreground: var(--ink);
   --color-primary: var(--primary);
-  --color-primary-foreground: var(--ink);
+  --color-primary-foreground: var(--canvas);
   --color-secondary: var(--surface-2);
   --color-secondary-foreground: var(--ink);
   --color-muted: var(--surface-2);
@@ -78,4 +78,11 @@ button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+@media print {
+  .public-actions { display: none !important; }
+  .public-share { background: #fff !important; color: #111 !important; }
+  .public-share header { background: #fff !important; }
+  .public-share * { border-color: #d7d7d7 !important; color: inherit; }
 }

@@ -11,6 +11,10 @@ test("anonymous requirement confirmation reaches a validated build", async ({ pa
   await page.route("**/api/v1/sessions/session-1", (route) => route.fulfill({ json: session() }));
   await page.route("**/api/v1/sessions/session-1/builds", (route) => route.fulfill({ json: { schema_version: 1, builds: versionCount ? [summary] : [] } }));
   await page.route("**/api/v1/sessions/session-1/builds/1", (route) => route.fulfill({ json: { schema_version: 1, summary, requirement, parts: ["cpu", "gpu", "motherboard", "memory", "ssd", "psu", "case", "cooler"].map((category, index) => ({ category, sku: `sku-${index}`, name: `${category.toUpperCase()} 示例零件`, quantity: 1, unit_price_cny: "900.00", subtotal_cny: "900.00", rationale: "满足需求" })), quote: { snapshot_date: "2026-08-09", total_cny: "7899.00", budget_cny: "8000.00", budget_delta_cny: "101.00", missing_count: 0, missing_skus: [] }, validation: { overall_status: "pass", checks: ["SOCKET_MATCH", "CHIPSET_SUPPORT", "MEMORY_GENERATION", "MEMORY_SPEED", "GPU_CLEARANCE", "COOLER_CLEARANCE", "PSU_HEADROOM", "FORM_FACTOR_SUPPORT", "M2_SLOT_CAPACITY", "GPU_POWER_CONNECTORS", "DISPLAY_OUTPUT", "COOLER_THERMAL_CAPACITY"].map((rule_id) => ({ rule_id, outcome: "pass", severity: "none", observed: {}, missing_fields: [], detail: "检查通过" })) }, disclaimers: ["价格为快照参考。", "购买前核对接口与尺寸。", "实际性能受环境影响。"] } }));
+  await page.route("**/api/v1/sessions/session-1/builds/1/shares", (route) => {
+    if (route.request().method() === "POST") return route.fulfill({ status: 201, json: { schema_version: 1, id: "00000000-0000-4000-8000-000000000099", version: 1, token: "P".repeat(43), url: `http://localhost:3000/share/${"P".repeat(43)}`, created_at: "2026-08-09T12:30:00Z", revoked_at: null } });
+    return route.fulfill({ json: { schema_version: 1, shares: [] } });
+  });
   await page.route("**/api/v1/sessions/session-1/requirement/confirm", async (route) => {
     phase = "ready"; versionCount = 1;
     await route.fulfill({ status: 202, json: { schema_version: 1, id: "run-1", session_id: "session-1", kind: "build", status: "running", started_at: "2026-08-09T10:00:01Z", events_url: "/api/v1/runs/run-1/events" } });
@@ -25,6 +29,11 @@ test("anonymous requirement confirmation reaches a validated build", async ({ pa
   await page.getByRole("tab", { name: "校验" }).click();
   await expect(page.getByText("处理器与主板接口")).toBeVisible();
   await expect(page.getByText("购买前说明")).toBeVisible();
+  await page.getByRole("button", { name: "分享配置 v1" }).click();
+  await page.getByRole("button", { name: "创建当前版本分享" }).click();
+  await expect(page.getByText(/只在本机/)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).not.toBeVisible();
   const violations = await new AxeBuilder({ page }).analyze();
   expect(violations.violations.filter((item) => ["serious", "critical"].includes(item.impact ?? ""))).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("workspace.png"), fullPage: true });

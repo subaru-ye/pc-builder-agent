@@ -245,8 +245,13 @@ function trialResult(sessionID: string, finalPhase: string, versions: number[], 
 async function startSession(page: Page, prompt: string) {
   await page.goto("/");
   await page.locator("#message-composer").fill(prompt);
+  const createResponse = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/v1/sessions", { timeout: 30_000 });
+  const messageResponse = page.waitForResponse((response) => response.request().method() === "POST" && /\/api\/v1\/sessions\/[^/]+\/messages$/.test(new URL(response.url()).pathname), { timeout: 30_000 });
   await page.getByRole("button", { name: "发送" }).click();
-  await page.waitForURL(/\/s\/[^/?]+/);
+  for (const response of await Promise.all([createResponse, messageResponse])) {
+    if (!response.ok()) throw new Error(`${response.request().method()} ${new URL(response.url()).pathname} -> ${response.status()} ${await response.text()}`);
+  }
+  await page.waitForURL(/\/s\/[^/?]+/, { timeout: 30_000 });
   return decodeURIComponent(new URL(page.url()).pathname.split("/").at(-1) ?? "");
 }
 

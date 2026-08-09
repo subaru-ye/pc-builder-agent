@@ -13,10 +13,13 @@ const artifactDir = join(root, "artifacts", "p10", runID);
 const metricsDir = join(artifactDir, "metrics");
 const reportPath = join(artifactDir, "live-results.json");
 mkdirSync(metricsDir, { recursive: true, mode: 0o700 });
+const webBaseURL = process.env.P10_WEB_BASE_URL ?? "http://127.0.0.1:3000";
 
 const childEnv = {
   ...process.env,
   P10_METRICS_DIR: metricsDir,
+  PUBLIC_WEB_BASE_URL: webBaseURL,
+  WEB_ALLOWED_ORIGIN: new URL(webBaseURL).origin,
   SHARE_TOKEN_SECRET: randomBytes(32).toString("base64url"),
 };
 const goCommand = process.platform === "win32" ? "go.exe" : "go";

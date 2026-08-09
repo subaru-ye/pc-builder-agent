@@ -140,12 +140,13 @@ func trimToPayload(ctx agent.Context, req *a2a.SendMessageRequest) (*session.Eve
 	for _, p := range req.Message.Parts {
 		b.WriteString(p.Text())
 	}
-	payload := pipeline.ExtractPayload(b.String())
+	currentText := originalUserText(ctx)
+	payload := preferCurrentPayload(currentText, b.String())
 	if payload == nil {
 		log.Printf("[host] A2A 出站:无结构化载荷,原样转发(初筛追问轮)")
 		return nil, nil
 	}
-	if sanitized, changed := sanitizeInferredBrandPrefs(payload, originalUserText(ctx)); changed {
+	if sanitized, changed := sanitizeInferredBrandPrefs(payload, currentText); changed {
 		payload = sanitized
 		log.Printf("[host] 初筛纠偏:移除用户未明确指定的 CPU/GPU 品牌偏好")
 	}
@@ -155,6 +156,16 @@ func trimToPayload(ctx agent.Context, req *a2a.SendMessageRequest) (*session.Eve
 	log.Printf("[host] A2A 出站:contextID=%s 载荷类型=%s", req.Message.ContextID, pipeline.PayloadKind(payload))
 	req.Message.Parts = a2a.ContentParts{a2a.NewTextPart(string(payload))}
 	return nil, nil
+}
+
+// preferCurrentPayload 避免 A2A 聚合消息中的旧 RequirementSpec 覆盖本次确认前编辑。
+// 产品 API 的 Remote 调用会把已确认 JSON 作为当前 UserContent;dev UI 当前输入仍是
+// 自然语言时,回退到 Sequential 历史中由初筛 Agent 产出的结构化载荷。
+func preferCurrentPayload(currentText, aggregateText string) json.RawMessage {
+	if payload := pipeline.ExtractPayload(currentText); payload != nil {
+		return payload
+	}
+	return pipeline.ExtractPayload(aggregateText)
 }
 
 func isProductOwnerID(value string) bool {

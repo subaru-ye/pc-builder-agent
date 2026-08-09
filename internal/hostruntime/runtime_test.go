@@ -91,3 +91,24 @@ func TestIsProductOwnerID(t *testing.T) {
 		}
 	}
 }
+
+func TestPreferCurrentPayloadUsesConfirmedEdit(t *testing.T) {
+	oldSpec := `{"schema_version":1,"budget_cny":8000,"noise_pref":"normal","use_case":{"type":"gaming","resolution":"2K"}}`
+	edited := `{"schema_version":1,"budget_cny":8500,"noise_pref":"silent","use_case":{"type":"gaming","resolution":"2K"}}`
+	got := preferCurrentPayload(edited, oldSpec+"\n"+edited)
+	spec, err := schemas.DecodeRequirementSpec(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.BudgetCNY != 8500 || spec.NoisePref != schemas.NoisePrefSilent {
+		t.Fatalf("应优先本次确认后的需求,得到 budget=%d noise=%s payload=%s", spec.BudgetCNY, spec.NoisePref, got)
+	}
+}
+
+func TestPreferCurrentPayloadFallsBackForDevUI(t *testing.T) {
+	aggregated := "用户说想装机\n" + requirementWithBrands
+	got := preferCurrentPayload("8000 元玩游戏", aggregated)
+	if !bytes.Equal(got, []byte(requirementWithBrands)) {
+		t.Fatalf("自然语言当前输入应回退聚合消息中的结构化载荷:\n got: %s\nwant: %s", got, requirementWithBrands)
+	}
+}

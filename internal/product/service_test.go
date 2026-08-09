@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
@@ -139,12 +140,14 @@ type fakeAgent struct {
 	store            *fakeProductStore
 	screen           ScreenResult
 	contextAvailable bool
+	remotePayload    json.RawMessage
 }
 
 func (f *fakeAgent) Screen(context.Context, string, string, string) (ScreenResult, error) {
 	return f.screen, nil
 }
-func (f *fakeAgent) Remote(context.Context, string, string, json.RawMessage) (RemoteResult, error) {
+func (f *fakeAgent) Remote(_ context.Context, _, _ string, payload json.RawMessage) (RemoteResult, error) {
+	f.remotePayload = append(json.RawMessage(nil), payload...)
 	f.store.mu.Lock()
 	f.store.latest++
 	f.store.mu.Unlock()
@@ -210,6 +213,10 @@ func TestServiceRequirementConfirmBuild(t *testing.T) {
 	if ws.Phase != store.PhaseRequirementReady || len(ws.PendingRequirement) == 0 {
 		t.Fatalf("screening 后状态不正确:%+v", ws)
 	}
+	edited := json.RawMessage(`{"schema_version":1,"budget_cny":8500,"noise_pref":"silent","use_case":{"type":"gaming","resolution":"2K"}}`)
+	if err := svc.ReplaceRequirement(context.Background(), "owner-1", "session-1", edited); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := svc.StartConfirm(context.Background(), "owner-1", "session-1",
 		"00000000-0000-4000-8000-000000000002"); err != nil {
 		t.Fatal(err)
@@ -218,6 +225,10 @@ func TestServiceRequirementConfirmBuild(t *testing.T) {
 	ws, _ = st.WebSessionByOwner(context.Background(), "owner-1", "session-1")
 	if ws.Phase != store.PhaseReady || st.latest != 1 {
 		t.Fatalf("confirm 后状态不正确:session=%+v latest=%d", ws, st.latest)
+	}
+	confirmed, err := schemas.DecodeRequirementSpec(agent.remotePayload)
+	if err != nil || confirmed.BudgetCNY != 8500 || confirmed.NoisePref != schemas.NoisePrefSilent {
+		t.Fatalf("Remote 应收到编辑后的 pending requirement,得到 %s err=%v", agent.remotePayload, err)
 	}
 	wantOrder := []string{"run.started", "run.progress", "assistant.completed", "requirement.ready", "run.completed",
 		"run.started", "run.progress", "run.progress", "assistant.completed", "build.saved", "run.completed"}

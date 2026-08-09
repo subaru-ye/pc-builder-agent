@@ -1,0 +1,235 @@
+package product
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/subaru-ye/pc-builder-agent/internal/store"
+)
+
+type fakeProductStore struct {
+	mu       sync.Mutex
+	session  store.WebSession
+	runs     map[string]store.AgentRun
+	messages []store.WebMessage
+	latest   int
+}
+
+func newFakeProductStore() *fakeProductStore {
+	return &fakeProductStore{
+		session: store.WebSession{ID: "session-1", OwnerID: "owner-1", Phase: store.PhaseCollecting},
+		runs:    make(map[string]store.AgentRun),
+	}
+}
+
+func (f *fakeProductStore) CreateWebSession(context.Context, string, string, string) (store.WebSession, error) {
+	return f.session, nil
+}
+func (f *fakeProductStore) WebSessionsByOwner(context.Context, string) ([]store.WebSession, error) {
+	return []store.WebSession{f.session}, nil
+}
+func (f *fakeProductStore) WebSessionByOwner(_ context.Context, owner, session string) (store.WebSession, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if owner != f.session.OwnerID || session != f.session.ID {
+		return store.WebSession{}, store.ErrWebSessionNotFound
+	}
+	return f.session, nil
+}
+func (f *fakeProductStore) WebMessages(context.Context, string) ([]store.WebMessage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]store.WebMessage(nil), f.messages...), nil
+}
+func (f *fakeProductStore) ActiveRun(context.Context, string) (*store.AgentRun, error) {
+	return nil, nil
+}
+func (f *fakeProductStore) RunByOwner(_ context.Context, _ string, id string) (store.AgentRun, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.runs[id], nil
+}
+func (f *fakeProductStore) ReplacePendingRequirement(_ context.Context, _, _ string, spec json.RawMessage) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.session.PendingRequirement = spec
+	f.session.Phase = store.PhaseRequirementReady
+	return nil
+}
+func (f *fakeProductStore) StartMessageRun(_ context.Context, p store.StartMessageRunParams) (store.AgentRun, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	kind := store.RunScreening
+	if f.session.Phase == store.PhaseReady {
+		kind = store.RunChange
+		f.session.Phase = store.PhaseChanging
+	}
+	r := store.AgentRun{ID: p.RunID, SessionID: p.SessionID, ClientRequestID: p.RequestID,
+		Kind: kind, Status: store.RunRunning, StartedAt: time.Now()}
+	f.runs[r.ID] = r
+	f.messages = append(f.messages, store.WebMessage{
+		ID: p.MessageID, SessionID: p.SessionID, Role: "user", Content: p.Text, RunID: &r.ID, CreatedAt: time.Now(),
+	})
+	return r, false, nil
+}
+func (f *fakeProductStore) StartConfirmRun(_ context.Context, p store.StartConfirmRunParams) (store.AgentRun, json.RawMessage, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r := store.AgentRun{ID: p.RunID, SessionID: p.SessionID, ClientRequestID: p.RequestID,
+		Kind: store.RunBuild, Status: store.RunRunning, StartedAt: time.Now()}
+	f.runs[r.ID] = r
+	f.session.Phase = store.PhaseBuilding
+	return r, f.session.PendingRequirement, false, nil
+}
+func (f *fakeProductStore) CompleteRun(_ context.Context, p store.CompleteRunParams) (*store.WebMessage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r := f.runs[p.RunID]
+	r.Status = p.Status
+	f.runs[p.RunID] = r
+	f.session.Phase = p.Phase
+	f.session.RecoveryPhase = p.RecoveryPhase
+	f.session.LastError = p.Error
+	if p.SetPending {
+		f.session.PendingRequirement = p.PendingRequirement
+	}
+	if p.AssistantContent == "" {
+		return nil, nil
+	}
+	m := store.WebMessage{ID: p.AssistantMessageID, SessionID: p.SessionID, Role: "assistant",
+		Content: p.AssistantContent, RunID: &p.RunID, CreatedAt: time.Now()}
+	f.messages = append(f.messages, m)
+	return &m, nil
+}
+func (f *fakeProductStore) LatestBuildVersion(context.Context, string) (int, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.latest, f.latest > 0, nil
+}
+func (f *fakeProductStore) InterruptRunning(context.Context, json.RawMessage) ([]store.InterruptedRun, error) {
+	return nil, nil
+}
+
+type fakeAgent struct {
+	store            *fakeProductStore
+	screen           ScreenResult
+	contextAvailable bool
+}
+
+func (f *fakeAgent) Screen(context.Context, string, string, string) (ScreenResult, error) {
+	return f.screen, nil
+}
+func (f *fakeAgent) Remote(context.Context, string, string, json.RawMessage) (RemoteResult, error) {
+	f.store.mu.Lock()
+	f.store.latest++
+	f.store.mu.Unlock()
+	return RemoteResult{Text: "配置已生成并通过校验。"}, nil
+}
+func (f *fakeAgent) ContextAvailable(context.Context, string, string) (bool, error) {
+	return f.contextAvailable, nil
+}
+
+type recordedEvent struct{ name string }
+type fakeSink struct {
+	mu        sync.Mutex
+	events    []recordedEvent
+	completed chan struct{}
+}
+
+func newFakeSink() *fakeSink { return &fakeSink{completed: make(chan struct{}, 8)} }
+func (f *fakeSink) Append(_ context.Context, _ string, name string, _ any) (string, error) {
+	f.mu.Lock()
+	f.events = append(f.events, recordedEvent{name: name})
+	f.mu.Unlock()
+	if name == "run.completed" {
+		f.completed <- struct{}{}
+	}
+	return "1-0", nil
+}
+func (f *fakeSink) Has(context.Context, string) (bool, error) { return true, nil }
+func (f *fakeSink) Degraded() bool                            { return false }
+func (f *fakeSink) wait(t *testing.T) {
+	t.Helper()
+	select {
+	case <-f.completed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("等待 run.completed 超时")
+	}
+}
+func (f *fakeSink) names() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]string, len(f.events))
+	for i := range f.events {
+		out[i] = f.events[i].name
+	}
+	return out
+}
+
+func TestServiceRequirementConfirmBuild(t *testing.T) {
+	st := newFakeProductStore()
+	spec := json.RawMessage(`{"schema_version":1,"budget_cny":8000,"use_case":{"type":"gaming","resolution":"2K"}}`)
+	agent := &fakeAgent{store: st, screen: ScreenResult{Kind: ScreenRequirement, Payload: spec}, contextAvailable: true}
+	sink := newFakeSink()
+	svc, err := NewService(context.Background(), st, agent, sink)
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, err := svc.StartMessage(context.Background(), "owner-1", "session-1",
+		"00000000-0000-4000-8000-000000000001", "8000 元 2K 玩黑神话")
+	if err != nil || started.Run.Kind != store.RunScreening {
+		t.Fatalf("StartMessage=%+v err=%v", started, err)
+	}
+	sink.wait(t)
+	ws, _ := st.WebSessionByOwner(context.Background(), "owner-1", "session-1")
+	if ws.Phase != store.PhaseRequirementReady || len(ws.PendingRequirement) == 0 {
+		t.Fatalf("screening 后状态不正确:%+v", ws)
+	}
+	if _, err := svc.StartConfirm(context.Background(), "owner-1", "session-1",
+		"00000000-0000-4000-8000-000000000002"); err != nil {
+		t.Fatal(err)
+	}
+	sink.wait(t)
+	ws, _ = st.WebSessionByOwner(context.Background(), "owner-1", "session-1")
+	if ws.Phase != store.PhaseReady || st.latest != 1 {
+		t.Fatalf("confirm 后状态不正确:session=%+v latest=%d", ws, st.latest)
+	}
+	wantOrder := []string{"run.started", "run.progress", "assistant.completed", "requirement.ready", "run.completed",
+		"run.started", "run.progress", "run.progress", "assistant.completed", "build.saved", "run.completed"}
+	got := sink.names()
+	if len(got) != len(wantOrder) {
+		t.Fatalf("事件数量=%d want=%d:%v", len(got), len(wantOrder), got)
+	}
+	for i := range wantOrder {
+		if got[i] != wantOrder[i] {
+			t.Fatalf("事件[%d]=%s want=%s,all=%v", i, got[i], wantOrder[i], got)
+		}
+	}
+}
+
+func TestServiceContextExpired(t *testing.T) {
+	st := newFakeProductStore()
+	st.session.Phase = store.PhaseReady
+	agent := &fakeAgent{store: st, contextAvailable: false}
+	svc, _ := NewService(context.Background(), st, agent, newFakeSink())
+	_, err := svc.StartMessage(context.Background(), "owner-1", "session-1",
+		"00000000-0000-4000-8000-000000000003", "换成 A 卡")
+	var problem Problem
+	if !errors.As(err, &problem) || problem.Code != "context_expired" {
+		t.Fatalf("应返回 context_expired,得到 %T %v", err, err)
+	}
+}
+
+func TestTitleFromText(t *testing.T) {
+	if got := TitleFromText("  8000 元\n 2K 玩黑神话  "); got != "8000 元 2K 玩黑神话" {
+		t.Fatalf("TitleFromText=%q", got)
+	}
+	long := "一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三"
+	if got := TitleFromText(long); len([]rune(got)) != 32 {
+		t.Fatalf("长标题 rune=%d", len([]rune(got)))
+	}
+}

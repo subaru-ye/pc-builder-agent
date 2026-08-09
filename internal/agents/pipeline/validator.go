@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"math"
+	"strconv"
 	"strings"
 
 	"google.golang.org/adk/v2/agent"
@@ -149,6 +151,37 @@ func decide(ctx context.Context, eval tools.BuildEvaluator, draftText, lastSelec
 	}
 
 	if res.Report.OverallStatus != schemas.OverallFail {
+		budgetMessage, err := budgetWindowMessage(chg, res.Quote)
+		if err != nil {
+			return verdict{
+				message:  fmt.Sprintf("预算窗口校验内部错误,流水线熔断:%v", err),
+				escalate: true,
+			}
+		}
+		if budgetMessage != "" {
+			switch {
+			case selKey == lastSelection:
+				return verdict{
+					message:    "连续两轮提交了完全相同的配置且预算窗口仍未通过,判定死循环,终止流水线。" + budgetMessage,
+					reportJSON: string(reportJSON),
+					selection:  selKey,
+					escalate:   true,
+				}
+			case finalRound:
+				return verdict{
+					message:    fmt.Sprintf("配置生成失败:第 %d/%d 轮预算窗口仍未通过,重试轮数用尽,本轮不保存版本。%s", round, maxLoopRounds, budgetMessage),
+					reportJSON: string(reportJSON),
+					selection:  selKey,
+					escalate:   true,
+				}
+			default:
+				return verdict{
+					message:    fmt.Sprintf("预算窗口未通过(第 %d/%d 轮):%s 请在保持兼容的前提下定向调整一到两个优先品类,不要从头乱换;下一轮仍须只输出 BuildDraft JSON。", round, maxLoopRounds, budgetMessage),
+					reportJSON: string(reportJSON),
+					selection:  selKey,
+				}
+			}
+		}
 		return verdict{
 			message:    deliveryMessage(draft, res),
 			reportJSON: string(reportJSON),
@@ -182,6 +215,29 @@ func decide(ctx context.Context, eval tools.BuildEvaluator, draftText, lastSelec
 			selection:  selKey,
 		}
 	}
+}
+
+// budgetWindowMessage 是兼容性规则之外的产品交付门禁。ValidationReport 仍只承载
+// 固定 12 条硬件规则;无缺价时,配置总价还必须落入需求预算弹性窗口,否则不落库。
+func budgetWindowMessage(chg *changeCtx, quote validate.Quote) (string, error) {
+	if chg == nil || len(chg.ActiveSpec) == 0 || quote.MissingCount > 0 {
+		return "", nil
+	}
+	spec, err := schemas.DecodeRequirementSpec(chg.ActiveSpec)
+	if err != nil {
+		return "", fmt.Errorf("解析生效需求单失败:%w", err)
+	}
+	totalFen, ok := parseCNYFen(quote.TotalCNY)
+	if !ok {
+		return "", fmt.Errorf("解析报价合计失败:%q", quote.TotalCNY)
+	}
+	budgetFen := int64(spec.BudgetCNY) * 100
+	flexFen := int64(math.Round(float64(budgetFen) * spec.BudgetFlex))
+	lower, upper := budgetFen-flexFen, budgetFen+flexFen
+	if totalFen >= lower && totalFen <= upper {
+		return "", nil
+	}
+	return fmt.Sprintf("当前合计 ¥%s,需求允许区间 ¥%s–¥%s。", quote.TotalCNY, formatFen64(lower), formatFen64(upper)), nil
 }
 
 // deliveryMessage 交付文本:结论 + 配置单清单 + 报价合计 + 快照日期(用例 A DoD)。
@@ -360,6 +416,15 @@ func remainingCNY(budgetCNY int, total string) string {
 	if budgetCNY <= 0 || total == "" {
 		return ""
 	}
+	totalFen, ok := parseCNYFen(total)
+	if !ok {
+		return ""
+	}
+	remain := int64(budgetCNY)*100 - totalFen
+	return formatFen64(remain)
+}
+
+func parseCNYFen(total string) (int64, bool) {
 	neg := strings.HasPrefix(total, "-")
 	s := strings.TrimPrefix(total, "-")
 	intPart, frac := s, ""
@@ -370,26 +435,30 @@ func remainingCNY(budgetCNY int, total string) string {
 		frac += "0"
 	}
 	if len(frac) > 2 {
-		return ""
+		return 0, false
 	}
-	var yuan, fen int
-	if _, err := fmt.Sscanf(intPart, "%d", &yuan); err != nil {
-		return ""
+	yuan, err := strconv.ParseInt(intPart, 10, 64)
+	if err != nil || yuan < 0 {
+		return 0, false
 	}
-	if _, err := fmt.Sscanf(frac, "%d", &fen); err != nil {
-		return ""
+	fen, err := strconv.ParseInt(frac, 10, 64)
+	if err != nil || fen < 0 || fen > 99 {
+		return 0, false
 	}
 	totalFen := yuan*100 + fen
 	if neg {
 		totalFen = -totalFen
 	}
-	remain := budgetCNY*100 - totalFen
+	return totalFen, true
+}
+
+func formatFen64(fen int64) string {
 	sign := ""
-	if remain < 0 {
+	if fen < 0 {
 		sign = "-"
-		remain = -remain
+		fen = -fen
 	}
-	return fmt.Sprintf("%s%d.%02d", sign, remain/100, remain%100)
+	return fmt.Sprintf("%s%d.%02d", sign, fen/100, fen%100)
 }
 
 // persistVersion 交付分支的版本落库 + 状态块更新(P4 设计 §3/§5)。

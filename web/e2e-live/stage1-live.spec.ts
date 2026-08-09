@@ -56,7 +56,7 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
           budget_within_flex: Math.abs(total - budget) <= budget * build.requirement.budget_flex,
         });
       });
-      report.trials.push(l1); save();
+      recordTrial(report, l1, save);
 
       const l3 = await measure("L3", repetition, observer, 1, async () => {
         await sendComposer(page, "降 500");
@@ -71,7 +71,7 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
           minimal_change: changed.length > 0 && changed.length <= 2,
         }, { changed_categories: changed, total_delta_cny: diff.total_delta_cny });
       });
-      report.trials.push(l3); save();
+      recordTrial(report, l3, save);
 
       const restart = await fetch(`${controlURL}/restart-api`, { method: "POST" });
       expect(restart.ok, `API restart failed: ${await restart.text()}`).toBeTruthy();
@@ -95,7 +95,7 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
           ...delivery,
         }, { changed_categories: changed, total_delta_cny: diff.total_delta_cny });
       });
-      report.trials.push(l4); save();
+      recordTrial(report, l4, save);
       await context.close();
 
       const l2Context = await browser.newContext();
@@ -115,7 +115,7 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
           validation_pass: build.validation.overall_status === "pass",
         });
       });
-      report.trials.push(l2); save();
+      recordTrial(report, l2, save);
       await l2Context.close();
 
       const l5Context = await browser.newContext();
@@ -133,7 +133,7 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
           },
         };
       });
-      report.trials.push(l5); save();
+      recordTrial(report, l5, save);
       await l5Context.close();
 
       const l6Context = await browser.newContext();
@@ -153,7 +153,7 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
           validation_pass: build.validation.overall_status === "pass",
         });
       });
-      report.trials.push(l6); save();
+      recordTrial(report, l6, save);
       await l6Context.close();
     }
 
@@ -240,6 +240,15 @@ async function measure(
 
 function trialResult(sessionID: string, finalPhase: string, versions: number[], build: BuildView, assertions: Record<string, boolean>, diffSummary?: Record<string, unknown>) {
   return { sessionID, finalPhase, versions, build, assertions, diffSummary };
+}
+
+function recordTrial(report: LiveReport, trial: Trial, save: () => void) {
+  report.trials.push(trial);
+  save();
+  expect(Object.values(trial.assertions).every(Boolean), `${trial.scenario}/${trial.repetition} assertions`).toBeTruthy();
+  expect(trial.first_progress_ms, `${trial.scenario}/${trial.repetition} first progress`).toBeLessThanOrEqual(1000);
+  expect(trial.max_sse_gap_ms, `${trial.scenario}/${trial.repetition} SSE gap`).toBeLessThanOrEqual(30_000);
+  expect(trial.total_ms, `${trial.scenario}/${trial.repetition} total`).toBeLessThanOrEqual(600_000);
 }
 
 async function startSession(page: Page, prompt: string) {

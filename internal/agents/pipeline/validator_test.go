@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -156,6 +157,58 @@ func TestDecideReviewDeliversWithNotes(t *testing.T) {
 	v := decide(context.Background(), &fakeEval{res: res}, draftJSON, "", 1, nil)
 	if !v.escalate || !strings.Contains(v.message, "review") || !strings.Contains(v.message, "内存超主板标称频率") {
 		t.Errorf("review 应交付并列注意项, 得到 %+v", v)
+	}
+}
+
+func budgetChangeCtx(budget int, flex float64) *changeCtx {
+	raw := json.RawMessage(fmt.Sprintf(`{"schema_version":1,"budget_cny":%d,"budget_flex":%g,"use_case":{"type":"general"}}`, budget, flex))
+	return &changeCtx{ActiveSpec: raw}
+}
+
+func TestDecideBudgetWindow(t *testing.T) {
+	t.Run("区间内正常交付", func(t *testing.T) {
+		v := decide(context.Background(), &fakeEval{res: passResult()}, draftJSON, "", 1, budgetChangeCtx(6500, 0.1))
+		if !v.deliver || !v.escalate {
+			t.Fatalf("预算区间内应交付,得到 %+v", v)
+		}
+	})
+
+	for _, tc := range []struct {
+		name   string
+		budget int
+		want   string
+	}{
+		{name: "低于下界", budget: 8000, want: "¥7200.00–¥8800.00"},
+		{name: "超过上界", budget: 5000, want: "¥4500.00–¥5500.00"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v := decide(context.Background(), &fakeEval{res: passResult()}, draftJSON, "", 1, budgetChangeCtx(tc.budget, 0.1))
+			if v.escalate || v.deliver || v.selection == "" || !strings.Contains(v.message, tc.want) {
+				t.Fatalf("预算越界应回喂定向修复,得到 %+v", v)
+			}
+		})
+	}
+}
+
+func TestDecideBudgetWindowDoesNotSaveFinalOrRepeatedDraft(t *testing.T) {
+	ctx := budgetChangeCtx(8000, 0.1)
+	first := decide(context.Background(), &fakeEval{res: passResult()}, draftJSON, "", 1, ctx)
+	repeated := decide(context.Background(), &fakeEval{res: passResult()}, draftJSON, first.selection, 2, ctx)
+	if !repeated.escalate || repeated.deliver || !strings.Contains(repeated.message, "死循环") {
+		t.Fatalf("重复的预算越界配置应停止且不交付,得到 %+v", repeated)
+	}
+	final := decide(context.Background(), &fakeEval{res: passResult()}, draftJSON, "", maxLoopRounds, ctx)
+	if !final.escalate || final.deliver || !strings.Contains(final.message, "不保存版本") {
+		t.Fatalf("末轮预算越界应停止且不交付,得到 %+v", final)
+	}
+}
+
+func TestBudgetWindowSkipsIncompleteQuote(t *testing.T) {
+	res := passResult()
+	res.Quote.MissingCount = 1
+	v := decide(context.Background(), &fakeEval{res: res}, draftJSON, "", 1, budgetChangeCtx(8000, 0.1))
+	if !v.deliver {
+		t.Fatalf("缺价时无法判定下界,应保留原有降级交付,得到 %+v", v)
 	}
 }
 

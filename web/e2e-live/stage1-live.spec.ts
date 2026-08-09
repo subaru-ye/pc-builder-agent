@@ -125,7 +125,11 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
       const l5Observer = observePage(l5Page, report.route_latency_ms);
       const l5 = await measure("L5", repetition, l5Observer, 1, async () => {
         const id = await startSession(l5Page, "我想配台电脑");
-        await waitPhase(l5Page, id, "collecting");
+        await expect.poll(async () => {
+          const current = await apiJSON<Session>(l5Page, `/api/v1/sessions/${id}`);
+          const hasQuestion = current.messages.some((message) => message.role === "assistant" && message.content.length > 0);
+          return `${current.phase}:${current.active_run == null}:${hasQuestion}`;
+        }).toBe("collecting:true:true");
         const session = await apiJSON<Session>(l5Page, `/api/v1/sessions/${id}`);
         const builds = await apiJSON<{ builds: unknown[] }>(l5Page, `/api/v1/sessions/${id}/builds`);
         return {

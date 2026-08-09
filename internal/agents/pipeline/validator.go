@@ -14,6 +14,7 @@ import (
 
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/tools"
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/validate"
+	"github.com/subaru-ye/pc-builder-agent/internal/evalmetrics"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
@@ -468,6 +469,10 @@ func newValidatorAgent(eval tools.BuildEvaluator, saver BuildSaver) (agent.Agent
 					stateString(st, stateKeyBuildDraft),
 					stateString(st, stateKeyLastSelection),
 					round, chg)
+				evalmetrics.Record("buildsvc", "validation.round", map[string]any{
+					"session_fingerprint": evalmetrics.Fingerprint(ictx.Session().ID()),
+					"round":               round, "deliver": v.deliver, "escalate": v.escalate,
+				})
 
 				delta := map[string]any{stateKeyRound: round}
 				if v.reportJSON != "" {

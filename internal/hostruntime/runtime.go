@@ -22,6 +22,7 @@ import (
 	"google.golang.org/adk/v2/session"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
+	"github.com/subaru-ye/pc-builder-agent/internal/evalmetrics"
 )
 
 const (
@@ -92,6 +93,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	if err != nil {
 		return nil, fmt.Errorf("创建初筛模型失败: %w", err)
 	}
+	screeningModel = evalmetrics.WrapModel("api", screeningModel)
 
 	screening, err := pipeline.NewScreening(screeningModel)
 	if err != nil {

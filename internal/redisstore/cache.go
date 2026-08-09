@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	"github.com/subaru-ye/pc-builder-agent/internal/evalmetrics"
 )
 
 // embedder 是 query 向量化的最小面(与 tools.QueryEmbedder 结构一致,不 import 以避免耦合)。
@@ -51,6 +53,9 @@ func (e *Embedder) EmbedOne(ctx context.Context, text string) ([]float32, error)
 		var vec []float32
 		if uerr := json.Unmarshal(raw, &vec); uerr == nil {
 			log.Printf("[cache] embedding 命中 model=%s len(text)=%d", e.model, len(text))
+			evalmetrics.Record("buildsvc", "embedding.cache", map[string]any{
+				"model": e.model, "status": "hit", "text_length": len(text),
+			})
 			return vec, nil
 		}
 		// 缓存值损坏:当作未命中,回落重算并覆盖。
@@ -59,10 +64,16 @@ func (e *Embedder) EmbedOne(ctx context.Context, text string) ([]float32, error)
 	default:
 		// Redis 读故障不应拖垮主流程,降级为直算(不写回)。
 		log.Printf("[cache] embedding 读缓存失败(降级直算): %v", err)
+		evalmetrics.Record("buildsvc", "embedding.cache", map[string]any{
+			"model": e.model, "status": "read_error", "text_length": len(text),
+		})
 		return e.inner.EmbedOne(ctx, text)
 	}
 
 	log.Printf("[cache] embedding 未命中 model=%s len(text)=%d", e.model, len(text))
+	evalmetrics.Record("buildsvc", "embedding.cache", map[string]any{
+		"model": e.model, "status": "miss", "text_length": len(text),
+	})
 	vec, err := e.inner.EmbedOne(ctx, text)
 	if err != nil {
 		return nil, err

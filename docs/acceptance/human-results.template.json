@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "reviewed_at": "RFC3339_TIME",
+  "reviews": [
+    {
+      "reviewer_id": "R1",
+      "profile": "novice",
+      "scores": {
+        "requirement_fit": -1,
+        "completeness": -1,
+        "trust": -1,
+        "change_control": -1,
+        "direct_buy": -1,
+        "share_clarity": -1
+      },
+      "assisted": false,
+      "blockers": [],
+      "notes": ""
+    },
+    {
+      "reviewer_id": "R2",
+      "profile": "hardware_familiar",
+      "scores": {
+        "requirement_fit": -1,
+        "completeness": -1,
+        "trust": -1,
+        "change_control": -1,
+        "direct_buy": -1,
+        "share_clarity": -1
+      },
+      "assisted": false,
+      "blockers": [],
+      "notes": ""
+    },
+    {
+      "reviewer_id": "R3",
+      "profile": "builder_experienced",
+      "scores": {
+        "requirement_fit": -1,
+        "completeness": -1,
+        "trust": -1,
+        "change_control": -1,
+        "direct_buy": -1,
+        "share_clarity": -1
+      },
+      "assisted": false,
+      "blockers": [],
+      "notes": ""
+    }
+  ]
+}

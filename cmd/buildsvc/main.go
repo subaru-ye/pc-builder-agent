@@ -25,6 +25,7 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
 	"github.com/subaru-ye/pc-builder-agent/internal/dotenv"
 	"github.com/subaru-ye/pc-builder-agent/internal/embedding"
+	"github.com/subaru-ye/pc-builder-agent/internal/evalmetrics"
 	"github.com/subaru-ye/pc-builder-agent/internal/redisstore"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
@@ -76,6 +77,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("创建生成模型失败: %v", err)
 	}
+	builderModel = evalmetrics.WrapModel("buildsvc", builderModel)
 
 	// P6:会话热上下文 + embedding 缓存统一过 Redis(无 REDIS_ADDR 时降级,见 redisstore.Open)。
 	backend := redisstore.Open(ctx)

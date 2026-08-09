@@ -15,5 +15,6 @@ describe("SSEParser", () => {
   it("rejects internal or malformed events", () => {
     expect(decodeRunEvent({ id: "1", event: "a2a.internal", data: "{}" })).toBeNull();
     expect(decodeRunEvent({ event: "run.completed", data: "{}" })).toBeNull();
+    expect(decodeRunEvent({ id: "2", event: "run.completed", data: "not-json" })).toBeNull();
   });
 });

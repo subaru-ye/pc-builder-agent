@@ -13,6 +13,7 @@ export function useRunStream(run: Run | null | undefined, onEvent: (event: RunEv
     const controller = new AbortController();
     let stopped = false;
     let lastID: string | undefined;
+    const seen = new Set<string>();
     let lastActivity = Date.now();
     let attempt = 0;
     const monitor = window.setInterval(() => {
@@ -28,7 +29,8 @@ export function useRunStream(run: Run | null | undefined, onEvent: (event: RunEv
             signal: controller.signal,
             onActivity: () => { lastActivity = Date.now(); setConnection("connected"); },
             onEvent: (event) => {
-              if (event.id === lastID) return;
+              if (seen.has(event.id)) return;
+              seen.add(event.id);
               lastID = event.id;
               onEvent(event);
               if (event.event === "run.completed") stopped = true;

@@ -14,7 +14,7 @@ export function Composer({ value, onChange, onSend, disabled, placeholder = "描
     <div className={`border-t bg-[var(--surface-1)] p-3 transition-colors ${focused ? "border-t-[var(--hairline-strong)]" : ""}`}>
       <label className="sr-only" htmlFor="message-composer">输入需求或改单内容</label>
       <div className="flex items-end gap-2">
-        <Textarea id="message-composer" value={value} disabled={disabled} placeholder={placeholder} rows={3}
+        <Textarea id="message-composer" value={value} disabled={disabled} placeholder={placeholder} rows={3} maxLength={4000}
           onChange={(e) => onChange(e.target.value)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
           onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !composing.current) { e.preventDefault(); if (!disabled && value.trim()) onSend(); } }}

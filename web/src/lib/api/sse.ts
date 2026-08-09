@@ -50,7 +50,11 @@ const eventNames = new Set<RunEventName>([
 
 export function decodeRunEvent(frame: SSEFrame): RunEvent | null {
   if (!frame.id || !frame.event || !frame.data || !eventNames.has(frame.event as RunEventName)) return null;
-  return { id: frame.id, event: frame.event as RunEventName, data: JSON.parse(frame.data) } as RunEvent;
+  try {
+    return { id: frame.id, event: frame.event as RunEventName, data: JSON.parse(frame.data) } as RunEvent;
+  } catch {
+    return null;
+  }
 }
 
 export interface StreamOptions {

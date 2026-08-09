@@ -50,8 +50,8 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
     if (event.event === "requirement.ready" || event.event === "assistant.completed") void refreshSession();
     if (event.event === "build.saved") void refreshBuilds(Number(event.data.payload.version));
     if (event.event === "run.failed") toast.error(String(event.data.payload.title ?? "运行失败"));
-    if (event.event === "run.completed") { setRun(null); setStage(null); setPollExpired(false); void refreshSession(); }
-  }, [refreshBuilds, refreshSession]);
+    if (event.event === "run.completed") { setRun(null); setStage(null); setPollExpired(false); void client.invalidateQueries({ queryKey: queryKeys.run(event.data.run_id) }); void refreshSession(); }
+  }, [client, refreshBuilds, refreshSession]);
   const connection = useRunStream(currentRun, onEvent, () => setPollExpired(true));
 
   const send = useMutation({
@@ -59,9 +59,14 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
     onSuccess: (nextRun) => { setDraft(""); setRun(nextRun); setStage(nextRun.kind === "screening" ? "screening" : "remote_processing"); void refreshSession(); },
   });
   const saveRequirement = async (value: RequirementSpec) => {
-    await api.replaceRequirement(sessionID, value, crypto.randomUUID());
-    await refreshSession();
-    toast.success("需求已保存");
+    try {
+      await api.replaceRequirement(sessionID, value, crypto.randomUUID());
+      await refreshSession();
+      toast.success("需求已保存");
+    } catch (error) {
+      toast.error(userMessage(error));
+      throw error;
+    }
   };
   const confirm = useMutation({
     mutationFn: async ({ value, dirty }: { value: RequirementSpec; dirty: boolean }) => {

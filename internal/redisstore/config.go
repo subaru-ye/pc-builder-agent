@@ -2,6 +2,7 @@ package redisstore
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -53,6 +54,20 @@ func (b *Backend) SessionService() session.Service {
 		return session.InMemoryService()
 	}
 	return NewSessionService(b.rdb, b.SessionTTL)
+}
+
+// Available 表示当前进程已连接 Redis；产品 API 据此标记降级状态。
+func (b *Backend) Available() bool { return b.rdb != nil }
+
+// Client 返回共享 Redis 客户端；nil 表示已降级。调用方不得关闭它，由 Backend.Close 统一管理。
+func (b *Backend) Client() *redis.Client { return b.rdb }
+
+// Ping 供 readyz 检查当前 Redis 连接。
+func (b *Backend) Ping(ctx context.Context) error {
+	if b.rdb == nil {
+		return fmt.Errorf("redis unavailable")
+	}
+	return b.rdb.Ping(ctx).Err()
 }
 
 // WrapEmbedder 给底层 embedder 套一层 Redis 缓存;无 Redis 时返回透传装饰器。

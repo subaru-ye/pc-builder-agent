@@ -51,6 +51,76 @@ jobs:
         with:
           version: v2.12.2
 
+  # P10 真实数据依赖门禁:环境已配置时任何 PG/Redis 不可达都必须 fail,不得 skip。
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: pcbuilder
+          POSTGRES_PASSWORD: pcbuilder
+          POSTGRES_DB: pcbuilder
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pcbuilder -d pcbuilder"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      PG_TEST_DSN: postgres://pcbuilder:pcbuilder@localhost:5432/pcbuilder?sslmode=disable
+      REDIS_TEST_ADDR: localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: PostgreSQL/Redis 集成测试(禁止 SKIP)
+        shell: bash
+        run: |
+          set -o pipefail
+          go test -count=1 -json ./... | tee /tmp/go-integration.json
+          if grep -q '"Action":"skip"' /tmp/go-integration.json; then
+            echo "检测到被跳过的测试"
+            grep '"Action":"skip"' /tmp/go-integration.json
+            exit 1
+          fi
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+          run_install: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: web/.nvmrc
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm api:check
+      - run: pnpm test --run
+      - run: pnpm build
+      - run: pnpm test:e2e
+
   # D1 数据管道门禁:测试只用 tests/fixtures 冻结数据,不实时下载上游、不连 DB。
   python:
     runs-on: ubuntu-latest

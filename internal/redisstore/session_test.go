@@ -25,7 +25,7 @@ func newTestClient(t *testing.T) *redis.Client {
 	rdb := redis.NewClient(&redis.Options{Addr: addr, DB: testRedisDB})
 	ctx := context.Background()
 	if err := rdb.Ping(ctx).Err(); err != nil {
-		t.Skipf("REDIS_TEST_ADDR=%s 不可达,跳过: %v", addr, err)
+		t.Fatalf("REDIS_TEST_ADDR=%s 已配置但不可达: %v", addr, err)
 	}
 	t.Cleanup(func() { _ = rdb.Close() })
 	return rdb

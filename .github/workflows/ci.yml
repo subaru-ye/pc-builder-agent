@@ -90,11 +90,20 @@ jobs:
         run: |
           set -o pipefail
           go test -count=1 -json ./... | tee /tmp/go-integration.json
-          if grep -q '"Action":"skip"' /tmp/go-integration.json; then
-            echo "检测到被跳过的测试"
-            grep '"Action":"skip"' /tmp/go-integration.json
-            exit 1
-          fi
+          python3 - <<'PY'
+          import json
+          skipped = []
+          with open("/tmp/go-integration.json", encoding="utf-8") as stream:
+              for line in stream:
+                  event = json.loads(line)
+                  if event.get("Action") == "skip" and event.get("Test"):
+                      skipped.append(event)
+          if skipped:
+              print("检测到被跳过的真实测试:")
+              for event in skipped:
+                  print(f"{event['Package']} {event['Test']}")
+              raise SystemExit(1)
+          PY
 
   web:
     runs-on: ubuntu-latest

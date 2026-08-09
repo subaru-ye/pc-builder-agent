@@ -8,6 +8,7 @@ const webURL = process.env.P10_WEB_BASE_URL ?? "http://127.0.0.1:3000";
 
 type MetricEvent = { component: string; name: string; fields?: Record<string, unknown> };
 type RunCapture = { runID: string; firstProgressMS: number; totalMS: number; maxGapMS: number };
+type RunCaptureOutcome = { capture?: RunCapture; error?: Error };
 type Trial = {
   scenario: string; repetition: number; session_fingerprint: string; run_fingerprints: string[];
   final_phase: string; versions: number[]; first_progress_ms: number; total_ms: number; max_sse_gap_ms: number;
@@ -181,12 +182,15 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
 });
 
 function observePage(page: Page, routeLatency: number[]) {
-  const captures: Promise<RunCapture>[] = [];
+  const captures: Promise<RunCaptureOutcome>[] = [];
   page.on("response", (response) => {
     const path = new URL(response.url()).pathname;
     if (response.request().method() === "POST" && (/\/messages$/.test(path) || /\/requirement\/confirm$/.test(path)) && response.ok()) {
       void response.json().then((body: { id?: string }) => {
-        if (body.id) captures.push(captureRun(page.context(), body.id));
+        if (body.id) captures.push(captureRun(page.context(), body.id).then(
+          (capture) => ({ capture }),
+          (error: unknown) => ({ error: error instanceof Error ? error : new Error(String(error)) }),
+        ));
       });
     }
     if (response.request().method() === "GET" && (/^\/api\/v1\/sessions/.test(path) || path === "/readyz") && !path.endsWith("/events")) {
@@ -214,7 +218,10 @@ async function measure(
   const started = Date.now();
   const result = await action();
   await waitUntil(() => observer.captures.length >= beforeRuns + expectedRuns, 10_000, "未捕获预期 run 响应");
-  const runs = await Promise.all(observer.captures.slice(beforeRuns, beforeRuns + expectedRuns));
+  const outcomes = await Promise.all(observer.captures.slice(beforeRuns, beforeRuns + expectedRuns));
+  const captureError = outcomes.find((outcome) => outcome.error)?.error;
+  if (captureError) throw captureError;
+  const runs = outcomes.map((outcome) => outcome.capture as RunCapture);
   const afterMetrics = await metricEvents();
   const delta = afterMetrics.slice(beforeMetrics.length);
   const cache = delta.filter((event) => event.name === "embedding.cache").map((event) => String(event.fields?.status ?? ""));
@@ -287,34 +294,66 @@ async function apiJSON<T>(page: Page, path: string): Promise<T> {
 async function captureRun(context: BrowserContext, runID: string): Promise<RunCapture> {
   const cookies = await context.cookies(webURL);
   const cookie = cookies.map((item) => `${item.name}=${item.value}`).join("; ");
-  const response = await fetch(`${webURL}/api/v1/runs/${runID}/events`, { headers: { Accept: "text/event-stream", Cookie: cookie } });
-  if (!response.ok || !response.body) throw new Error(`SSE ${runID} -> ${response.status}`);
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let body = "";
+  const deadline = Date.now() + 600_000;
+  const events: { event: string; data: { timestamp: string } }[] = [];
+  const seen = new Set<string>();
   const arrivals: number[] = [];
-  while (true) {
-    const chunk = await reader.read();
-    if (chunk.done) break;
-    arrivals.push(Date.now());
-    body += decoder.decode(chunk.value, { stream: true });
+  let lastEventID = "";
+  let backoffMS = 1000;
+  let completed = false;
+  let lastError = "connection closed before run.completed";
+
+  while (!completed && Date.now() < deadline) {
+    try {
+      const headers: Record<string, string> = { Accept: "text/event-stream", Cookie: cookie };
+      if (lastEventID) headers["Last-Event-ID"] = lastEventID;
+      const response = await fetch(`${webURL}/api/v1/runs/${runID}/events`, { headers });
+      if (!response.ok || !response.body) throw new Error(`SSE ${runID} -> ${response.status}`);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (!completed) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        arrivals.push(Date.now());
+        buffer += decoder.decode(chunk.value, { stream: true }).replaceAll("\r\n", "\n");
+        let boundary = buffer.indexOf("\n\n");
+        while (boundary >= 0) {
+          const frame = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          const lines = frame.split("\n");
+          const id = lines.find((line) => line.startsWith("id:"))?.slice(3).trim() ?? "";
+          const event = lines.find((line) => line.startsWith("event:"))?.slice(6).trim();
+          const data = lines.filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n");
+          if (id) lastEventID = id;
+          if (event && data && (!id || !seen.has(id))) {
+            if (id) seen.add(id);
+            events.push({ event, data: JSON.parse(data) as { timestamp: string } });
+            if (event === "run.completed") completed = true;
+          }
+          boundary = buffer.indexOf("\n\n");
+        }
+      }
+      if (completed) await reader.cancel();
+      backoffMS = 1000;
+    } catch (error) {
+      lastError = String(error);
+    }
+    if (!completed) {
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, backoffMS));
+      backoffMS = Math.min(backoffMS * 2, 15_000);
+    }
   }
-  body += decoder.decode();
-  const events = body.replaceAll("\r\n", "\n").split("\n\n").flatMap((frame) => {
-    const event = frame.split("\n").find((line) => line.startsWith("event:"))?.slice(6).trim();
-    const data = frame.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n");
-    if (!event || !data) return [];
-    return [{ event, data: JSON.parse(data) as { timestamp: string } }];
-  });
+  if (!completed) throw new Error(`SSE ${runID} 在 10 分钟内未完成: ${lastError}`);
   const start = events.find((event) => event.event === "run.started");
   const progress = events.find((event) => event.event === "run.progress");
-  const completed = [...events].reverse().find((event) => event.event === "run.completed");
-  if (!start || !progress || !completed) throw new Error(`run ${runID} 缺少必需 SSE 事件`);
+  const completedEvent = [...events].reverse().find((event) => event.event === "run.completed");
+  if (!start || !progress || !completedEvent) throw new Error(`run ${runID} 缺少必需 SSE 事件`);
   const gaps = arrivals.slice(1).map((value, index) => value - arrivals[index]);
   return {
     runID,
     firstProgressMS: Math.max(0, Date.parse(progress.data.timestamp) - Date.parse(start.data.timestamp)),
-    totalMS: Math.max(1, Date.parse(completed.data.timestamp) - Date.parse(start.data.timestamp)),
+    totalMS: Math.max(1, Date.parse(completedEvent.data.timestamp) - Date.parse(start.data.timestamp)),
     maxGapMS: gaps.length ? Math.max(...gaps) : 0,
   };
 }

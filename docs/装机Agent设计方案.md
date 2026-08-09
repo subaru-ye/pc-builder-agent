@@ -277,8 +277,8 @@ sessions     (id PK, user_id, profile JSONB, created_at)                        
 
 ## 七、客户端
 
-- MVP:Web 客户端(先用 ADK 自带 dev UI 调试;正式版 Next.js/React:左侧聊天流、右侧配置单卡片 + 校验报告 + 版本 diff)。
-- 阶段 2:配置单导出为分享图、公开链接。
+- MVP:使用 ADK 自带 dev UI + CLI 调试,已随 P0–P6 封板。
+- 阶段 1:Next.js/React 产品工作台(左侧聊天,右侧需求/配置/校验/版本检查器)+ 分享图/只读链接;实现顺序与边界见 product/stage1.md。
 
 ## 八、里程碑
 

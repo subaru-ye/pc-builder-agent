@@ -49,9 +49,16 @@
 | 文档 | 职责 |
 |---|---|
 | [PRD](docs/product/PRD.md) | 产品定义、用户与场景、功能需求、路线图、成功指标(长期方向权威) |
-| [MVP 实现指导](docs/product/mvp.md) | MVP 范围裁定、阶段拆分 P0–P6、验收用例、数据准备 runbook(短期执行权威) |
+| [MVP 实现指导](docs/product/mvp.md) | 已封板 MVP 范围、P0–P6 阶段拆分与验收历史 |
+| [阶段 1 实现指导](docs/product/stage1.md) | P7–P10 Web 产品化范围、顺序、退出标准与阶段 2/3 交接(当前短期执行权威) |
 | [设计方案](docs/装机Agent设计方案.md) | 架构、A2A 消息 schema、兼容性规则表、数据表结构(技术设计权威) |
 | [P2 流水线设计](docs/tech/P2-流水线设计.md) | P2 三 Agent 流水线实现层:编排拓扑、提示词 SOP、tool 契约、Loop 控制 |
+| [P7 产品 API 设计](docs/tech/P7-产品API与会话状态机设计.md) | 产品会话状态机、匿名身份、后台 run、SSE 与配置读模型 |
+| [P8 Web 客户端设计](docs/tech/P8-Web客户端设计.md) | Next.js 工作台、需求确认、配置/校验/版本交互与响应式 |
+| [P9 分享与导出设计](docs/tech/P9-分享与导出设计.md) | 共享 presenter、只读链接、Markdown 与分享图 |
+| [P10 评测与阶段验收](docs/tech/P10-评测与阶段验收.md) | 50+ golden、Web/Live E2E、真人 rubric 与退出门禁 |
+| [产品 API 契约](docs/api/openapi.yaml) | 阶段 1 HTTP DTO、路径与错误响应唯一线格式 |
+| [设计上下文](DESIGN_CONTEXT.md) | Linear 派生的产品视觉目标;具体 token/规则见 DESIGN.md、UI_RULES.md |
 | [技术选型](docs/tech/技术选型.md) | 语言/框架/模型供应商决策记录(栈级选择权威) |
 | [工程实践指引](docs/tech/工程实践指引.md) | 按模块/阶段筛选的 Agent 工程实践要点与阶段检查单 |
 | [产品调研](docs/装机Agent产品调研.md) | 竞品格局与数据源论证(历史依据) |
@@ -87,6 +94,8 @@ go run ./cmd/host web --write-timeout=10m api --sse-write-timeout=10m webui
 - [x] P6 Redis 会话层与 embedding 缓存
 
 2026-08-09 封板验收结果:PostgreSQL/pgvector/Redis 真实集成测试无跳过;Python 数据流水线 104 项测试通过;用例 A–H 全部验证,包括全 pass 配单、语义召回、v1→v3 回放/diff/Markdown 导出、A2A schema/contextID 以及 kill host 后从 Redis 恢复同一会话继续改单。
+
+阶段 1(P7–P10)已完成文档规划,尚未实现产品 API 或 Next.js 前端。后续按[阶段 1 实现指导](docs/product/stage1.md)依次开发,当前可运行界面仍是 ADK dev UI。
 
 ## 免责声明
 

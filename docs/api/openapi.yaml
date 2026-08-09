@@ -1,0 +1,696 @@
+openapi: 3.1.0
+info:
+  title: PC Builder Agent Product API
+  version: 1.0.0-draft
+  license:
+    name: MIT
+    identifier: MIT
+  description: |
+    阶段 1 产品 API 规划契约。当前尚未实现;浏览器不得绕过本契约直接依赖 ADK/A2A 线格式。
+servers:
+  - url: /
+    description: 同源入口;本地由 Next.js rewrite 转发至 Go :8082
+tags:
+  - name: health
+    description: 进程与依赖健康状态
+  - name: sessions
+    description: 匿名产品会话、消息与需求确认
+  - name: runs
+    description: 后台 Agent 运行与 SSE 事件
+  - name: builds
+    description: 配置版本、diff 与 Markdown 导出
+  - name: shares
+    description: 只读分享的创建、撤销与公开读取
+paths:
+  /healthz:
+    get:
+      summary: 检查 API 进程存活
+      tags: [health]
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: 进程存活
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "4XX":
+          $ref: "#/components/responses/Problem"
+  /readyz:
+    get:
+      summary: 检查完整依赖就绪状态
+      tags: [health]
+      operationId: getReadiness
+      security: []
+      responses:
+        "200":
+          description: 完整依赖可用
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Readiness"
+        "503":
+          description: 未就绪或处于降级状态
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Readiness"
+        "4XX":
+          $ref: "#/components/responses/Problem"
+  /api/v1/sessions:
+    post:
+      summary: 创建匿名产品会话
+      tags: [sessions]
+      operationId: createSession
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: 会话已创建;必要时同时设置匿名身份 cookie
+          headers:
+            Set-Cookie:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "4XX":
+          $ref: "#/components/responses/Problem"
+    get:
+      summary: 列出当前匿名用户的会话
+      tags: [sessions]
+      operationId: listSessions
+      responses:
+        "200":
+          description: 当前匿名用户的会话
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [schema_version, sessions]
+                properties:
+                  schema_version: {type: integer, const: 1}
+                  sessions:
+                    type: array
+                    items: {$ref: "#/components/schemas/SessionSummary"}
+        "4XX":
+          $ref: "#/components/responses/Problem"
+  /api/v1/sessions/{session_id}:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+    get:
+      summary: 读取一个产品会话
+      tags: [sessions]
+      operationId: getSession
+      responses:
+        "200":
+          description: 会话详情、消息、待确认需求和活动 run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "4XX":
+          $ref: "#/components/responses/Problem"
+  /api/v1/sessions/{session_id}/messages:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+    post:
+      summary: 发送消息并启动初筛或改单 run
+      tags: [sessions]
+      operationId: createMessageRun
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [schema_version, text]
+              properties:
+                schema_version: {type: integer, const: 1}
+                text: {type: string, minLength: 1, maxLength: 4000}
+      responses:
+        "200":
+          description: 幂等命中已完成的同一 run
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Run"}
+        "202":
+          description: run 已开始或幂等命中运行中的 run
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Run"}
+        "4XX":
+          $ref: "#/components/responses/Problem"
+  /api/v1/sessions/{session_id}/requirement:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+    patch:
+      summary: 完整替换待确认需求
+      tags: [sessions]
+      operationId: replacePendingRequirement
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      description: 只允许 requirement_ready;请求体为完整替换而非 merge patch。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/RequirementSpec"}
+      responses:
+        "200":
+          description: 严格校验并保存后的需求
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/RequirementSpec"}
+        "4XX":
+          $ref: "#/components/responses/Problem"
+  /api/v1/sessions/{session_id}/requirement/confirm:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+    post:
+      summary: 确认需求并启动生成 run
+      tags: [sessions]
+      operationId: confirmRequirement
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: 幂等命中已完成 run
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Run"}
+        "202":
+          description: build run 已开始
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Run"}
+        "4XX":
+          $ref: "#/components/responses/Problem"
+  /api/v1/runs/{run_id}:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+    get:
+      summary: 读取后台 run 状态
+      tags: [runs]
+      operationId: getRun
+      responses:
+        "200":
+          description: 当前匿名用户所属 run
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Run"}
+        "4XX":
+          $ref: "#/components/responses/Problem"
+  /api/v1/runs/{run_id}/events:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+      - name: Last-Event-ID
+        in: header
+        required: false
+        description: SSE 重连游标;从其后一条事件开始。
+        schema: {type: string}
+    get:
+      summary: 订阅并重放 run 事件
+      tags: [runs]
+      operationId: streamRunEvents
+      responses:
+        "200":
+          description: 事件细节见 SSE事件协议.md
+          headers:
+            Cache-Control:
+              schema: {type: string, const: no-cache}
+            X-Accel-Buffering:
+              schema: {type: string, const: "no"}
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "4XX":
+          $ref: "#/components/responses/Problem"
+  /api/v1/sessions/{session_id}/builds:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+    get:
+      summary: 列出会话的配置版本
+      tags: [builds]
+      operationId: listBuilds
+      responses:
+        "200":
+          description: 版本树摘要,按 version 升序
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [schema_version, builds]
+                properties:
+                  schema_version: {type: integer, const: 1}
+                  builds:
+                    type: array
+                    items: {$ref: "#/components/schemas/BuildSummary"}
+        "4XX":
+          $ref: "#/components/responses/Problem"
+  /api/v1/sessions/{session_id}/builds/{version}:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+      - $ref: "#/components/parameters/Version"
+    get:
+      summary: 读取聚合配置版本
+      tags: [builds]
+      operationId: getBuild
+      responses:
+        "200":
+          description: 聚合配置读模型
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/BuildView"}
+        "4XX":
+          $ref: "#/components/responses/Problem"
+  /api/v1/sessions/{session_id}/diff:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+      - name: from
+        in: query
+        required: true
+        schema: {type: integer, minimum: 1}
+      - name: to
+        in: query
+        required: true
+        schema: {type: integer, minimum: 1}
+    get:
+      summary: 比较任意两个配置版本
+      tags: [builds]
+      operationId: getBuildDiff
+      responses:
+        "200":
+          description: 两版本逐品类 diff
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/BuildDiff"}
+        "4XX":
+          $ref: "#/components/responses/Problem"
+  /api/v1/sessions/{session_id}/builds/{version}/export.md:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+      - $ref: "#/components/parameters/Version"
+    get:
+      summary: 下载一个版本的 Markdown
+      tags: [builds]
+      operationId: exportBuildMarkdown
+      responses:
+        "200":
+          description: 与 cmd/builds 共用 presenter 的 Markdown
+          headers:
+            Content-Disposition:
+              schema: {type: string}
+          content:
+            text/markdown; charset=utf-8:
+              schema: {type: string}
+        "4XX":
+          $ref: "#/components/responses/Problem"
+  /api/v1/sessions/{session_id}/builds/{version}/shares:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+      - $ref: "#/components/parameters/Version"
+    post:
+      summary: 创建固定版本的只读分享
+      tags: [shares]
+      operationId: createBuildShare
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: 新分享;原始 token 只在响应和 URL 中出现
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Share"}
+        "4XX":
+          $ref: "#/components/responses/Problem"
+  /api/v1/shares/{token}:
+    parameters:
+      - $ref: "#/components/parameters/ShareToken"
+    delete:
+      summary: 撤销当前用户拥有的分享
+      tags: [shares]
+      operationId: revokeBuildShare
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "204":
+          description: 已撤销;重复撤销保持幂等
+        "4XX":
+          $ref: "#/components/responses/Problem"
+  /api/v1/public/shares/{token}:
+    parameters:
+      - $ref: "#/components/parameters/ShareToken"
+    get:
+      summary: 公开读取一份只读配置
+      tags: [shares]
+      operationId: getPublicBuildShare
+      security: []
+      responses:
+        "200":
+          description: 不含会话、用户、聊天与内部 ID 的公开配置
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PublicBuildView"}
+        "404":
+          $ref: "#/components/responses/Problem"
+components:
+  securitySchemes:
+    anonymousCookie:
+      type: apiKey
+      in: cookie
+      name: pcb_anonymous_id
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, format: uuid}
+    SessionID:
+      name: session_id
+      in: path
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 128}
+    RunID:
+      name: run_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Version:
+      name: version
+      in: path
+      required: true
+      schema: {type: integer, minimum: 1}
+    ShareToken:
+      name: token
+      in: path
+      required: true
+      schema: {type: string, minLength: 32, maxLength: 128, pattern: "^[A-Za-z0-9_-]+$"}
+  responses:
+    Problem:
+      description: RFC problem details;404 同时用于不存在与无权访问
+      content:
+        application/problem+json:
+          schema: {$ref: "#/components/schemas/Problem"}
+  schemas:
+    Health:
+      type: object
+      additionalProperties: false
+      required: [schema_version, status]
+      properties:
+        schema_version: {type: integer, const: 1}
+        status: {type: string, const: ok}
+    Readiness:
+      type: object
+      additionalProperties: false
+      required: [schema_version, status, dependencies]
+      properties:
+        schema_version: {type: integer, const: 1}
+        status: {type: string, enum: [ready, degraded, unavailable]}
+        dependencies:
+          type: object
+          additionalProperties: false
+          required: [postgres, redis, buildsvc]
+          properties:
+            postgres: {type: string, enum: [ok, unavailable]}
+            redis: {type: string, enum: [ok, degraded, unavailable]}
+            buildsvc: {type: string, enum: [ok, unavailable]}
+    Problem:
+      type: object
+      additionalProperties: true
+      required: [type, title, status, code, request_id]
+      properties:
+        type: {type: string, format: uri-reference}
+        title: {type: string}
+        status: {type: integer, minimum: 400, maximum: 599}
+        detail: {type: string}
+        instance: {type: string, format: uri-reference}
+        code:
+          type: string
+          enum:
+            - invalid_request
+            - not_found
+            - session_busy
+            - invalid_session_phase
+            - schema_validation_failed
+            - upstream_unavailable
+            - context_expired
+            - run_timeout
+            - run_interrupted
+        request_id: {type: string}
+    SessionPhase:
+      type: string
+      enum: [collecting, requirement_ready, building, ready, changing, error]
+    SessionSummary:
+      type: object
+      additionalProperties: false
+      required: [schema_version, id, title, phase, created_at, updated_at, version_count]
+      properties:
+        schema_version: {type: integer, const: 1}
+        id: {type: string}
+        title: {type: string}
+        phase: {$ref: "#/components/schemas/SessionPhase"}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        version_count: {type: integer, minimum: 0}
+    Session:
+      allOf:
+        - $ref: "#/components/schemas/SessionSummary"
+        - type: object
+          required: [messages, degraded]
+          properties:
+            messages:
+              type: array
+              items: {$ref: "#/components/schemas/Message"}
+            pending_requirement:
+              oneOf:
+                - $ref: "#/components/schemas/RequirementSpec"
+                - type: "null"
+            active_run:
+              oneOf:
+                - $ref: "#/components/schemas/Run"
+                - type: "null"
+            degraded: {type: boolean}
+    Message:
+      type: object
+      additionalProperties: false
+      required: [schema_version, id, role, content, created_at]
+      properties:
+        schema_version: {type: integer, const: 1}
+        id: {type: string, format: uuid}
+        role: {type: string, enum: [user, assistant]}
+        content: {type: string}
+        run_id:
+          oneOf:
+            - {type: string, format: uuid}
+            - {type: "null"}
+        created_at: {type: string, format: date-time}
+    Run:
+      type: object
+      additionalProperties: false
+      required: [schema_version, id, session_id, kind, status, started_at, events_url]
+      properties:
+        schema_version: {type: integer, const: 1}
+        id: {type: string, format: uuid}
+        session_id: {type: string}
+        kind: {type: string, enum: [screening, build, change]}
+        status: {type: string, enum: [running, succeeded, failed, interrupted]}
+        started_at: {type: string, format: date-time}
+        finished_at:
+          oneOf:
+            - {type: string, format: date-time}
+            - {type: "null"}
+        error:
+          oneOf:
+            - $ref: "#/components/schemas/Problem"
+            - type: "null"
+        events_url: {type: string, format: uri-reference}
+    RequirementSpec:
+      type: object
+      additionalProperties: false
+      required: [schema_version, budget_cny, use_case]
+      properties:
+        schema_version: {type: integer, const: 1}
+        budget_cny: {type: integer, minimum: 1}
+        budget_flex: {type: number, minimum: 0, maximum: 0.3, default: 0.1}
+        use_case:
+          type: object
+          additionalProperties: false
+          required: [type]
+          properties:
+            type: {type: string, enum: [gaming, productivity, general]}
+            titles: {type: array, items: {type: string}, default: []}
+            resolution: {type: string, enum: [1080p, 2K, 4K]}
+            fps_target: {type: integer, minimum: 1}
+          allOf:
+            - if:
+                properties:
+                  type: {const: gaming}
+                required: [type]
+              then:
+                properties:
+                  resolution: {type: string, enum: [1080p, 2K, 4K]}
+                required: [resolution]
+        size_pref: {type: string, enum: [atx, matx, itx, any], default: any}
+        noise_pref: {type: string, enum: [silent, normal, any], default: any}
+        brand_pref:
+          type: object
+          additionalProperties: false
+          properties:
+            cpu: {type: string, enum: [any, intel, amd], default: any}
+            gpu: {type: string, enum: [any, nvidia, amd], default: any}
+        existing_parts:
+          type: array
+          items: {$ref: "#/components/schemas/PartCategory"}
+          default: []
+        priority:
+          type: array
+          items: {$ref: "#/components/schemas/PartCategory"}
+          default: []
+        notes: {type: string, default: ""}
+    PartCategory:
+      type: string
+      enum: [cpu, gpu, motherboard, memory, ssd, psu, case, cooler]
+    Money:
+      type: string
+      pattern: "^-?[0-9]+\\.[0-9]{2}$"
+      examples: ["6419.90"]
+    BuildSummary:
+      type: object
+      additionalProperties: false
+      required: [schema_version, version, intent, total_cny, snapshot_date, overall_status, created_at]
+      properties:
+        schema_version: {type: integer, const: 1}
+        version: {type: integer, minimum: 1}
+        parent_version:
+          oneOf:
+            - {type: integer, minimum: 1}
+            - {type: "null"}
+        intent: {type: string}
+        total_cny: {$ref: "#/components/schemas/Money"}
+        snapshot_date: {type: string, format: date}
+        overall_status: {type: string, enum: [pass, review, fail]}
+        created_at: {type: string, format: date-time}
+    PartLine:
+      type: object
+      additionalProperties: false
+      required: [category, sku, name, quantity]
+      properties:
+        category: {$ref: "#/components/schemas/PartCategory"}
+        sku: {type: string}
+        name: {type: string}
+        quantity: {type: integer, minimum: 1}
+        unit_price_cny:
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+        subtotal_cny:
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+        rationale: {type: string}
+    ValidationCheck:
+      type: object
+      additionalProperties: false
+      required: [rule_id, outcome, severity, observed, missing_fields, detail]
+      properties:
+        rule_id: {type: string}
+        outcome: {type: string, enum: [pass, fail, unknown]}
+        severity: {type: string, enum: [none, warning, error]}
+        observed: {type: object, additionalProperties: true}
+        missing_fields: {type: array, items: {type: string}}
+        detail: {type: string}
+    ValidationReport:
+      type: object
+      additionalProperties: false
+      required: [overall_status, checks]
+      properties:
+        overall_status: {type: string, enum: [pass, review, fail]}
+        checks:
+          type: array
+          minItems: 12
+          maxItems: 12
+          items: {$ref: "#/components/schemas/ValidationCheck"}
+    Quote:
+      type: object
+      additionalProperties: false
+      required: [snapshot_date, total_cny, budget_cny, budget_delta_cny, missing_count, missing_skus]
+      properties:
+        snapshot_date: {type: string, format: date}
+        total_cny: {$ref: "#/components/schemas/Money"}
+        budget_cny: {$ref: "#/components/schemas/Money"}
+        budget_delta_cny: {$ref: "#/components/schemas/Money"}
+        missing_count: {type: integer, minimum: 0}
+        missing_skus: {type: array, items: {type: string}}
+    BuildView:
+      type: object
+      additionalProperties: false
+      required: [schema_version, summary, requirement, parts, quote, validation, disclaimers]
+      properties:
+        schema_version: {type: integer, const: 1}
+        summary: {$ref: "#/components/schemas/BuildSummary"}
+        requirement: {$ref: "#/components/schemas/RequirementSpec"}
+        parts:
+          type: array
+          items: {$ref: "#/components/schemas/PartLine"}
+        quote: {$ref: "#/components/schemas/Quote"}
+        validation: {$ref: "#/components/schemas/ValidationReport"}
+        disclaimers: {type: array, items: {type: string}, minItems: 3}
+    DiffLine:
+      type: object
+      additionalProperties: false
+      required: [category, changed, before, after]
+      properties:
+        category: {$ref: "#/components/schemas/PartCategory"}
+        changed: {type: boolean}
+        before: {type: string}
+        after: {type: string}
+        price_delta_cny:
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+    BuildDiff:
+      type: object
+      additionalProperties: false
+      required: [schema_version, from_version, to_version, lines, total_delta_cny]
+      properties:
+        schema_version: {type: integer, const: 1}
+        from_version: {type: integer, minimum: 1}
+        to_version: {type: integer, minimum: 1}
+        lines:
+          type: array
+          minItems: 8
+          maxItems: 8
+          items: {$ref: "#/components/schemas/DiffLine"}
+        total_delta_cny: {$ref: "#/components/schemas/Money"}
+        budget_delta_cny: {$ref: "#/components/schemas/Money"}
+        snapshot_warning: {type: string}
+    Share:
+      type: object
+      additionalProperties: false
+      required: [schema_version, token, url, created_at]
+      properties:
+        schema_version: {type: integer, const: 1}
+        token: {type: string}
+        url: {type: string, format: uri}
+        created_at: {type: string, format: date-time}
+    PublicBuildView:
+      description: 与 BuildView 相同的展示数据,但不含任何 session/user/chat/run/内部 build id。
+      allOf:
+        - $ref: "#/components/schemas/BuildView"
+        - type: object
+          required: [share]
+          properties:
+            share:
+              type: object
+              required: [created_at]
+              properties:
+                created_at: {type: string, format: date-time}
+security:
+  - anonymousCookie: []

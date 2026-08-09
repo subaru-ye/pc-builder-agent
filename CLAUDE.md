@@ -21,12 +21,19 @@ go build ./... && go vet ./...
 | 文档 | 权威范围 |
 |---|---|
 | docs/product/PRD.md | 产品长期方向 |
-| docs/product/mvp.md | MVP 范围与 P0–P6 阶段(短期执行唯一依据) |
+| docs/product/mvp.md | 已封板 MVP 范围与 P0–P6 验收历史 |
+| docs/product/stage1.md | P7–P10 Web 产品化范围、顺序与退出标准(当前短期执行唯一依据) |
 | docs/装机Agent设计方案.md | 架构 / A2A schema / 规则表 / 表结构 |
 | docs/tech/P2-流水线设计.md | P2 实现层:编排拓扑 / 提示词 SOP / tool 契约 / Loop 控制(schema 口径仍以设计方案 §四 为准) |
 | docs/tech/P3-语义选件设计.md | P3 实现层:embedding 素材与文本 / 语义检索路径 / search_parts_semantic 契约 |
 | docs/tech/P4-版本快照与增量改单设计.md | P4 实现层:builds/requirements 版本表 / ChangeRequest 意图解析 / 锁定校验 / cmd/builds 回放·diff·导出 |
 | docs/tech/P5-A2A单跳拆分设计.md | P5 实现层:buildsvc A2A 远程服务(生成+校验)/ host 初筛远程消费方 / 出站只传三样 + 入站 schema 校验 / contextID 会话映射 |
+| docs/tech/P7-产品API与会话状态机设计.md | P7 实现层:产品 API / 匿名所有权 / 需求确认状态机 / run 与 SSE / 产品读模型 |
+| docs/tech/P8-Web客户端设计.md | P8 实现层:Next.js 工作台 / 需求确认 / 配置·校验·版本 / 响应式与无障碍 |
+| docs/tech/P9-分享与导出设计.md | P9 实现层:共享 presenter / Markdown / 分享 token / 只读页与分享图 |
+| docs/tech/P10-评测与阶段验收.md | P10 实现层:50+ golden / Web 与 Live E2E / 真人 rubric / 最终门禁 |
+| docs/api/openapi.yaml | 产品 HTTP 路径与 DTO 线格式;SSE 细节见同目录协议文档 |
+| DESIGN.md / DESIGN_CONTEXT.md / UI_RULES.md | Web 视觉来源、产品设计语境与实现规则;写 UI 前必须依次阅读 |
 | docs/tech/技术选型.md | 栈级决策(ADR)+ 版本锁定表 |
 | docs/tech/工程实践指引.md | 各阶段开工前扫对应小节;评审对照 §九检查单 |
 
@@ -36,7 +43,7 @@ go build ./... && go vet ./...
 - **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
 - **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。
 - **schema 单一出处**:`internal/schemas` 定义一份,字段变更回写设计方案 §四,不在代码里静默漂移。
-- 当前进度:MVP P0–P6 已完成并于 2026-08-09 封板验收通过。Redis 会话服务供 host/buildsvc 两进程共享,host 重启后可恢复同一会话与 A2A contextID 继续改单;embedding 查询缓存带命中日志,无 Redis 时仍降级 InMemory/透传。真实验收覆盖用例 A–H:v1←v2←v3 均 pass、版本回放/diff/Markdown 导出正确、语义查询可解释命中、A2A 两侧 schema/contextID 一致、PostgreSQL/Redis 集成测试无跳过、Python 104 项测试通过。
+- 当前进度:MVP P0–P6 已完成并于 2026-08-09 封板验收通过。阶段 1(P7–P10)的产品 API、Web、分享与评测指导文档已规划,实现尚未开始;当前可运行界面仍是 ADK dev UI。开始 P7 前先读 stage1.md 和 P7 专题,不得直接写页面绕过产品 API。
 
 ## 已知环境坑(Windows)
 

@@ -97,6 +97,12 @@ func (s *Service) GetRun(ctx context.Context, ownerID, runID string) (store.Agen
 	return s.store.RunByOwner(ctx, ownerID, runID)
 }
 
+// OwnSession 只验证匿名归属，供不需要聊天记录的配置读取接口使用。
+func (s *Service) OwnSession(ctx context.Context, ownerID, sessionID string) error {
+	_, err := s.store.WebSessionByOwner(ctx, ownerID, sessionID)
+	return err
+}
+
 func (s *Service) ReplaceRequirement(ctx context.Context, ownerID, sessionID string, spec json.RawMessage) error {
 	return s.store.ReplacePendingRequirement(ctx, ownerID, sessionID, spec)
 }

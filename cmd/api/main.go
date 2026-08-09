@@ -13,6 +13,7 @@ import (
 
 	"github.com/subaru-ye/pc-builder-agent/internal/dotenv"
 	"github.com/subaru-ye/pc-builder-agent/internal/hostruntime"
+	"github.com/subaru-ye/pc-builder-agent/internal/presenter"
 	"github.com/subaru-ye/pc-builder-agent/internal/product"
 	"github.com/subaru-ye/pc-builder-agent/internal/producthttp"
 	"github.com/subaru-ye/pc-builder-agent/internal/redisstore"
@@ -63,7 +64,7 @@ func main() {
 		log.Fatalf("恢复遗留运行失败:%v", err)
 	}
 
-	httpAPI, err := producthttp.New(service, events, st, backend, producthttp.Config{
+	httpAPI, err := producthttp.New(service, presenter.New(st), events, st, backend, producthttp.Config{
 		PublicWebBaseURL: envOr("PUBLIC_WEB_BASE_URL", "http://localhost:3000"),
 		AllowedOrigin:    os.Getenv("WEB_ALLOWED_ORIGIN"),
 		BuildsvcURL:      runtimeCfg.BuildsvcURL,

@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/subaru-ye/pc-builder-agent/internal/presenter"
 	"github.com/subaru-ye/pc-builder-agent/internal/product"
 	"github.com/subaru-ye/pc-builder-agent/internal/runevents"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
@@ -42,6 +43,12 @@ func (f *fakeService) GetRun(_ context.Context, owner, id string) (store.AgentRu
 	}
 	return f.run, nil
 }
+func (f *fakeService) OwnSession(_ context.Context, owner, id string) error {
+	if id != f.session.ID || owner != f.session.OwnerID {
+		return store.ErrWebSessionNotFound
+	}
+	return nil
+}
 func (*fakeService) ReplaceRequirement(context.Context, string, string, json.RawMessage) error {
 	return nil
 }
@@ -64,6 +71,21 @@ type fakeRedis struct {
 func (f fakeRedis) Available() bool            { return f.available }
 func (f fakeRedis) Ping(context.Context) error { return f.err }
 
+type fakeBuildPresenter struct{}
+
+func (fakeBuildPresenter) Builds(context.Context, string) ([]presenter.BuildSummary, error) {
+	return []presenter.BuildSummary{}, nil
+}
+func (fakeBuildPresenter) Build(context.Context, string, int) (presenter.BuildView, error) {
+	return presenter.BuildView{SchemaVersion: 1}, nil
+}
+func (fakeBuildPresenter) Diff(context.Context, string, int, int) (presenter.BuildDiff, error) {
+	return presenter.BuildDiff{SchemaVersion: 1}, nil
+}
+func (fakeBuildPresenter) Markdown(context.Context, string, int) (string, error) {
+	return "# test\n", nil
+}
+
 func newTestAPI(t *testing.T, events runevents.Store) (*API, *fakeService) {
 	t.Helper()
 	now := time.Now().UTC()
@@ -71,7 +93,7 @@ func newTestAPI(t *testing.T, events runevents.Store) (*API, *fakeService) {
 		session: store.WebSession{ID: "session-1", Title: "新会话", Phase: store.PhaseCollecting, CreatedAt: now, UpdatedAt: now},
 		run:     store.AgentRun{ID: "run-1", SessionID: "session-1", Kind: store.RunScreening, Status: store.RunSucceeded, StartedAt: now},
 	}
-	api, err := New(f, events, fakeDB{}, fakeRedis{}, Config{PublicWebBaseURL: "http://localhost:3000", BuildsvcURL: "http://127.0.0.1:1"})
+	api, err := New(f, fakeBuildPresenter{}, events, fakeDB{}, fakeRedis{}, Config{PublicWebBaseURL: "http://localhost:3000", BuildsvcURL: "http://127.0.0.1:1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,6 +173,37 @@ func TestSSEReplaysUntilCompleted(t *testing.T) {
 	api.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "event: run.started") || !strings.Contains(rec.Body.String(), "event: run.completed") {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestBuildReadRoutesRequireOwnershipAndKeepContentTypes(t *testing.T) {
+	api, service := newTestAPI(t, runevents.NewMemory())
+	owner := "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	service.session.OwnerID = owner
+	tests := []struct {
+		path        string
+		contentType string
+	}{
+		{"/api/v1/sessions/session-1/builds", "application/json"},
+		{"/api/v1/sessions/session-1/builds/1", "application/json"},
+		{"/api/v1/sessions/session-1/diff?from=1&to=2", "application/json"},
+		{"/api/v1/sessions/session-1/builds/1/export.md", "text/markdown; charset=utf-8"},
+	}
+	for _, tc := range tests {
+		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		req.AddCookie(&http.Cookie{Name: anonymousCookieName, Value: owner})
+		rec := httptest.NewRecorder()
+		api.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), tc.contentType) {
+			t.Fatalf("path=%s status=%d type=%q body=%s", tc.path, rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
+		}
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sessions/session-1/builds", nil)
+	req.AddCookie(&http.Cookie{Name: anonymousCookieName, Value: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"})
+	rec := httptest.NewRecorder()
+	api.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("越权读取 status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
 

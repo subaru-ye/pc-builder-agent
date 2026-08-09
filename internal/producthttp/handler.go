@@ -11,12 +11,14 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
 
+	"github.com/subaru-ye/pc-builder-agent/internal/presenter"
 	"github.com/subaru-ye/pc-builder-agent/internal/product"
 	"github.com/subaru-ye/pc-builder-agent/internal/runevents"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
@@ -34,9 +36,17 @@ type ProductService interface {
 	ListSessions(context.Context, string) ([]store.WebSession, error)
 	GetSession(context.Context, string, string) (product.SessionDetail, error)
 	GetRun(context.Context, string, string) (store.AgentRun, error)
+	OwnSession(context.Context, string, string) error
 	ReplaceRequirement(context.Context, string, string, json.RawMessage) error
 	StartMessage(context.Context, string, string, string, string) (product.StartResult, error)
 	StartConfirm(context.Context, string, string, string) (product.StartResult, error)
+}
+
+type BuildPresenter interface {
+	Builds(context.Context, string) ([]presenter.BuildSummary, error)
+	Build(context.Context, string, int) (presenter.BuildView, error)
+	Diff(context.Context, string, int, int) (presenter.BuildDiff, error)
+	Markdown(context.Context, string, int) (string, error)
 }
 
 type DatabaseHealth interface{ Ping(context.Context) error }
@@ -53,6 +63,7 @@ type Config struct {
 
 type API struct {
 	service ProductService
+	builds  BuildPresenter
 	events  runevents.Store
 	db      DatabaseHealth
 	redis   RedisHealth
@@ -61,9 +72,9 @@ type API struct {
 	client  *http.Client
 }
 
-func New(service ProductService, events runevents.Store, db DatabaseHealth, redis RedisHealth, cfg Config) (*API, error) {
-	if service == nil || events == nil || db == nil || redis == nil {
-		return nil, fmt.Errorf("product http: service/events/db/redis 不能为空")
+func New(service ProductService, builds BuildPresenter, events runevents.Store, db DatabaseHealth, redis RedisHealth, cfg Config) (*API, error) {
+	if service == nil || builds == nil || events == nil || db == nil || redis == nil {
+		return nil, fmt.Errorf("product http: service/builds/events/db/redis 不能为空")
 	}
 	if cfg.PublicWebBaseURL == "" {
 		cfg.PublicWebBaseURL = "http://localhost:3000"
@@ -73,7 +84,7 @@ func New(service ProductService, events runevents.Store, db DatabaseHealth, redi
 		return nil, fmt.Errorf("product http: PUBLIC_WEB_BASE_URL 无效:%q", cfg.PublicWebBaseURL)
 	}
 	return &API{
-		service: service, events: events, db: db, redis: redis, cfg: cfg,
+		service: service, builds: builds, events: events, db: db, redis: redis, cfg: cfg,
 		secure: u.Scheme == "https", client: &http.Client{Timeout: 2 * time.Second},
 	}, nil
 }
@@ -90,6 +101,10 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/sessions/{session_id}/requirement/confirm", a.confirmRequirement)
 	mux.HandleFunc("GET /api/v1/runs/{run_id}", a.getRun)
 	mux.HandleFunc("GET /api/v1/runs/{run_id}/events", a.streamRunEvents)
+	mux.HandleFunc("GET /api/v1/sessions/{session_id}/builds", a.listBuilds)
+	mux.HandleFunc("GET /api/v1/sessions/{session_id}/builds/{version}", a.getBuild)
+	mux.HandleFunc("GET /api/v1/sessions/{session_id}/diff", a.getDiff)
+	mux.HandleFunc("GET /api/v1/sessions/{session_id}/builds/{version}/export.md", a.exportBuild)
 	return a.requestMiddleware(a.corsMiddleware(mux))
 }
 
@@ -299,6 +314,95 @@ func (a *API) getRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, toRun(run))
+}
+
+func (a *API) listBuilds(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("session_id")
+	if !a.ownsSession(w, r, sessionID) {
+		return
+	}
+	items, err := a.builds.Builds(r.Context(), sessionID)
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"schema_version": 1, "builds": items})
+}
+
+func (a *API) getBuild(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("session_id")
+	if !a.ownsSession(w, r, sessionID) {
+		return
+	}
+	version, ok := a.positiveInt(w, r, r.PathValue("version"), "version")
+	if !ok {
+		return
+	}
+	view, err := a.builds.Build(r.Context(), sessionID, version)
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (a *API) getDiff(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("session_id")
+	if !a.ownsSession(w, r, sessionID) {
+		return
+	}
+	from, ok := a.positiveInt(w, r, r.URL.Query().Get("from"), "from")
+	if !ok {
+		return
+	}
+	to, ok := a.positiveInt(w, r, r.URL.Query().Get("to"), "to")
+	if !ok {
+		return
+	}
+	diff, err := a.builds.Diff(r.Context(), sessionID, from, to)
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, diff)
+}
+
+func (a *API) exportBuild(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("session_id")
+	if !a.ownsSession(w, r, sessionID) {
+		return
+	}
+	version, ok := a.positiveInt(w, r, r.PathValue("version"), "version")
+	if !ok {
+		return
+	}
+	markdown, err := a.builds.Markdown(r.Context(), sessionID, version)
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="pc-build-v%d.md"`, version))
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, markdown)
+}
+
+func (a *API) ownsSession(w http.ResponseWriter, r *http.Request, sessionID string) bool {
+	if err := a.service.OwnSession(r.Context(), a.owner(w, r), sessionID); err != nil {
+		a.writeError(w, r, err)
+		return false
+	}
+	return true
+}
+
+func (a *API) positiveInt(w http.ResponseWriter, r *http.Request, raw, name string) (int, bool) {
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		a.writeProblem(w, r, product.NewProblem("invalid_request", "版本参数无效", 400,
+			name+" 必须是正整数。", requestID(r)))
+		return 0, false
+	}
+	return value, true
 }
 
 func (a *API) writeStartResult(w http.ResponseWriter, result product.StartResult) {

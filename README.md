@@ -2,7 +2,7 @@
 
 > 对话式 DIY 装机助手:说清预算和用途,得到**保证兼容**、**带日期化报价**、**可多轮修改**的装机配置单。
 >
-> 个人学习向项目,目标技术栈:多 Agent 流水线 + A2A 协议 + 记忆基座。当前状态:MVP P0–P6 已封板,P7 产品 API 与 P8 Web 配置工作台已完成。
+> 个人学习向项目,目标技术栈:多 Agent 流水线 + A2A 协议 + 记忆基座。当前状态:MVP P0–P6 已封板,P7–P9 已完成。
 
 ## 为什么做
 
@@ -72,7 +72,7 @@ docker compose up -d        # PG → localhost:15432,Redis → localhost:16379(�
 go run ./cmd/migrate up     # 应用 PostgreSQL 编号迁移
 ```
 
-复制 `.env.example` 为 `.env`,填入 `DASHSCOPE_API_KEY`;若创建 key 时控制台显示了工作空间专属「OpenAI 兼容地址」,一并填入 `DASHSCOPE_BASE_URL`。`SCREENING_MODEL`、`BUILDER_MODEL` 与 `EMBEDDING_MODEL` 可按控制台实际免费额度独立切换，百炼不会在额度耗尽后自动改用其他 Model Code。
+复制 `.env.example` 为 `.env`,填入 `DASHSCOPE_API_KEY`;若创建 key 时控制台显示了工作空间专属「OpenAI 兼容地址」,一并填入 `DASHSCOPE_BASE_URL`。`SCREENING_MODEL`、`BUILDER_MODEL` 与 `EMBEDDING_MODEL` 可按控制台实际免费额度独立切换，百炼不会在额度耗尽后自动改用其他 Model Code。P9 还要求独立的 `SHARE_TOKEN_SECRET`,生成方法见[本地运行手册](docs/ops/阶段1本地运行与部署准备.md)。
 
 ```bash
 go run ./cmd/buildsvc  # 终端 1:启动「生成 + 校验」A2A 服务(http://localhost:8081)
@@ -104,12 +104,12 @@ pnpm dev
 - [x] P6 Redis 会话层与 embedding 缓存
 - [x] P7 产品 API 与会话状态机
 - [x] P8 Web 配置工作台
-- [ ] P9 分享与导出
+- [x] P9 分享与导出
 - [ ] P10 评测与发布准备
 
 2026-08-09 封板验收结果:PostgreSQL/pgvector/Redis 真实集成测试无跳过;Python 数据流水线 104 项测试通过;用例 A–H 全部验证,包括全 pass 配单、语义召回、v1→v3 回放/diff/Markdown 导出、A2A schema/contextID 以及 kill host 后从 Redis 恢复同一会话继续改单。
 
-阶段 1 的 P7/P8 已实现:P7 提供 `cmd/api :8082`、匿名产品会话、需求确认状态机、后台 run、Redis SSE、版本读取、diff 与 Markdown 导出;P8 提供 Next.js 匿名工作台、需求编辑确认、SSE 恢复、配置与 12 条校验、历史版本、任意版本 diff、Markdown 下载及桌面/平板/手机布局。前端确定性测试覆盖 375/768/1440 三种视口并通过 axe serious/critical 门禁。下一步进入 P9 分享与公开只读页。
+阶段 1 的 P7–P9 已实现:P7 提供产品 API、匿名会话、需求确认、后台 run 与 Redis SSE;P8 提供 Next.js 工作台、配置/校验/版本/diff 与响应式交互;P9 提供不可变版本分享、所有者撤销、最小披露的 SSR 只读页、公开 Markdown 与 1200×630 PNG。P9 已用现有 v3 完成零模型调用验收:跨重启幂等 URL、无 Cookie 读取、越权隔离和撤销后全资源 404 均通过。下一步进入 P10 评测与发布准备。
 
 ## 免责声明
 

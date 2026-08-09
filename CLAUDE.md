@@ -15,7 +15,7 @@ go build ./... && go vet ./...
 ```
 
 - 端口非默认:本机原生 PostgreSQL 17 与 Redis 服务常驻占用 5432/6379,故 compose 用 15432/16379。
-- `.env`(不入库)存 `DASHSCOPE_API_KEY`;工作空间专属端点用 `DASHSCOPE_BASE_URL` 覆盖,见 `.env.example`。
+- `.env`(不入库)存 `DASHSCOPE_API_KEY` 和独立的 `SHARE_TOKEN_SECRET`;工作空间专属端点用 `DASHSCOPE_BASE_URL` 覆盖,见 `.env.example`。
 - `db/init/` 的 SQL 仅数据卷首次初始化执行,改动后需 `docker compose down -v` 重建。
 
 ## 权威文档(冲突仲裁)
@@ -45,7 +45,7 @@ go build ./... && go vet ./...
 - **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
 - **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。
 - **schema 单一出处**:`internal/schemas` 定义一份,字段变更回写设计方案 §四,不在代码里静默漂移。
-- 当前进度:MVP P0–P6 已封板;P7 产品 API 与 P8 Web 配置工作台已实现。产品入口为 `web/` 的 Next.js 工作台,ADK dev UI 继续只作调试入口。下一步按 stage1.md 与 P9 专题实现不可变版本分享,不得把分享业务规则放进 Next.js 或绕过 `cmd/api :8082`。
+- 当前进度:MVP P0–P6 已封板;P7 产品 API、P8 Web 工作台与 P9 分享只读页已实现。产品入口为 `web/` 的 Next.js 工作台,ADK dev UI 继续只作调试入口。下一步按 stage1.md 与 P10 专题完成 golden set、真人验收和发布门禁;分享业务规则仍只能在 Go API/presenter 内演进。
 
 ## 已知环境坑(Windows)
 

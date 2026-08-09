@@ -1,0 +1,80 @@
+{
+  "overall_status": "review",
+  "load_w": 385,
+  "checks": [
+    {
+      "rule_id": "SOCKET_MATCH",
+      "outcome": "pass",
+      "severity": "none",
+      "missing_fields": []
+    },
+    {
+      "rule_id": "CHIPSET_SUPPORT",
+      "outcome": "pass",
+      "severity": "none",
+      "missing_fields": []
+    },
+    {
+      "rule_id": "MEMORY_GENERATION",
+      "outcome": "unknown",
+      "severity": "none",
+      "missing_fields": [
+        "memory.generation"
+      ]
+    },
+    {
+      "rule_id": "MEMORY_SPEED",
+      "outcome": "pass",
+      "severity": "none",
+      "missing_fields": []
+    },
+    {
+      "rule_id": "GPU_CLEARANCE",
+      "outcome": "pass",
+      "severity": "none",
+      "missing_fields": []
+    },
+    {
+      "rule_id": "COOLER_CLEARANCE",
+      "outcome": "pass",
+      "severity": "none",
+      "missing_fields": []
+    },
+    {
+      "rule_id": "PSU_HEADROOM",
+      "outcome": "pass",
+      "severity": "none",
+      "missing_fields": []
+    },
+    {
+      "rule_id": "FORM_FACTOR_SUPPORT",
+      "outcome": "pass",
+      "severity": "none",
+      "missing_fields": []
+    },
+    {
+      "rule_id": "M2_SLOT_CAPACITY",
+      "outcome": "pass",
+      "severity": "none",
+      "missing_fields": []
+    },
+    {
+      "rule_id": "GPU_POWER_CONNECTORS",
+      "outcome": "pass",
+      "severity": "none",
+      "missing_fields": []
+    },
+    {
+      "rule_id": "DISPLAY_OUTPUT",
+      "outcome": "pass",
+      "severity": "none",
+      "missing_fields": []
+    },
+    {
+      "rule_id": "COOLER_THERMAL_CAPACITY",
+      "outcome": "pass",
+      "severity": "none",
+      "missing_fields": []
+    }
+  ]
+}

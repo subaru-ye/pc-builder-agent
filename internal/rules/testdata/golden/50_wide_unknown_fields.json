@@ -1,0 +1,111 @@
+{
+  "overall_status": "review",
+  "load_w": null,
+  "checks": [
+    {
+      "rule_id": "SOCKET_MATCH",
+      "outcome": "unknown",
+      "severity": "none",
+      "missing_fields": [
+        "cpu.socket",
+        "motherboard.socket"
+      ]
+    },
+    {
+      "rule_id": "CHIPSET_SUPPORT",
+      "outcome": "unknown",
+      "severity": "none",
+      "missing_fields": [
+        "cpu.supported_chipsets",
+        "motherboard.chipset"
+      ]
+    },
+    {
+      "rule_id": "MEMORY_GENERATION",
+      "outcome": "unknown",
+      "severity": "none",
+      "missing_fields": [
+        "memory.generation",
+        "motherboard.memory_generation"
+      ]
+    },
+    {
+      "rule_id": "MEMORY_SPEED",
+      "outcome": "unknown",
+      "severity": "none",
+      "missing_fields": [
+        "memory.speed_mts",
+        "motherboard.memory_speed_max_mts"
+      ]
+    },
+    {
+      "rule_id": "GPU_CLEARANCE",
+      "outcome": "unknown",
+      "severity": "none",
+      "missing_fields": [
+        "case.gpu_length_max_mm",
+        "gpu.length_mm"
+      ]
+    },
+    {
+      "rule_id": "COOLER_CLEARANCE",
+      "outcome": "unknown",
+      "severity": "none",
+      "missing_fields": [
+        "cooler.type"
+      ]
+    },
+    {
+      "rule_id": "PSU_HEADROOM",
+      "outcome": "unknown",
+      "severity": "none",
+      "missing_fields": [
+        "cpu.tdp_w",
+        "gpu.tdp_w",
+        "psu.wattage_w"
+      ]
+    },
+    {
+      "rule_id": "FORM_FACTOR_SUPPORT",
+      "outcome": "unknown",
+      "severity": "none",
+      "missing_fields": [
+        "case.supported_form_factors",
+        "motherboard.form_factor"
+      ]
+    },
+    {
+      "rule_id": "M2_SLOT_CAPACITY",
+      "outcome": "unknown",
+      "severity": "none",
+      "missing_fields": [
+        "motherboard.m2_slots",
+        "ssd.form_factor"
+      ]
+    },
+    {
+      "rule_id": "GPU_POWER_CONNECTORS",
+      "outcome": "unknown",
+      "severity": "none",
+      "missing_fields": [
+        "gpu.power_connectors",
+        "psu.power_connectors"
+      ]
+    },
+    {
+      "rule_id": "DISPLAY_OUTPUT",
+      "outcome": "pass",
+      "severity": "none",
+      "missing_fields": []
+    },
+    {
+      "rule_id": "COOLER_THERMAL_CAPACITY",
+      "outcome": "unknown",
+      "severity": "none",
+      "missing_fields": [
+        "cooler.cooling_capacity_w",
+        "cpu.tdp_w"
+      ]
+    }
+  ]
+}

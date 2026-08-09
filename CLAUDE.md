@@ -6,8 +6,9 @@
 
 ```bash
 docker compose up -d             # PG → localhost:15432,Redis → localhost:16379
-go run ./cmd/host                # console 模式(快速验证模型连通)
-go run ./cmd/host web api webui  # ADK dev UI,http://localhost:8080(三个子命令缺一不可)
+go run ./cmd/migrate up          # 应用 PostgreSQL 编号迁移
+go run ./cmd/buildsvc            # 终端 1:A2A 生成+校验服务
+go run ./cmd/host web --write-timeout=10m api --sse-write-timeout=10m webui  # 终端 2:ADK dev UI,http://localhost:8080/ui/
 go build ./... && go vet ./...
 ```
 
@@ -35,7 +36,7 @@ go build ./... && go vet ./...
 - **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
 - **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。
 - **schema 单一出处**:`internal/schemas` 定义一份,字段变更回写设计方案 §四,不在代码里静默漂移。
-- 当前进度:P5 完成(A2A 单跳拆分:cmd/buildsvc 把生成+校验流水线包装为独立进程 A2A 远程服务、cmd/host 改为初筛 + A2A 远程消费方、出站 trimToPayload 只传三样、入站 ingest schema 校验、contextID 跨轮会话映射;DoD 用例 G 双进程端到端与 P4 一致、跨进程 A2A 消息 contextID 一致且 schema 校验通过、用例 C/D/E 版本树 v1←v2←v3 不退化、用例 A 回归 pass;设计见 docs/tech/P5-A2A单跳拆分设计.md)。下一步 P6。
+- 当前进度:MVP P0–P6 已完成并于 2026-08-09 封板验收通过。Redis 会话服务供 host/buildsvc 两进程共享,host 重启后可恢复同一会话与 A2A contextID 继续改单;embedding 查询缓存带命中日志,无 Redis 时仍降级 InMemory/透传。真实验收覆盖用例 A–H:v1←v2←v3 均 pass、版本回放/diff/Markdown 导出正确、语义查询可解释命中、A2A 两侧 schema/contextID 一致、PostgreSQL/Redis 集成测试无跳过、Python 104 项测试通过。
 
 ## 已知环境坑(Windows)
 

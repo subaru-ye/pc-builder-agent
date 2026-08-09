@@ -52,6 +52,7 @@ RequirementSpec schema(schema_version=1):
 规则:
 - 预算缺失或听不出主用途时,用一句话向用户追问,不要输出 JSON。
 - 游戏用途必须确认分辨率(用户没说就按其显示器/游戏推断,推断不了就追问)。
+- brand_pref 只记录用户明确说出的 CPU/GPU 品牌偏好;用户未点名 AMD/Intel/NVIDIA 时必须省略,不得从用途、性能、静音或风格描述推断品牌。
 - 不做选件、不推荐型号——那是下游生成 Agent 的事。`
 
 // builderInstruction 生成 Agent(旗舰档):RequirementSpec → BuildDraft JSON。
@@ -77,6 +78,7 @@ const builderInstruction = `你是装机配置单生成专家。根据下面的�
 - 需求单 existing_parts 里已有的品类照常选(P2 不支持跳过),但在 rationale 里注明"用户已有,可不购买"。
 - 报价合计控制在 budget_cny × (1 + budget_flex) 以内;先按大件(gpu/cpu)定档,再配齐外围。
 - gpu 只有在 CPU 带核显且需求非游戏时才可为 null。
+- 候选的 specs 已给出规则所需字段;只要预算与兼容性允许,必须优先选择这些字段非 null 的候选,避免产生可消除的 unknown。尤其散热器优先选择 cooling_capacity_w 非 null 的型号;validate_build 若返回 review 且 unknown 能通过改选字段完整的候选消除,必须换件后重新校验再输出。
 - 校验反馈(上一轮 validator_agent 的消息)里列出的失败项必须定向修复:换掉冲突零件,而不是从头乱换。
 
 输出要求(严格遵守):

@@ -2,7 +2,7 @@
 
 > 对话式 DIY 装机助手:说清预算和用途,得到**保证兼容**、**带日期化报价**、**可多轮修改**的装机配置单。
 >
-> 个人学习向项目,目标技术栈:多 Agent 流水线 + A2A 协议 + 记忆基座。当前状态:MVP 开发中(P1 数据底座与规则引擎)。
+> 个人学习向项目,目标技术栈:多 Agent 流水线 + A2A 协议 + 记忆基座。当前状态:MVP P0–P6 已完成并于 2026-08-09 通过封板验收。
 
 ## 为什么做
 
@@ -62,13 +62,17 @@
 
 ```bash
 docker compose up -d        # PG → localhost:15432,Redis → localhost:16379(非默认端口,避让本机原生服务)
+go run ./cmd/migrate up     # 应用 PostgreSQL 编号迁移
 ```
 
 复制 `.env.example` 为 `.env`,填入 `DASHSCOPE_API_KEY`;若创建 key 时控制台显示了工作空间专属「OpenAI 兼容地址」,一并填入 `DASHSCOPE_BASE_URL`。
 
 ```bash
-go run ./cmd/host                # console 模式,快速验证模型连通
-go run ./cmd/host web api webui  # Web UI(三个子命令缺一不可):http://localhost:8080
+go run ./cmd/buildsvc  # 终端 1:启动「生成 + 校验」A2A 服务(http://localhost:8081)
+
+# 终端 2:启动初筛 host + dev UI;语义选件可能超过 ADK 默认写超时,故统一放宽到 10 分钟
+go run ./cmd/host web --write-timeout=10m api --sse-write-timeout=10m webui
+# 浏览器访问 http://localhost:8080/ui/
 ```
 
 ## MVP 进度
@@ -76,11 +80,13 @@ go run ./cmd/host web api webui  # Web UI(三个子命令缺一不可):http://lo
 - [x] 产品调研 / 设计方案 / PRD / MVP 计划 / 技术选型
 - [x] P0 环境与骨架
 - [x] P1 数据底座与规则引擎
-- [ ] P2 单进程三 Agent 流水线
-- [ ] P3 pgvector 语义选件
-- [ ] P4 版本快照与增量改单
-- [ ] P5 A2A 单跳拆分
-- [ ] P6 Redis 会话层
+- [x] P2 单进程三 Agent 流水线
+- [x] P3 pgvector 语义选件
+- [x] P4 版本快照与增量改单
+- [x] P5 A2A 单跳拆分
+- [x] P6 Redis 会话层与 embedding 缓存
+
+2026-08-09 封板验收结果:PostgreSQL/pgvector/Redis 真实集成测试无跳过;Python 数据流水线 104 项测试通过;用例 A–H 全部验证,包括全 pass 配单、语义召回、v1→v3 回放/diff/Markdown 导出、A2A schema/contextID 以及 kill host 后从 Redis 恢复同一会话继续改单。
 
 ## 免责声明
 

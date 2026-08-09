@@ -329,6 +329,47 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/Share"}
+        "200":
+          description: 相同幂等键的既有分享
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Share"}
+        "4XX":
+          $ref: "#/components/responses/Problem"
+    get:
+      summary: 列出当前用户对固定版本创建过的分享
+      tags: [shares]
+      operationId: listBuildShares
+      responses:
+        "200":
+          description: 包含活动和已撤销记录;不返回 token 或 URL
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [schema_version, shares]
+                properties:
+                  schema_version: {type: integer, const: 1}
+                  shares:
+                    type: array
+                    items: {$ref: "#/components/schemas/ShareRecord"}
+        "4XX":
+          $ref: "#/components/responses/Problem"
+  /api/v1/sessions/{session_id}/builds/{version}/shares/{share_id}:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+      - $ref: "#/components/parameters/Version"
+      - $ref: "#/components/parameters/ShareID"
+    delete:
+      summary: 按所有者分享 ID 撤销旧链接
+      tags: [shares]
+      operationId: revokeBuildShareById
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "204":
+          description: 已撤销;重复撤销保持幂等
         "4XX":
           $ref: "#/components/responses/Problem"
   /api/v1/shares/{token}:
@@ -359,6 +400,25 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/PublicBuildView"}
+        "404":
+          $ref: "#/components/responses/Problem"
+  /api/v1/public/shares/{token}/export.md:
+    parameters:
+      - $ref: "#/components/parameters/ShareToken"
+    get:
+      summary: 公开下载固定分享版本的 Markdown
+      tags: [shares]
+      operationId: exportPublicBuildShareMarkdown
+      security: []
+      responses:
+        "200":
+          description: 与所有者导出和 cmd/builds 共用 presenter
+          headers:
+            Content-Disposition:
+              schema: {type: string}
+          content:
+            text/markdown; charset=utf-8:
+              schema: {type: string}
         "404":
           $ref: "#/components/responses/Problem"
 components:
@@ -393,6 +453,11 @@ components:
       in: path
       required: true
       schema: {type: string, minLength: 32, maxLength: 128, pattern: "^[A-Za-z0-9_-]+$"}
+    ShareID:
+      name: share_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
   responses:
     Problem:
       description: RFC problem details;404 同时用于不存在与无权访问
@@ -696,23 +761,124 @@ components:
     Share:
       type: object
       additionalProperties: false
-      required: [schema_version, token, url, created_at]
+      required: [schema_version, id, version, token, url, created_at, revoked_at]
       properties:
         schema_version: {type: integer, const: 1}
+        id: {type: string, format: uuid}
+        version: {type: integer, minimum: 1}
         token: {type: string}
         url: {type: string, format: uri}
         created_at: {type: string, format: date-time}
-    PublicBuildView:
-      description: 与 BuildView 相同的展示数据,但不含任何 session/user/chat/run/内部 build id。
-      allOf:
-        - $ref: "#/components/schemas/BuildView"
-        - type: object
-          required: [share]
+        revoked_at:
+          oneOf:
+            - {type: string, format: date-time}
+            - {type: "null"}
+    ShareRecord:
+      type: object
+      additionalProperties: false
+      required: [schema_version, id, version, created_at, revoked_at]
+      properties:
+        schema_version: {type: integer, const: 1}
+        id: {type: string, format: uuid}
+        version: {type: integer, minimum: 1}
+        created_at: {type: string, format: date-time}
+        revoked_at:
+          oneOf:
+            - {type: string, format: date-time}
+            - {type: "null"}
+    PublicRequirementSummary:
+      type: object
+      additionalProperties: false
+      required: [budget_cny, budget_flex_percent, use_case, size_pref, noise_pref, brand_pref, existing_parts, priority]
+      properties:
+        budget_cny: {$ref: "#/components/schemas/Money"}
+        budget_flex_percent: {type: integer, minimum: 0, maximum: 30}
+        use_case:
+          type: object
+          additionalProperties: false
+          required: [type, titles, resolution, fps_target]
           properties:
-            share:
-              type: object
-              required: [created_at]
-              properties:
-                created_at: {type: string, format: date-time}
+            type: {type: string, enum: [gaming, productivity, general]}
+            titles: {type: array, items: {type: string}}
+            resolution:
+              oneOf:
+                - {type: string, enum: [1080p, 2K, 4K]}
+                - {type: "null"}
+            fps_target:
+              oneOf:
+                - {type: integer, minimum: 1}
+                - {type: "null"}
+        size_pref: {type: string, enum: [atx, matx, itx, any]}
+        noise_pref: {type: string, enum: [silent, normal, any]}
+        brand_pref:
+          type: object
+          additionalProperties: false
+          required: [cpu, gpu]
+          properties:
+            cpu: {type: string, enum: [any, intel, amd]}
+            gpu: {type: string, enum: [any, nvidia, amd]}
+        existing_parts:
+          type: array
+          items: {$ref: "#/components/schemas/PartCategory"}
+        priority:
+          type: array
+          items: {$ref: "#/components/schemas/PartCategory"}
+    PublicBuildSummary:
+      type: object
+      additionalProperties: false
+      required: [schema_version, version, intent_label, total_cny, snapshot_date, overall_status, created_at]
+      properties:
+        schema_version: {type: integer, const: 1}
+        version: {type: integer, minimum: 1}
+        parent_version:
+          oneOf:
+            - {type: integer, minimum: 1}
+            - {type: "null"}
+        intent_label: {type: string}
+        total_cny: {$ref: "#/components/schemas/Money"}
+        snapshot_date: {type: string, format: date}
+        overall_status: {type: string, enum: [pass, review, fail]}
+        created_at: {type: string, format: date-time}
+    PublicValidationCheck:
+      type: object
+      additionalProperties: false
+      required: [rule_id, outcome, severity, missing_fields, detail]
+      properties:
+        rule_id: {type: string}
+        outcome: {type: string, enum: [pass, fail, unknown]}
+        severity: {type: string, enum: [none, warning, error]}
+        missing_fields: {type: array, items: {type: string}}
+        detail: {type: string}
+    PublicBuildView:
+      description: 独立最小披露 DTO;不含 notes、observed、session/user/chat/run/内部 build id。
+      type: object
+      additionalProperties: false
+      required: [schema_version, summary, requirement, parts, quote, validation, disclaimers, share]
+      properties:
+        schema_version: {type: integer, const: 1}
+        summary: {$ref: "#/components/schemas/PublicBuildSummary"}
+        requirement: {$ref: "#/components/schemas/PublicRequirementSummary"}
+        parts:
+          type: array
+          items: {$ref: "#/components/schemas/PartLine"}
+        quote: {$ref: "#/components/schemas/Quote"}
+        validation:
+          type: object
+          additionalProperties: false
+          required: [overall_status, checks]
+          properties:
+            overall_status: {type: string, enum: [pass, review, fail]}
+            checks:
+              type: array
+              minItems: 12
+              maxItems: 12
+              items: {$ref: "#/components/schemas/PublicValidationCheck"}
+        disclaimers: {type: array, items: {type: string}, minItems: 3}
+        share:
+          type: object
+          additionalProperties: false
+          required: [created_at]
+          properties:
+            created_at: {type: string, format: date-time}
 security:
   - anonymousCookie: []

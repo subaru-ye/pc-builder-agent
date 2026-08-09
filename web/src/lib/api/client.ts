@@ -10,6 +10,8 @@ import type {
   Run,
   Session,
   SessionSummary,
+  Share,
+  ShareRecord,
 } from "./types";
 
 const client = createClient<paths>({ baseUrl: "", credentials: "include" });
@@ -85,7 +87,33 @@ export const api = {
       params: { path: { session_id: id }, query: { from, to } },
     }));
   },
+  async createShare(id: string, version: number, key: string): Promise<Share> {
+    return unwrap(await client.POST("/api/v1/sessions/{session_id}/builds/{version}/shares", {
+      params: { path: { session_id: id, version }, header: { "Idempotency-Key": key } },
+    }));
+  },
+  async listShares(id: string, version: number): Promise<ShareRecord[]> {
+    const result = await client.GET("/api/v1/sessions/{session_id}/builds/{version}/shares", {
+      params: { path: { session_id: id, version } },
+    });
+    return unwrap(result).shares;
+  },
+  async revokeShareByID(id: string, version: number, shareID: string, key: string): Promise<void> {
+    const result = await client.DELETE("/api/v1/sessions/{session_id}/builds/{version}/shares/{share_id}", {
+      params: { path: { session_id: id, version, share_id: shareID }, header: { "Idempotency-Key": key } },
+    });
+    if (!result.response.ok) unwrap(result as never);
+  },
+  async revokeShareByToken(token: string, key: string): Promise<void> {
+    const result = await client.DELETE("/api/v1/shares/{token}", {
+      params: { path: { token }, header: { "Idempotency-Key": key } },
+    });
+    if (!result.response.ok) unwrap(result as never);
+  },
 };
 
 export const exportURL = (sessionID: string, version: number) =>
   `/api/v1/sessions/${encodeURIComponent(sessionID)}/builds/${version}/export.md`;
+
+export const publicExportURL = (token: string) =>
+  `/api/v1/public/shares/${encodeURIComponent(token)}/export.md`;

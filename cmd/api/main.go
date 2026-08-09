@@ -18,6 +18,7 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/producthttp"
 	"github.com/subaru-ye/pc-builder-agent/internal/redisstore"
 	"github.com/subaru-ye/pc-builder-agent/internal/runevents"
+	"github.com/subaru-ye/pc-builder-agent/internal/sharing"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
@@ -64,8 +65,18 @@ func main() {
 		log.Fatalf("恢复遗留运行失败:%v", err)
 	}
 
-	httpAPI, err := producthttp.New(service, presenter.New(st), events, st, backend, producthttp.Config{
-		PublicWebBaseURL: envOr("PUBLIC_WEB_BASE_URL", "http://localhost:3000"),
+	publicWebBaseURL := envOr("PUBLIC_WEB_BASE_URL", "http://localhost:3000")
+	shareTokens, err := sharing.NewTokenCodec(os.Getenv("SHARE_TOKEN_SECRET"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	buildPresenter := presenter.New(st)
+	shareService, err := sharing.New(st, buildPresenter, shareTokens, publicWebBaseURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	httpAPI, err := producthttp.New(service, buildPresenter, shareService, events, st, backend, producthttp.Config{
+		PublicWebBaseURL: publicWebBaseURL,
 		AllowedOrigin:    os.Getenv("WEB_ALLOWED_ORIGIN"),
 		BuildsvcURL:      runtimeCfg.BuildsvcURL,
 	})

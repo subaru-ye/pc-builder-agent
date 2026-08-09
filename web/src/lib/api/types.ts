@@ -12,6 +12,9 @@ export type BuildDiff = components["schemas"]["BuildDiff"];
 export type Problem = components["schemas"]["Problem"];
 export type Readiness = components["schemas"]["Readiness"];
 export type PartCategory = components["schemas"]["PartCategory"];
+export type Share = components["schemas"]["Share"];
+export type ShareRecord = components["schemas"]["ShareRecord"];
+export type PublicBuildView = components["schemas"]["PublicBuildView"];
 
 const useCaseSchema = z.discriminatedUnion("type", [
   z.object({

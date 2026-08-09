@@ -187,19 +187,68 @@ const BuildDiff = z.object({
 });
 const Share = z.object({
   schema_version: z.number().int(),
+  id: z.string().uuid(),
+  version: z.number().int().gte(1),
   token: z.string(),
   url: z.string().url(),
   created_at: z.string().datetime({ offset: true }),
+  revoked_at: z.union([z.string(), z.null()]),
 });
-const PublicBuildView = BuildView.and(
-  z
-    .object({
-      share: z
-        .object({ created_at: z.string().datetime({ offset: true }) })
-        .passthrough(),
-    })
-    .passthrough()
-);
+const ShareRecord = z.object({
+  schema_version: z.number().int(),
+  id: z.string().uuid(),
+  version: z.number().int().gte(1),
+  created_at: z.string().datetime({ offset: true }),
+  revoked_at: z.union([z.string(), z.null()]),
+});
+const PublicBuildSummary = z.object({
+  schema_version: z.number().int(),
+  version: z.number().int().gte(1),
+  parent_version: z.union([z.number(), z.null()]).optional(),
+  intent_label: z.string(),
+  total_cny: Money.regex(/^-?[0-9]+\.[0-9]{2}$/),
+  snapshot_date: z.string(),
+  overall_status: z.enum(["pass", "review", "fail"]),
+  created_at: z.string().datetime({ offset: true }),
+});
+const PublicRequirementSummary = z.object({
+  budget_cny: Money.regex(/^-?[0-9]+\.[0-9]{2}$/),
+  budget_flex_percent: z.number().int().gte(0).lte(30),
+  use_case: z.object({
+    type: z.enum(["gaming", "productivity", "general"]),
+    titles: z.array(z.string()),
+    resolution: z.union([z.enum(["1080p", "2K", "4K"]), z.null()]),
+    fps_target: z.union([z.number(), z.null()]),
+  }),
+  size_pref: z.enum(["atx", "matx", "itx", "any"]),
+  noise_pref: z.enum(["silent", "normal", "any"]),
+  brand_pref: z.object({
+    cpu: z.enum(["any", "intel", "amd"]),
+    gpu: z.enum(["any", "nvidia", "amd"]),
+  }),
+  existing_parts: z.array(PartCategory),
+  priority: z.array(PartCategory),
+});
+const PublicValidationCheck = z.object({
+  rule_id: z.string(),
+  outcome: z.enum(["pass", "fail", "unknown"]),
+  severity: z.enum(["none", "warning", "error"]),
+  missing_fields: z.array(z.string()),
+  detail: z.string(),
+});
+const PublicBuildView = z.object({
+  schema_version: z.number().int(),
+  summary: PublicBuildSummary,
+  requirement: PublicRequirementSummary,
+  parts: z.array(PartLine),
+  quote: Quote,
+  validation: z.object({
+    overall_status: z.enum(["pass", "review", "fail"]),
+    checks: z.array(PublicValidationCheck).min(12).max(12),
+  }),
+  disclaimers: z.array(z.string()).min(3),
+  share: z.object({ created_at: z.string().datetime({ offset: true }) }),
+});
 
 export const schemas = {
   Health,
@@ -223,5 +272,9 @@ export const schemas = {
   DiffLine,
   BuildDiff,
   Share,
+  ShareRecord,
+  PublicBuildSummary,
+  PublicRequirementSummary,
+  PublicValidationCheck,
   PublicBuildView,
 };

@@ -267,11 +267,33 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /** 列出当前用户对固定版本创建过的分享 */
+        get: operations["listBuildShares"];
         put?: never;
         /** 创建固定版本的只读分享 */
         post: operations["createBuildShare"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/builds/{version}/shares/{share_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["SessionID"];
+                version: components["parameters"]["Version"];
+                share_id: components["parameters"]["ShareID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 按所有者分享 ID 撤销旧链接 */
+        delete: operations["revokeBuildShareById"];
         options?: never;
         head?: never;
         patch?: never;
@@ -307,6 +329,25 @@ export interface paths {
         };
         /** 公开读取一份只读配置 */
         get: operations["getPublicBuildShare"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/shares/{token}/export.md": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: components["parameters"]["ShareToken"];
+            };
+            cookie?: never;
+        };
+        /** 公开下载固定分享版本的 Markdown */
+        get: operations["exportPublicBuildShareMarkdown"];
         put?: never;
         post?: never;
         delete?: never;
@@ -534,14 +575,86 @@ export interface components {
         Share: {
             /** @constant */
             schema_version: 1;
+            /** Format: uuid */
+            id: string;
+            version: number;
             token: string;
             /** Format: uri */
             url: string;
             /** Format: date-time */
             created_at: string;
+            revoked_at: string | null;
         };
-        /** @description 与 BuildView 相同的展示数据,但不含任何 session/user/chat/run/内部 build id。 */
-        PublicBuildView: components["schemas"]["BuildView"] & {
+        ShareRecord: {
+            /** @constant */
+            schema_version: 1;
+            /** Format: uuid */
+            id: string;
+            version: number;
+            /** Format: date-time */
+            created_at: string;
+            revoked_at: string | null;
+        };
+        PublicRequirementSummary: {
+            budget_cny: components["schemas"]["Money"];
+            budget_flex_percent: number;
+            use_case: {
+                /** @enum {string} */
+                type: "gaming" | "productivity" | "general";
+                titles: string[];
+                resolution: ("1080p" | "2K" | "4K") | null;
+                fps_target: number | null;
+            };
+            /** @enum {string} */
+            size_pref: "atx" | "matx" | "itx" | "any";
+            /** @enum {string} */
+            noise_pref: "silent" | "normal" | "any";
+            brand_pref: {
+                /** @enum {string} */
+                cpu: "any" | "intel" | "amd";
+                /** @enum {string} */
+                gpu: "any" | "nvidia" | "amd";
+            };
+            existing_parts: components["schemas"]["PartCategory"][];
+            priority: components["schemas"]["PartCategory"][];
+        };
+        PublicBuildSummary: {
+            /** @constant */
+            schema_version: 1;
+            version: number;
+            parent_version?: number | null;
+            intent_label: string;
+            total_cny: components["schemas"]["Money"];
+            /** Format: date */
+            snapshot_date: string;
+            /** @enum {string} */
+            overall_status: "pass" | "review" | "fail";
+            /** Format: date-time */
+            created_at: string;
+        };
+        PublicValidationCheck: {
+            rule_id: string;
+            /** @enum {string} */
+            outcome: "pass" | "fail" | "unknown";
+            /** @enum {string} */
+            severity: "none" | "warning" | "error";
+            missing_fields: string[];
+            detail: string;
+        };
+        /** @description 独立最小披露 DTO;不含 notes、observed、session/user/chat/run/内部 build id。 */
+        PublicBuildView: {
+            /** @constant */
+            schema_version: 1;
+            summary: components["schemas"]["PublicBuildSummary"];
+            requirement: components["schemas"]["PublicRequirementSummary"];
+            parts: components["schemas"]["PartLine"][];
+            quote: components["schemas"]["Quote"];
+            validation: {
+                /** @enum {string} */
+                overall_status: "pass" | "review" | "fail";
+                checks: components["schemas"]["PublicValidationCheck"][];
+            };
+            disclaimers: string[];
             share: {
                 /** Format: date-time */
                 created_at: string;
@@ -565,6 +678,7 @@ export interface components {
         RunID: string;
         Version: number;
         ShareToken: string;
+        ShareID: string;
     };
     requestBodies: never;
     headers: never;
@@ -953,6 +1067,34 @@ export interface operations {
             "4XX": components["responses"]["Problem"];
         };
     };
+    listBuildShares: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["SessionID"];
+                version: components["parameters"]["Version"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 包含活动和已撤销记录;不返回 token 或 URL */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        schema_version: 1;
+                        shares: components["schemas"]["ShareRecord"][];
+                    };
+                };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
     createBuildShare: {
         parameters: {
             query?: never;
@@ -967,6 +1109,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description 相同幂等键的既有分享 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Share"];
+                };
+            };
             /** @description 新分享;原始 token 只在响应和 URL 中出现 */
             201: {
                 headers: {
@@ -975,6 +1126,31 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Share"];
                 };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    revokeBuildShareById: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                session_id: components["parameters"]["SessionID"];
+                version: components["parameters"]["Version"];
+                share_id: components["parameters"]["ShareID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已撤销;重复撤销保持幂等 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             "4XX": components["responses"]["Problem"];
         };
@@ -1020,6 +1196,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicBuildView"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    exportPublicBuildShareMarkdown: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: components["parameters"]["ShareToken"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 与所有者导出和 cmd/builds 共用 presenter */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/markdown; charset=utf-8": string;
                 };
             };
             404: components["responses"]["Problem"];

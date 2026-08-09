@@ -15,6 +15,7 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/presenter"
 	"github.com/subaru-ye/pc-builder-agent/internal/product"
 	"github.com/subaru-ye/pc-builder-agent/internal/runevents"
+	"github.com/subaru-ye/pc-builder-agent/internal/sharing"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
@@ -86,6 +87,30 @@ func (fakeBuildPresenter) Markdown(context.Context, string, int) (string, error)
 	return "# test\n", nil
 }
 
+type fakeShareService struct {
+	share   sharing.Share
+	records []sharing.ShareRecord
+	public  sharing.PublicBuildView
+	err     error
+}
+
+func (f *fakeShareService) Create(context.Context, string, string, int, string) (sharing.Share, bool, error) {
+	return f.share, true, f.err
+}
+func (f *fakeShareService) List(context.Context, string, string, int) ([]sharing.ShareRecord, error) {
+	return f.records, f.err
+}
+func (f *fakeShareService) RevokeByID(context.Context, string, string, int, string) error {
+	return f.err
+}
+func (f *fakeShareService) RevokeByToken(context.Context, string, string) error { return f.err }
+func (f *fakeShareService) Public(context.Context, string) (sharing.PublicBuildView, error) {
+	return f.public, f.err
+}
+func (f *fakeShareService) PublicMarkdown(context.Context, string) (string, int, string, error) {
+	return "# public\n", 3, "2026-08-09", f.err
+}
+
 func newTestAPI(t *testing.T, events runevents.Store) (*API, *fakeService) {
 	t.Helper()
 	now := time.Now().UTC()
@@ -93,7 +118,11 @@ func newTestAPI(t *testing.T, events runevents.Store) (*API, *fakeService) {
 		session: store.WebSession{ID: "session-1", Title: "新会话", Phase: store.PhaseCollecting, CreatedAt: now, UpdatedAt: now},
 		run:     store.AgentRun{ID: "run-1", SessionID: "session-1", Kind: store.RunScreening, Status: store.RunSucceeded, StartedAt: now},
 	}
-	api, err := New(f, fakeBuildPresenter{}, events, fakeDB{}, fakeRedis{}, Config{PublicWebBaseURL: "http://localhost:3000", BuildsvcURL: "http://127.0.0.1:1"})
+	shareService := &fakeShareService{
+		share:  sharing.Share{SchemaVersion: 1, ID: uuid.NewString(), Version: 1, Token: strings.Repeat("A", 43), URL: "http://localhost:3000/share/test", CreatedAt: now},
+		public: sharing.PublicBuildView{SchemaVersion: 1},
+	}
+	api, err := New(f, fakeBuildPresenter{}, shareService, events, fakeDB{}, fakeRedis{}, Config{PublicWebBaseURL: "http://localhost:3000", BuildsvcURL: "http://127.0.0.1:1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,6 +255,58 @@ func TestBuildReadRoutesRequireOwnershipAndKeepContentTypes(t *testing.T) {
 	api.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("越权读取 status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestShareRoutesAndPublicResponses(t *testing.T) {
+	api, service := newTestAPI(t, runevents.NewMemory())
+	owner := "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	service.session.OwnerID = owner
+	shareService := api.shares.(*fakeShareService)
+	shareService.records = []sharing.ShareRecord{{SchemaVersion: 1, ID: uuid.NewString(), Version: 1, CreatedAt: time.Now()}}
+
+	create := httptest.NewRequest(http.MethodPost, "/api/v1/sessions/session-1/builds/1/shares", nil)
+	create.AddCookie(&http.Cookie{Name: anonymousCookieName, Value: owner})
+	create.Header.Set("Idempotency-Key", uuid.NewString())
+	created := httptest.NewRecorder()
+	api.Handler().ServeHTTP(created, create)
+	if created.Code != http.StatusCreated || !strings.Contains(created.Body.String(), `"token"`) {
+		t.Fatalf("create status=%d body=%s", created.Code, created.Body.String())
+	}
+
+	list := httptest.NewRequest(http.MethodGet, "/api/v1/sessions/session-1/builds/1/shares", nil)
+	list.AddCookie(&http.Cookie{Name: anonymousCookieName, Value: owner})
+	listed := httptest.NewRecorder()
+	api.Handler().ServeHTTP(listed, list)
+	if listed.Code != http.StatusOK || strings.Contains(listed.Body.String(), `"token"`) || !strings.Contains(listed.Body.String(), `"shares"`) {
+		t.Fatalf("list status=%d body=%s", listed.Code, listed.Body.String())
+	}
+
+	public := httptest.NewRecorder()
+	api.Handler().ServeHTTP(public, httptest.NewRequest(http.MethodGet, "/api/v1/public/shares/"+strings.Repeat("A", 43), nil))
+	if public.Code != http.StatusOK || public.Header().Get("Cache-Control") != "no-store" || len(public.Result().Cookies()) != 0 {
+		t.Fatalf("public status=%d cache=%q cookies=%v", public.Code, public.Header().Get("Cache-Control"), public.Result().Cookies())
+	}
+
+	markdown := httptest.NewRecorder()
+	api.Handler().ServeHTTP(markdown, httptest.NewRequest(http.MethodGet, "/api/v1/public/shares/"+strings.Repeat("A", 43)+"/export.md", nil))
+	if markdown.Code != http.StatusOK || markdown.Header().Get("Cache-Control") != "no-store" || !strings.Contains(markdown.Header().Get("Content-Disposition"), "pc-build-v3-2026-08-09.md") {
+		t.Fatalf("markdown status=%d headers=%v body=%s", markdown.Code, markdown.Header(), markdown.Body.String())
+	}
+}
+
+func TestShareNotFoundIsUniform(t *testing.T) {
+	api, _ := newTestAPI(t, runevents.NewMemory())
+	api.shares.(*fakeShareService).err = store.ErrShareNotFound
+	for _, path := range []string{
+		"/api/v1/public/shares/bad-token",
+		"/api/v1/public/shares/bad-token/export.md",
+	} {
+		rec := httptest.NewRecorder()
+		api.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), `"code":"not_found"`) {
+			t.Fatalf("path=%s status=%d body=%s", path, rec.Code, rec.Body.String())
+		}
 	}
 }
 

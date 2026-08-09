@@ -22,6 +22,7 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/product"
 	"github.com/subaru-ye/pc-builder-agent/internal/runevents"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
+	"github.com/subaru-ye/pc-builder-agent/internal/sharing"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
@@ -49,6 +50,15 @@ type BuildPresenter interface {
 	Markdown(context.Context, string, int) (string, error)
 }
 
+type ShareService interface {
+	Create(context.Context, string, string, int, string) (sharing.Share, bool, error)
+	List(context.Context, string, string, int) ([]sharing.ShareRecord, error)
+	RevokeByID(context.Context, string, string, int, string) error
+	RevokeByToken(context.Context, string, string) error
+	Public(context.Context, string) (sharing.PublicBuildView, error)
+	PublicMarkdown(context.Context, string) (string, int, string, error)
+}
+
 type DatabaseHealth interface{ Ping(context.Context) error }
 type RedisHealth interface {
 	Available() bool
@@ -64,6 +74,7 @@ type Config struct {
 type API struct {
 	service ProductService
 	builds  BuildPresenter
+	shares  ShareService
 	events  runevents.Store
 	db      DatabaseHealth
 	redis   RedisHealth
@@ -72,9 +83,9 @@ type API struct {
 	client  *http.Client
 }
 
-func New(service ProductService, builds BuildPresenter, events runevents.Store, db DatabaseHealth, redis RedisHealth, cfg Config) (*API, error) {
-	if service == nil || builds == nil || events == nil || db == nil || redis == nil {
-		return nil, fmt.Errorf("product http: service/builds/events/db/redis 不能为空")
+func New(service ProductService, builds BuildPresenter, shares ShareService, events runevents.Store, db DatabaseHealth, redis RedisHealth, cfg Config) (*API, error) {
+	if service == nil || builds == nil || shares == nil || events == nil || db == nil || redis == nil {
+		return nil, fmt.Errorf("product http: service/builds/shares/events/db/redis 不能为空")
 	}
 	if cfg.PublicWebBaseURL == "" {
 		cfg.PublicWebBaseURL = "http://localhost:3000"
@@ -87,7 +98,7 @@ func New(service ProductService, builds BuildPresenter, events runevents.Store, 
 		cfg.AllowedOrigin = u.Scheme + "://" + u.Host
 	}
 	return &API{
-		service: service, builds: builds, events: events, db: db, redis: redis, cfg: cfg,
+		service: service, builds: builds, shares: shares, events: events, db: db, redis: redis, cfg: cfg,
 		secure: u.Scheme == "https", client: &http.Client{Timeout: 2 * time.Second},
 	}, nil
 }
@@ -108,6 +119,12 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/sessions/{session_id}/builds/{version}", a.getBuild)
 	mux.HandleFunc("GET /api/v1/sessions/{session_id}/diff", a.getDiff)
 	mux.HandleFunc("GET /api/v1/sessions/{session_id}/builds/{version}/export.md", a.exportBuild)
+	mux.HandleFunc("POST /api/v1/sessions/{session_id}/builds/{version}/shares", a.createBuildShare)
+	mux.HandleFunc("GET /api/v1/sessions/{session_id}/builds/{version}/shares", a.listBuildShares)
+	mux.HandleFunc("DELETE /api/v1/sessions/{session_id}/builds/{version}/shares/{share_id}", a.revokeBuildShareByID)
+	mux.HandleFunc("DELETE /api/v1/shares/{token}", a.revokeBuildShareByToken)
+	mux.HandleFunc("GET /api/v1/public/shares/{token}", a.getPublicBuildShare)
+	mux.HandleFunc("GET /api/v1/public/shares/{token}/export.md", a.exportPublicBuildShare)
 	return a.requestMiddleware(a.corsMiddleware(mux))
 }
 
@@ -379,15 +396,111 @@ func (a *API) exportBuild(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	view, err := a.builds.Build(r.Context(), sessionID, version)
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
 	markdown, err := a.builds.Markdown(r.Context(), sessionID, version)
 	if err != nil {
 		a.writeError(w, r, err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="pc-build-v%d.md"`, version))
+	w.Header().Set("Content-Disposition", markdownDisposition(version, view.Quote.SnapshotDate))
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.WriteString(w, markdown)
+}
+
+func (a *API) createBuildShare(w http.ResponseWriter, r *http.Request) {
+	key, ok := a.idempotencyKey(w, r)
+	if !ok {
+		return
+	}
+	version, ok := a.positiveInt(w, r, r.PathValue("version"), "version")
+	if !ok {
+		return
+	}
+	share, created, err := a.shares.Create(r.Context(), a.owner(w, r), r.PathValue("session_id"), version, key)
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, share)
+}
+
+func (a *API) listBuildShares(w http.ResponseWriter, r *http.Request) {
+	version, ok := a.positiveInt(w, r, r.PathValue("version"), "version")
+	if !ok {
+		return
+	}
+	shares, err := a.shares.List(r.Context(), a.owner(w, r), r.PathValue("session_id"), version)
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"schema_version": 1, "shares": shares})
+}
+
+func (a *API) revokeBuildShareByID(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.idempotencyKey(w, r); !ok {
+		return
+	}
+	version, ok := a.positiveInt(w, r, r.PathValue("version"), "version")
+	if !ok {
+		return
+	}
+	err := a.shares.RevokeByID(r.Context(), a.owner(w, r), r.PathValue("session_id"), version, r.PathValue("share_id"))
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) revokeBuildShareByToken(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.idempotencyKey(w, r); !ok {
+		return
+	}
+	if err := a.shares.RevokeByToken(r.Context(), a.owner(w, r), r.PathValue("token")); err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) getPublicBuildShare(w http.ResponseWriter, r *http.Request) {
+	view, err := a.shares.Public(r.Context(), r.PathValue("token"))
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (a *API) exportPublicBuildShare(w http.ResponseWriter, r *http.Request) {
+	markdown, version, snapshot, err := a.shares.PublicMarkdown(r.Context(), r.PathValue("token"))
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("Content-Disposition", markdownDisposition(version, snapshot))
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, markdown)
+}
+
+func markdownDisposition(version int, snapshot string) string {
+	if len(snapshot) != len("2006-01-02") {
+		snapshot = "unknown-date"
+	}
+	return fmt.Sprintf(`attachment; filename="pc-build-v%d-%s.md"`, version, snapshot)
 }
 
 func (a *API) ownsSession(w http.ResponseWriter, r *http.Request, sessionID string) bool {
@@ -471,7 +584,7 @@ func (a *API) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 	switch {
-	case errors.Is(err, store.ErrWebSessionNotFound), errors.Is(err, store.ErrRunNotFound), errors.Is(err, store.ErrBuildNotFound):
+	case errors.Is(err, store.ErrWebSessionNotFound), errors.Is(err, store.ErrRunNotFound), errors.Is(err, store.ErrBuildNotFound), errors.Is(err, store.ErrShareNotFound):
 		a.writeProblem(w, r, product.NewProblem("not_found", "资源不存在", 404, "", requestID(r)))
 	case errors.Is(err, store.ErrSessionBusy):
 		a.writeProblem(w, r, product.NewProblem("session_busy", "会话正在处理中", 409,
@@ -480,7 +593,7 @@ func (a *API) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		detail := err.Error()
 		a.writeProblem(w, r, product.NewProblem("invalid_session_phase", "当前会话阶段不允许该操作", 409,
 			detail, requestID(r)))
-	case errors.Is(err, store.ErrIdempotencyConflict):
+	case errors.Is(err, store.ErrIdempotencyConflict), errors.Is(err, store.ErrShareTokenMismatch):
 		a.writeProblem(w, r, product.NewProblem("invalid_request", "幂等键冲突", 409,
 			"同一个 Idempotency-Key 已用于不同请求。", requestID(r)))
 	default:

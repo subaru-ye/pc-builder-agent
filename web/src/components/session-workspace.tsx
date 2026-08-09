@@ -103,7 +103,7 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
   const busy = data.phase === "building" || data.phase === "changing" || !!currentRun;
   const canSend = data.phase === "collecting" || data.phase === "ready" || data.phase === "requirement_ready" || (data.phase === "error" && data.recovery_phase !== "requirement_ready");
   return <main className="flex h-dvh flex-col overflow-hidden bg-[var(--canvas)]">
-    <AppHeader title={data.title} exportHref={requestedVersion ? exportURL(sessionID, requestedVersion) : undefined} />
+    <AppHeader title={data.title} exportHref={requestedVersion ? exportURL(sessionID, requestedVersion) : undefined} share={build.data && requestedVersion ? { sessionID, version: requestedVersion } : undefined} />
     {data.degraded && <div role="status" className="border-b border-[var(--review)]/40 bg-[var(--review)]/10 px-4 py-2 text-center text-xs status-review">Redis 当前不可用：本进程内可以继续使用，但刷新或重启后的会话恢复受限。</div>}
     <div className="flex min-h-11 shrink-0 border-b lg:hidden" aria-label="移动端面板切换"><button className={`flex flex-1 items-center justify-center gap-2 ${pane === "chat" ? "bg-[var(--surface-2)]" : "text-[var(--ink-muted)]"}`} onClick={() => setPane("chat")}><MessageSquare size={16} />对话</button><button className={`flex flex-1 items-center justify-center gap-2 ${pane === "build" ? "bg-[var(--surface-2)]" : "text-[var(--ink-muted)]"}`} onClick={() => setPane("build")}><PanelRight size={16} />配置</button></div>
     <div className="workspace-grid grid min-h-0 flex-1">

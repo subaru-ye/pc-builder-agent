@@ -51,7 +51,11 @@ func main() {
 	if baseURL == "" {
 		baseURL = defaultBaseURL
 	}
-	client := embedding.NewClient(baseURL, apiKey, embedding.DefaultModel, store.EmbeddingDims)
+	embeddingModelName := os.Getenv("EMBEDDING_MODEL")
+	if embeddingModelName == "" {
+		embeddingModelName = embedding.DefaultModel
+	}
+	client := embedding.NewClient(baseURL, apiKey, embeddingModelName, store.EmbeddingDims)
 
 	ctx := context.Background()
 	if *query != "" {

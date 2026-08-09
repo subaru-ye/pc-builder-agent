@@ -7,6 +7,30 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
 
+func TestConfigFromEnvModelDefaultsAndOverride(t *testing.T) {
+	t.Setenv("DASHSCOPE_API_KEY", "test-key")
+	t.Setenv("DASHSCOPE_BASE_URL", "")
+	t.Setenv("BUILDSVC_URL", "")
+	t.Setenv("SCREENING_MODEL", "")
+
+	cfg, err := ConfigFromEnv()
+	if err != nil {
+		t.Fatalf("ConfigFromEnv: %v", err)
+	}
+	if cfg.ScreeningModel != DefaultScreeningModel {
+		t.Fatalf("ScreeningModel=%q, want %q", cfg.ScreeningModel, DefaultScreeningModel)
+	}
+
+	t.Setenv("SCREENING_MODEL", "custom-screening")
+	cfg, err = ConfigFromEnv()
+	if err != nil {
+		t.Fatalf("ConfigFromEnv override: %v", err)
+	}
+	if cfg.ScreeningModel != "custom-screening" {
+		t.Fatalf("ScreeningModel=%q, want custom-screening", cfg.ScreeningModel)
+	}
+}
+
 const requirementWithBrands = `{
   "schema_version":1,
   "budget_cny":8000,

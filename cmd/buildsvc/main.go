@@ -29,8 +29,8 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
-// 模型分档(ADR-004:型号只写代码常量):生成旗舰档,型号迁到本服务进程。
-const builderModelName = "qwen3.7-max"
+// 默认模型使用控制台当前有独立免费额度的固定快照；环境变量可显式覆盖。
+const defaultBuilderModel = "qwen3.7-max-2026-06-08"
 
 // 百炼 OpenAI 兼容端点(公共默认);工作空间专属 Host 用 DASHSCOPE_BASE_URL 覆盖。
 const defaultBaseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -54,6 +54,8 @@ func main() {
 	if baseURL == "" {
 		baseURL = defaultBaseURL
 	}
+	builderModelName := envOrDefault("BUILDER_MODEL", defaultBuilderModel)
+	embeddingModelName := envOrDefault("EMBEDDING_MODEL", embedding.DefaultModel)
 	dsn := os.Getenv("PG_DSN")
 	if dsn == "" {
 		log.Fatal("PG_DSN 未设置:生成服务需要零件库(docker-compose up -d 后见 .env.example)")
@@ -81,8 +83,8 @@ func main() {
 
 	// P3 语义检索的查询向量化客户端(与 cmd/embedparts 同模型/同维度),外包一层 Redis 缓存。
 	embedder := backend.WrapEmbedder(
-		embedding.NewClient(baseURL, apiKey, embedding.DefaultModel, store.EmbeddingDims),
-		embedding.DefaultModel,
+		embedding.NewClient(baseURL, apiKey, embeddingModelName, store.EmbeddingDims),
+		embeddingModelName,
 	)
 
 	root, err := pipeline.NewRemote(pipeline.Config{
@@ -133,6 +135,13 @@ func main() {
 	if err := http.ListenAndServe(addr, logMiddleware(mux)); err != nil {
 		log.Fatalf("[buildsvc] A2A 服务退出: %v", err)
 	}
+}
+
+func envOrDefault(name, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+		return value
+	}
+	return fallback
 }
 
 // publicBaseURL 由监听地址推出对外基址(":8081" → http://localhost:8081)。

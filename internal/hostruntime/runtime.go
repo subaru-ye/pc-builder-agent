@@ -28,7 +28,7 @@ const (
 	// AppName 固定为既有 host 根 Agent 名；产品 API 使用同名 ADK session 命名空间。
 	AppName = "pc_builder_host"
 
-	ScreeningModelName     = "qwen-flash"
+	DefaultScreeningModel  = "qwen3.7-plus"
 	DefaultBaseURL         = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 	DefaultBuildsvcURL     = "http://localhost:8081"
 	BuildsvcRequestTimeout = 10 * time.Minute
@@ -36,23 +36,28 @@ const (
 
 // Config 是 host/API 共享的运行时连接配置。
 type Config struct {
-	APIKey      string
-	BaseURL     string
-	BuildsvcURL string
+	APIKey         string
+	BaseURL        string
+	ScreeningModel string
+	BuildsvcURL    string
 }
 
 // ConfigFromEnv 读取百炼与 buildsvc 配置并补齐公共默认值。
 func ConfigFromEnv() (Config, error) {
 	cfg := Config{
-		APIKey:      os.Getenv("DASHSCOPE_API_KEY"),
-		BaseURL:     os.Getenv("DASHSCOPE_BASE_URL"),
-		BuildsvcURL: os.Getenv("BUILDSVC_URL"),
+		APIKey:         os.Getenv("DASHSCOPE_API_KEY"),
+		BaseURL:        os.Getenv("DASHSCOPE_BASE_URL"),
+		ScreeningModel: os.Getenv("SCREENING_MODEL"),
+		BuildsvcURL:    os.Getenv("BUILDSVC_URL"),
 	}
 	if cfg.APIKey == "" {
 		return Config{}, fmt.Errorf("DASHSCOPE_API_KEY 未设置:复制 .env.example 为 .env 并填入百炼 key")
 	}
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = DefaultBaseURL
+	}
+	if cfg.ScreeningModel == "" {
+		cfg.ScreeningModel = DefaultScreeningModel
 	}
 	if cfg.BuildsvcURL == "" {
 		cfg.BuildsvcURL = DefaultBuildsvcURL
@@ -75,12 +80,15 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = DefaultBaseURL
 	}
+	if cfg.ScreeningModel == "" {
+		cfg.ScreeningModel = DefaultScreeningModel
+	}
 	if cfg.BuildsvcURL == "" {
 		cfg.BuildsvcURL = DefaultBuildsvcURL
 	}
 
 	clientCfg := &openaimodel.ClientConfig{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL}
-	screeningModel, err := openaimodel.NewModel(ctx, ScreeningModelName, clientCfg)
+	screeningModel, err := openaimodel.NewModel(ctx, cfg.ScreeningModel, clientCfg)
 	if err != nil {
 		return nil, fmt.Errorf("创建初筛模型失败: %w", err)
 	}

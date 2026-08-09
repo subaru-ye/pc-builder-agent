@@ -318,7 +318,7 @@ async function verifyDeliveryAndRevocation(page: Page, ownerContext: BrowserCont
   const outsider = await newRequest.newContext({ baseURL: webURL });
   const outsiderRevoke = await outsider.delete(`/api/v1/shares/${token}`, { headers: { "Idempotency-Key": crypto.randomUUID() } });
   await outsider.dispose();
-  const share = (await publicJSON.json()) as { version: number };
+  const share = (await publicJSON.json()) as { summary: { version: number } };
   const ownerRevoke = await ownerContext.request.delete(`/api/v1/shares/${token}`, { headers: { "Idempotency-Key": crypto.randomUUID() } });
   const after = await Promise.all([
     ownerContext.request.get(`/api/v1/public/shares/${token}`),
@@ -329,7 +329,7 @@ async function verifyDeliveryAndRevocation(page: Page, ownerContext: BrowserCont
   await page.keyboard.press("Escape");
   return {
     markdown_ok: ownerMarkdown.ok() && publicMarkdown.ok(),
-    share_version_v3: publicJSON.ok() && share.version === 3,
+    share_version_v3: publicJSON.ok() && share.summary.version === 3,
     public_ssr_ok: publicPage.ok(),
     png_ok: image.ok() && image.headers()["content-type"] === "image/png",
     outsider_revoke_404: outsiderRevoke.status() === 404,

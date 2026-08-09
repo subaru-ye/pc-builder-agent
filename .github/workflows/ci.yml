@@ -127,6 +127,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm api:check
       - run: pnpm test --run
+      - run: pnpm test:orchestrator
       - run: pnpm build
       - run: pnpm test:e2e
 

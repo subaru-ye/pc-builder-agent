@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isChildRunning } from "./process-state.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const web = join(root, "web");
@@ -23,7 +24,7 @@ const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const children = new Map();
 
 function start(name, command, args, cwd) {
-  if (children.get(name)?.exitCode == null) throw new Error(`${name} 已在运行`);
+  if (isChildRunning(children.get(name))) throw new Error(`${name} 已在运行`);
   const output = createWriteStream(join(artifactDir, `${name}.log`), { flags: "a", mode: 0o600 });
   const child = spawn(command, args, { cwd, env: childEnv, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });
   child.stdout.pipe(output);
@@ -35,7 +36,7 @@ function start(name, command, args, cwd) {
 
 function stop(name) {
   const child = children.get(name);
-  if (!child || child.exitCode != null) return;
+  if (!isChildRunning(child)) return;
   if (process.platform === "win32") {
     spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
   } else {
@@ -72,7 +73,7 @@ function readMetrics() {
 async function restartAPI() {
   stop("api");
   const deadline = Date.now() + 15_000;
-  while (children.get("api")?.exitCode == null && Date.now() < deadline) {
+  while (isChildRunning(children.get("api")) && Date.now() < deadline) {
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
   }
   start("api", goCommand, ["run", "./cmd/api"], root);
@@ -90,7 +91,7 @@ const server = createServer(async (request, response) => {
   response.setHeader("Content-Type", "application/json; charset=utf-8");
   response.setHeader("Cache-Control", "no-store");
   if (request.method === "GET" && request.url === "/healthz") {
-    const healthy = ["buildsvc", "api", "web"].every((name) => children.get(name)?.exitCode == null);
+    const healthy = ["buildsvc", "api", "web"].every((name) => isChildRunning(children.get(name)));
     response.statusCode = healthy ? 200 : 503;
     response.end(JSON.stringify({ status: healthy ? "ready" : "failed" }));
     return;

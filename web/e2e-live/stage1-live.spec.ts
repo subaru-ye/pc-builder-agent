@@ -298,6 +298,7 @@ async function confirmRequirement(page: Page) {
 async function waitPhase(page: Page, sessionID: string, phase: string, versionCount?: number) {
   const expected = `${phase}:${versionCount ?? 0}`;
   const deadline = Date.now() + 600_000;
+  let idleMismatchSince: number | null = null;
   while (Date.now() < deadline) {
     const session = await apiJSON<Session>(page, `/api/v1/sessions/${sessionID}`);
     const actual = `${session.phase}:${session.version_count}`;
@@ -306,7 +307,13 @@ async function waitPhase(page: Page, sessionID: string, phase: string, versionCo
       throw new Error(`${sessionID} entered error: ${session.last_error?.code ?? "unknown"} ${session.last_error?.detail ?? ""}`.trim());
     }
     if (session.active_run == null) {
-      throw new Error(`${sessionID} completed without expected state ${expected}; got ${actual}`);
+      // run 终态与 session phase 切换附近可能短暂读到旧会话快照;连续空闲 5 秒才判定终态不符。
+      idleMismatchSince ??= Date.now();
+      if (Date.now() - idleMismatchSince >= 5_000) {
+        throw new Error(`${sessionID} completed without expected state ${expected}; got ${actual}`);
+      }
+    } else {
+      idleMismatchSince = null;
     }
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 500));
   }

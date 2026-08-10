@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
-import { request as newRequest, expect, test, type BrowserContext, type Page, type Response } from "@playwright/test";
+import { request as newRequest, expect, test, type APIResponse, type BrowserContext, type Page, type Response } from "@playwright/test";
 import type { BuildDiff, BuildView, Session } from "../src/lib/api/types";
 
 const controlURL = process.env.P10_CONTROL_URL ?? "http://127.0.0.1:18083";
@@ -292,9 +292,23 @@ async function waitPhase(page: Page, sessionID: string, phase: string, versionCo
 }
 
 async function apiJSON<T>(page: Page, path: string): Promise<T> {
-  const response = await page.context().request.get(path);
-  if (!response.ok()) throw new Error(`${path} -> ${response.status()} ${await response.text()}`);
-  return response.json() as Promise<T>;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    let response: APIResponse | undefined;
+    try {
+      response = await page.context().request.get(path);
+    } catch (error) {
+      lastError = error;
+    }
+    if (response) {
+      if (response.ok()) return response.json() as Promise<T>;
+      const error = new Error(`${path} -> ${response.status()} ${await response.text()}`);
+      if (![502, 503, 504].includes(response.status())) throw error;
+      lastError = error;
+    }
+    if (attempt < 3) await new Promise((resolveDelay) => setTimeout(resolveDelay, 200 * 2 ** attempt));
+  }
+  throw lastError;
 }
 
 async function captureRun(context: BrowserContext, runID: string): Promise<RunCapture> {

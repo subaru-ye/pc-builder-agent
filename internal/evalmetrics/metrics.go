@@ -7,15 +7,18 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"iter"
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	openai "github.com/openai/openai-go/v3"
 	"google.golang.org/adk/v2/model"
 )
 
@@ -102,13 +105,17 @@ func (m *measuredModel) GenerateContent(ctx context.Context, req *model.LLMReque
 		id := callSeq.Add(1)
 		status := "succeeded"
 		var promptTokens, candidateTokens, totalTokens int32
+		var callErr error
+		responseErrorCode := ""
 		m.inner.GenerateContent(ctx, req, stream)(func(resp *model.LLMResponse, err error) bool {
 			if err != nil {
 				status = "failed"
+				callErr = err
 			}
 			if resp != nil {
 				if resp.ErrorCode != "" || resp.ErrorMessage != "" {
 					status = "failed"
+					responseErrorCode = resp.ErrorCode
 				}
 				if usage := resp.UsageMetadata; usage != nil {
 					promptTokens = usage.PromptTokenCount
@@ -118,12 +125,40 @@ func (m *measuredModel) GenerateContent(ctx context.Context, req *model.LLMReque
 			}
 			return yield(resp, err)
 		})
-		Record(m.component, "model.call", map[string]any{
+		fields := map[string]any{
 			"call_id": id, "model": m.inner.Name(), "status": status,
 			"duration_ms": time.Since(started).Milliseconds(), "stream": stream,
 			"prompt_tokens": promptTokens, "candidate_tokens": candidateTokens, "total_tokens": totalTokens,
-		})
+		}
+		for key, value := range safeModelErrorFields(callErr, responseErrorCode) {
+			fields[key] = value
+		}
+		Record(m.component, "model.call", fields)
 	}
+}
+
+var safeErrorCodeRE = regexp.MustCompile(`^[A-Za-z0-9._-]{1,96}$`)
+
+// safeModelErrorFields 只保留上游状态码和机器错误 Code,不记录可能含请求正文的 error message。
+func safeModelErrorFields(err error, responseCode string) map[string]any {
+	fields := map[string]any{}
+	code := responseCode
+	var apiErr *openai.Error
+	if errors.As(err, &apiErr) {
+		if apiErr.StatusCode > 0 {
+			fields["http_status"] = apiErr.StatusCode
+		}
+		if code == "" {
+			code = apiErr.Code
+		}
+	}
+	if code != "" {
+		if !safeErrorCodeRE.MatchString(code) {
+			code = "redacted"
+		}
+		fields["error_code"] = code
+	}
+	return fields
 }
 
 // ValidateDirectory 供验收命令预检指标目录是否可写。

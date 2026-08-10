@@ -93,8 +93,12 @@ func (g *ADKAgentGateway) Screen(ctx context.Context, userID, sessionID, text st
 		payload = normalized
 		log.Printf("[host] 初筛纠偏:移除用户未明确指定的预算弹性")
 	}
-	if _, err := schemas.DecodeRequirementSpec(payload); err == nil {
-		return ScreenResult{Kind: ScreenRequirement, Text: lastText, Payload: payload}, nil
+	if spec, err := schemas.DecodeRequirementSpec(payload); err == nil {
+		canonical, encodeErr := schemas.EncodeRequirementSpec(spec)
+		if encodeErr != nil {
+			return ScreenResult{}, encodeErr
+		}
+		return ScreenResult{Kind: ScreenRequirement, Text: lastText, Payload: canonical}, nil
 	}
 	if _, err := schemas.DecodeChangeRequest(payload); err == nil {
 		return ScreenResult{Kind: ScreenChange, Text: lastText, Payload: payload}, nil

@@ -1,6 +1,9 @@
 package schemas
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // RequirementSpecSchemaVersion 当前唯一支持的 RequirementSpec schema 版本。
 const RequirementSpecSchemaVersion = 1
@@ -197,6 +200,64 @@ type useCaseWire struct {
 type brandPrefWire struct {
 	CPU *CPUBrand `json:"cpu"`
 	GPU *GPUBrand `json:"gpu"`
+}
+
+// EncodeRequirementSpec 输出已展开缺省值的稳定线上 JSON。
+// Agent 可以省略 budget_flex 等可选键,但产品 API 的需求卡必须拿到解码后的
+// 实际语义,否则浏览器表单会把“缺省 ±10%”误当成第一个选项“严格预算”。
+func EncodeRequirementSpec(spec RequirementSpec) (json.RawMessage, error) {
+	titles := spec.UseCase.Titles
+	if titles == nil {
+		titles = []string{}
+	}
+	existing := spec.ExistingParts
+	if existing == nil {
+		existing = []Category{}
+	}
+	priority := spec.Priority
+	if priority == nil {
+		priority = []Category{}
+	}
+
+	type canonicalUseCase struct {
+		Type       UseCaseType `json:"type"`
+		Titles     []string    `json:"titles"`
+		Resolution Resolution  `json:"resolution,omitempty"`
+		FPSTarget  *int        `json:"fps_target,omitempty"`
+	}
+	type canonicalBrandPref struct {
+		CPU CPUBrand `json:"cpu"`
+		GPU GPUBrand `json:"gpu"`
+	}
+	type canonicalRequirement struct {
+		SchemaVersion int                `json:"schema_version"`
+		BudgetCNY     int                `json:"budget_cny"`
+		BudgetFlex    float64            `json:"budget_flex"`
+		UseCase       canonicalUseCase   `json:"use_case"`
+		SizePref      SizePref           `json:"size_pref"`
+		NoisePref     NoisePref          `json:"noise_pref"`
+		BrandPref     canonicalBrandPref `json:"brand_pref"`
+		ExistingParts []Category         `json:"existing_parts"`
+		Priority      []Category         `json:"priority"`
+		Notes         string             `json:"notes"`
+	}
+
+	encoded, err := json.Marshal(canonicalRequirement{
+		SchemaVersion: spec.SchemaVersion,
+		BudgetCNY:     spec.BudgetCNY,
+		BudgetFlex:    spec.BudgetFlex,
+		UseCase: canonicalUseCase{
+			Type: spec.UseCase.Type, Titles: titles, Resolution: spec.UseCase.Resolution,
+			FPSTarget: spec.UseCase.FPSTarget,
+		},
+		SizePref: spec.SizePref, NoisePref: spec.NoisePref,
+		BrandPref:     canonicalBrandPref{CPU: spec.BrandPref.CPU, GPU: spec.BrandPref.GPU},
+		ExistingParts: existing, Priority: priority, Notes: spec.Notes,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("requirement spec: 编码失败: %w", err)
+	}
+	return encoded, nil
 }
 
 // DecodeRequirementSpec 严格解码需求单 JSON;违反契约返回 error(schema error)。

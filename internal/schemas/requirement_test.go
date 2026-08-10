@@ -1,6 +1,7 @@
 package schemas
 
 import (
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -74,6 +75,39 @@ func TestDecodeRequirementSpecDefaults(t *testing.T) {
 	}
 	if got.UseCase.Resolution != "" || got.UseCase.FPSTarget != nil {
 		t.Errorf("非 gaming 用途 resolution/fps 应为空: %+v", got.UseCase)
+	}
+}
+
+func TestEncodeRequirementSpecMaterializesDefaults(t *testing.T) {
+	spec, err := DecodeRequirementSpec([]byte(`{
+  "schema_version": 1,
+  "budget_cny": 5000,
+  "use_case": {"type": "general"}
+}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := EncodeRequirementSpec(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(encoded, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["budget_flex"] != 0.1 || got["size_pref"] != "any" || got["noise_pref"] != "any" {
+		t.Fatalf("缺省值未展开: %s", encoded)
+	}
+	if !reflect.DeepEqual(got["existing_parts"], []any{}) || !reflect.DeepEqual(got["priority"], []any{}) {
+		t.Fatalf("列表应编码为空数组而非 null: %s", encoded)
+	}
+	brand, ok := got["brand_pref"].(map[string]any)
+	if !ok || brand["cpu"] != "any" || brand["gpu"] != "any" {
+		t.Fatalf("品牌缺省值未展开: %s", encoded)
+	}
+	if _, err := DecodeRequirementSpec(encoded); err != nil {
+		t.Fatalf("编码结果必须能严格回读: %v", err)
 	}
 }
 

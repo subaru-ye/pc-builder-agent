@@ -2,6 +2,7 @@
 package p10report
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -76,6 +77,19 @@ type HumanScores struct {
 
 var fingerprintRE = regexp.MustCompile(`^[0-9a-f]{12}$`)
 
+const maxReportBytes = 10 << 20
+
+var (
+	forbiddenReportKeys = map[string]struct{}{
+		"api_key": {}, "apikey": {}, "authorization": {}, "cookie": {}, "owner_id": {},
+		"session_id": {}, "run_id": {}, "share_token": {}, "token": {}, "prompt": {},
+		"model_response": {}, "request_body": {}, "response_body": {},
+	}
+	secretValueRE = regexp.MustCompile(`(?i)(sk-[A-Za-z0-9_-]{10,}|bearer\s+[A-Za-z0-9._~-]{10,}|pcb_anonymous_id=)`)
+	rawUUIDRE     = regexp.MustCompile(`(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b`)
+	opaqueTokenRE = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
+)
+
 func DecodeLive(r io.Reader) (LiveReport, error) {
 	var report LiveReport
 	if err := decodeStrict(r, &report); err != nil {
@@ -93,7 +107,21 @@ func DecodeHuman(r io.Reader) (HumanReport, error) {
 }
 
 func decodeStrict(r io.Reader, dst any) error {
-	dec := json.NewDecoder(r)
+	raw, err := io.ReadAll(io.LimitReader(r, maxReportBytes+1))
+	if err != nil {
+		return err
+	}
+	if len(raw) > maxReportBytes {
+		return fmt.Errorf("报告超过 %d 字节上限", maxReportBytes)
+	}
+	var generic any
+	if err := json.Unmarshal(raw, &generic); err != nil {
+		return err
+	}
+	if path, found := sensitiveReportValue(generic, "$"); found {
+		return fmt.Errorf("报告包含禁止的敏感字段或原始标识: %s", path)
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
 		return err
@@ -102,6 +130,32 @@ func decodeStrict(r io.Reader, dst any) error {
 		return fmt.Errorf("报告末尾存在多余 JSON")
 	}
 	return nil
+}
+
+func sensitiveReportValue(value any, path string) (string, bool) {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, child := range typed {
+			normalized := strings.ToLower(strings.TrimSpace(key))
+			if _, forbidden := forbiddenReportKeys[normalized]; forbidden {
+				return path + "." + key, true
+			}
+			if childPath, found := sensitiveReportValue(child, path+"."+key); found {
+				return childPath, true
+			}
+		}
+	case []any:
+		for index, child := range typed {
+			if childPath, found := sensitiveReportValue(child, fmt.Sprintf("%s[%d]", path, index)); found {
+				return childPath, true
+			}
+		}
+	case string:
+		if secretValueRE.MatchString(typed) || rawUUIDRE.MatchString(typed) || opaqueTokenRE.MatchString(typed) {
+			return path, true
+		}
+	}
+	return "", false
 }
 
 func ValidateLive(report LiveReport) []error {

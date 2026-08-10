@@ -1,6 +1,9 @@
 package p10report
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestValidateHumanRequiresThreeDirectBuyScores(t *testing.T) {
 	report := HumanReport{SchemaVersion: 1, Reviews: []HumanReview{
@@ -50,5 +53,35 @@ func TestValidateLiveRequiresPassCubed(t *testing.T) {
 	report.Trials = report.Trials[:17]
 	if errs := ValidateLive(report); len(errs) == 0 {
 		t.Fatal("缺一次重复必须失败")
+	}
+}
+
+func TestDecodeLiveRejectsSensitiveDataInsideOpenMap(t *testing.T) {
+	raw := `{
+  "schema_version": 1,
+  "generated_at": "2026-08-10T00:00:00Z",
+  "models": {"screening":"s","builder":"b","embedding":"e"},
+  "trials": [{
+    "scenario":"L1","repetition":1,"model_code":"b",
+    "session_fingerprint":"0123456789ab","run_fingerprints":["abcdef012345"],
+    "final_phase":"ready","versions":[1],"first_progress_ms":10,"total_ms":100,
+    "max_sse_gap_ms":20,"screening_calls":1,"builder_calls":1,"validation_rounds":1,
+    "embedding_cache":"not_used","assertions":{"ok":true},
+    "diff_summary":{"token":"must-not-pass"}
+  }],
+  "route_latency_ms":[10]
+}`
+	if _, err := DecodeLive(strings.NewReader(raw)); err == nil || !strings.Contains(err.Error(), "diff_summary.token") {
+		t.Fatalf("开放 map 中的敏感键必须被拒绝, err=%v", err)
+	}
+}
+
+func TestDecodeHumanRejectsRawIdentifiersInNotes(t *testing.T) {
+	raw := `{
+  "schema_version":1,"reviewed_at":"2026-08-10T00:00:00Z",
+  "reviews":[{"reviewer_id":"R1","profile":"novice","scores":{"requirement_fit":2,"completeness":2,"trust":2,"change_control":2,"direct_buy":2,"share_clarity":2},"assisted":false,"blockers":[],"notes":"session 123e4567-e89b-42d3-a456-426614174000"}]
+}`
+	if _, err := DecodeHuman(strings.NewReader(raw)); err == nil || !strings.Contains(err.Error(), "reviews[0].notes") {
+		t.Fatalf("真人备注中的原始 UUID 必须被拒绝, err=%v", err)
 	}
 }

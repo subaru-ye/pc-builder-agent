@@ -155,6 +155,7 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
         const build = await apiJSON<BuildView>(l6Page, `/api/v1/sessions/${id}/builds/1`);
         return trialResult(id, "ready", [1], build, {
           edited_budget_used: build.requirement.budget_cny === 8500,
+          default_budget_flex_used: build.requirement.budget_flex === 0.1,
           edited_noise_used: build.requirement.noise_pref === "silent",
           validation_pass: build.validation.overall_status === "pass",
         });

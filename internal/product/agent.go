@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"google.golang.org/adk/v2/agent"
@@ -88,6 +89,10 @@ func (g *ADKAgentGateway) Screen(ctx context.Context, userID, sessionID, text st
 	if payload == nil {
 		return ScreenResult{Kind: ScreenQuestion, Text: strings.TrimSpace(lastText)}, nil
 	}
+	if normalized, changed := normalizeUnstatedBudgetFlex(payload, text); changed {
+		payload = normalized
+		log.Printf("[host] 初筛纠偏:移除用户未明确指定的预算弹性")
+	}
 	if _, err := schemas.DecodeRequirementSpec(payload); err == nil {
 		return ScreenResult{Kind: ScreenRequirement, Text: lastText, Payload: payload}, nil
 	}
@@ -98,6 +103,41 @@ func (g *ADKAgentGateway) Screen(ctx context.Context, userID, sessionID, text st
 		Kind: ScreenInvalid, Text: lastText, Payload: payload,
 		Err: fmt.Errorf("初筛输出不符合 RequirementSpec/ChangeRequest schema"),
 	}, nil
+}
+
+// normalizeUnstatedBudgetFlex 防止模型把普通预算金额擅自解释为零弹性或其他比例。
+// RequirementSpec 缺省值仍由 schema 单一实现；用户明确表达浮动、百分比或封顶时保留模型字段。
+func normalizeUnstatedBudgetFlex(payload json.RawMessage, userText string) (json.RawMessage, bool) {
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &root); err != nil {
+		return payload, false
+	}
+	if _, isChange := root["intent"]; isChange {
+		return payload, false
+	}
+	if _, exists := root["budget_flex"]; !exists || hasExplicitBudgetFlex(userText) {
+		return payload, false
+	}
+	delete(root, "budget_flex")
+	updated, err := json.Marshal(root)
+	if err != nil {
+		return payload, false
+	}
+	return updated, true
+}
+
+func hasExplicitBudgetFlex(text string) bool {
+	normalized := strings.Join(strings.Fields(strings.ToLower(text)), "")
+	for _, marker := range []string{
+		"预算弹性", "弹性预算", "浮动", "上下", "左右", "%", "百分之",
+		"可超", "可以超", "能超", "超一点", "超出一点",
+		"不能超", "不要超", "不超", "封顶", "上限",
+	} {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *ADKAgentGateway) Remote(ctx context.Context, userID, sessionID string, payload json.RawMessage) (RemoteResult, error) {

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
@@ -230,6 +233,30 @@ func (s *Service) succeedRequirement(ctx context.Context, r store.AgentRun, requ
 
 func (s *Service) executeChange(ctx context.Context, r store.AgentRun, ownerID, text string) {
 	s.progress(ctx, r.ID, "screening", "正在理解改单要求", 1)
+	if delta, ok := parseDeterministicBudgetDelta(text); ok {
+		version, found, err := s.store.LatestBuildVersion(ctx, r.SessionID)
+		if err != nil || !found {
+			s.failInternal(ctx, r, store.PhaseReady, "")
+			return
+		}
+		payload, err := json.Marshal(struct {
+			SchemaVersion  int                  `json:"schema_version"`
+			BaseBuildRef   string               `json:"base_build_ref"`
+			Intent         schemas.ChangeIntent `json:"intent"`
+			BudgetDeltaCNY int                  `json:"budget_delta_cny"`
+		}{
+			SchemaVersion:  schemas.ChangeRequestSchemaVersion,
+			BaseBuildRef:   fmt.Sprintf("v%d", version),
+			Intent:         schemas.IntentAdjustBudget,
+			BudgetDeltaCNY: delta,
+		})
+		if err != nil {
+			s.failInternal(ctx, r, store.PhaseReady, "")
+			return
+		}
+		s.executeRemote(ctx, r, ownerID, payload)
+		return
+	}
 	result, err := s.agent.Screen(ctx, ownerID, r.SessionID, text)
 	if err != nil {
 		s.failFromError(ctx, r, err, store.PhaseReady, "")
@@ -249,6 +276,27 @@ func (s *Service) executeChange(ctx context.Context, r store.AgentRun, ownerID, 
 		return
 	case ScreenChange:
 		s.executeRemote(ctx, r, ownerID, result.Payload)
+	}
+}
+
+var deterministicBudgetDeltaRE = regexp.MustCompile(`^(?:(?:把)?预算)?(?:再)?(降低|减少|下调|降|减|增加|提高|上调|加)([1-9][0-9]{0,5})(?:元)?$`)
+
+// parseDeterministicBudgetDelta 只接管无歧义的整数金额升降表达,其余语句仍交给 screening Agent。
+func parseDeterministicBudgetDelta(text string) (int, bool) {
+	normalized := strings.Join(strings.Fields(text), "")
+	match := deterministicBudgetDeltaRE.FindStringSubmatch(normalized)
+	if len(match) != 3 {
+		return 0, false
+	}
+	amount, err := strconv.Atoi(match[2])
+	if err != nil || amount <= 0 {
+		return 0, false
+	}
+	switch match[1] {
+	case "降低", "减少", "下调", "降", "减":
+		return -amount, true
+	default:
+		return amount, true
 	}
 }
 

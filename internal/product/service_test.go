@@ -141,9 +141,11 @@ type fakeAgent struct {
 	screen           ScreenResult
 	contextAvailable bool
 	remotePayload    json.RawMessage
+	screenCalls      int
 }
 
 func (f *fakeAgent) Screen(context.Context, string, string, string) (ScreenResult, error) {
+	f.screenCalls++
 	return f.screen, nil
 }
 func (f *fakeAgent) Remote(_ context.Context, _, _ string, payload json.RawMessage) (RemoteResult, error) {
@@ -253,6 +255,56 @@ func TestServiceContextExpired(t *testing.T) {
 	var problem Problem
 	if !errors.As(err, &problem) || problem.Code != "context_expired" {
 		t.Fatalf("应返回 context_expired,得到 %T %v", err, err)
+	}
+}
+
+func TestServiceDeterministicBudgetChangeBypassesScreening(t *testing.T) {
+	st := newFakeProductStore()
+	st.session.Phase = store.PhaseReady
+	st.latest = 1
+	agent := &fakeAgent{store: st, contextAvailable: true}
+	sink := newFakeSink()
+	svc, err := NewService(context.Background(), st, agent, sink)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.StartMessage(context.Background(), "owner-1", "session-1",
+		"00000000-0000-4000-8000-000000000006", "降 500")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink.wait(t)
+	change, err := schemas.DecodeChangeRequest(agent.remotePayload)
+	if err != nil {
+		t.Fatalf("Remote payload 不是合法 ChangeRequest:%s err=%v", agent.remotePayload, err)
+	}
+	if agent.screenCalls != 0 || change.BaseBuildRef != "v1" || change.BudgetDeltaCNY == nil || *change.BudgetDeltaCNY != -500 {
+		t.Fatalf("确定性改单不正确:screen_calls=%d change=%+v", agent.screenCalls, change)
+	}
+	ws, _ := st.WebSessionByOwner(context.Background(), "owner-1", "session-1")
+	if ws.Phase != store.PhaseReady || st.latest != 2 {
+		t.Fatalf("改单后状态不正确:session=%+v latest=%d", ws, st.latest)
+	}
+}
+
+func TestParseDeterministicBudgetDelta(t *testing.T) {
+	tests := []struct {
+		text  string
+		want  int
+		match bool
+	}{
+		{text: "降 500", want: -500, match: true},
+		{text: "预算减少500元", want: -500, match: true},
+		{text: "再加 300", want: 300, match: true},
+		{text: "预算提高1000元", want: 1000, match: true},
+		{text: "降 500，显卡别动", match: false},
+		{text: "预算改成 7500", match: false},
+	}
+	for _, tt := range tests {
+		got, matched := parseDeterministicBudgetDelta(tt.text)
+		if got != tt.want || matched != tt.match {
+			t.Errorf("parseDeterministicBudgetDelta(%q)=(%d,%v),want (%d,%v)", tt.text, got, matched, tt.want, tt.match)
+		}
 	}
 }
 

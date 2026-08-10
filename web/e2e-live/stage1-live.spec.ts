@@ -45,7 +45,7 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
       const l1 = await measure("L1", repetition, observer, 2, async () => {
         sessionID = await startSession(page, "8000 元，2K 玩黑神话：悟空");
         await waitPhase(page, sessionID, "requirement_ready");
-        await page.getByRole("button", { name: "确认并生成配置" }).click();
+        await confirmRequirement(page);
         await waitPhase(page, sessionID, "ready", 1);
         const build = await apiJSON<BuildView>(page, `/api/v1/sessions/${sessionID}/builds/1`);
         const budget = build.requirement.budget_cny;
@@ -107,7 +107,7 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
         const id = await startSession(l2Page, "8000 元，2K 游戏，想要安静的显卡和白色海景房机箱，品牌不限");
         await waitPhase(l2Page, id, "requirement_ready");
         const pending = await apiJSON<Session>(l2Page, `/api/v1/sessions/${id}`);
-        await l2Page.getByRole("button", { name: "确认并生成配置" }).click();
+        await confirmRequirement(l2Page);
         await waitPhase(l2Page, id, "ready", 1);
         const build = await apiJSON<BuildView>(l2Page, `/api/v1/sessions/${id}/builds/1`);
         const rationale = build.parts.filter((part) => part.category === "gpu" || part.category === "case").map((part) => part.rationale).join(" ");
@@ -150,7 +150,7 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
         await waitPhase(l6Page, id, "requirement_ready");
         await l6Page.getByLabel("预算（元）").fill("8500");
         await l6Page.getByLabel("噪音偏好").selectOption("silent");
-        await l6Page.getByRole("button", { name: "确认并生成配置" }).click();
+        await confirmRequirement(l6Page);
         await waitPhase(l6Page, id, "ready", 1);
         const build = await apiJSON<BuildView>(l6Page, `/api/v1/sessions/${id}/builds/1`);
         return trialResult(id, "ready", [1], build, {
@@ -281,7 +281,17 @@ async function startSession(page: Page, prompt: string) {
 
 async function sendComposer(page: Page, text: string) {
   await page.locator("#message-composer").fill(text);
+  const responsePromise = page.waitForResponse((response) => response.request().method() === "POST" && /\/api\/v1\/sessions\/[^/]+\/messages$/.test(new URL(response.url()).pathname), { timeout: 30_000 });
   await page.getByRole("button", { name: "发送" }).click();
+  const response = await responsePromise;
+  if (!response.ok()) throw new Error(`message POST -> ${response.status()} ${await response.text()}`);
+}
+
+async function confirmRequirement(page: Page) {
+  const responsePromise = page.waitForResponse((response) => response.request().method() === "POST" && /\/api\/v1\/sessions\/[^/]+\/requirement\/confirm$/.test(new URL(response.url()).pathname), { timeout: 30_000 });
+  await page.getByRole("button", { name: "确认并生成配置" }).click();
+  const response = await responsePromise;
+  if (!response.ok()) throw new Error(`confirm POST -> ${response.status()} ${await response.text()}`);
 }
 
 async function waitPhase(page: Page, sessionID: string, phase: string, versionCount?: number) {
@@ -293,6 +303,9 @@ async function waitPhase(page: Page, sessionID: string, phase: string, versionCo
     if (actual === expected) return;
     if (session.phase === "error") {
       throw new Error(`${sessionID} entered error: ${session.last_error?.code ?? "unknown"} ${session.last_error?.detail ?? ""}`.trim());
+    }
+    if (session.active_run == null) {
+      throw new Error(`${sessionID} completed without expected state ${expected}; got ${actual}`);
     }
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 500));
   }

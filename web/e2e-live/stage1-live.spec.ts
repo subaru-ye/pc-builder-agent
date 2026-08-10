@@ -285,10 +285,18 @@ async function sendComposer(page: Page, text: string) {
 }
 
 async function waitPhase(page: Page, sessionID: string, phase: string, versionCount?: number) {
-  await expect.poll(async () => {
+  const expected = `${phase}:${versionCount ?? 0}`;
+  const deadline = Date.now() + 600_000;
+  while (Date.now() < deadline) {
     const session = await apiJSON<Session>(page, `/api/v1/sessions/${sessionID}`);
-    return `${session.phase}:${session.version_count}`;
-  }).toBe(`${phase}:${versionCount ?? 0}`);
+    const actual = `${session.phase}:${session.version_count}`;
+    if (actual === expected) return;
+    if (session.phase === "error") {
+      throw new Error(`${sessionID} entered error: ${session.last_error?.code ?? "unknown"} ${session.last_error?.detail ?? ""}`.trim());
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 500));
+  }
+  throw new Error(`${sessionID} did not reach ${expected} within 10 minutes`);
 }
 
 async function apiJSON<T>(page: Page, path: string): Promise<T> {

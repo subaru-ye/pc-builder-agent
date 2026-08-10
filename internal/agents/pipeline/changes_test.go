@@ -352,3 +352,45 @@ func TestDecideLockedPassProceedsToRules(t *testing.T) {
 		t.Errorf("锁定合规应正常交付, 得到 %+v", v)
 	}
 }
+
+func TestDecideBudgetChangeRejectsMoreThanTwoChangedCategories(t *testing.T) {
+	base := strings.NewReplacer(
+		"amd-ryzen5-7500f", "amd-ryzen7-7800x3d",
+		"msi-b650m-mortar-wifi", "asus-b650-plus",
+		"thermalright-pa120-se", "deepcool-ak620",
+	).Replace(baseSelectionJSON)
+	chg := &changeCtx{
+		Change:        json.RawMessage(`{"schema_version":1,"base_build_ref":"v1","intent":"adjust_budget","budget_delta_cny":-500}`),
+		BaseSelection: json.RawMessage(base),
+	}
+	f := &fakeEval{res: passResult()}
+	v := decide(context.Background(), f, draftJSON, "", 1, chg)
+	if v.escalate || v.deliver || !strings.Contains(v.message, "改动过多") || !strings.Contains(v.message, "3 个品类") {
+		t.Fatalf("预算改单超过两类应定向打回, 得到 %+v", v)
+	}
+	if f.gotSel.CPU != "" {
+		t.Error("改动数超限时不应进入兼容性规则引擎")
+	}
+}
+
+func TestDecideBudgetChangeAllowsZeroToTwoChangedCategories(t *testing.T) {
+	change := json.RawMessage(`{"schema_version":1,"base_build_ref":"v1","intent":"adjust_budget","budget_delta_cny":-500}`)
+	for _, tc := range []struct {
+		name string
+		base string
+	}{
+		{name: "零改动", base: baseSelectionJSON},
+		{name: "两类改动", base: strings.NewReplacer(
+			"amd-ryzen5-7500f", "amd-ryzen7-7800x3d",
+			"thermalright-pa120-se", "deepcool-ak620",
+		).Replace(baseSelectionJSON)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeEval{res: passResult()}
+			v := decide(context.Background(), f, draftJSON, "", 1, &changeCtx{Change: change, BaseSelection: json.RawMessage(tc.base)})
+			if !v.deliver || !v.escalate || f.gotSel.CPU == "" {
+				t.Fatalf("预算改单不超过两类应继续校验并交付, 得到 %+v", v)
+			}
+		})
+	}
+}

@@ -114,6 +114,49 @@ func decide(ctx context.Context, eval tools.BuildEvaluator, draftText, lastSelec
 		}
 	}
 
+	// adjust_budget 的产品语义是“尽量少改”。只写在提示词中会随模型波动,
+	// 因此在校验层硬性限制单次最多改动两个品类;零换件也是合法的最小改动。
+	if chg != nil && len(chg.Change) > 0 && len(chg.BaseSelection) > 0 {
+		cr, err := schemas.DecodeChangeRequest(chg.Change)
+		if err != nil {
+			return verdict{
+				message:  fmt.Sprintf("校验节点内部错误(重新解析改单失败),流水线熔断:%v", err),
+				escalate: true,
+			}
+		}
+		if cr.Intent == schemas.IntentAdjustBudget {
+			changed, err := lockedViolations(schemas.AllCategories, chg.BaseSelection, draft.Selection)
+			if err != nil {
+				return verdict{
+					message:  fmt.Sprintf("校验节点内部错误(预算改单比对失败),流水线熔断:%v", err),
+					escalate: true,
+				}
+			}
+			if len(changed) > 2 {
+				detail := strings.Join(changed, ";")
+				switch {
+				case selKey == lastSelection:
+					return verdict{
+						message:   "连续提交了相同配置且预算改单仍改动超过两个品类,判定死循环,终止流水线。改动项:" + detail,
+						selection: selKey,
+						escalate:  true,
+					}
+				case finalRound:
+					return verdict{
+						message:   fmt.Sprintf("预算改单失败:第 %d/%d 轮仍改动了 %d 个品类,超过最多两类的限制,本轮不保存版本。改动项:%s", round, maxLoopRounds, len(changed), detail),
+						selection: selKey,
+						escalate:  true,
+					}
+				default:
+					return verdict{
+						message:   fmt.Sprintf("预算改单改动过多(第 %d/%d 轮):当前改了 %d 个品类(%s)。请保留基版本其余 SKU,最多只重选两个对预算影响最大的品类;若原配置已在新预算弹性区间内,直接照抄整份 selection。", round, maxLoopRounds, len(changed), detail),
+						selection: selKey,
+					}
+				}
+			}
+		}
+	}
+
 	res, err := eval.Evaluate(ctx, draft.Selection)
 	if err != nil {
 		if errors.Is(err, store.ErrUnknownSKU) {

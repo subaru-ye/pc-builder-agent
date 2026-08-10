@@ -31,6 +31,7 @@ type Models struct {
 type LiveTrial struct {
 	Scenario           string          `json:"scenario"`
 	Repetition         int             `json:"repetition"`
+	ModelCode          string          `json:"model_code"`
 	SessionFingerprint string          `json:"session_fingerprint"`
 	RunFingerprints    []string        `json:"run_fingerprints"`
 	FinalPhase         string          `json:"final_phase"`
@@ -128,6 +129,9 @@ func ValidateLive(report LiveReport) []error {
 			errs = append(errs, fmt.Errorf("重复轮次 %s", key))
 		}
 		want[key] = true
+		if trial.ModelCode == "" {
+			errs = append(errs, fmt.Errorf("%s 缺少模型 Code", key))
+		}
 		if !fingerprintRE.MatchString(trial.SessionFingerprint) {
 			errs = append(errs, fmt.Errorf("%s session 指纹非法", key))
 		}

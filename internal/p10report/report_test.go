@@ -25,7 +25,7 @@ func TestValidateLiveRequiresPassCubed(t *testing.T) {
 	report := LiveReport{SchemaVersion: 1, Models: Models{Screening: "s", Builder: "b", Embedding: "e"}, RouteLatencyMS: []int64{10}}
 	for scenario := 1; scenario <= 6; scenario++ {
 		for repetition := 1; repetition <= 3; repetition++ {
-			trial := LiveTrial{Scenario: string(rune('L')), Repetition: repetition}
+			trial := LiveTrial{Scenario: string(rune('L')), Repetition: repetition, ModelCode: "model"}
 			trial.Scenario += string(rune('0' + scenario))
 			trial.SessionFingerprint = "0123456789ab"
 			trial.RunFingerprints = []string{"abcdef012345"}

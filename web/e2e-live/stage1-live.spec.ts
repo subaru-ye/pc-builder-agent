@@ -10,7 +10,7 @@ type MetricEvent = { component: string; name: string; fields?: Record<string, un
 type RunCapture = { runID: string; firstProgressMS: number; totalMS: number; maxGapMS: number };
 type RunCaptureOutcome = { capture?: RunCapture; error?: Error };
 type Trial = {
-  scenario: string; repetition: number; session_fingerprint: string; run_fingerprints: string[];
+  scenario: string; repetition: number; model_code: string; session_fingerprint: string; run_fingerprints: string[];
   final_phase: string; versions: number[]; first_progress_ms: number; total_ms: number; max_sse_gap_ms: number;
   screening_calls: number; builder_calls: number; validation_rounds: number; embedding_cache: string;
   total_cny?: string; budget_delta_cny?: string; overall_status?: string;
@@ -92,7 +92,7 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
         return trialResult(sessionID, "ready", [1, 2, 3], build, {
           version_v3: build.summary.version === 3 && build.summary.parent_version === 2,
           amd_gpu: /AMD|Radeon|RX\s?\d/i.test(`${gpu?.name ?? ""} ${gpu?.sku ?? ""}`),
-          only_gpu_changed: changed.length === 1 && changed[0] === "gpu",
+          non_gpu_unchanged: changed.every((category) => category === "gpu"),
           validation_pass: build.validation.overall_status === "pass",
           ...delivery,
         }, { changed_categories: changed, total_delta_cny: diff.total_delta_cny });
@@ -231,6 +231,7 @@ async function measure(
   const cache = delta.filter((event) => event.name === "embedding.cache").map((event) => String(event.fields?.status ?? ""));
   return {
     scenario, repetition,
+    model_code: modelName(delta, "buildsvc", "model.call") || modelName(delta, "api", "model.call"),
     session_fingerprint: fingerprint(result.sessionID),
     run_fingerprints: runs.map((run) => fingerprint(run.runID)),
     final_phase: result.finalPhase,

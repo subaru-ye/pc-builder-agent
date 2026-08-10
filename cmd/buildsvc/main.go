@@ -30,8 +30,8 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
-// 默认模型使用控制台当前有独立免费额度的固定快照；环境变量可显式覆盖。
-const defaultBuilderModel = "qwen3.7-max-2026-05-17"
+// 默认模型使用控制台当前有独立免费额度的精确 Code；环境变量可显式覆盖。
+const defaultBuilderModel = "qwen3.7-max-preview"
 
 // 百炼 OpenAI 兼容端点(公共默认);工作空间专属 Host 用 DASHSCOPE_BASE_URL 覆盖。
 const defaultBaseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"

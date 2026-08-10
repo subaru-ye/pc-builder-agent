@@ -45,7 +45,7 @@ go build ./... && go vet ./...
 - **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
 - **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。
 - **schema 单一出处**:`internal/schemas` 定义一份,字段变更回写设计方案 §四,不在代码里静默漂移。
-- 当前进度:MVP P0–P6 已封板;P7 产品 API、P8 Web 工作台与 P9 分享只读页已实现。产品入口为 `web/` 的 Next.js 工作台,ADK dev UI 继续只作调试入口。下一步按 stage1.md 与 P10 专题完成 golden set、真人验收和发布门禁;分享业务规则仍只能在 Go API/presenter 内演进。
+- 当前进度:MVP P0–P6 已封板;P7 产品 API、P8 Web 工作台与 P9 分享只读页已实现。P10 已完成 50 组 golden、自动门禁和 Live/真人验收工具,但真实模型 Pass³ 与 3 人盲评尚未完成,不得创建 `stage1-freeze`。产品入口为 `web/` 的 Next.js 工作台,ADK dev UI 继续只作调试入口;分享业务规则仍只能在 Go API/presenter 内演进。
 
 ## 已知环境坑(Windows)
 

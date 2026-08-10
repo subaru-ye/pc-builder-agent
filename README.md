@@ -2,7 +2,7 @@
 
 > 对话式 DIY 装机助手:说清预算和用途,得到**保证兼容**、**带日期化报价**、**可多轮修改**的装机配置单。
 >
-> 个人学习向项目,目标技术栈:多 Agent 流水线 + A2A 协议 + 记忆基座。当前状态:MVP P0–P6 已封板,P7–P9 已完成;P10 的确定性门禁已实现,Live Pass³ 与真人盲评尚未完成。
+> 个人学习向项目,目标技术栈:多 Agent 流水线 + A2A 协议 + 记忆基座。当前状态:MVP P0–P6 已封板,P7–P9 已完成;P10 的自动门禁与 Live Pass³ 已通过,尚待 3 人真人盲评。
 
 ## 为什么做
 
@@ -105,11 +105,11 @@ pnpm dev
 - [x] P7 产品 API 与会话状态机
 - [x] P8 Web 配置工作台
 - [x] P9 分享与导出
-- [ ] P10 评测与发布准备(50 组 golden、自动门禁与验收工具已完成;Live/真人待完成)
+- [ ] P10 评测与发布准备(50 组 golden、自动门禁与 Live 18/18 已通过;3 人真人盲评待完成)
 
 2026-08-09 封板验收结果:PostgreSQL/pgvector/Redis 真实集成测试无跳过;Python 数据流水线 104 项测试通过;用例 A–H 全部验证,包括全 pass 配单、语义召回、v1→v3 回放/diff/Markdown 导出、A2A schema/contextID 以及 kill host 后从 Redis 恢复同一会话继续改单。
 
-阶段 1 的 P7–P9 已实现:P7 提供产品 API、匿名会话、需求确认、后台 run 与 Redis SSE;P8 提供 Next.js 工作台、配置/校验/版本/diff 与响应式交互;P9 提供不可变版本分享、所有者撤销、最小披露的 SSR 只读页、公开 Markdown 与 1200×630 PNG。P10 已完成 50 组 golden、Go/Web/Python 自动门禁、Live 记录器和真人验收工具;2026-08-10 检查点的确定性门禁全绿,但真实模型矩阵因连续上游失败未形成 18 个 Pass³ 样本,真人盲评仍为 0/3,因此尚未创建 `stage1-freeze`。
+阶段 1 的 P7–P9 已实现:P7 提供产品 API、匿名会话、需求确认、后台 run 与 Redis SSE;P8 提供 Next.js 工作台、配置/校验/版本/diff 与响应式交互;P9 提供不可变版本分享、所有者撤销、最小披露的 SSR 只读页、公开 Markdown 与 1200×630 PNG。P10 的 50 组 golden、Go/Web/Python 自动门禁和 L1–L6×3 真实模型矩阵已通过;Live 脱敏汇总见 [P10-Live 验收汇总](docs/acceptance/P10-Live验收汇总.json)。真人盲评仍为 0/3,因此尚未创建 `stage1-freeze`。
 
 ## 免责声明
 

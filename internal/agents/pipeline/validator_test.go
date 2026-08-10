@@ -160,6 +160,52 @@ func TestDecideReviewDeliversWithNotes(t *testing.T) {
 	}
 }
 
+func TestDecideReviewRetriesUnknownBeforeFinalRound(t *testing.T) {
+	res := passResult()
+	res.Report.OverallStatus = schemas.OverallReview
+	res.Report.Checks = []schemas.CheckResult{
+		{
+			RuleID:        schemas.RuleMemorySpeed,
+			Outcome:       schemas.OutcomeUnknown,
+			Severity:      schemas.SeverityNone,
+			MissingFields: []string{"motherboard.memory_speed_max_mts"},
+			Detail:        "内存频率字段缺失,无法判定",
+		},
+	}
+
+	v := decide(context.Background(), &fakeEval{res: res}, draftJSON, "", 1, nil)
+	if v.escalate || v.deliver {
+		t.Fatalf("非最后轮的 unknown review 应定向重试, 得到 %+v", v)
+	}
+	for _, want := range []string{"MEMORY_SPEED", "motherboard.memory_speed_max_mts", "字段非 null"} {
+		if !strings.Contains(v.message, want) {
+			t.Errorf("重试反馈缺少 %q:\n%s", want, v.message)
+		}
+	}
+	if v.reportJSON == "" {
+		t.Error("重试时应保留最后一版校验报告")
+	}
+}
+
+func TestDecideReviewDeliversUnknownOnFinalRound(t *testing.T) {
+	res := passResult()
+	res.Report.OverallStatus = schemas.OverallReview
+	res.Report.Checks = []schemas.CheckResult{
+		{
+			RuleID:        schemas.RuleCoolerThermalCapacity,
+			Outcome:       schemas.OutcomeUnknown,
+			Severity:      schemas.SeverityNone,
+			MissingFields: []string{"cooler.cooling_capacity_w"},
+			Detail:        "散热能力字段缺失,无法判定",
+		},
+	}
+
+	v := decide(context.Background(), &fakeEval{res: res}, draftJSON, "", maxLoopRounds, nil)
+	if !v.escalate || !v.deliver || !strings.Contains(v.message, "review") {
+		t.Fatalf("最后一轮 unknown review 应如实交付, 得到 %+v", v)
+	}
+}
+
 func budgetChangeCtx(budget int, flex float64) *changeCtx {
 	raw := json.RawMessage(fmt.Sprintf(`{"schema_version":1,"budget_cny":%d,"budget_flex":%g,"use_case":{"type":"general"}}`, budget, flex))
 	return &changeCtx{ActiveSpec: raw}

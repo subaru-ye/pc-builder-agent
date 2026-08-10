@@ -56,7 +56,9 @@ type verdict struct {
 //   - 轮数用尽 → 带最后一版报告如实出栈,不展示假成功(§5 熔断纪律);
 //   - 其他错误(DB 不可达等)→ 不可恢复,立即熔断;
 //   - 改单模式下硬锁定品类被改动 → 确定性锁定校验打回(FR-402,不靠提示词),计入轮数;
-//   - pass/review → 交付配置单 + 报价 + 快照日期,出栈。
+//   - pass → 交付配置单 + 报价 + 快照日期,出栈;
+//   - review 中含可消除的 unknown 且尚有轮次 → 回馈缺失字段,要求定向换用数据完整候选;
+//   - 纯 warning review 或最后一轮 review → 如实交付并列出注意项。
 func decide(ctx context.Context, eval tools.BuildEvaluator, draftText, lastSelection string, round int, chg *changeCtx) verdict {
 	finalRound := round >= maxLoopRounds
 
@@ -182,6 +184,17 @@ func decide(ctx context.Context, eval tools.BuildEvaluator, draftText, lastSelec
 				}
 			}
 		}
+		if unknownMessage := retryableUnknownMessage(res.Report); unknownMessage != "" && !finalRound {
+			prefix := fmt.Sprintf("存在可消除的数据不足(review,第 %d/%d 轮):", round, maxLoopRounds)
+			if selKey == lastSelection {
+				prefix = fmt.Sprintf("连续提交了相同配置且数据不足仍未消除(review,第 %d/%d 轮):", round, maxLoopRounds)
+			}
+			return verdict{
+				message:    prefix + unknownMessage + " 请只更换对应品类,优先选择这些字段非 null 的真实候选,然后重新校验;下一轮仍须只输出 BuildDraft JSON。",
+				reportJSON: string(reportJSON),
+				selection:  selKey,
+			}
+		}
 		return verdict{
 			message:    deliveryMessage(draft, res),
 			reportJSON: string(reportJSON),
@@ -215,6 +228,24 @@ func decide(ctx context.Context, eval tools.BuildEvaluator, draftText, lastSelec
 			selection:  selKey,
 		}
 	}
+}
+
+// retryableUnknownMessage 只摘要规则引擎明确标记为 unknown 的字段。
+// 数据缺失可能通过换用同品类的字段完整候选消除,因此在还有轮次时先给生成 Agent
+// 一次定向修正机会;最后一轮仍由调用方如实交付 review。
+func retryableUnknownMessage(report schemas.ValidationReport) string {
+	var issues []string
+	for _, check := range report.Checks {
+		if check.Outcome != schemas.OutcomeUnknown {
+			continue
+		}
+		fields := strings.Join(check.MissingFields, ",")
+		if fields == "" {
+			fields = "未列明缺失字段"
+		}
+		issues = append(issues, fmt.Sprintf("%s 缺少 %s", check.RuleID, fields))
+	}
+	return strings.Join(issues, ";")
 }
 
 // budgetWindowMessage 是兼容性规则之外的产品交付门禁。ValidationReport 仍只承载

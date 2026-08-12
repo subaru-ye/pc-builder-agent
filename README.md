@@ -51,6 +51,7 @@
 | [PRD](docs/product/PRD.md) | 产品定义、用户与场景、功能需求、路线图、成功指标(长期方向权威) |
 | [MVP 实现指导](docs/product/mvp.md) | 已封板 MVP 范围、P0–P6 阶段拆分与验收历史 |
 | [阶段 1 实现指导](docs/product/stage1.md) | P7–P10 Web 产品化范围、顺序、退出标准与阶段 2/3 交接(当前短期执行权威) |
+| [阶段 1 待封口 Backlog](docs/product/stage1-backlog.md) | 优化后 Pass³、成本目标、真人盲评与最终封板的剩余工作 |
 | [设计方案](docs/装机Agent设计方案.md) | 架构、A2A 消息 schema、兼容性规则表、数据表结构(技术设计权威) |
 | [P2 流水线设计](docs/tech/P2-流水线设计.md) | P2 三 Agent 流水线实现层:编排拓扑、提示词 SOP、tool 契约、Loop 控制 |
 | [P7 产品 API 设计](docs/tech/P7-产品API与会话状态机设计.md) | 产品会话状态机、匿名身份、后台 run、SSE 与配置读模型 |

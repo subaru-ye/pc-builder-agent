@@ -26,6 +26,7 @@ go build ./... && go vet ./...
 | docs/product/PRD.md | 产品长期方向 |
 | docs/product/mvp.md | 已封板 MVP 范围与 P0–P6 验收历史 |
 | docs/product/stage1.md | P7–P10 Web 产品化范围、顺序与退出标准(当前短期执行唯一依据) |
+| docs/product/stage1-backlog.md | 阶段 1 未封口项、外部阻塞、恢复条件与最终封板步骤 |
 | docs/装机Agent设计方案.md | 架构 / A2A schema / 规则表 / 表结构 |
 | docs/tech/P2-流水线设计.md | P2 实现层:编排拓扑 / 提示词 SOP / tool 契约 / Loop 控制(schema 口径仍以设计方案 §四 为准) |
 | docs/tech/P3-语义选件设计.md | P3 实现层:embedding 素材与文本 / 语义检索路径 / search_parts_semantic 契约 |

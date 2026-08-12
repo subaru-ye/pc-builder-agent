@@ -41,7 +41,7 @@ func New(cfg Config) (agent.Agent, error) {
 		return nil, fmt.Errorf("pipeline: QueryEmbedder 不能为空")
 	}
 
-	screening, err := newScreeningAgent(cfg.ScreeningModel)
+	screening, err := newScreeningAgent(cfg.ScreeningModel, llmagent.IncludeContentsDefault)
 	if err != nil {
 		return nil, err
 	}
@@ -65,12 +65,13 @@ func New(cfg Config) (agent.Agent, error) {
 
 // newScreeningAgent 初筛 Agent(低价档):自然语言 → RequirementSpec/ChangeRequest JSON。
 // 单进程 New 与 P5 host 的 NewScreening 共用,型号常量由调用方(host)注入。
-func newScreeningAgent(m model.LLM) (agent.Agent, error) {
+func newScreeningAgent(m model.LLM, includeContents llmagent.IncludeContents) (agent.Agent, error) {
 	screening, err := llmagent.New(llmagent.Config{
 		Name:                     "requirement_agent",
 		Model:                    m,
 		Description:              "初筛 Agent:把用户自然语言装机需求整理成 RequirementSpec JSON,信息不足时追问。",
 		Instruction:              screeningInstruction,
+		IncludeContents:          includeContents,
 		OutputKey:                stateKeyRequirementSpec,
 		DisallowTransferToParent: true,
 		DisallowTransferToPeers:  true,
@@ -94,19 +95,14 @@ func newBuildCore(cfg Config) (prep, loop agent.Agent, err error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("pipeline: 构造 search_parts_semantic 失败: %w", err)
 	}
-	validateTool, err := tools.NewValidateBuild(node)
-	if err != nil {
-		return nil, nil, fmt.Errorf("pipeline: 构造 validate_build 失败: %w", err)
-	}
-
-	// 生成 Agent 挂 validate_build 供输出前自查,但最终判定仍由 validator_agent
-	// 确定性节点做(工程实践指引 §四.1:真值不采信模型自报)。
+	// 最终判定只由 Loop 内的 validator_agent 执行，避免生成 Agent 再调用一次
+	// 同一套规则所造成的额外模型往返；确定性校验仍最多驱动三轮修复。
 	builder, err := llmagent.New(llmagent.Config{
 		Name:                     "builder_agent",
 		Model:                    cfg.BuilderModel,
 		Description:              "生成 Agent:按 RequirementSpec 用 search_parts 从零件库选件,产出 BuildDraft JSON。",
 		Instruction:              builderInstruction,
-		Tools:                    []tool.Tool{searchTool, semanticTool, validateTool},
+		Tools:                    []tool.Tool{searchTool, semanticTool},
 		OutputKey:                stateKeyBuildDraft,
 		DisallowTransferToParent: true,
 		DisallowTransferToPeers:  true,

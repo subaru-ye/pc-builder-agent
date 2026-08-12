@@ -17,6 +17,7 @@ import (
 
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
+	"github.com/subaru-ye/pc-builder-agent/internal/upstream"
 )
 
 const RunTimeout = 10 * time.Minute
@@ -32,6 +33,7 @@ type ProductStore interface {
 	WebSessionsByOwner(context.Context, string) ([]store.WebSession, error)
 	WebSessionByOwner(context.Context, string, string) (store.WebSession, error)
 	WebMessages(context.Context, string) ([]store.WebMessage, error)
+	ScreeningMessages(context.Context, string, store.RunKind) ([]store.WebMessage, error)
 	ActiveRun(context.Context, string) (*store.AgentRun, error)
 	RunByOwner(context.Context, string, string) (store.AgentRun, error)
 	MessageRunByRequest(context.Context, string, string, string, string) (store.AgentRun, bool, error)
@@ -190,7 +192,12 @@ func (s *Service) execute(ctx context.Context, r store.AgentRun, ownerID, text s
 
 func (s *Service) executeScreening(ctx context.Context, r store.AgentRun, ownerID, text string) {
 	s.progress(ctx, r.ID, "screening", "正在整理需求", 1)
-	result, err := s.agent.Screen(ctx, ownerID, r.SessionID, text)
+	input, err := s.screenInput(ctx, r, text)
+	if err != nil {
+		s.failInternal(ctx, r, store.PhaseCollecting, "")
+		return
+	}
+	result, err := s.agent.Screen(ctx, ownerID, r.SessionID, input)
 	if err != nil {
 		s.failFromError(ctx, r, err, store.PhaseCollecting, "")
 		return
@@ -234,19 +241,13 @@ func (s *Service) succeedRequirement(ctx context.Context, r store.AgentRun, requ
 func (s *Service) executeChange(ctx context.Context, r store.AgentRun, ownerID, text string) {
 	s.progress(ctx, r.ID, "screening", "正在理解改单要求", 1)
 	if delta, ok := parseDeterministicBudgetDelta(text); ok {
-		version, found, err := s.store.LatestBuildVersion(ctx, r.SessionID)
-		if err != nil || !found {
-			s.failInternal(ctx, r, store.PhaseReady, "")
-			return
-		}
-		payload, err := json.Marshal(struct {
+		payload, err := s.deterministicChangePayload(ctx, r.SessionID, struct {
 			SchemaVersion  int                  `json:"schema_version"`
 			BaseBuildRef   string               `json:"base_build_ref"`
 			Intent         schemas.ChangeIntent `json:"intent"`
 			BudgetDeltaCNY int                  `json:"budget_delta_cny"`
 		}{
 			SchemaVersion:  schemas.ChangeRequestSchemaVersion,
-			BaseBuildRef:   fmt.Sprintf("v%d", version),
 			Intent:         schemas.IntentAdjustBudget,
 			BudgetDeltaCNY: delta,
 		})
@@ -257,7 +258,40 @@ func (s *Service) executeChange(ctx context.Context, r store.AgentRun, ownerID, 
 		s.executeRemote(ctx, r, ownerID, payload)
 		return
 	}
-	result, err := s.agent.Screen(ctx, ownerID, r.SessionID, text)
+	if target, ok := parseDeterministicGPUBrandSwap(text); ok {
+		locked := make([]schemas.Category, 0, len(schemas.AllCategories)-1)
+		for _, category := range schemas.AllCategories {
+			if category != schemas.CategoryGPU {
+				locked = append(locked, category)
+			}
+		}
+		payload, err := s.deterministicChangePayload(ctx, r.SessionID, struct {
+			SchemaVersion    int                  `json:"schema_version"`
+			BaseBuildRef     string               `json:"base_build_ref"`
+			Intent           schemas.ChangeIntent `json:"intent"`
+			Swap             map[string]string    `json:"swap"`
+			LockedCategories []schemas.Category   `json:"locked_categories"`
+		}{
+			SchemaVersion: schemas.ChangeRequestSchemaVersion,
+			Intent:        schemas.IntentSwapPart,
+			Swap: map[string]string{
+				"category": "gpu", "target_hint": target,
+			},
+			LockedCategories: locked,
+		})
+		if err != nil {
+			s.failInternal(ctx, r, store.PhaseReady, "")
+			return
+		}
+		s.executeRemote(ctx, r, ownerID, payload)
+		return
+	}
+	input, err := s.screenInput(ctx, r, text)
+	if err != nil {
+		s.failInternal(ctx, r, store.PhaseReady, "")
+		return
+	}
+	result, err := s.agent.Screen(ctx, ownerID, r.SessionID, input)
 	if err != nil {
 		s.failFromError(ctx, r, err, store.PhaseReady, "")
 		return
@@ -279,7 +313,71 @@ func (s *Service) executeChange(ctx context.Context, r store.AgentRun, ownerID, 
 	}
 }
 
+func (s *Service) deterministicChangePayload(ctx context.Context, sessionID string, value any) (json.RawMessage, error) {
+	version, found, err := s.store.LatestBuildVersion(ctx, sessionID)
+	if err != nil || !found {
+		if err == nil {
+			err = fmt.Errorf("当前会话没有可改单版本")
+		}
+		return nil, err
+	}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err != nil {
+		return nil, err
+	}
+	base, err := json.Marshal(fmt.Sprintf("v%d", version))
+	if err != nil {
+		return nil, err
+	}
+	object["base_build_ref"] = base
+	return json.Marshal(object)
+}
+
+const (
+	maxScreenMessages = 6
+	maxScreenRunes    = 4000
+)
+
+// screenInput 从稳定产品消息生成有界上下文。Store 会排除 RunBuild，以及产生
+// build 或失败的 change assistant 交付；ADK 工具和 A2A event 从未进入 web_messages。
+func (s *Service) screenInput(ctx context.Context, r store.AgentRun, current string) (ScreenInput, error) {
+	messages, err := s.store.ScreeningMessages(ctx, r.SessionID, r.Kind)
+	if err != nil {
+		return ScreenInput{}, err
+	}
+	prior := make([]store.WebMessage, 0, len(messages))
+	for _, message := range messages {
+		if message.RunID != nil && *message.RunID == r.ID && message.Role == "user" {
+			continue
+		}
+		prior = append(prior, message)
+	}
+	if len(prior) > maxScreenMessages-1 {
+		prior = prior[len(prior)-(maxScreenMessages-1):]
+	}
+	var lines []string
+	for _, message := range prior {
+		role := "用户"
+		if message.Role == "assistant" {
+			role = "助手"
+		}
+		lines = append(lines, role+"："+message.Content)
+	}
+	lines = append(lines, "用户："+current)
+	contextText := strings.Join(lines, "\n")
+	runes := []rune(contextText)
+	if len(runes) > maxScreenRunes {
+		contextText = string(runes[len(runes)-maxScreenRunes:])
+	}
+	return ScreenInput{Text: current, Context: contextText}, nil
+}
+
 var deterministicBudgetDeltaRE = regexp.MustCompile(`^(?:(?:把)?预算)?(?:再)?(降低|减少|下调|降|减|增加|提高|上调|加)([1-9][0-9]{0,5})(?:元)?$`)
+var deterministicGPUBrandRE = regexp.MustCompile(`^(?:把)?(?:显卡)?(?:换成|换为|改成|改为)(?:一张|一个)?(A卡|AMD(?:显卡)?|N卡|NVIDIA(?:显卡)?)$`)
 
 // parseDeterministicBudgetDelta 只接管无歧义的整数金额升降表达,其余语句仍交给 screening Agent。
 func parseDeterministicBudgetDelta(text string) (int, bool) {
@@ -298,6 +396,25 @@ func parseDeterministicBudgetDelta(text string) (int, bool) {
 	default:
 		return amount, true
 	}
+}
+
+// parseDeterministicGPUBrandSwap 只接管肯定、完整且无歧义的品牌改单。
+// 否定、比较、多个条件或具体型号仍交给 screening 模型理解。
+func parseDeterministicGPUBrandSwap(text string) (string, bool) {
+	normalized := strings.ToUpper(strings.Join(strings.Fields(text), ""))
+	for _, negation := range []string{"不要", "不是", "并非", "取消", "别", "不"} {
+		if strings.Contains(normalized, negation) {
+			return "", false
+		}
+	}
+	match := deterministicGPUBrandRE.FindStringSubmatch(normalized)
+	if len(match) != 2 {
+		return "", false
+	}
+	if strings.HasPrefix(match[1], "A") {
+		return "AMD 显卡", true
+	}
+	return "NVIDIA 显卡", true
 }
 
 func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID string, payload json.RawMessage) {
@@ -368,6 +485,27 @@ func (s *Service) failFromError(ctx context.Context, r store.AgentRun, err error
 		s.fail(ctx, r, NewProblem("run_timeout", "运行超时", 504,
 			"运行超过 10 分钟，已停止本次处理，可使用新请求重试。", r.ID), recovery, assistant)
 		return
+	}
+	var upstreamErr *upstream.Error
+	if errors.As(err, &upstreamErr) && (r.Kind == store.RunScreening || r.Kind == store.RunChange) {
+		switch upstreamErr.Kind {
+		case upstream.KindQuota:
+			s.fail(ctx, r, NewProblem("model_quota_exhausted", "模型额度已用尽", 503,
+				"初筛模型额度不足；系统不会自动切换到其他模型或付费供应商。", r.ID), recovery, assistant)
+			return
+		case upstream.KindAuthentication:
+			s.fail(ctx, r, NewProblem("model_authentication_failed", "模型鉴权失败", 503,
+				"初筛模型凭据无效或无权访问当前模型，请检查供应商配置。", r.ID), recovery, assistant)
+			return
+		case upstream.KindRateLimit:
+			s.fail(ctx, r, NewProblem("model_rate_limited", "模型请求受限", 503,
+				"初筛模型触发限流，请稍后使用新请求重试。", r.ID), recovery, assistant)
+			return
+		case upstream.KindTimeout:
+			s.fail(ctx, r, NewProblem("model_timeout", "模型响应超时", 504,
+				"初筛模型未在限定时间内响应，请稍后使用新请求重试。", r.ID), recovery, assistant)
+			return
+		}
 	}
 	s.fail(ctx, r, NewProblem("upstream_unavailable", "Agent 服务不可用", 503,
 		"上游 Agent 暂时不可用，请稍后使用新请求重试。", r.ID), recovery, assistant)

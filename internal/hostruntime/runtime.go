@@ -18,48 +18,34 @@ import (
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/agent/remoteagent/v2"
 	"google.golang.org/adk/v2/agent/workflowagents/sequentialagent"
-	"google.golang.org/adk/v2/model/openaimodel"
 	"google.golang.org/adk/v2/session"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
-	"github.com/subaru-ye/pc-builder-agent/internal/evalmetrics"
+	"github.com/subaru-ye/pc-builder-agent/internal/modelprovider"
 )
 
 const (
 	// AppName 固定为既有 host 根 Agent 名；产品 API 使用同名 ADK session 命名空间。
 	AppName = "pc_builder_host"
 
-	DefaultScreeningModel  = "qwen3.7-plus"
-	DefaultBaseURL         = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+	DefaultScreeningModel  = modelprovider.DefaultScreeningModel
 	DefaultBuildsvcURL     = "http://localhost:8081"
 	BuildsvcRequestTimeout = 10 * time.Minute
 )
 
 // Config 是 host/API 共享的运行时连接配置。
 type Config struct {
-	APIKey         string
-	BaseURL        string
-	ScreeningModel string
-	BuildsvcURL    string
+	Screening   modelprovider.Config
+	BuildsvcURL string
 }
 
-// ConfigFromEnv 读取百炼与 buildsvc 配置并补齐公共默认值。
+// ConfigFromEnv 读取初筛供应商与 buildsvc 配置并补齐公共默认值。
 func ConfigFromEnv() (Config, error) {
-	cfg := Config{
-		APIKey:         os.Getenv("DASHSCOPE_API_KEY"),
-		BaseURL:        os.Getenv("DASHSCOPE_BASE_URL"),
-		ScreeningModel: os.Getenv("SCREENING_MODEL"),
-		BuildsvcURL:    os.Getenv("BUILDSVC_URL"),
+	screening, err := modelprovider.Load(modelprovider.RoleScreening)
+	if err != nil {
+		return Config{}, err
 	}
-	if cfg.APIKey == "" {
-		return Config{}, fmt.Errorf("DASHSCOPE_API_KEY 未设置:复制 .env.example 为 .env 并填入百炼 key")
-	}
-	if cfg.BaseURL == "" {
-		cfg.BaseURL = DefaultBaseURL
-	}
-	if cfg.ScreeningModel == "" {
-		cfg.ScreeningModel = DefaultScreeningModel
-	}
+	cfg := Config{Screening: screening, BuildsvcURL: os.Getenv("BUILDSVC_URL")}
 	if cfg.BuildsvcURL == "" {
 		cfg.BuildsvcURL = DefaultBuildsvcURL
 	}
@@ -68,36 +54,30 @@ func ConfigFromEnv() (Config, error) {
 
 // Runtime 同时提供 dev UI 的完整根 Agent，以及产品 API 分阶段调用的两个 Agent。
 type Runtime struct {
-	Root      agent.Agent
-	Screening agent.Agent
-	Remote    agent.Agent
+	Root             agent.Agent
+	Screening        agent.Agent
+	ProductScreening agent.Agent
+	Remote           agent.Agent
 }
 
 // New 装配共享 Agent runtime。调用方负责提供 session.Service 给 launcher/runner。
 func New(ctx context.Context, cfg Config) (*Runtime, error) {
-	if cfg.APIKey == "" {
-		return nil, fmt.Errorf("host runtime: APIKey 不能为空")
-	}
-	if cfg.BaseURL == "" {
-		cfg.BaseURL = DefaultBaseURL
-	}
-	if cfg.ScreeningModel == "" {
-		cfg.ScreeningModel = DefaultScreeningModel
-	}
 	if cfg.BuildsvcURL == "" {
 		cfg.BuildsvcURL = DefaultBuildsvcURL
 	}
 
-	clientCfg := &openaimodel.ClientConfig{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL}
-	screeningModel, err := openaimodel.NewModel(ctx, cfg.ScreeningModel, clientCfg)
+	screeningModel, err := modelprovider.NewChat(ctx, cfg.Screening, "api")
 	if err != nil {
 		return nil, fmt.Errorf("创建初筛模型失败: %w", err)
 	}
-	screeningModel = evalmetrics.WrapModel("api", screeningModel)
 
 	screening, err := pipeline.NewScreening(screeningModel)
 	if err != nil {
 		return nil, fmt.Errorf("装配初筛 Agent 失败: %w", err)
+	}
+	productScreening, err := pipeline.NewProductScreening(screeningModel)
+	if err != nil {
+		return nil, fmt.Errorf("装配产品初筛 Agent 失败: %w", err)
 	}
 
 	remote, err := remoteagent.NewA2A(remoteagent.A2AConfig{
@@ -124,7 +104,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		return nil, fmt.Errorf("装配 host 流水线失败: %w", err)
 	}
 
-	return &Runtime{Root: root, Screening: screening, Remote: remote}, nil
+	return &Runtime{Root: root, Screening: screening, ProductScreening: productScreening, Remote: remote}, nil
 }
 
 // trimToPayload 发送前把 A2A 消息裁成唯一一条结构化载荷 JSON：

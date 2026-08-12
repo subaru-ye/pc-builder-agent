@@ -47,6 +47,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Printf("[api] 模型配置 provider=%s role=%s model=%s reasoning=%s retries=%d cache=%v",
+		runtimeCfg.Screening.Provider, runtimeCfg.Screening.Role, runtimeCfg.Screening.Model,
+		runtimeCfg.Screening.ReasoningEffort, runtimeCfg.Screening.MaxRetries, runtimeCfg.Screening.SessionCache)
 	runtime, err := hostruntime.New(rootCtx, runtimeCfg)
 	if err != nil {
 		log.Fatal(err)

@@ -3,7 +3,7 @@
 // parts.embedding / embedding_text。幂等全量重算;任一 SKU 失败整批报错,
 // 单事务写库不留半批状态。
 //
-// 运行方式(从仓库根,PG_DSN/DASHSCOPE_API_KEY 来自 .env 或环境变量):
+// 运行方式(从仓库根,PG_DSN/模型供应商配置来自 .env 或环境变量):
 //
 //	go run ./cmd/embedparts                         # 全量生成回填
 //	go run ./cmd/embedparts -query "要安静的显卡"    # 检索模式:top-N 人工核对(DoD)
@@ -24,12 +24,10 @@ import (
 
 	"github.com/subaru-ye/pc-builder-agent/internal/dotenv"
 	"github.com/subaru-ye/pc-builder-agent/internal/embedding"
+	"github.com/subaru-ye/pc-builder-agent/internal/modelprovider"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
-
-// defaultBaseURL 百炼 OpenAI 兼容端点默认地址(与 cmd/host 同口径)。
-const defaultBaseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 func main() {
 	stylesPath := flag.String("styles", filepath.Join("scripts", "data", "styles", "styles.json"), "风格标注文件路径")
@@ -43,19 +41,16 @@ func main() {
 	if dsn == "" {
 		log.Fatal("PG_DSN 未设置:复制 .env.example 为 .env,或显式导出 PG_DSN")
 	}
-	apiKey := os.Getenv("DASHSCOPE_API_KEY")
-	if apiKey == "" {
-		log.Fatal("DASHSCOPE_API_KEY 未设置")
+	embeddingCfg, err := modelprovider.Load(modelprovider.RoleEmbedding)
+	if err != nil {
+		log.Fatal(err)
 	}
-	baseURL := os.Getenv("DASHSCOPE_BASE_URL")
-	if baseURL == "" {
-		baseURL = defaultBaseURL
+	client, err := modelprovider.NewEmbedding(embeddingCfg)
+	if err != nil {
+		log.Fatal(err)
 	}
-	embeddingModelName := os.Getenv("EMBEDDING_MODEL")
-	if embeddingModelName == "" {
-		embeddingModelName = embedding.DefaultModel
-	}
-	client := embedding.NewClient(baseURL, apiKey, embeddingModelName, store.EmbeddingDims)
+	log.Printf("[embedparts] 模型配置 provider=%s role=%s model=%s retries=%d",
+		embeddingCfg.Provider, embeddingCfg.Role, embeddingCfg.Model, embeddingCfg.MaxRetries)
 
 	ctx := context.Background()
 	if *query != "" {

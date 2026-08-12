@@ -19,22 +19,14 @@ import (
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
 	adka2a "google.golang.org/adk/v2/server/adka2a/v2"
 
-	"google.golang.org/adk/v2/model/openaimodel"
 	"google.golang.org/adk/v2/runner"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
 	"github.com/subaru-ye/pc-builder-agent/internal/dotenv"
-	"github.com/subaru-ye/pc-builder-agent/internal/embedding"
-	"github.com/subaru-ye/pc-builder-agent/internal/evalmetrics"
+	"github.com/subaru-ye/pc-builder-agent/internal/modelprovider"
 	"github.com/subaru-ye/pc-builder-agent/internal/redisstore"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
-
-// 默认模型使用控制台当前有独立免费额度的精确 Code；环境变量可显式覆盖。
-const defaultBuilderModel = "qwen3.7-max-2026-05-20"
-
-// 百炼 OpenAI 兼容端点(公共默认);工作空间专属 Host 用 DASHSCOPE_BASE_URL 覆盖。
-const defaultBaseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 // A2A invoke 路径与默认监听地址(agent card 与 host 的 BUILDSVC_URL 对齐)。
 const (
@@ -47,16 +39,14 @@ func main() {
 
 	dotenv.Load(".env")
 
-	apiKey := os.Getenv("DASHSCOPE_API_KEY")
-	if apiKey == "" {
-		log.Fatal("DASHSCOPE_API_KEY 未设置:复制 .env.example 为 .env 并填入百炼 key")
+	builderCfg, err := modelprovider.Load(modelprovider.RoleBuilder)
+	if err != nil {
+		log.Fatal(err)
 	}
-	baseURL := os.Getenv("DASHSCOPE_BASE_URL")
-	if baseURL == "" {
-		baseURL = defaultBaseURL
+	embeddingCfg, err := modelprovider.Load(modelprovider.RoleEmbedding)
+	if err != nil {
+		log.Fatal(err)
 	}
-	builderModelName := envOrDefault("BUILDER_MODEL", defaultBuilderModel)
-	embeddingModelName := envOrDefault("EMBEDDING_MODEL", embedding.DefaultModel)
 	dsn := os.Getenv("PG_DSN")
 	if dsn == "" {
 		log.Fatal("PG_DSN 未设置:生成服务需要零件库(docker-compose up -d 后见 .env.example)")
@@ -72,22 +62,22 @@ func main() {
 	}
 	defer st.Close()
 
-	clientCfg := &openaimodel.ClientConfig{APIKey: apiKey, BaseURL: baseURL}
-	builderModel, err := openaimodel.NewModel(ctx, builderModelName, clientCfg)
+	builderModel, err := modelprovider.NewChat(ctx, builderCfg, "buildsvc")
 	if err != nil {
 		log.Fatalf("创建生成模型失败: %v", err)
 	}
-	builderModel = evalmetrics.WrapModel("buildsvc", builderModel)
 
 	// P6:会话热上下文 + embedding 缓存统一过 Redis(无 REDIS_ADDR 时降级,见 redisstore.Open)。
 	backend := redisstore.Open(ctx)
 	defer func() { _ = backend.Close() }()
 
 	// P3 语义检索的查询向量化客户端(与 cmd/embedparts 同模型/同维度),外包一层 Redis 缓存。
-	embedder := backend.WrapEmbedder(
-		embedding.NewClient(baseURL, apiKey, embeddingModelName, store.EmbeddingDims),
-		embeddingModelName,
-	)
+	embeddingClient, err := modelprovider.NewEmbedding(embeddingCfg)
+	if err != nil {
+		log.Fatalf("创建 embedding 客户端失败: %v", err)
+	}
+	embedder := backend.WrapEmbedder(embeddingClient, embeddingCfg.CacheIdentity(),
+		string(embeddingCfg.Provider), embeddingCfg.Model)
 
 	root, err := pipeline.NewRemote(pipeline.Config{
 		BuilderModel:  builderModel,
@@ -132,18 +122,12 @@ func main() {
 	mux.Handle(a2asrv.WellKnownAgentCardPath, a2asrv.NewStaticAgentCardHandler(agentCard))
 	mux.Handle(invokePath, a2asrv.NewJSONRPCHandler(a2asrv.NewHandler(executor)))
 
-	log.Printf("[buildsvc] A2A 服务启动:监听 %s,card=%s,invoke=%s",
-		addr, cardURL.JoinPath(a2asrv.WellKnownAgentCardPath).String(), cardURL.JoinPath(invokePath).String())
+	log.Printf("[buildsvc] A2A 服务启动:监听 %s,card=%s,invoke=%s,builder=%s/%s,embedding=%s/%s",
+		addr, cardURL.JoinPath(a2asrv.WellKnownAgentCardPath).String(), cardURL.JoinPath(invokePath).String(),
+		builderCfg.Provider, builderCfg.Model, embeddingCfg.Provider, embeddingCfg.Model)
 	if err := http.ListenAndServe(addr, logMiddleware(mux)); err != nil {
 		log.Fatalf("[buildsvc] A2A 服务退出: %v", err)
 	}
-}
-
-func envOrDefault(name, fallback string) string {
-	if value := strings.TrimSpace(os.Getenv(name)); value != "" {
-		return value
-	}
-	return fallback
 }
 
 // publicBaseURL 由监听地址推出对外基址(":8081" → http://localhost:8081)。

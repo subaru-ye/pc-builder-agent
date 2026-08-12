@@ -1,16 +1,20 @@
-// Package embedding 百炼 OpenAI 兼容端点 /embeddings 的最小客户端。
-// 供 cmd/embedparts(全量生成)与 cmd/host(查询向量化)共用;
-// 模型型号只写代码常量,不进文档(技术选型 ADR-004)。
+// Package embedding 实现 OpenAI 兼容 /embeddings 的最小客户端。
+// 供 cmd/embedparts(全量生成)与 buildsvc(查询向量化)共用；供应商、模型和端点
+// 由 internal/modelprovider 统一解析。
 package embedding
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/subaru-ye/pc-builder-agent/internal/evalmetrics"
+	"github.com/subaru-ye/pc-builder-agent/internal/upstream"
 )
 
 // DefaultModel 端点 embedding 模型(2026-07-30 实测输出 1024 维)。
@@ -21,21 +25,47 @@ const batchSize = 10
 
 // Client OpenAI 兼容 /embeddings 客户端。
 type Client struct {
-	baseURL string
-	apiKey  string
-	model   string
-	dims    int // 期望维度,响应不符即报错(不静默截断/填充)
-	hc      *http.Client
+	baseURL  string
+	apiKey   string
+	model    string
+	dims     int // 期望维度,响应不符即报错(不静默截断/填充)
+	hc       *http.Client
+	provider string
+	role     string
+}
+
+// Options 是供应商层传入的 embedding 连接参数。
+type Options struct {
+	BaseURL    string
+	APIKey     string
+	Model      string
+	Dimensions int
+	Timeout    time.Duration
+	Provider   string
+	Role       string
 }
 
 // NewClient 构造客户端;dims 为期望向量维度(与 store.EmbeddingDims 对齐)。
 func NewClient(baseURL, apiKey, model string, dims int) *Client {
+	return NewClientWithOptions(Options{
+		BaseURL: baseURL, APIKey: apiKey, Model: model, Dimensions: dims,
+		Timeout: 60 * time.Second, Provider: "bailian", Role: "embedding",
+	})
+}
+
+// NewClientWithOptions 构造带供应商身份和可配置超时的客户端。
+func NewClientWithOptions(opts Options) *Client {
+	if opts.Timeout <= 0 {
+		opts.Timeout = 60 * time.Second
+	}
 	return &Client{
-		baseURL: baseURL,
-		apiKey:  apiKey,
-		model:   model,
-		dims:    dims,
-		hc:      &http.Client{Timeout: 60 * time.Second},
+		baseURL:  opts.BaseURL,
+		apiKey:   opts.APIKey,
+		model:    opts.Model,
+		dims:     opts.Dimensions,
+		hc:       &http.Client{Timeout: opts.Timeout},
+		provider: opts.Provider,
+		role:     opts.Role,
 	}
 }
 
@@ -75,9 +105,34 @@ type embedResponse struct {
 		Index     int       `json:"index"`
 		Embedding []float32 `json:"embedding"`
 	} `json:"data"`
+	Usage struct {
+		PromptTokens int `json:"prompt_tokens"`
+		TotalTokens  int `json:"total_tokens"`
+	} `json:"usage"`
 }
 
-func (c *Client) embedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+func (c *Client) embedBatch(ctx context.Context, texts []string) (out [][]float32, retErr error) {
+	started := time.Now()
+	var usagePrompt, usageTotal int
+	defer func() {
+		fields := map[string]any{
+			"provider": c.provider, "role": c.role, "model": c.model,
+			"duration_ms": time.Since(started).Milliseconds(), "input_count": len(texts),
+			"prompt_tokens": usagePrompt, "total_tokens": usageTotal, "status": "succeeded",
+		}
+		if retErr != nil {
+			fields["status"] = "failed"
+		}
+		var upstreamErr *upstream.Error
+		if errors.As(retErr, &upstreamErr) {
+			fields["status"] = "failed"
+			fields["error_class"] = upstreamErr.Kind
+			if upstreamErr.HTTPStatus > 0 {
+				fields["http_status"] = upstreamErr.HTTPStatus
+			}
+		}
+		evalmetrics.Record("buildsvc", "embedding.call", fields)
+	}()
 	body, err := json.Marshal(embedRequest{Model: c.model, Input: texts})
 	if err != nil {
 		return nil, fmt.Errorf("编码请求失败: %w", err)
@@ -91,7 +146,7 @@ func (c *Client) embedBatch(ctx context.Context, texts []string) ([][]float32, e
 
 	resp, err := c.hc.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("请求端点失败: %w", err)
+		return nil, upstream.New(c.provider, c.role, upstream.Classify(0, "", err), 0, "", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -100,39 +155,56 @@ func (c *Client) embedBatch(ctx context.Context, texts []string) ([][]float32, e
 		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("端点返回 %d: %s", resp.StatusCode, truncate(string(raw), 500))
+		code := embeddingErrorCode(raw)
+		cause := errors.New("embedding endpoint returned non-200")
+		return nil, upstream.New(c.provider, c.role,
+			upstream.Classify(resp.StatusCode, code, cause), resp.StatusCode, code, cause)
 	}
 
 	var er embedResponse
 	if err := json.Unmarshal(raw, &er); err != nil {
-		return nil, fmt.Errorf("解码响应失败: %w", err)
+		return nil, upstream.New(c.provider, c.role, upstream.KindProtocol, resp.StatusCode, "malformed_response", err)
 	}
+	usagePrompt, usageTotal = er.Usage.PromptTokens, er.Usage.TotalTokens
 	if len(er.Data) != len(texts) {
-		return nil, fmt.Errorf("返回 %d 条向量,期望 %d", len(er.Data), len(texts))
+		return nil, upstream.New(c.provider, c.role, upstream.KindProtocol, resp.StatusCode,
+			"embedding_count_mismatch", errors.New("embedding count mismatch"))
 	}
 
 	// 按 index 归位(响应顺序不做假设),并校验维度。
-	out := make([][]float32, len(texts))
+	out = make([][]float32, len(texts))
 	for _, d := range er.Data {
 		if d.Index < 0 || d.Index >= len(texts) {
-			return nil, fmt.Errorf("响应 index %d 越界(批大小 %d)", d.Index, len(texts))
+			return nil, upstream.New(c.provider, c.role, upstream.KindProtocol, resp.StatusCode,
+				"embedding_index_invalid", errors.New("embedding index invalid"))
 		}
 		if len(d.Embedding) != c.dims {
-			return nil, fmt.Errorf("向量维度 %d,期望 %d(模型与库列不匹配须新迁移)", len(d.Embedding), c.dims)
+			return nil, upstream.New(c.provider, c.role, upstream.KindProtocol, resp.StatusCode,
+				"embedding_dimension_mismatch", errors.New("embedding dimension mismatch"))
 		}
 		out[d.Index] = d.Embedding
 	}
-	for i, v := range out {
+	for _, v := range out {
 		if v == nil {
-			return nil, fmt.Errorf("响应缺少 index %d 的向量", i)
+			return nil, upstream.New(c.provider, c.role, upstream.KindProtocol, resp.StatusCode,
+				"embedding_index_missing", errors.New("embedding index missing"))
 		}
 	}
 	return out, nil
 }
 
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
+func embeddingErrorCode(raw []byte) string {
+	var payload struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+		Code string `json:"code"`
 	}
-	return s[:n] + "…"
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return ""
+	}
+	if payload.Error.Code != "" {
+		return payload.Error.Code
+	}
+	return payload.Code
 }

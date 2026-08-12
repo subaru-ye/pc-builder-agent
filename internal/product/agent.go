@@ -38,8 +38,15 @@ type RemoteResult struct {
 	Text string
 }
 
+// ScreenInput 区分本轮原始文本与发给模型的有界上下文。品牌/预算纠偏只依据
+// 本轮原文，避免历史表达被误判为用户本轮的明确要求。
+type ScreenInput struct {
+	Text    string
+	Context string
+}
+
 type AgentGateway interface {
-	Screen(context.Context, string, string, string) (ScreenResult, error)
+	Screen(context.Context, string, string, ScreenInput) (ScreenResult, error)
 	Remote(context.Context, string, string, json.RawMessage) (RemoteResult, error)
 	ContextAvailable(context.Context, string, string) (bool, error)
 }
@@ -53,11 +60,11 @@ type ADKAgentGateway struct {
 }
 
 func NewADKAgentGateway(runtime *hostruntime.Runtime, sessions session.Service, redisBacked bool) (*ADKAgentGateway, error) {
-	if runtime == nil || runtime.Screening == nil || runtime.Remote == nil || sessions == nil {
+	if runtime == nil || runtime.ProductScreening == nil || runtime.Remote == nil || sessions == nil {
 		return nil, fmt.Errorf("product agent: runtime/session service 不能为空")
 	}
 	screeningRunner, err := runner.New(runner.Config{
-		AppName: hostruntime.AppName, Agent: runtime.Screening,
+		AppName: hostruntime.AppName, Agent: runtime.ProductScreening,
 		SessionService: sessions, AutoCreateSession: true,
 	})
 	if err != nil {
@@ -79,9 +86,9 @@ func NewADKAgentGateway(runtime *hostruntime.Runtime, sessions session.Service, 
 	}, nil
 }
 
-func (g *ADKAgentGateway) Screen(ctx context.Context, userID, sessionID, text string) (ScreenResult, error) {
+func (g *ADKAgentGateway) Screen(ctx context.Context, userID, sessionID string, input ScreenInput) (ScreenResult, error) {
 	lastText, err := collectAgentText(g.screeningRunner.Run(ctx, userID, sessionID,
-		genai.NewContentFromText(text, genai.RoleUser), agent.RunConfig{}), "")
+		genai.NewContentFromText(input.Context, genai.RoleUser), agent.RunConfig{}), "")
 	if err != nil {
 		return ScreenResult{}, err
 	}
@@ -89,7 +96,7 @@ func (g *ADKAgentGateway) Screen(ctx context.Context, userID, sessionID, text st
 	if payload == nil {
 		return ScreenResult{Kind: ScreenQuestion, Text: strings.TrimSpace(lastText)}, nil
 	}
-	if normalized, changed := normalizeUnstatedBudgetFlex(payload, text); changed {
+	if normalized, changed := normalizeUnstatedBudgetFlex(payload, input.Text); changed {
 		payload = normalized
 		log.Printf("[host] 初筛纠偏:移除用户未明确指定的预算弹性")
 	}

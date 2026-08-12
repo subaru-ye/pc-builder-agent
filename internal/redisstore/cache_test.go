@@ -19,7 +19,7 @@ func (f *fakeEmbedder) EmbedOne(_ context.Context, text string) ([]float32, erro
 // 不带 Redis(rdb=nil)时装饰器应直接透传底层,不缓存。
 func TestEmbedder_NilRedisPassthrough(t *testing.T) {
 	inner := &fakeEmbedder{}
-	e := NewEmbedder(inner, nil, "m", time.Hour)
+	e := NewEmbedder(inner, nil, "bailian:example:m:3", "bailian", "m", time.Hour)
 
 	ctx := context.Background()
 	if _, err := e.EmbedOne(ctx, "hello"); err != nil {
@@ -41,7 +41,7 @@ func TestEmbedder_RedisHitMiss(t *testing.T) {
 	}
 
 	inner := &fakeEmbedder{}
-	e := NewEmbedder(inner, rdb, "m", time.Hour)
+	e := NewEmbedder(inner, rdb, "bailian:example:m:3", "bailian", "m", time.Hour)
 	ctx := context.Background()
 
 	v1, err := e.EmbedOne(ctx, "黑神话")
@@ -70,5 +70,15 @@ func TestEmbedder_RedisHitMiss(t *testing.T) {
 	}
 	if inner.calls != 2 {
 		t.Errorf("不同文本应再落底层,inner.calls = %d, want 2", inner.calls)
+	}
+}
+
+func TestEmbedder_CacheIdentityIsolatesProviderEndpointModelAndDimensions(t *testing.T) {
+	inner := &fakeEmbedder{}
+	first := NewEmbedder(inner, nil, "bailian:dashscope.example:m:1024", "bailian", "m", time.Hour)
+	second := NewEmbedder(inner, nil, "openai_compatible:local.example:m:1024", "openai_compatible", "m", time.Hour)
+	third := NewEmbedder(inner, nil, "bailian:dashscope.example:m:1536", "bailian", "m", time.Hour)
+	if first.cacheKey("相同文本") == second.cacheKey("相同文本") || first.cacheKey("相同文本") == third.cacheKey("相同文本") {
+		t.Fatal("不同 provider/endpoint/dimension 不得复用 embedding 缓存键")
 	}
 }

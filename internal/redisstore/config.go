@@ -71,8 +71,8 @@ func (b *Backend) Ping(ctx context.Context) error {
 }
 
 // WrapEmbedder 给底层 embedder 套一层 Redis 缓存;无 Redis 时返回透传装饰器。
-func (b *Backend) WrapEmbedder(inner embedder, model string) *Embedder {
-	return NewEmbedder(inner, b.rdb, model, b.CacheTTL)
+func (b *Backend) WrapEmbedder(inner embedder, identity, provider, model string) *Embedder {
+	return NewEmbedder(inner, b.rdb, identity, provider, model, b.CacheTTL)
 }
 
 // Close 关闭底层连接(若有)。

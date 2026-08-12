@@ -17,8 +17,8 @@ func TestConfigFromEnvModelDefaultsAndOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConfigFromEnv: %v", err)
 	}
-	if cfg.ScreeningModel != DefaultScreeningModel {
-		t.Fatalf("ScreeningModel=%q, want %q", cfg.ScreeningModel, DefaultScreeningModel)
+	if cfg.Screening.Model != DefaultScreeningModel {
+		t.Fatalf("Screening.Model=%q, want %q", cfg.Screening.Model, DefaultScreeningModel)
 	}
 
 	t.Setenv("SCREENING_MODEL", "custom-screening")
@@ -26,8 +26,8 @@ func TestConfigFromEnvModelDefaultsAndOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConfigFromEnv override: %v", err)
 	}
-	if cfg.ScreeningModel != "custom-screening" {
-		t.Fatalf("ScreeningModel=%q, want custom-screening", cfg.ScreeningModel)
+	if cfg.Screening.Model != "custom-screening" {
+		t.Fatalf("Screening.Model=%q, want custom-screening", cfg.Screening.Model)
 	}
 }
 

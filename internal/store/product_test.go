@@ -85,6 +85,10 @@ func TestProductSessionRunLifecycle(t *testing.T) {
 	if err != nil || msg == nil || msg.Role != "assistant" {
 		t.Fatalf("完成 screening 失败:msg=%+v err=%v", msg, err)
 	}
+	screeningMessages, err := s.ScreeningMessages(ctx, sessionID, RunScreening)
+	if err != nil || len(screeningMessages) != 2 {
+		t.Fatalf("同类初筛消息=%v err=%v", screeningMessages, err)
+	}
 	ws, err = s.WebSessionByOwner(ctx, owner, sessionID)
 	if err != nil || ws.Phase != PhaseRequirementReady || len(ws.PendingRequirement) == 0 || ws.Title == "新会话" {
 		t.Fatalf("requirement_ready 会话不正确:%+v err=%v", ws, err)
@@ -104,9 +108,14 @@ func TestProductSessionRunLifecycle(t *testing.T) {
 	recovery := PhaseRequirementReady
 	if _, err := s.CompleteRun(ctx, CompleteRunParams{
 		RunID: run2, SessionID: sessionID, Status: RunFailed, Phase: PhaseError,
-		RecoveryPhase: &recovery, Error: problem,
+		RecoveryPhase: &recovery, Error: problem, AssistantMessageID: "00000000-0000-4000-8000-000000000010",
+		AssistantContent: "不应进入下一轮 screening 的 builder 输出",
 	}); err != nil {
 		t.Fatalf("失败完成:%v", err)
+	}
+	screeningMessages, err = s.ScreeningMessages(ctx, sessionID, RunScreening)
+	if err != nil || len(screeningMessages) != 2 {
+		t.Fatalf("build 输出污染同类初筛消息:%v err=%v", screeningMessages, err)
 	}
 	ws, _ = s.WebSessionByOwner(ctx, owner, sessionID)
 	if ws.Phase != PhaseError || ws.RecoveryPhase == nil || *ws.RecoveryPhase != PhaseRequirementReady {

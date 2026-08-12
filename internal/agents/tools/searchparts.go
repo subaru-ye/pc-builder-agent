@@ -55,7 +55,7 @@ const searchPartsDescription = `按硬约束从零件库(PostgreSQL)结构化检
 
 边界:
 - 只接受结构化条件,不接受自然语言;软偏好(安静/颜值)不在本工具能力内。
-- category 必填,取值:cpu|gpu|motherboard|memory|ssd|psu|case|cooler;top_n 必填且 > 0。
+- category 必填,取值:cpu|gpu|motherboard|memory|ssd|psu|case|cooler;top_n 通常为 5,必须在 1..8。
 - socket 仅适用 cpu/motherboard;form_factor 仅适用 motherboard/case;memory_generation 仅适用 memory/motherboard;违规组合会报错。
 - truncated > 0 表示还有匹配未返回,需要更多就放宽条件或加大 top_n,不要臆造 SKU。
 
@@ -63,7 +63,7 @@ const searchPartsDescription = `按硬约束从零件库(PostgreSQL)结构化检
 - 查 AM5 主板前 5:{"category":"motherboard","socket":"AM5","top_n":5}
 - 查 2000 元内显卡:{"category":"gpu","price_max_cny":2000,"top_n":8}
 
-协作:所有选件必须来自本工具返回的 sku;整机选完后调用 validate_build 校验兼容性。`
+协作:所有选件必须来自本工具返回的 sku;整机输出后由确定性 validator 校验兼容性。`
 
 // NewSearchParts 构造结构化选件检索 tool(SQL 硬过滤,零 LLM)。
 func NewSearchParts(s PartSearcher) (tool.Tool, error) {
@@ -77,6 +77,9 @@ func NewSearchParts(s PartSearcher) (tool.Tool, error) {
 
 // runSearchParts 入参映射 → store.Candidates → 出参映射;错误原样上抛(保真)。
 func runSearchParts(ctx context.Context, s PartSearcher, args SearchPartsArgs) (SearchPartsResult, error) {
+	if args.TopN < 1 || args.TopN > 8 {
+		return SearchPartsResult{}, fmt.Errorf("tools: top_n 必须在 1..8,常规使用 5")
+	}
 	res, err := s.Candidates(ctx, store.CandidateQuery{
 		Category:         schemas.Category(args.Category),
 		Brand:            args.Brand,

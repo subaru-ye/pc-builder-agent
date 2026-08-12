@@ -77,6 +77,18 @@ func TestRunSearchPartsErrorPropagates(t *testing.T) {
 	}
 }
 
+func TestRunSearchPartsRejectsTopNOutsideLimit(t *testing.T) {
+	for _, topN := range []int{0, 9} {
+		f := &fakeSearcher{}
+		if _, err := runSearchParts(context.Background(), f, SearchPartsArgs{Category: "cpu", TopN: topN}); err == nil {
+			t.Fatalf("top_n=%d 应显式报错", topN)
+		}
+		if f.gotQuery.TopN != 0 {
+			t.Fatalf("top_n=%d 不应调用 store", topN)
+		}
+	}
+}
+
 // fakeEvaluator 记录收到的 selection 并返回预置校验结果。
 type fakeEvaluator struct {
 	gotSel schemas.BuildSelection

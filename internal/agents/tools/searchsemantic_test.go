@@ -113,8 +113,22 @@ func TestRunSearchPartsSemanticEmbedderErrorPropagates(t *testing.T) {
 func TestRunSearchPartsSemanticStoreErrorPropagates(t *testing.T) {
 	_, err := runSearchPartsSemantic(context.Background(), &fakeEmbedder{vec: []float32{1}},
 		&fakeSemanticSearcher{err: store.ErrInvalidQuery},
-		SearchPartsSemanticArgs{Query: "白色海景房", TopN: 0})
+		SearchPartsSemanticArgs{Query: "白色海景房", TopN: 5})
 	if !errors.Is(err, store.ErrInvalidQuery) {
 		t.Errorf("store 错误应透传, 得到 %v", err)
+	}
+}
+
+func TestRunSearchPartsSemanticRejectsTopNOutsideLimit(t *testing.T) {
+	for _, topN := range []int{0, 9} {
+		embedder := &fakeEmbedder{vec: []float32{1}}
+		_, err := runSearchPartsSemantic(context.Background(), embedder, &fakeSemanticSearcher{},
+			SearchPartsSemanticArgs{Query: "白色海景房", TopN: topN})
+		if err == nil {
+			t.Fatalf("top_n=%d 应显式报错", topN)
+		}
+		if embedder.gotText != "" {
+			t.Fatalf("top_n=%d 不应调用 embedding", topN)
+		}
 	}
 }

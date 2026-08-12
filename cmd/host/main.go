@@ -32,6 +32,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Printf("[host] 模型配置 provider=%s role=%s model=%s reasoning=%s retries=%d cache=%v",
+		cfg.Screening.Provider, cfg.Screening.Role, cfg.Screening.Model,
+		cfg.Screening.ReasoningEffort, cfg.Screening.MaxRetries, cfg.Screening.SessionCache)
 
 	// P6:会话热上下文迁 Redis(带 TTL、两进程共享),让 kill host 重启后同一会话可续;
 	// 无 REDIS_ADDR 时降级回退进程内 InMemory(见 redisstore.Open)。

@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
+	"github.com/subaru-ye/pc-builder-agent/internal/upstream"
 )
 
 type fakeProductStore struct {
@@ -45,6 +49,17 @@ func (f *fakeProductStore) WebMessages(context.Context, string) ([]store.WebMess
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]store.WebMessage(nil), f.messages...), nil
+}
+func (f *fakeProductStore) ScreeningMessages(_ context.Context, _ string, kind store.RunKind) ([]store.WebMessage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]store.WebMessage, 0)
+	for _, message := range f.messages {
+		if message.RunID != nil && f.runs[*message.RunID].Kind == kind {
+			out = append(out, message)
+		}
+	}
+	return out, nil
 }
 func (f *fakeProductStore) ActiveRun(context.Context, string) (*store.AgentRun, error) {
 	return nil, nil
@@ -142,11 +157,14 @@ type fakeAgent struct {
 	contextAvailable bool
 	remotePayload    json.RawMessage
 	screenCalls      int
+	screenInput      ScreenInput
+	screenErr        error
 }
 
-func (f *fakeAgent) Screen(context.Context, string, string, string) (ScreenResult, error) {
+func (f *fakeAgent) Screen(_ context.Context, _, _ string, input ScreenInput) (ScreenResult, error) {
 	f.screenCalls++
-	return f.screen, nil
+	f.screenInput = input
+	return f.screen, f.screenErr
 }
 func (f *fakeAgent) Remote(_ context.Context, _, _ string, payload json.RawMessage) (RemoteResult, error) {
 	f.remotePayload = append(json.RawMessage(nil), payload...)
@@ -287,6 +305,44 @@ func TestServiceDeterministicBudgetChangeBypassesScreening(t *testing.T) {
 	}
 }
 
+func TestServiceDeterministicGPUBrandChangeBypassesScreening(t *testing.T) {
+	for _, tc := range []struct {
+		text, target string
+	}{
+		{text: "换成 A 卡", target: "AMD 显卡"},
+		{text: "把显卡改为 NVIDIA", target: "NVIDIA 显卡"},
+	} {
+		t.Run(tc.text, func(t *testing.T) {
+			st := newFakeProductStore()
+			st.session.Phase = store.PhaseReady
+			st.latest = 1
+			agent := &fakeAgent{store: st, contextAvailable: true}
+			sink := newFakeSink()
+			svc, err := NewService(context.Background(), st, agent, sink)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = svc.StartMessage(context.Background(), "owner-1", "session-1",
+				"00000000-0000-4000-8000-000000000016", tc.text)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sink.wait(t)
+			change, err := schemas.DecodeChangeRequest(agent.remotePayload)
+			if err != nil {
+				t.Fatalf("Remote payload 不是合法 ChangeRequest:%s err=%v", agent.remotePayload, err)
+			}
+			if agent.screenCalls != 0 || change.BaseBuildRef != "v1" || change.Swap == nil ||
+				change.Swap.Category != schemas.CategoryGPU || change.Swap.TargetHint != tc.target {
+				t.Fatalf("确定性显卡改单不正确:screen_calls=%d change=%+v", agent.screenCalls, change)
+			}
+			if got := change.HardLocked(); len(got) != len(schemas.AllCategories)-1 {
+				t.Fatalf("锁定品类=%v", got)
+			}
+		})
+	}
+}
+
 func TestParseDeterministicBudgetDelta(t *testing.T) {
 	tests := []struct {
 		text  string
@@ -305,6 +361,74 @@ func TestParseDeterministicBudgetDelta(t *testing.T) {
 		if got != tt.want || matched != tt.match {
 			t.Errorf("parseDeterministicBudgetDelta(%q)=(%d,%v),want (%d,%v)", tt.text, got, matched, tt.want, tt.match)
 		}
+	}
+}
+
+func TestParseDeterministicGPUBrandSwap(t *testing.T) {
+	for _, tc := range []struct {
+		text, want string
+		match      bool
+	}{
+		{text: "换成 A 卡", want: "AMD 显卡", match: true},
+		{text: "显卡换为AMD", want: "AMD 显卡", match: true},
+		{text: "把显卡改为 N 卡", want: "NVIDIA 显卡", match: true},
+		{text: "换成NVIDIA显卡", want: "NVIDIA 显卡", match: true},
+		{text: "不要换成 A 卡", match: false},
+		{text: "换成 A 卡还是 N 卡", match: false},
+		{text: "换成 RX 9070", match: false},
+	} {
+		got, matched := parseDeterministicGPUBrandSwap(tc.text)
+		if got != tc.want || matched != tc.match {
+			t.Errorf("parseDeterministicGPUBrandSwap(%q)=(%q,%v),want (%q,%v)",
+				tc.text, got, matched, tc.want, tc.match)
+		}
+	}
+}
+
+func TestScreenInputUsesOnlyRecentSameKindStableMessages(t *testing.T) {
+	st := newFakeProductStore()
+	for i := 0; i < 8; i++ {
+		runID := "screen-" + strconv.Itoa(i)
+		st.runs[runID] = store.AgentRun{ID: runID, Kind: store.RunScreening}
+		st.messages = append(st.messages, store.WebMessage{Role: "user", Content: "screening-" + strconv.Itoa(i), RunID: &runID})
+	}
+	buildRunID := "build-output"
+	st.runs[buildRunID] = store.AgentRun{ID: buildRunID, Kind: store.RunBuild}
+	st.messages = append(st.messages, store.WebMessage{Role: "assistant", Content: "不应进入初筛的完整配置", RunID: &buildRunID})
+	svc, _ := NewService(context.Background(), st, &fakeAgent{}, newFakeSink())
+	input, err := svc.screenInput(context.Background(), store.AgentRun{SessionID: st.session.ID, Kind: store.RunScreening}, "当前消息")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(input.Context, "完整配置") || strings.Contains(input.Context, "screening-0") || strings.Contains(input.Context, "screening-1") {
+		t.Fatalf("上下文未正确过滤/截断:%s", input.Context)
+	}
+	if strings.Count(input.Context, "用户：screening-") != maxScreenMessages-1 || !strings.HasSuffix(input.Context, "用户：当前消息") {
+		t.Fatalf("上下文消息数不正确:%s", input.Context)
+	}
+	if input.Text != "当前消息" || utf8.RuneCountInString(input.Context) > maxScreenRunes {
+		t.Fatalf("input=%+v", input)
+	}
+}
+
+func TestScreeningQuotaErrorIsExplicitAndDoesNotFallback(t *testing.T) {
+	st := newFakeProductStore()
+	agent := &fakeAgent{store: st, screenErr: upstream.New("bailian", "screening", upstream.KindQuota,
+		403, "AllocationQuota.FreeTierOnly", errors.New("secret provider body"))}
+	sink := newFakeSink()
+	svc, _ := NewService(context.Background(), st, agent, sink)
+	_, err := svc.StartMessage(context.Background(), "owner-1", "session-1",
+		"00000000-0000-4000-8000-000000000026", "8000 元装机")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink.wait(t)
+	var problem Problem
+	if err := json.Unmarshal(st.session.LastError, &problem); err != nil {
+		t.Fatal(err)
+	}
+	if problem.Code != "model_quota_exhausted" || agent.screenCalls != 1 {
+		t.Fatalf("problem=%+v calls=%d", problem, agent.screenCalls)
 	}
 }
 

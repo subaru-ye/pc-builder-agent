@@ -20,6 +20,8 @@ import (
 
 	openai "github.com/openai/openai-go/v3"
 	"google.golang.org/adk/v2/model"
+
+	"github.com/subaru-ye/pc-builder-agent/internal/upstream"
 )
 
 var (
@@ -87,14 +89,21 @@ func Record(component, name string, fields map[string]any) {
 type measuredModel struct {
 	component string
 	inner     model.LLM
+	provider  string
+	role      string
 }
 
 // WrapModel 记录每次顶层 GenerateContent 的耗时、状态和 Token 计数。
 func WrapModel(component string, inner model.LLM) model.LLM {
+	return WrapModelWithMeta(component, inner, "", "")
+}
+
+// WrapModelWithMeta 在基础 Token 指标外记录供应商与角色；二者均为配置标识，不含凭据。
+func WrapModelWithMeta(component string, inner model.LLM, provider, role string) model.LLM {
 	if inner == nil || !Enabled() {
 		return inner
 	}
-	return &measuredModel{component: component, inner: inner}
+	return &measuredModel{component: component, inner: inner, provider: provider, role: role}
 }
 
 func (m *measuredModel) Name() string { return m.inner.Name() }
@@ -104,7 +113,7 @@ func (m *measuredModel) GenerateContent(ctx context.Context, req *model.LLMReque
 		started := time.Now()
 		id := callSeq.Add(1)
 		status := "succeeded"
-		var promptTokens, candidateTokens, totalTokens int32
+		var promptTokens, candidateTokens, totalTokens, reasoningTokens, cachedTokens, toolTokens int32
 		var callErr error
 		responseErrorCode := ""
 		m.inner.GenerateContent(ctx, req, stream)(func(resp *model.LLMResponse, err error) bool {
@@ -121,6 +130,9 @@ func (m *measuredModel) GenerateContent(ctx context.Context, req *model.LLMReque
 					promptTokens = usage.PromptTokenCount
 					candidateTokens = usage.CandidatesTokenCount
 					totalTokens = usage.TotalTokenCount
+					reasoningTokens = usage.ThoughtsTokenCount
+					cachedTokens = usage.CachedContentTokenCount
+					toolTokens = usage.ToolUsePromptTokenCount
 				}
 			}
 			return yield(resp, err)
@@ -129,6 +141,13 @@ func (m *measuredModel) GenerateContent(ctx context.Context, req *model.LLMReque
 			"call_id": id, "model": m.inner.Name(), "status": status,
 			"duration_ms": time.Since(started).Milliseconds(), "stream": stream,
 			"prompt_tokens": promptTokens, "candidate_tokens": candidateTokens, "total_tokens": totalTokens,
+			"reasoning_tokens": reasoningTokens, "cached_tokens": cachedTokens, "tool_prompt_tokens": toolTokens,
+		}
+		if m.provider != "" {
+			fields["provider"] = m.provider
+		}
+		if m.role != "" {
+			fields["role"] = m.role
 		}
 		for key, value := range safeModelErrorFields(callErr, responseErrorCode) {
 			fields[key] = value
@@ -143,6 +162,16 @@ var safeErrorCodeRE = regexp.MustCompile(`^[A-Za-z0-9._-]{1,96}$`)
 func safeModelErrorFields(err error, responseCode string) map[string]any {
 	fields := map[string]any{}
 	code := responseCode
+	var upstreamErr *upstream.Error
+	if errors.As(err, &upstreamErr) {
+		fields["error_class"] = upstreamErr.Kind
+		if upstreamErr.HTTPStatus > 0 {
+			fields["http_status"] = upstreamErr.HTTPStatus
+		}
+		if code == "" {
+			code = upstreamErr.Code
+		}
+	}
 	var apiErr *openai.Error
 	if errors.As(err, &apiErr) {
 		if apiErr.StatusCode > 0 {

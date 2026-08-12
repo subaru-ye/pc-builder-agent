@@ -56,7 +56,7 @@ const searchPartsSemanticDescription = `按自然语言软偏好(安静/颜值/�
 
 边界与分工:
 - 软偏好(要安静、白色海景房、低调无光、客厅摆得出手)用本工具;预算/插槽/板型/内存代数等硬约束用 search_parts,本工具不做数值过滤。
-- query 必填,写用户的软偏好原话或其浓缩;category 可选(cpu|gpu|motherboard|memory|ssd|psu|case|cooler),不传则跨品类;top_n 必填且 > 0。
+- query 必填,写用户的软偏好原话或其浓缩;category 可选(cpu|gpu|motherboard|memory|ssd|psu|case|cooler),不传则跨品类;top_n 通常为 5,必须在 1..8。
 - 返回的 match_text 是该零件的语义描述原文,选件理由要引用其中命中的词(如"噪音表现:安静低噪");similarity 只用于排序参考,不要向用户展示裸数值。
 - 两路工具返回的 sku 同等有效;truncated > 0 表示还有命中未返回。
 
@@ -64,7 +64,7 @@ const searchPartsSemanticDescription = `按自然语言软偏好(安静/颜值/�
 - 要安静的显卡:{"query":"要安静的显卡","category":"gpu","top_n":5}
 - 白色海景房机箱:{"query":"白色海景房","category":"case","top_n":5}
 
-协作:候选仍须满足预算并通过 validate_build 校验;语义命中不豁免任何硬约束。`
+协作:候选仍须满足预算并通过确定性 validator 校验;语义命中不豁免任何硬约束。`
 
 // NewSearchPartsSemantic 构造语义检索 tool(query 向量化 → pgvector 余弦近邻)。
 func NewSearchPartsSemantic(e QueryEmbedder, s SemanticSearcher) (tool.Tool, error) {
@@ -82,6 +82,9 @@ func runSearchPartsSemantic(ctx context.Context, e QueryEmbedder, s SemanticSear
 	args SearchPartsSemanticArgs) (SearchPartsSemanticResult, error) {
 	if strings.TrimSpace(args.Query) == "" {
 		return SearchPartsSemanticResult{}, fmt.Errorf("tools: query 不得为空(软偏好原话或其浓缩)")
+	}
+	if args.TopN < 1 || args.TopN > 8 {
+		return SearchPartsSemanticResult{}, fmt.Errorf("tools: top_n 必须在 1..8,常规使用 5")
 	}
 	vec, err := e.EmbedOne(ctx, args.Query)
 	if err != nil {

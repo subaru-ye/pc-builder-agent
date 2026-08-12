@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"google.golang.org/adk/v2/agent"
+	"google.golang.org/adk/v2/agent/llmagent"
 	"google.golang.org/adk/v2/agent/workflowagents/sequentialagent"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/session"
@@ -31,7 +32,16 @@ func NewScreening(m model.LLM) (agent.Agent, error) {
 	if m == nil {
 		return nil, fmt.Errorf("pipeline: NewScreening 的 ScreeningModel 不能为空")
 	}
-	return newScreeningAgent(m)
+	return newScreeningAgent(m, llmagent.IncludeContentsDefault)
+}
+
+// NewProductScreening 装配产品 API 专用初筛 Agent。产品层会把稳定聊天记录压缩进
+// 当前 UserContent，因此这里明确禁止 ADK 再回灌整段会话历史。
+func NewProductScreening(m model.LLM) (agent.Agent, error) {
+	if m == nil {
+		return nil, fmt.Errorf("pipeline: NewProductScreening 的 ScreeningModel 不能为空")
+	}
+	return newScreeningAgent(m, llmagent.IncludeContentsNone)
 }
 
 // NewRemote 装配 buildsvc 侧远程服务根 agent:Sequential(ingest → prep → Loop(生成→校验))。

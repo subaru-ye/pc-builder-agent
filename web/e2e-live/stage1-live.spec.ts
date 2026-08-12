@@ -5,6 +5,7 @@ import type { BuildDiff, BuildView, Session } from "../src/lib/api/types";
 
 const controlURL = process.env.P10_CONTROL_URL ?? "http://127.0.0.1:18083";
 const webURL = process.env.P10_WEB_BASE_URL ?? "http://127.0.0.1:3000";
+const smokeOnly = process.env.P10_SMOKE === "1";
 
 type MetricEvent = { component: string; name: string; fields?: Record<string, unknown> };
 type RunCapture = { runID: string; firstProgressMS: number; totalMS: number; maxGapMS: number };
@@ -24,7 +25,7 @@ type LiveReport = {
 
 test.describe.configure({ mode: "serial" });
 
-test("L1-L6 complete live matrix passes three consecutive times", async ({ browser }) => {
+test(smokeOnly ? "L1 and L2 provider optimization smoke" : "L1-L6 complete live matrix passes three consecutive times", async ({ browser }) => {
   const config = await controlJSON<{ report_path: string }>("/config");
   const report: LiveReport = {
     schema_version: 1,
@@ -36,7 +37,7 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
   const save = () => writeFileSync(config.report_path, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 
   try {
-    for (let repetition = 1; repetition <= 3; repetition++) {
+    for (let repetition = 1; repetition <= (smokeOnly ? 1 : 3); repetition++) {
       const context = await browser.newContext();
       const page = await context.newPage();
       const observer = observePage(page, report.route_latency_ms);
@@ -60,7 +61,8 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
       });
       recordTrial(report, l1, save);
 
-      const l3 = await measure("L3", repetition, observer, 1, async () => {
+      if (!smokeOnly) {
+        const l3 = await measure("L3", repetition, observer, 1, async () => {
         await sendComposer(page, "降 500");
         await waitPhase(page, sessionID, "ready", 2);
         const build = await apiJSON<BuildView>(page, `/api/v1/sessions/${sessionID}/builds/2`);
@@ -74,13 +76,13 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
           minimal_change: changed.length <= 2,
         }, { changed_categories: changed, total_delta_cny: diff.total_delta_cny });
       });
-      recordTrial(report, l3, save);
+        recordTrial(report, l3, save);
 
-      const restart = await fetch(`${controlURL}/restart-api`, { method: "POST" });
-      expect(restart.ok, `API restart failed: ${await restart.text()}`).toBeTruthy();
-      await expect.poll(async () => (await apiJSON<Session>(page, `/api/v1/sessions/${sessionID}`)).phase).toBe("ready");
+        const restart = await fetch(`${controlURL}/restart-api`, { method: "POST" });
+        expect(restart.ok, `API restart failed: ${await restart.text()}`).toBeTruthy();
+        await expect.poll(async () => (await apiJSON<Session>(page, `/api/v1/sessions/${sessionID}`)).phase).toBe("ready");
 
-      const l4 = await measure("L4", repetition, observer, 1, async () => {
+        const l4 = await measure("L4", repetition, observer, 1, async () => {
         await page.reload();
         await waitPhase(page, sessionID, "ready", 2);
         await sendComposer(page, "换成 A 卡");
@@ -98,7 +100,8 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
           ...delivery,
         }, { changed_categories: changed, total_delta_cny: diff.total_delta_cny });
       });
-      recordTrial(report, l4, save);
+        recordTrial(report, l4, save);
+      }
       await context.close();
 
       const l2Context = await browser.newContext();
@@ -121,7 +124,8 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
       recordTrial(report, l2, save);
       await l2Context.close();
 
-      const l5Context = await browser.newContext();
+      if (!smokeOnly) {
+        const l5Context = await browser.newContext();
       const l5Page = await l5Context.newPage();
       const l5Observer = observePage(l5Page, report.route_latency_ms);
       const l5 = await measure("L5", repetition, l5Observer, 1, async () => {
@@ -141,9 +145,9 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
         };
       });
       recordTrial(report, l5, save);
-      await l5Context.close();
+        await l5Context.close();
 
-      const l6Context = await browser.newContext();
+        const l6Context = await browser.newContext();
       const l6Page = await l6Context.newPage();
       const l6Observer = observePage(l6Page, report.route_latency_ms);
       const l6 = await measure("L6", repetition, l6Observer, 2, async () => {
@@ -162,7 +166,8 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
         });
       });
       recordTrial(report, l6, save);
-      await l6Context.close();
+        await l6Context.close();
+      }
     }
 
     const metrics = await metricEvents();
@@ -172,7 +177,7 @@ test("L1-L6 complete live matrix passes three consecutive times", async ({ brows
     report.generated_at = new Date().toISOString();
     save();
 
-    expect(report.trials).toHaveLength(18);
+    expect(report.trials).toHaveLength(smokeOnly ? 2 : 18);
     expect(report.models.screening).not.toBe("");
     expect(report.models.builder).not.toBe("");
     expect(report.models.embedding).not.toBe("");

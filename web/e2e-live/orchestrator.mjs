@@ -5,6 +5,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isChildRunning } from "./process-state.mjs";
+import { assertComposeServices, parseComposePS } from "./compose-state.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const web = join(root, "web");
@@ -25,6 +26,17 @@ const childEnv = {
 const goCommand = process.platform === "win32" ? "go.exe" : "go";
 const executableSuffix = process.platform === "win32" ? ".exe" : "";
 const children = new Map();
+
+function checkComposeDependencies() {
+  const result = spawnSync("docker", ["compose", "ps", "--format", "json", "postgres", "redis"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  if (result.status !== 0) {
+    throw new Error(`docker compose ps postgres redis 失败: ${String(result.stderr).trim()}`);
+  }
+  assertComposeServices(parseComposePS(result.stdout));
+}
 
 function buildGoBinary(name, packagePath) {
   const binary = join(artifactDir, `${name}${executableSuffix}`);
@@ -94,6 +106,7 @@ async function restartAPI() {
   await waitFor("http://127.0.0.1:8082/readyz");
 }
 
+checkComposeDependencies();
 const buildsvcBinary = buildGoBinary("buildsvc", "./cmd/buildsvc");
 const apiBinary = buildGoBinary("api", "./cmd/api");
 const nextEntrypoint = join(web, "node_modules", "next", "dist", "bin", "next");

@@ -10,12 +10,13 @@ go run ./cmd/migrate up          # 应用 PostgreSQL 编号迁移
 go run ./cmd/buildsvc            # 终端 1:A2A 生成+校验服务
 go run ./cmd/host web --write-timeout=10m api --sse-write-timeout=10m webui  # 终端 2:ADK dev UI,http://localhost:8080/ui/
 go run ./cmd/api                 # 终端 3:产品 API,http://localhost:8082
+go run ./cmd/modelcheck -role screening  # 显式上游检查;普通启动/测试不调用模型
 cd web && pnpm dev               # 终端 4:产品 Web,http://localhost:3000
 go build ./... && go vet ./...
 ```
 
 - 端口非默认:本机原生 PostgreSQL 17 与 Redis 服务常驻占用 5432/6379,故 compose 用 15432/16379。
-- `.env`(不入库)存 `DASHSCOPE_API_KEY` 和独立的 `SHARE_TOKEN_SECRET`;工作空间专属端点用 `DASHSCOPE_BASE_URL` 覆盖,见 `.env.example`。
+- `.env`(不入库)存所选供应商 Key 和独立的 `SHARE_TOKEN_SECRET`;三个模型角色通过 `*_PROVIDER/MODEL/API_KEY/BASE_URL` 独立配置,见 `.env.example`。
 - `db/init/` 的 SQL 仅数据卷首次初始化执行,改动后需 `docker compose down -v` 重建。
 
 ## 权威文档(冲突仲裁)
@@ -34,6 +35,7 @@ go build ./... && go vet ./...
 | docs/tech/P8-Web客户端设计.md | P8 实现层:Next.js 工作台 / 需求确认 / 配置·校验·版本 / 响应式与无障碍 |
 | docs/tech/P9-分享与导出设计.md | P9 实现层:共享 presenter / Markdown / 分享 token / 只读页与分享图 |
 | docs/tech/P10-评测与阶段验收.md | P10 实现层:50+ golden / Web 与 Live E2E / 真人 rubric / 最终门禁 |
+| docs/tech/ADR-007-模型供应商适配与成本控制.md | 百炼/MiMo/通用 Responses 装配 / 无自动 fallback / 上下文与 Token 优化 |
 | docs/api/openapi.yaml | 产品 HTTP 路径与 DTO 线格式;SSE 细节见同目录协议文档 |
 | DESIGN.md / DESIGN_CONTEXT.md / UI_RULES.md | Web 视觉来源、产品设计语境与实现规则;写 UI 前必须依次阅读 |
 | docs/tech/技术选型.md | 栈级决策(ADR)+ 版本锁定表 |
@@ -41,7 +43,8 @@ go build ./... && go vet ./...
 
 ## 工程纪律
 
-- **版本纪律**:ADK-Go/a2a-go 迭代快,文档不写死 import 路径与 API 签名;首装后回填技术选型.md 末尾版本锁定表。模型型号只写在代码常量,不进文档(ADR-004)。
+- **版本纪律**:ADK-Go/a2a-go 迭代快,文档不写死 import 路径与 API 签名;首装后回填技术选型.md 末尾版本锁定表。模型默认值集中在 `internal/modelprovider`,部署值只进未跟踪 `.env`;文档示例需与 `.env.example` 同步。
+- **模型纪律**:不得在启动时探测模型,不得自动 fallback;真实调用只通过显式 `modelcheck` 或 Live 门禁。日志/指标只写 provider、role、model、状态和安全错误类别。
 - **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
 - **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。
 - **schema 单一出处**:`internal/schemas` 定义一份,字段变更回写设计方案 §四,不在代码里静默漂移。

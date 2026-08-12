@@ -7,10 +7,13 @@
 # - P1 起库结构(含 vector extension)全部由 goose 编号迁移管理:
 #   `go run ./cmd/migrate up`;不再使用 docker-entrypoint-initdb.d。
 
+# 显式固定 compose 项目名,避免目录改名导致项目漂移
+name: pc-builder-agent
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: pcbuilder-pg
+
     environment:
       POSTGRES_USER: pcbuilder
       POSTGRES_PASSWORD: pcbuilder
@@ -27,7 +30,7 @@ services:
 
   redis:
     image: redis:7
-    container_name: pcbuilder-redis
+
     ports:
       - "16379:6379"
     volumes:

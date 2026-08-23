@@ -42,6 +42,18 @@ func TestLoadRunManifest(t *testing.T) {
 	}
 }
 
+func TestLoadPartialRunManifest(t *testing.T) {
+	partial := strings.Replace(validManifest, `"status": "no_change"`, `"status": "partial"`, 1)
+	partial = strings.Replace(partial, `"sources": []`, `"sources": [{"source_id":"amd_products","status":"failed","error_code":"source_policy_changed"}]`, 1)
+	manifest, err := loadRunManifest(writeManifest(t, partial))
+	if err != nil {
+		t.Fatalf("partial manifest 应通过: %v", err)
+	}
+	if manifest.Status != "partial" {
+		t.Fatalf("status 未保留: %q", manifest.Status)
+	}
+}
+
 func TestLoadRunManifestRejectsModelAndUnknownField(t *testing.T) {
 	model := strings.Replace(validManifest, `"model_used": false`, `"model_used": true`, 1)
 	if _, err := loadRunManifest(writeManifest(t, model)); err == nil || !strings.Contains(err.Error(), "禁止") {

@@ -32,6 +32,7 @@ def _source(**overrides):
         "automated_access": "allowed_after_review",
         "robots_policy": "obey",
         "rate_limit_policy": "weekly_single_request",
+        "failure_mode": "block_run",
         "schedule": "weekly",
         "enabled": True,
         "terms_reviewed_at": "2026-08-24",
@@ -44,7 +45,8 @@ def test_默认registry合法且京东不在实施来源():
     sources = load_registry()
     assert {"seed_catalog", "pc_part_dataset", "dbgpu", "amd_products"} == set(sources)
     assert "jd" not in " ".join(sources).lower()
-    assert not sources["amd_products"]["enabled"]
+    assert sources["amd_products"]["enabled"]
+    assert sources["amd_products"]["adapter"] == "amd_cpu_official"
     assert get_registered_source("seed_catalog")["adapter"] == "local_parts"
 
 

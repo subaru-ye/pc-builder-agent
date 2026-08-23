@@ -98,6 +98,47 @@ func TestSpecFingerprintStableAcrossJSONKeyOrder(t *testing.T) {
 	}
 }
 
+func testEvidence(t *testing.T, sku string) evidenceRecord {
+	t.Helper()
+	record := evidenceRecord{
+		SchemaVersion: 1, SKU: sku, Field: "specs.socket", Value: []byte(`"AM5"`),
+		SourceID: "amd_products", SourceURL: "https://www.amd.com/en/products/example.html",
+		CapturedAt: "2026-08-24T00:00:00Z", RawSHA256: strings.Repeat("b", 64),
+		Method: "deterministic", EvidenceExcerpt: "CPU Socket: AM5", EvidenceStatus: "verified",
+	}
+	var value any
+	if err := json.Unmarshal(record.Value, &value); err != nil {
+		t.Fatal(err)
+	}
+	identity, err := json.Marshal(map[string]any{
+		"source_id": record.SourceID, "sku": record.SKU, "field": record.Field,
+		"value": value, "raw_sha256": record.RawSHA256,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.ID = fmt.Sprintf("%x", sha256.Sum256(identity))
+	return record
+}
+
+func TestCatalogStateAndEvidenceValidation(t *testing.T) {
+	valid := partRecord{CatalogState: "catalog_only"}
+	if got := catalogState(valid); got != "catalog_only" {
+		t.Fatalf("catalog_state 未保留: %q", got)
+	}
+	if got := catalogState(partRecord{}); got != "active_core" {
+		t.Fatalf("历史记录应兼容 active_core: %q", got)
+	}
+	evidence := testEvidence(t, "cpu-r5-7600")
+	if err := validateEvidence(evidence); err != nil {
+		t.Fatalf("合法 evidence 应通过: %v", err)
+	}
+	evidence.SourceURL = "https://user:pass@www.amd.com/example"
+	if err := validateEvidence(evidence); err == nil {
+		t.Fatal("含凭据 URL 必须拒绝")
+	}
+}
+
 // PostgreSQL 集成测试:PG_TEST_DSN 未设置时整体跳过(与 internal/store 同约定)。
 // 本地运行(compose PG 就绪后):
 //
@@ -269,6 +310,72 @@ func TestImportRealCatalogWithP11Release(t *testing.T) {
 	}
 	if publications != 1 {
 		t.Fatalf("重试后 publication 应仍为 1,得到 %d", publications)
+	}
+}
+
+func TestImportV2CatalogStateEvidenceAtomic(t *testing.T) {
+	conn := setupConn(t)
+	ctx := context.Background()
+	parts, err := loadParts(partsDir(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts[0].CatalogState = "catalog_only"
+	parts[1].CatalogState = "retired"
+	release := &releaseManifest{
+		SchemaVersion: 2, ReleaseID: "55101c4f-2291-5d51-9a2d-1f5d8ef0fa02",
+		RunID: "8ef69660-9c17-5c60-b184-51c034db59dc", Decision: "auto",
+		InputSHA256: strings.Repeat("a", 64), Stats: []byte(`{"total_skus":160}`),
+		ManifestSHA256: strings.Repeat("b", 64),
+	}
+	evidence := testEvidence(t, parts[2].SKU)
+	if err := importPartsWithRelease(ctx, conn, parts, release, []evidenceRecord{evidence}); err != nil {
+		t.Fatalf("v2 导入失败: %v", err)
+	}
+	var state string
+	var active bool
+	if err := conn.QueryRow(ctx, "SELECT catalog_state, active FROM parts WHERE sku=$1", parts[0].SKU).Scan(&state, &active); err != nil {
+		t.Fatal(err)
+	}
+	if state != "catalog_only" || active {
+		t.Fatalf("catalog_only 映射错误: state=%s active=%v", state, active)
+	}
+	var count int
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM part_evidence WHERE release_id=$1", release.ReleaseID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("evidence 应为 1 条,得到 %d", count)
+	}
+	if err := importPartsWithRelease(ctx, conn, parts, release, []evidenceRecord{evidence}); err != nil {
+		t.Fatalf("相同 v2 重试应幂等: %v", err)
+	}
+	secondRelease := *release
+	secondRelease.ReleaseID = "65101c4f-2291-5d51-9a2d-1f5d8ef0fa03"
+	secondRelease.RunID = "9ef69660-9c17-5c60-b184-51c034db59dd"
+	secondRelease.PreviousReleaseID = &release.ReleaseID
+	secondRelease.ManifestSHA256 = strings.Repeat("e", 64)
+	if err := importPartsWithRelease(ctx, conn, parts, &secondRelease, []evidenceRecord{evidence}); err != nil {
+		t.Fatalf("后续 release 复用稳定 evidence 应通过: %v", err)
+	}
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM part_evidence WHERE evidence_id=$1", evidence.ID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("稳定 evidence 跨 release 不应重复: %d", count)
+	}
+
+	parts[2].Model += " drift"
+	evidence.EvidenceExcerpt = "conflicting excerpt"
+	if err := importPartsWithRelease(ctx, conn, parts, &secondRelease, []evidenceRecord{evidence}); err == nil {
+		t.Fatal("同 ID evidence 冲突必须导致整批回滚")
+	}
+	var model string
+	if err := conn.QueryRow(ctx, "SELECT model FROM parts WHERE sku=$1", parts[2].SKU).Scan(&model); err != nil {
+		t.Fatal(err)
+	}
+	if strings.HasSuffix(model, " drift") {
+		t.Fatal("evidence 冲突时 parts 更新必须回滚")
 	}
 }
 

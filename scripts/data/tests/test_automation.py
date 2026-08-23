@@ -1,5 +1,6 @@
 """P11 自动运行、HTTP 安全、风险分类和 last-known-good。"""
 
+import hashlib
 import json
 import shutil
 import urllib.error
@@ -15,7 +16,9 @@ from pcdata.automation import (
     PipelineError,
     RunLock,
     _copy_parts,
+    _current_evidence,
     _load_parts,
+    _write_evidence,
     bootstrap_release,
     create_review,
     health_report,
@@ -262,6 +265,63 @@ def test_release文件损坏后health失败(paths):
     assert report["problems"][0]["code"] == "release_invalid"
 
 
+def test_release_v2_evidence_only发布且篡改可检测(paths):
+    current = bootstrap_release(paths, importer=lambda *_args: None)
+    run_id = "12121212-1212-4212-8212-121212121212"
+    candidate = _candidate(paths, run_id)
+    evidence_path = paths.runs / run_id / "normalized" / "evidence.jsonl"
+    identity = {
+        "source_id": "amd_products",
+        "sku": "cpu-r5-7600",
+        "field": "specs.socket",
+        "value": "AM5",
+        "raw_sha256": "b" * 64,
+    }
+    evidence_id = hashlib.sha256(
+        json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    evidence = {
+        "schema_version": 1,
+        "id": evidence_id,
+        "sku": "cpu-r5-7600",
+        "field": "specs.socket",
+        "value": "AM5",
+        "source_id": "amd_products",
+        "source_url": "https://www.amd.com/en/products/example.html",
+        "captured_at": "2026-08-24T00:00:00Z",
+        "raw_sha256": "b" * 64,
+        "method": "deterministic",
+        "evidence_excerpt": "CPU Socket: AM5",
+        "evidence_status": "verified",
+    }
+    _write_evidence(evidence_path, [evidence])
+    base = paths.releases / current["release_id"] / "parts"
+    review = create_review(
+        run_id=run_id,
+        candidate_parts=candidate,
+        base_parts=base,
+        base_release_id=current["release_id"],
+        candidate_evidence=evidence_path,
+        base_evidence=_current_evidence(paths, current["release_id"]),
+    )
+    assert review["decision"] == "auto_publish"
+    release = publish_reviewed_release(
+        paths,
+        run_id=run_id,
+        candidate_parts=candidate,
+        candidate_evidence=evidence_path,
+        review=review,
+        policy="auto",
+        importer=lambda *_args: None,
+    )
+    assert release["schema_version"] == 2
+    stored = paths.releases / release["release_id"] / "evidence" / "fields.jsonl"
+    stored.write_bytes(stored.read_bytes() + b"\n")
+    report = health_report(paths)
+    assert not report["healthy"]
+    assert report["problems"][0]["code"] == "release_invalid"
+
+
 def test_current路径穿越被拒绝(paths):
     paths.ensure()
     paths.current.write_text(
@@ -331,6 +391,17 @@ def test_model参与和隐式删除必须隔离(paths):
     codes = {risk["code"] for risk in review["risks"]}
     assert {"implicit_removal", "model_output_requires_manual_review"} <= codes
     assert review["decision"] == "quarantine"
+
+    explicit = _candidate(paths, "45454545-4545-4454-8454-454545454545")
+    _rewrite_record(explicit, "cpu-r5-5500", lambda row: row.update({"catalog_state": "retired"}))
+    review = create_review(
+        run_id="45454545-4545-4454-8454-454545454545",
+        candidate_parts=explicit,
+        base_parts=base,
+        base_release_id=current["release_id"],
+    )
+    assert review["decision"] == "quarantine"
+    assert any(risk["code"] == "catalog_state_changed" for risk in review["risks"])
 
 
 def test_publish检查漂移且失败不切换指针(paths):
@@ -440,8 +511,11 @@ def test_scheduled_run无变化_幂等且不调用导入(paths):
         registry_path=REAL_DATA / "sources.registry.json",
         importer=lambda *args: imports.append(args),
     )
-    assert first == second
-    assert first["status"] == "no_change"
+    assert first["run_id"] == second["run_id"]
+    assert first["status"] == second["status"] == "partial"
+    assert first["summary"] == second["summary"]
+    assert first["trigger"] == "schedule"
+    assert second["trigger"] == "startup_catch_up"
     assert first["model_used"] is False
     assert imports == []
 

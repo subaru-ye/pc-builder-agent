@@ -11,13 +11,14 @@ go run ./cmd/buildsvc            # 终端 1:A2A 生成+校验服务
 go run ./cmd/host web --write-timeout=10m api --sse-write-timeout=10m webui  # 终端 2:ADK dev UI,http://localhost:8080/ui/
 go run ./cmd/api                 # 终端 3:产品 API,http://localhost:8082
 go run ./cmd/modelcheck -role screening  # 显式上游检查;普通启动/测试不调用模型
+uv run --project scripts/data pcdata source check  # P11 静态来源检查;默认不联网
 cd web && pnpm dev               # 终端 4:产品 Web,http://localhost:3000
 go build ./... && go vet ./...
 ```
 
 - 端口非默认:本机原生 PostgreSQL 17 与 Redis 服务常驻占用 5432/6379,故 compose 用 15432/16379。
 - `.env`(不入库)存所选供应商 Key 和独立的 `SHARE_TOKEN_SECRET`;三个模型角色通过 `*_PROVIDER/MODEL/API_KEY/BASE_URL` 独立配置,见 `.env.example`。
-- `db/init/` 的 SQL 仅数据卷首次初始化执行,改动后需 `docker compose down -v` 重建。
+- 数据库结构统一由 `db/migrations/` 的 goose 编号迁移管理；保留数据卷运行 `go run ./cmd/migrate up`，禁止为普通迁移执行 `down -v`。
 
 ## 权威文档(冲突仲裁)
 
@@ -27,6 +28,10 @@ go build ./... && go vet ./...
 | docs/product/mvp.md | 已封板 MVP 范围与 P0–P6 验收历史 |
 | docs/product/stage1.md | P7–P10 Web 产品化范围、顺序与退出标准(当前短期执行唯一依据) |
 | docs/product/stage1-backlog.md | 阶段 1 未封口项、外部阻塞、恢复条件与最终封板步骤 |
+| docs/product/stage2.md | P11–P14 本机数据自动化范围、顺序、数据分层与阶段退出标准 |
+| docs/data/数据获取与发布规则.md | 数据来源、字段证据、价格选择、模型禁区和条件发布强制规则 |
+| docs/tech/P11-数据获取与发布管道设计.md | 本机调度、HTTP 安全采集、风险分类、不可变 release 与数据库演进 |
+| docs/ops/P11本机数据任务.md | P11 初始化、计划任务安装、日志、补跑和卸载操作 |
 | docs/装机Agent设计方案.md | 架构 / A2A schema / 规则表 / 表结构 |
 | docs/tech/P2-流水线设计.md | P2 实现层:编排拓扑 / 提示词 SOP / tool 契约 / Loop 控制(schema 口径仍以设计方案 §四 为准) |
 | docs/tech/P3-语义选件设计.md | P3 实现层:embedding 素材与文本 / 语义检索路径 / search_parts_semantic 契约 |
@@ -46,10 +51,11 @@ go build ./... && go vet ./...
 
 - **版本纪律**:ADK-Go/a2a-go 迭代快,文档不写死 import 路径与 API 签名;首装后回填技术选型.md 末尾版本锁定表。模型默认值集中在 `internal/modelprovider`,部署值只进未跟踪 `.env`;文档示例需与 `.env.example` 同步。
 - **模型纪律**:不得在启动时探测模型,不得自动 fallback;真实调用只通过显式 `modelcheck` 或 Live 门禁。日志/指标只写 provider、role、model、状态和安全错误类别。
+- **数据纪律**:网络响应和模型辅助结果默认只能进入候选区;只有精确身份、确定性证据和全部门禁通过的低风险变化可条件自动发布,其余进入 quarantine 并保持 last-known-good。定时主链模型调用必须为 0。阶段 2 以 `docs/data/数据获取与发布规则.md` 为准。
 - **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
 - **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。
 - **schema 单一出处**:`internal/schemas` 定义一份,字段变更回写设计方案 §四,不在代码里静默漂移。
-- 当前进度:MVP P0–P6 已封板;P7 产品 API、P8 Web 工作台与 P9 分享只读页已实现。P10 的 50 组 golden、全部自动门禁和 L1–L6×3 Live Pass³ 已通过,但 3 人真人盲评尚未执行,不得创建 `stage1-freeze`。产品入口为 `web/` 的 Next.js 工作台,ADK dev UI 继续只作调试入口;分享业务规则仍只能在 Go API/presenter 内演进。
+- 当前进度:MVP P0–P6 已封板;P7 产品 API、P8 Web 工作台与 P9 分享只读页已实现。P10 的 50 组 golden、全部自动门禁和 L1–L6×3 Live Pass³ 已通过,但 3 人真人盲评尚未执行,不得创建 `stage1-freeze`。P11 发布基座和本机任务代码已完成,官方字段适配器与真实周期验收待完成。产品入口为 `web/` 的 Next.js 工作台,ADK dev UI 继续只作调试入口。
 
 ## 已知环境坑(Windows)
 

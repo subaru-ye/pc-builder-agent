@@ -52,6 +52,11 @@
 | [MVP 实现指导](docs/product/mvp.md) | 已封板 MVP 范围、P0–P6 阶段拆分与验收历史 |
 | [阶段 1 实现指导](docs/product/stage1.md) | P7–P10 Web 产品化范围、顺序、退出标准与阶段 2/3 交接(当前短期执行权威) |
 | [阶段 1 待封口 Backlog](docs/product/stage1-backlog.md) | 优化后 Pass³、成本目标、真人盲评与最终封板的剩余工作 |
+| [阶段 2 实现指导](docs/product/stage2.md) | P11–P14 本机数据自动化范围、顺序、数据分层与退出标准 |
+| [数据获取与发布规则](docs/data/数据获取与发布规则.md) | 来源、字段证据、价格、模型辅助、审核与发布的强制约束 |
+| [数据获取方式实测](docs/data/2026-08-23-数据获取方式探查.md) | 浏览器、官方 API、开放数据与模型抽取的真实对照结果 |
+| [P11 数据管道设计](docs/tech/P11-数据获取与发布管道设计.md) | 本机调度、HTTP 安全采集、风险分类、不可变 release 与 last-known-good |
+| [P11 本机数据任务](docs/ops/P11本机数据任务.md) | 初始化、手动运行、Windows 任务安装、日志和卸载方法 |
 | [设计方案](docs/装机Agent设计方案.md) | 架构、A2A 消息 schema、兼容性规则表、数据表结构(技术设计权威) |
 | [P2 流水线设计](docs/tech/P2-流水线设计.md) | P2 三 Agent 流水线实现层:编排拓扑、提示词 SOP、tool 契约、Loop 控制 |
 | [P7 产品 API 设计](docs/tech/P7-产品API与会话状态机设计.md) | 产品会话状态机、匿名身份、后台 run、SSE 与配置读模型 |
@@ -94,6 +99,19 @@ pnpm dev
 # 浏览器访问 http://localhost:3000
 ```
 
+P11 数据自动化当前处于实施中。以下命令只使用确定性代码，不调用大模型；安装计划任务前应先人工运行并检查一次：
+
+```powershell
+uv run --project scripts/data pcdata source check
+uv run --project scripts/data pcdata bootstrap
+uv run --project scripts/data pcdata scheduled-run --profile weekly
+
+# 确认上述命令正常后，显式安装本机隐藏任务；不会由普通项目启动自动安装。
+powershell -ExecutionPolicy Bypass -File scripts/data/ops/install-tasks.ps1 -SkipBootstrap
+```
+
+当前没有启用外部官方字段适配器，因此计划任务只会验证现有 seed 并报告“无变化”。启用真实来源前必须完成条款、robots、确定性解析器和 fake HTTP 测试，详见[P11 本机数据任务](docs/ops/P11本机数据任务.md)。
+
 ## MVP 进度
 
 - [x] 产品调研 / 设计方案 / PRD / MVP 计划 / 技术选型
@@ -108,6 +126,7 @@ pnpm dev
 - [x] P8 Web 配置工作台
 - [x] P9 分享与导出
 - [ ] P10 评测与发布准备(50 组 golden、自动门禁与 Live 18/18 已通过;3 人真人盲评待完成)
+- [ ] P11 数据自动化(发布基座与本机任务代码已完成;官方适配器和真实周期验收待完成)
 
 2026-08-09 封板验收结果:PostgreSQL/pgvector/Redis 真实集成测试无跳过;Python 数据流水线 104 项测试通过;用例 A–H 全部验证,包括全 pass 配单、语义召回、v1→v3 回放/diff/Markdown 导出、A2A schema/contextID 以及 kill host 后从 Redis 恢复同一会话继续改单。
 

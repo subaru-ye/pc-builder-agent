@@ -1,6 +1,6 @@
 # 阶段 2：可维护的数据自动化
 
-> 状态：P11 实施中，P12–P14 尚未实现。最后更新：2026-08-24。
+> 状态：P11 已完成，P12–P14 尚未实现。最后更新：2026-08-24。
 >
 > 本文是阶段 2（P11–P14）的产品范围与执行顺序权威。数据获取和发布的强制规则见[数据获取与发布规则](../data/数据获取与发布规则.md)，P11 的实现设计见[P11 数据获取与发布管道设计](../tech/P11-数据获取与发布管道设计.md)。阶段 1 尚未封口的事项继续由[阶段 1 待封口 Backlog](stage1-backlog.md)管理。
 >
@@ -25,22 +25,21 @@
 
 ## 2. 当前基线与缺口
 
-截至 2026-08-23，仓库基线为：
+截至 2026-08-24，P11 完成后的仓库基线为：
 
 - 160 个零件，八类各 20 个；160 个零件均有 `2026-07-28` 价格。
 - `pc-part-dataset` 锁定在 commit `c52a04ca9465c83997ed335f7767b09a2005dd26`，提供产品级候选规格，美元价格被明确丢弃。
 - `dbgpu==2025.12` 作为 GPU 芯片级 TDP、板长和供电接口兜底。
 - `scripts/data/catalog/*.json` 是人工选品与 override 输入，`scripts/data/parts/*.jsonl` 是确定性 bootstrap 产物。
 - `cmd/importparts` 全量 upsert 零件，`cmd/importprices` 导入单日不可变价格快照，`cmd/embedparts` 当前全量重算 embedding。
+- P11 已增加字段 evidence、条件 GET、run/checkpoint、quarantine、release v2、last-known-good、`catalog_state` 和 Windows 本机调度。
+- AMD 官方适配器固定覆盖当前 13 个 AMD CPU；数据库当前 release 有 65 条已验证字段 evidence。
 
-现有链路已有来源锁、严格 schema、单事务导入和覆盖率门禁，但还缺少：
+阶段 2 剩余缺口为：
 
-- 字段级来源 URL、采集时间、原始内容哈希和证据状态。
-- 调度 run、检查点、条件 GET、互斥锁和开机补跑。
-- `active_core`、`catalog_only`、`candidate`、`retired` 生命周期。
-- 候选区、quarantine、风险分类、不可变 release 和 last-known-good 指针。
 - 价格商品变体、店铺、库存、价格类型和异常波动信息。
-- 新旧数据的机器 Diff、条件自动发布、失败回滚和增量 embedding。
+- 八类目录扩容、新 SKU 候选生命周期和更多厂商品类证据覆盖。
+- 性能分许可、版本化刷新和变化项增量 embedding。
 
 因此阶段 2 第一项工作是可信发布与恢复协议，而不是直接增加大量网页采集器。
 
@@ -86,7 +85,7 @@
 
 ### P11：来源证据、本机调度与安全发布基座
 
-实施进度：registry/schema、CLI、HTTP 安全采集、风险分类、quarantine、不可变 release、数据库迁移和 Windows 任务脚本已完成，真实 PostgreSQL 已完成 160 SKU bootstrap 与 weekly/monthly 零变化回灌；官方字段适配器、任务实际安装和连续周期验收尚未完成。
+实施进度：已完成。13 个固定映射的 AMD CPU 官方页可低频条件采集，65 条字段 evidence 已进入 release v2 和 PostgreSQL；正式五项 Windows 任务已安装，两次一次性 Task Scheduler 验收均命中 13 个 304、保持 publication/evidence 幂等且模型调用为 0。验收细节见[P11 验收记录](../acceptance/P11-验收记录.md)。
 
 目标：建立 `schedule → source check → discover/collect → normalize → validate → risk classify → publish/quarantine` 主链。
 

@@ -150,10 +150,11 @@ func runGenerate(ctx context.Context, client *embedding.Client, dsn, stylesPath 
 	return nil
 }
 
-// loadActiveParts 读 active 零件全量(按 sku 排序,批次顺序稳定可复现)。
+// loadActiveParts 读 active_core 零件全量(按 sku 排序,批次顺序稳定可复现)。
 func loadActiveParts(ctx context.Context, conn *pgx.Conn) ([]dbPart, error) {
 	rows, err := conn.Query(ctx,
-		`SELECT sku, category, brand, model, specs FROM parts WHERE active ORDER BY sku`)
+		`SELECT sku, category, brand, model, specs
+		 FROM parts WHERE active AND catalog_state = 'active_core' ORDER BY sku`)
 	if err != nil {
 		return nil, fmt.Errorf("查询 parts 失败: %w", err)
 	}

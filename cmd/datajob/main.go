@@ -108,7 +108,7 @@ func loadRunManifest(path string) (runManifest, error) {
 	}
 	validStatus := map[string]bool{
 		"running": true, "no_change": true, "published": true, "quarantined": true,
-		"failed": true, "blocked": true,
+		"partial": true, "failed": true, "blocked": true,
 	}
 	if !validStatus[manifest.Status] {
 		return runManifest{}, fmt.Errorf("status 非法: %q", manifest.Status)
@@ -151,11 +151,16 @@ func loadRunManifest(path string) (runManifest, error) {
 }
 
 func upsertRun(ctx context.Context, conn *pgx.Conn, manifest runManifest) error {
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("开启 run 同步事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
 	var errorCode *string
 	if manifest.Error != nil {
 		errorCode = &manifest.Error.Code
 	}
-	_, err := conn.Exec(ctx, `
+	_, err = tx.Exec(ctx, `
 		INSERT INTO data_job_runs (
 			run_id, profile, trigger_kind, scheduled_for, status, model_used,
 			manifest_sha256, error_code, summary, started_at, finished_at
@@ -173,6 +178,61 @@ func upsertRun(ctx context.Context, conn *pgx.Conn, manifest runManifest) error 
 	)
 	if err != nil {
 		return fmt.Errorf("写入 data_job_runs 失败: %w", err)
+	}
+	var sources []struct {
+		SourceID      string `json:"source_id"`
+		Status        string `json:"status"`
+		ContentSHA256 string `json:"content_sha256"`
+		CapturedAt    string `json:"captured_at"`
+		Resources     []struct {
+			CapturedAt string `json:"captured_at"`
+		} `json:"resources"`
+	}
+	if err := json.Unmarshal(manifest.Sources, &sources); err != nil {
+		return fmt.Errorf("解码来源检查点投影失败: %w", err)
+	}
+	for _, source := range sources {
+		if source.SourceID == "" || source.Status == "" {
+			return fmt.Errorf("来源检查点投影缺少 source_id/status")
+		}
+		attemptedAt := manifest.StartedAt
+		if source.CapturedAt != "" {
+			attemptedAt = source.CapturedAt
+		}
+		for _, resource := range source.Resources {
+			if resource.CapturedAt > attemptedAt {
+				attemptedAt = resource.CapturedAt
+			}
+		}
+		if _, err := time.Parse(time.RFC3339, attemptedAt); err != nil {
+			return fmt.Errorf("来源 %q captured_at 非法: %w", source.SourceID, err)
+		}
+		success := source.Status != "failed"
+		var successAt *string
+		if success {
+			successAt = &attemptedAt
+		}
+		var contentSHA *string
+		if source.ContentSHA256 != "" {
+			contentSHA = &source.ContentSHA256
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO source_checkpoints (
+				source_id, content_sha256, last_attempt_at, last_success_at, status
+			) VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (source_id) DO UPDATE SET
+				content_sha256 = COALESCE(EXCLUDED.content_sha256, source_checkpoints.content_sha256),
+				last_attempt_at = EXCLUDED.last_attempt_at,
+				last_success_at = COALESCE(EXCLUDED.last_success_at, source_checkpoints.last_success_at),
+				status = EXCLUDED.status,
+				updated_at = now()`,
+			source.SourceID, contentSHA, attemptedAt, successAt, source.Status,
+		); err != nil {
+			return fmt.Errorf("写入来源 %q 检查点投影失败: %w", source.SourceID, err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("提交 run 同步事务失败: %w", err)
 	}
 	return nil
 }

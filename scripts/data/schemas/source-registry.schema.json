@@ -21,12 +21,12 @@
         "id", "kind", "adapter", "base_url", "purpose", "trust_tier",
         "license_or_terms_url", "attribution", "requires_credentials",
         "automated_access", "robots_policy", "rate_limit_policy", "schedule",
-        "enabled", "terms_reviewed_at"
+        "enabled", "terms_reviewed_at", "failure_mode"
       ],
       "properties": {
         "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{1,63}$"},
         "kind": {"enum": ["local_seed", "local_package", "open_dataset", "official_catalog", "official_product", "public_retail", "manual"]},
-        "adapter": {"enum": ["local_parts", "locked_git_version", "locked_package", "http_snapshot", "manual"]},
+        "adapter": {"enum": ["local_parts", "locked_git_version", "locked_package", "http_snapshot", "amd_cpu_official", "manual"]},
         "base_url": {"type": ["string", "null"]},
         "purpose": {"type": "array", "minItems": 1, "items": {"type": "string"}},
         "trust_tier": {"enum": ["A", "B", "C", "D"]},
@@ -38,7 +38,18 @@
         "rate_limit_policy": {"type": "string", "minLength": 1},
         "schedule": {"enum": ["daily", "weekly", "monthly", "manual"]},
         "enabled": {"type": "boolean"},
-        "terms_reviewed_at": {"type": ["string", "null"], "format": "date"}
+        "terms_reviewed_at": {"type": ["string", "null"], "format": "date"},
+        "failure_mode": {"enum": ["block_run", "isolate_source"]},
+        "resources_path": {"type": "string"},
+        "policy_sha256": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["robots", "terms"],
+          "properties": {
+            "robots": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "terms": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
       }
     }
   }

@@ -18,10 +18,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -39,6 +42,7 @@ type partRecord struct {
 	SchemaVersion int              `json:"schema_version"`
 	Specs         json.RawMessage  `json:"specs"`
 	SourceMeta    json.RawMessage  `json:"source_meta"`
+	CatalogState  string           `json:"catalog_state,omitempty"`
 }
 
 // releaseManifest 是 P11 不可变 release 的最小导入信封。files/created_at 由
@@ -51,9 +55,26 @@ type releaseManifest struct {
 	CreatedAt         string          `json:"created_at"`
 	Decision          string          `json:"decision"`
 	InputSHA256       string          `json:"input_sha256"`
+	PartsSHA256       string          `json:"parts_sha256,omitempty"`
+	EvidenceSHA256    string          `json:"evidence_sha256,omitempty"`
 	Files             []releaseFile   `json:"files"`
 	Stats             json.RawMessage `json:"stats"`
 	ManifestSHA256    string          `json:"manifest_sha256"`
+}
+
+type evidenceRecord struct {
+	SchemaVersion   int             `json:"schema_version"`
+	ID              string          `json:"id"`
+	SKU             string          `json:"sku"`
+	Field           string          `json:"field"`
+	Value           json.RawMessage `json:"value"`
+	SourceID        string          `json:"source_id"`
+	SourceURL       string          `json:"source_url"`
+	CapturedAt      string          `json:"captured_at"`
+	RawSHA256       string          `json:"raw_sha256"`
+	Method          string          `json:"method"`
+	EvidenceExcerpt string          `json:"evidence_excerpt"`
+	EvidenceStatus  string          `json:"evidence_status"`
 }
 
 type releaseFile struct {
@@ -82,8 +103,8 @@ func loadReleaseManifest(path string) (*releaseManifest, error) {
 		}
 		return nil, fmt.Errorf("release manifest 尾部非法: %w", err)
 	}
-	if manifest.SchemaVersion != 1 {
-		return nil, fmt.Errorf("release manifest schema_version 必须为 1")
+	if manifest.SchemaVersion != 1 && manifest.SchemaVersion != 2 {
+		return nil, fmt.Errorf("release manifest schema_version 必须为 1 或 2")
 	}
 	if _, err := uuid.Parse(manifest.ReleaseID); err != nil {
 		return nil, fmt.Errorf("release_id 非法: %w", err)
@@ -102,6 +123,13 @@ func loadReleaseManifest(path string) (*releaseManifest, error) {
 	if !sha256Pattern.MatchString(manifest.InputSHA256) || !sha256Pattern.MatchString(manifest.ManifestSHA256) {
 		return nil, fmt.Errorf("release SHA-256 必须为 64 位小写十六进制")
 	}
+	if manifest.SchemaVersion == 1 && (manifest.PartsSHA256 != "" || manifest.EvidenceSHA256 != "") {
+		return nil, fmt.Errorf("release v1 不得包含 parts/evidence SHA-256")
+	}
+	if manifest.SchemaVersion == 2 &&
+		(!sha256Pattern.MatchString(manifest.PartsSHA256) || !sha256Pattern.MatchString(manifest.EvidenceSHA256)) {
+		return nil, fmt.Errorf("release v2 parts/evidence SHA-256 非法")
+	}
 	if _, err := time.Parse(time.RFC3339, manifest.CreatedAt); err != nil {
 		return nil, fmt.Errorf("created_at 非法: %w", err)
 	}
@@ -109,12 +137,15 @@ func loadReleaseManifest(path string) (*releaseManifest, error) {
 	if err := json.Unmarshal(manifest.Stats, &stats); err != nil || stats == nil {
 		return nil, fmt.Errorf("stats 必须为 JSON 对象")
 	}
-	if len(manifest.Files) != len(schemas.AllCategories) {
-		return nil, fmt.Errorf("release files 必须包含八类 parts")
-	}
-	expected := make(map[string]struct{}, len(schemas.AllCategories))
+	expected := make(map[string]struct{}, len(schemas.AllCategories)+1)
 	for _, category := range schemas.AllCategories {
 		expected["parts/"+string(category)+".jsonl"] = struct{}{}
+	}
+	if manifest.SchemaVersion == 2 {
+		expected["evidence/fields.jsonl"] = struct{}{}
+	}
+	if len(manifest.Files) != len(expected) {
+		return nil, fmt.Errorf("release files 与 schema_version 不匹配")
 	}
 	seen := make(map[string]struct{}, len(manifest.Files))
 	for _, file := range manifest.Files {
@@ -176,7 +207,15 @@ func validateReleaseFiles(manifestPath, partsDir string, manifest *releaseManife
 		return fmt.Errorf("-dir 必须指向 release manifest 同目录下的 parts")
 	}
 	for _, file := range manifest.Files {
-		path := filepath.Join(actualPartsDir, filepath.Base(file.Path))
+		path := filepath.Join(releaseDir, filepath.FromSlash(file.Path))
+		resolved, err := filepath.Abs(path)
+		if err != nil {
+			return fmt.Errorf("解析 release file %s 失败: %w", file.Path, err)
+		}
+		relative, err := filepath.Rel(releaseDir, resolved)
+		if err != nil || relative == ".." || filepath.IsAbs(relative) || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("release file %s 越过 release 目录", file.Path)
+		}
 		info, err := os.Lstat(path)
 		if err != nil {
 			return fmt.Errorf("release file %s 不存在: %w", file.Path, err)
@@ -198,8 +237,123 @@ func validateReleaseFiles(manifestPath, partsDir string, manifest *releaseManife
 	if err != nil {
 		return err
 	}
-	if digest != manifest.InputSHA256 {
-		return fmt.Errorf("release parts 与 input_sha256 不一致")
+	if manifest.SchemaVersion == 1 {
+		if digest != manifest.InputSHA256 {
+			return fmt.Errorf("release parts 与 input_sha256 不一致")
+		}
+		return nil
+	}
+	if digest != manifest.PartsSHA256 {
+		return fmt.Errorf("release parts 与 parts_sha256 不一致")
+	}
+	evidencePath := filepath.Join(releaseDir, "evidence", "fields.jsonl")
+	evidenceData, err := os.ReadFile(evidencePath)
+	if err != nil {
+		return fmt.Errorf("读取 release evidence 失败: %w", err)
+	}
+	evidenceDigest := fmt.Sprintf("%x", sha256.Sum256(evidenceData))
+	if evidenceDigest != manifest.EvidenceSHA256 {
+		return fmt.Errorf("release evidence 与 evidence_sha256 不一致")
+	}
+	combined, err := json.MarshalIndent(map[string]string{
+		"parts_sha256": digest, "evidence_sha256": evidenceDigest,
+	}, "", "  ")
+	if err != nil {
+		return fmt.Errorf("规范化 release 输入哈希失败: %w", err)
+	}
+	combined = append(combined, '\n')
+	if fmt.Sprintf("%x", sha256.Sum256(combined)) != manifest.InputSHA256 {
+		return fmt.Errorf("release parts/evidence 与 input_sha256 不一致")
+	}
+	return nil
+}
+
+func loadEvidence(path string) ([]evidenceRecord, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("打开 evidence 失败: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+	var records []evidenceRecord
+	seen := make(map[string]struct{})
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for lineNo := 1; scanner.Scan(); lineNo++ {
+		line := bytes.TrimSpace(scanner.Bytes())
+		if len(line) == 0 {
+			continue
+		}
+		var record evidenceRecord
+		decoder := json.NewDecoder(bytes.NewReader(line))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&record); err != nil {
+			return nil, fmt.Errorf("evidence:%d 解码失败: %w", lineNo, err)
+		}
+		var extra any
+		if err := decoder.Decode(&extra); err != io.EOF {
+			return nil, fmt.Errorf("evidence:%d JSON 尾部非法", lineNo)
+		}
+		if err := validateEvidence(record); err != nil {
+			return nil, fmt.Errorf("evidence:%d %w", lineNo, err)
+		}
+		if _, duplicate := seen[record.ID]; duplicate {
+			return nil, fmt.Errorf("evidence:%d ID %q 重复", lineNo, record.ID)
+		}
+		seen[record.ID] = struct{}{}
+		records = append(records, record)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("读取 evidence 失败: %w", err)
+	}
+	return records, nil
+}
+
+func validateEvidence(record evidenceRecord) error {
+	if record.SchemaVersion != 1 || !sha256Pattern.MatchString(record.ID) || !sha256Pattern.MatchString(record.RawSHA256) {
+		return fmt.Errorf("schema_version 或哈希非法")
+	}
+	if record.SKU == "" || record.SourceID == "" || record.Field == "" || len(record.Value) == 0 || !json.Valid(record.Value) {
+		return fmt.Errorf("SKU、来源、字段或值非法")
+	}
+	if !regexp.MustCompile(`^(model|brand|specs\.[a-z0-9_]+)$`).MatchString(record.Field) {
+		return fmt.Errorf("field 非法: %q", record.Field)
+	}
+	parsedURL, err := url.Parse(record.SourceURL)
+	if err != nil || parsedURL.Scheme != "https" || parsedURL.Host == "" || parsedURL.User != nil {
+		return fmt.Errorf("source_url 必须是不含凭据的 HTTPS URL")
+	}
+	if _, err := time.Parse(time.RFC3339, record.CapturedAt); err != nil {
+		return fmt.Errorf("captured_at 非法: %w", err)
+	}
+	if record.Method != "deterministic" && record.Method != "model_assisted" && record.Method != "manual" {
+		return fmt.Errorf("method 非法: %q", record.Method)
+	}
+	if record.EvidenceStatus != "verified" && record.EvidenceStatus != "candidate" &&
+		record.EvidenceStatus != "conflict" && record.EvidenceStatus != "rejected" {
+		return fmt.Errorf("evidence_status 非法: %q", record.EvidenceStatus)
+	}
+	if utf8.RuneCountInString(record.EvidenceExcerpt) > 500 {
+		return fmt.Errorf("evidence_excerpt 超过 500 字符")
+	}
+	var value any
+	if err := json.Unmarshal(record.Value, &value); err != nil {
+		return fmt.Errorf("value 非法: %w", err)
+	}
+	identity, err := json.Marshal(map[string]any{
+		"source_id":  record.SourceID,
+		"sku":        record.SKU,
+		"field":      record.Field,
+		"value":      value,
+		"raw_sha256": record.RawSHA256,
+	})
+	if err != nil || fmt.Sprintf("%x", sha256.Sum256(identity)) != record.ID {
+		return fmt.Errorf("evidence ID 与内容不匹配")
+	}
+	lowered := strings.ToLower(record.SourceURL + "\n" + record.EvidenceExcerpt)
+	for _, marker := range []string{"authorization:", "cookie:", "api_key", "apikey", "password", "secret", "token=", "sk-"} {
+		if strings.Contains(lowered, marker) {
+			return fmt.Errorf("evidence 含敏感信息标记")
+		}
 	}
 	return nil
 }
@@ -337,7 +491,17 @@ func validateRecord(rec partRecord, cat schemas.Category) error {
 	if len(rec.SourceMeta) == 0 {
 		return fmt.Errorf("SKU %q source_meta 缺失", rec.SKU)
 	}
+	if state := catalogState(rec); state != "active_core" && state != "catalog_only" && state != "retired" {
+		return fmt.Errorf("SKU %q catalog_state 非法: %q", rec.SKU, rec.CatalogState)
+	}
 	return nil
+}
+
+func catalogState(rec partRecord) string {
+	if rec.CatalogState == "" {
+		return "active_core"
+	}
+	return rec.CatalogState
 }
 
 // importParts 单事务全量 upsert;任一条写入失败整批回滚。
@@ -352,7 +516,18 @@ func importPartsWithRelease(
 	conn *pgx.Conn,
 	parts []partRecord,
 	release *releaseManifest,
+	evidenceSets ...[]evidenceRecord,
 ) error {
+	var evidence []evidenceRecord
+	if len(evidenceSets) > 1 {
+		return fmt.Errorf("evidence 参数只能提供一次")
+	}
+	if len(evidenceSets) == 1 {
+		evidence = evidenceSets[0]
+	}
+	if release == nil && len(evidence) != 0 {
+		return fmt.Errorf("没有 release 时不得导入 evidence")
+	}
 	tx, err := conn.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("开启事务失败: %w", err)
@@ -368,7 +543,7 @@ func importPartsWithRelease(
 			sku, category, brand, model, schema_version, specs, source_meta,
 			active, catalog_state, spec_fingerprint
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, 'active_core', $8)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (sku) DO UPDATE SET
 			category       = EXCLUDED.category,
 			brand          = EXCLUDED.brand,
@@ -376,8 +551,8 @@ func importPartsWithRelease(
 			schema_version = EXCLUDED.schema_version,
 			specs          = EXCLUDED.specs,
 			source_meta    = EXCLUDED.source_meta,
-			active         = TRUE,
-			catalog_state  = 'active_core',
+			active         = EXCLUDED.active,
+			catalog_state  = EXCLUDED.catalog_state,
 			spec_fingerprint = EXCLUDED.spec_fingerprint,
 			updated_at     = now()`
 	skus := make([]string, 0, len(parts))
@@ -386,9 +561,11 @@ func importPartsWithRelease(
 		if err != nil {
 			return fmt.Errorf("计算 SKU %q 指纹失败: %w", rec.SKU, err)
 		}
+		state := catalogState(rec)
+		active := state == "active_core"
 		if _, err := tx.Exec(ctx, upsertSQL,
 			rec.SKU, rec.Category, rec.Brand, rec.Model,
-			rec.SchemaVersion, rec.Specs, rec.SourceMeta, fingerprint); err != nil {
+			rec.SchemaVersion, rec.Specs, rec.SourceMeta, active, state, fingerprint); err != nil {
 			return fmt.Errorf("upsert SKU %q 失败(整批回滚): %w", rec.SKU, err)
 		}
 		skus = append(skus, rec.SKU)
@@ -397,7 +574,7 @@ func importPartsWithRelease(
 		var missing int
 		if err := tx.QueryRow(ctx, `
 			SELECT count(*) FROM parts
-			WHERE active AND NOT (sku = ANY($1::text[]))`, skus).Scan(&missing); err != nil {
+			WHERE catalog_state <> 'retired' AND NOT (sku = ANY($1::text[]))`, skus).Scan(&missing); err != nil {
 			return fmt.Errorf("检查 release 缺失 SKU 失败(整批回滚): %w", err)
 		}
 		if missing != 0 {
@@ -450,6 +627,65 @@ func importPartsWithRelease(
 			return fmt.Errorf("读取 release %q publication 失败: %w", release.ReleaseID, err)
 		}
 	}
+	if release != nil {
+		knownSKUs := make(map[string]struct{}, len(parts))
+		for _, record := range parts {
+			knownSKUs[record.SKU] = struct{}{}
+		}
+		for _, record := range evidence {
+			if err := validateEvidence(record); err != nil {
+				return fmt.Errorf("evidence %q 非法(整批回滚): %w", record.ID, err)
+			}
+			if _, exists := knownSKUs[record.SKU]; !exists {
+				return fmt.Errorf("evidence %q 引用 release 外 SKU %q(整批回滚)", record.ID, record.SKU)
+			}
+			command, err := tx.Exec(ctx, `
+				INSERT INTO part_evidence (
+					evidence_id, sku, field_path, value, source_id, source_url,
+					raw_sha256, method, evidence_status, captured_at, release_id, evidence_excerpt
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+				ON CONFLICT (evidence_id) DO NOTHING`,
+				record.ID, record.SKU, record.Field, record.Value, record.SourceID,
+				record.SourceURL, record.RawSHA256, record.Method, record.EvidenceStatus,
+				record.CapturedAt, release.ReleaseID, record.EvidenceExcerpt,
+			)
+			if err != nil {
+				return fmt.Errorf("写入 evidence %q 失败(整批回滚): %w", record.ID, err)
+			}
+			if command.RowsAffected() == 0 {
+				var existing evidenceRecord
+				var existingRelease *string
+				var existingCaptured time.Time
+				if err := tx.QueryRow(ctx, `
+					SELECT evidence_id, sku, field_path, value, source_id, source_url,
+					       raw_sha256, method, evidence_status, captured_at, release_id::text,
+					       evidence_excerpt
+					FROM part_evidence WHERE evidence_id = $1`, record.ID).Scan(
+					&existing.ID, &existing.SKU, &existing.Field, &existing.Value, &existing.SourceID,
+					&existing.SourceURL, &existing.RawSHA256, &existing.Method,
+					&existing.EvidenceStatus, &existingCaptured, &existingRelease, &existing.EvidenceExcerpt,
+				); err != nil {
+					return fmt.Errorf("核对 evidence %q 失败: %w", record.ID, err)
+				}
+				captured, _ := time.Parse(time.RFC3339, record.CapturedAt)
+				if existing.SKU != record.SKU || existing.Field != record.Field ||
+					existing.SourceID != record.SourceID || existing.SourceURL != record.SourceURL ||
+					existing.RawSHA256 != record.RawSHA256 || existing.Method != record.Method ||
+					existing.EvidenceStatus != record.EvidenceStatus ||
+					existing.EvidenceExcerpt != record.EvidenceExcerpt ||
+					!captured.Equal(existingCaptured) || !jsonSemanticallyEqual(existing.Value, record.Value) {
+					return fmt.Errorf("evidence %q 已存在但元数据不一致", record.ID)
+				}
+				if existingRelease == nil {
+					if _, err := tx.Exec(ctx, `
+						UPDATE part_evidence SET release_id = $1
+						WHERE evidence_id = $2 AND release_id IS NULL`, release.ReleaseID, record.ID); err != nil {
+						return fmt.Errorf("关联历史 evidence %q 到 release 失败: %w", record.ID, err)
+					}
+				}
+			}
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("提交事务失败: %w", err)
 	}
@@ -472,6 +708,7 @@ func main() {
 		log.Fatalf("加载 parts 产物失败: %v", err)
 	}
 	var release *releaseManifest
+	var evidence []evidenceRecord
 	if *releaseManifestPath != "" {
 		release, err = loadReleaseManifest(*releaseManifestPath)
 		if err != nil {
@@ -483,6 +720,13 @@ func main() {
 		if err := validateReleaseFiles(*releaseManifestPath, *dir, release); err != nil {
 			log.Fatalf("校验 release 文件失败: %v", err)
 		}
+		if release.SchemaVersion == 2 {
+			evidencePath := filepath.Join(filepath.Dir(*releaseManifestPath), "evidence", "fields.jsonl")
+			evidence, err = loadEvidence(evidencePath)
+			if err != nil {
+				log.Fatalf("加载 release evidence 失败: %v", err)
+			}
+		}
 	}
 
 	ctx := context.Background()
@@ -492,7 +736,7 @@ func main() {
 	}
 	defer func() { _ = conn.Close(ctx) }()
 
-	if err := importPartsWithRelease(ctx, conn, parts, release); err != nil {
+	if err := importPartsWithRelease(ctx, conn, parts, release, evidence); err != nil {
 		log.Fatalf("导入失败: %v", err)
 	}
 

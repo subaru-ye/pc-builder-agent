@@ -58,7 +58,7 @@ type partRow struct {
 // 任一 SKU 不存在/已停用/类目不符/specs 非法均返回错误(schema error 类,不产生 unknown)。
 func (s *Store) ResolveBuild(ctx context.Context, sel schemas.BuildSelection) (schemas.ResolvedBuild, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT sku, category, active, specs FROM parts WHERE sku = ANY($1)`, sel.SKUs())
+		`SELECT sku, category, active, catalog_state, specs FROM parts WHERE sku = ANY($1)`, sel.SKUs())
 	if err != nil {
 		return schemas.ResolvedBuild{}, fmt.Errorf("store: 查询 parts 失败: %w", err)
 	}
@@ -67,15 +67,16 @@ func (s *Store) ResolveBuild(ctx context.Context, sel schemas.BuildSelection) (s
 	found := make(map[string]partRow)
 	for rows.Next() {
 		var (
-			sku    string
-			row    partRow
-			active bool
+			sku          string
+			row          partRow
+			active       bool
+			catalogState string
 		)
-		if err := rows.Scan(&sku, &row.Category, &active, &row.Specs); err != nil {
+		if err := rows.Scan(&sku, &row.Category, &active, &catalogState, &row.Specs); err != nil {
 			return schemas.ResolvedBuild{}, fmt.Errorf("store: 读取 parts 行失败: %w", err)
 		}
-		if !active {
-			return schemas.ResolvedBuild{}, fmt.Errorf("store: SKU %q 已停用(active=false): %w", sku, ErrUnknownSKU)
+		if !active || catalogState != "active_core" {
+			return schemas.ResolvedBuild{}, fmt.Errorf("store: SKU %q 不属于 active_core: %w", sku, ErrUnknownSKU)
 		}
 		found[sku] = row
 	}
@@ -275,7 +276,7 @@ func (s *Store) Candidates(ctx context.Context, q CandidateQuery) (CandidateResu
 		args = append(args, v)
 		return fmt.Sprintf("$%d", len(args))
 	}
-	conds := []string{"p.active", "p.category = " + ph(string(q.Category))}
+	conds := []string{"p.active", "p.catalog_state = 'active_core'", "p.category = " + ph(string(q.Category))}
 	if q.Brand != "" {
 		conds = append(conds, "p.brand ILIKE "+ph(q.Brand))
 	}

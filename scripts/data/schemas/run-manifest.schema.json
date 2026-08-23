@@ -13,7 +13,7 @@
     "scheduled_for": {"type": "string", "format": "date-time"},
     "started_at": {"type": "string", "format": "date-time"},
     "finished_at": {"type": ["string", "null"], "format": "date-time"},
-    "status": {"enum": ["running", "no_change", "published", "quarantined", "failed", "blocked"]},
+    "status": {"enum": ["running", "no_change", "published", "partial", "quarantined", "failed", "blocked"]},
     "model_used": {"const": false},
     "sources": {"type": "array", "items": {"type": "object"}},
     "summary": {"type": "object"},

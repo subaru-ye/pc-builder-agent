@@ -29,7 +29,14 @@ _KINDS = {
     "public_retail",
     "manual",
 }
-_ADAPTERS = {"local_parts", "locked_git_version", "locked_package", "http_snapshot", "manual"}
+_ADAPTERS = {
+    "local_parts",
+    "locked_git_version",
+    "locked_package",
+    "http_snapshot",
+    "amd_cpu_official",
+    "manual",
+}
 _TRUST_TIERS = {"A", "B", "C", "D"}
 _ACCESS = {
     "local_only",
@@ -41,7 +48,7 @@ _ACCESS = {
 }
 _ROBOTS = {"obey", "not_applicable"}
 _SCHEDULES = {"daily", "weekly", "monthly", "manual"}
-_KEYS = {
+_REQUIRED_KEYS = {
     "id",
     "kind",
     "adapter",
@@ -57,7 +64,10 @@ _KEYS = {
     "schedule",
     "enabled",
     "terms_reviewed_at",
+    "failure_mode",
 }
+_OPTIONAL_KEYS = {"resources_path", "policy_sha256"}
+_KEYS = _REQUIRED_KEYS | _OPTIONAL_KEYS
 
 
 def _nonempty_string(where: str, value: Any) -> str:
@@ -88,7 +98,7 @@ def _validate_source(raw: Any, index: int) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise SpecError(f"{where} 必须为对象")
     unknown = sorted(set(raw) - _KEYS)
-    missing = sorted(_KEYS - set(raw))
+    missing = sorted(_REQUIRED_KEYS - set(raw))
     if unknown:
         raise SpecError(f"{where} 含未知键: {', '.join(unknown)}")
     if missing:
@@ -109,6 +119,8 @@ def _validate_source(raw: Any, index: int) -> dict[str, Any]:
         raise SpecError(f"{where}.robots_policy 非法: {raw['robots_policy']!r}")
     if raw["schedule"] not in _SCHEDULES:
         raise SpecError(f"{where}.schedule 非法: {raw['schedule']!r}")
+    if raw["failure_mode"] not in {"block_run", "isolate_source"}:
+        raise SpecError(f"{where}.failure_mode 非法: {raw['failure_mode']!r}")
     if not isinstance(raw["enabled"], bool) or not isinstance(raw["requires_credentials"], bool):
         raise SpecError(f"{where}.enabled/requires_credentials 必须为布尔")
     purpose = raw["purpose"]
@@ -144,8 +156,22 @@ def _validate_source(raw: Any, index: int) -> dict[str, Any]:
             raise SpecError(f"{where} 未获自动访问权限却启用")
         if raw["automated_access"] == "allowed_after_review" and reviewed is None:
             raise SpecError(f"{where} 启用前必须完成条款复核")
-        if raw["adapter"] == "http_snapshot" and raw["robots_policy"] != "obey":
+        if raw["adapter"] in {"http_snapshot", "amd_cpu_official"} and raw["robots_policy"] != "obey":
             raise SpecError(f"{where} HTTP 自动来源必须遵守 robots")
+
+    if raw["adapter"] == "amd_cpu_official":
+        resources_path = _nonempty_string(f"{where}.resources_path", raw.get("resources_path"))
+        resource = Path(resources_path)
+        if resource.is_absolute() or ".." in resource.parts or resource.suffix != ".json":
+            raise SpecError(f"{where}.resources_path 必须为数据目录内的 JSON 相对路径")
+        policy = raw.get("policy_sha256")
+        if not isinstance(policy, dict) or set(policy) != {"robots", "terms"}:
+            raise SpecError(f"{where}.policy_sha256 必须只包含 robots/terms")
+        for key, digest in policy.items():
+            if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                raise SpecError(f"{where}.policy_sha256.{key} 必须为 SHA-256")
+    elif any(key in raw for key in _OPTIONAL_KEYS):
+        raise SpecError(f"{where} 仅 amd_cpu_official 可配置 resources_path/policy_sha256")
 
     return dict(raw)
 

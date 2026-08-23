@@ -16,8 +16,13 @@ from .automation import (
     HTTPCollector,
     PipelineError,
     _copy_parts,
+    _collect_amd_cpu_source,
+    _current_evidence,
     _current_parts,
+    _load_evidence,
+    _load_parts,
     _parts_digest,
+    _write_evidence,
     _write_review,
     bootstrap_release,
     create_review,
@@ -123,6 +128,19 @@ def _cmd_collect(args: argparse.Namespace) -> int:
             paths.runs / run_id / "raw",
             CheckpointStore(paths.checkpoints),
         )
+    elif source["adapter"] == "amd_cpu_official":
+        base_release_id, base_parts = _current_parts(paths)
+        evidence = _load_evidence(_current_evidence(paths, base_release_id))
+        result = _collect_amd_cpu_source(
+            source=source,
+            paths=paths,
+            run_dir=paths.runs / run_id,
+            checkpoints=CheckpointStore(paths.checkpoints),
+            collector=HTTPCollector(),
+            current_parts=_load_parts(base_parts or paths.seed_parts),
+            evidence=evidence,
+        )
+        _write_evidence(paths.runs / run_id / "normalized" / "evidence.jsonl", evidence.values())
     elif source["adapter"] == "local_parts":
         result = {
             "source_id": source["id"],
@@ -138,8 +156,11 @@ def _cmd_collect(args: argparse.Namespace) -> int:
 def _cmd_normalize(args: argparse.Namespace) -> int:
     paths = _paths(args)
     target = paths.runs / args.run_id / "normalized" / "parts"
-    _base_release_id, base_parts = _current_parts(paths)
+    evidence_target = paths.runs / args.run_id / "normalized" / "evidence.jsonl"
+    base_release_id, base_parts = _current_parts(paths)
     _copy_parts(base_parts or paths.seed_parts, target)
+    if not evidence_target.is_file():
+        _write_evidence(evidence_target, _load_evidence(_current_evidence(paths, base_release_id)).values())
     _json({"schema_version": 1, "run_id": args.run_id, "parts_sha256": _parts_digest(target)})
     return 0
 
@@ -149,11 +170,14 @@ def _cmd_review(args: argparse.Namespace) -> int:
     run_dir = paths.runs / args.run_id
     candidate = run_dir / "normalized" / "parts"
     base_release_id, base_parts = _current_parts(paths)
+    candidate_evidence = run_dir / "normalized" / "evidence.jsonl"
     review = create_review(
         run_id=args.run_id,
         candidate_parts=candidate,
         base_parts=base_parts,
         base_release_id=base_release_id,
+        candidate_evidence=candidate_evidence,
+        base_evidence=_current_evidence(paths, base_release_id),
         model_used=False,
     )
     _write_review(run_dir, review)
@@ -172,6 +196,7 @@ def _cmd_publish(args: argparse.Namespace) -> int:
         paths,
         run_id=args.run_id,
         candidate_parts=run_dir / "normalized" / "parts",
+        candidate_evidence=run_dir / "normalized" / "evidence.jsonl",
         review=review,
         policy=args.policy,
     )

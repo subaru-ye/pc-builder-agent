@@ -16,7 +16,8 @@
       "rate_limit_policy": "not_applicable",
       "schedule": "weekly",
       "enabled": true,
-      "terms_reviewed_at": "2026-08-24"
+      "terms_reviewed_at": "2026-08-24",
+      "failure_mode": "block_run"
     },
     {
       "id": "pc_part_dataset",
@@ -33,7 +34,8 @@
       "rate_limit_policy": "monthly",
       "schedule": "monthly",
       "enabled": true,
-      "terms_reviewed_at": "2026-08-23"
+      "terms_reviewed_at": "2026-08-23",
+      "failure_mode": "isolate_source"
     },
     {
       "id": "dbgpu",
@@ -50,13 +52,14 @@
       "rate_limit_policy": "not_applicable",
       "schedule": "monthly",
       "enabled": true,
-      "terms_reviewed_at": "2026-08-23"
+      "terms_reviewed_at": "2026-08-23",
+      "failure_mode": "isolate_source"
     },
     {
       "id": "amd_products",
       "kind": "official_catalog",
-      "adapter": "http_snapshot",
-      "base_url": "https://www.amd.com/en/products/processors.html",
+      "adapter": "amd_cpu_official",
+      "base_url": "https://www.amd.com",
       "purpose": ["discovery", "spec"],
       "trust_tier": "A",
       "license_or_terms_url": "https://www.amd.com/en/legal/terms-and-conditions.html",
@@ -64,10 +67,16 @@
       "requires_credentials": false,
       "automated_access": "allowed_after_review",
       "robots_policy": "obey",
-      "rate_limit_policy": "weekly_single_request",
+      "rate_limit_policy": "weekly_serial_one_request_per_second",
       "schedule": "weekly",
-      "enabled": false,
-      "terms_reviewed_at": null
+      "enabled": true,
+      "terms_reviewed_at": "2026-08-24",
+      "failure_mode": "isolate_source",
+      "resources_path": "amd-cpu-products.json",
+      "policy_sha256": {
+        "robots": "0b1fd3de47d303a51102f2e720c1f447a3666b80cbf9f36bacc4a184cb186194",
+        "terms": "80572aeac8e00910fdc726e072358e85f5141721174b5240d6321d3a00fc5c3f"
+      }
     }
   ]
 }

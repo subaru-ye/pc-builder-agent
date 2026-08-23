@@ -174,7 +174,8 @@ def validate_specs(category: str, specs: Any) -> None:
 
 
 # parts.jsonl 单条记录的固定键集(与 parts 表列一致,时间戳由 DB 生成)。
-_PART_KEYS = ("sku", "category", "brand", "model", "schema_version", "specs", "source_meta")
+_PART_REQUIRED_KEYS = ("sku", "category", "brand", "model", "schema_version", "specs", "source_meta")
+_PART_KEYS = (*_PART_REQUIRED_KEYS, "catalog_state")
 
 
 def validate_part(record: Any) -> None:
@@ -184,7 +185,7 @@ def validate_part(record: Any) -> None:
     unknown = sorted(set(record) - set(_PART_KEYS))
     if unknown:
         raise SpecError(f"记录含未知键: {', '.join(unknown)}")
-    missing = sorted(set(_PART_KEYS) - set(record))
+    missing = sorted(set(_PART_REQUIRED_KEYS) - set(record))
     if missing:
         raise SpecError(f"记录缺少键: {', '.join(missing)}")
     for key in ("sku", "brand", "model"):
@@ -195,6 +196,8 @@ def validate_part(record: Any) -> None:
         raise SpecError(f"非法类目 {record['category']!r}(仅 {'|'.join(CATEGORIES)})")
     if record["schema_version"] != 1:
         raise SpecError(f"schema_version 必须为 1,得到 {record['schema_version']!r}")
+    if record.get("catalog_state", "active_core") not in {"active_core", "catalog_only", "retired"}:
+        raise SpecError(f"catalog_state 非法: {record.get('catalog_state')!r}")
     if not isinstance(record["source_meta"], dict) or not record["source_meta"]:
         raise SpecError("source_meta 必须为非空对象(每个字段值都要可追溯来源)")
     validate_specs(record["category"], record["specs"])

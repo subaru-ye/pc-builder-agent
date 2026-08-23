@@ -12,6 +12,7 @@ import ipaddress
 import json
 import os
 import random
+import re
 import shutil
 import socket
 import subprocess
@@ -24,10 +25,12 @@ import uuid
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Callable, Iterable
 from urllib.parse import urlsplit, urlunsplit
 
+from .amd import build_amd_evidence, load_amd_products, parse_amd_cpu_html
 from .canonical import CATEGORIES, SpecError
 from .coverage import ERROR_LEVEL_FIELDS, load_parts_jsonl
 from .registry import DEFAULT_REGISTRY_PATH, load_registry
@@ -48,7 +51,46 @@ __all__ = [
 ]
 
 SCHEMA_VERSION = 1
+RELEASE_SCHEMA_VERSION = 2
+REVIEW_SCHEMA_VERSION = 2
 MAX_HTTP_BYTES = 10 * 1024 * 1024
+
+
+class _VisiblePolicyTextParser(HTMLParser):
+    """提取条款页可见文本，避免动态属性/脚本令原始 HTML 哈希每次变化。"""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._ignored = 0
+        self.parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        del attrs
+        if tag in {"script", "style", "noscript", "svg"}:
+            self._ignored += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"script", "style", "noscript", "svg"}:
+            self._ignored = max(0, self._ignored - 1)
+
+    def handle_data(self, data: str) -> None:
+        if self._ignored == 0:
+            value = re.sub(r"\s+", " ", data).strip()
+            if value:
+                self.parts.append(value)
+
+
+def _terms_policy_digest(data: bytes) -> str:
+    try:
+        text = data.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as exc:
+        raise PipelineError("terms_unavailable", "条款页面不是合法 UTF-8") from exc
+    parser = _VisiblePolicyTextParser()
+    parser.feed(text)
+    canonical = "\n".join(parser.parts) + "\n"
+    if "Terms and Conditions" not in canonical or len(canonical) < 1000:
+        raise PipelineError("terms_unavailable", "条款页面可见正文不完整")
+    return sha256_bytes(canonical.encode("utf-8"))
 MAX_HTTP_ATTEMPTS = 2
 LOGIN_MARKERS = (
     "captcha",
@@ -396,7 +438,47 @@ class HTTPCollector:
             time.sleep(0.1 * (2**attempt) + random.uniform(0, 0.05))
         raise PipelineError("network_error", "HTTP 请求重试失败")
 
-    def _check_robots(self, source: dict[str, Any], user_agent: str) -> None:
+    def _read_policy_url(self, url: str, *, error_code: str, user_agent: str) -> bytes:
+        _validate_http_endpoint(url, allow_http_for_test=self.allow_http_for_test)
+        request = urllib.request.Request(url, headers={"User-Agent": user_agent}, method="GET")
+        try:
+            response = self._open_with_retry(request)
+            with response:
+                status = int(getattr(response, "status", response.getcode()))
+                data = response.read(min(self.max_bytes, 512 * 1024) + 1)
+                _validate_response_url(url, response, allow_http_for_test=self.allow_http_for_test)
+        except urllib.error.HTTPError as exc:
+            code = "rate_limited" if exc.code == 429 else "access_denied" if exc.code in {401, 403} else error_code
+            raise PipelineError(code, f"策略页面 HTTP {exc.code}") from exc
+        except (TimeoutError, urllib.error.URLError) as exc:
+            raise PipelineError(error_code, "策略页面无法读取") from exc
+        if status != 200 or not data or len(data) > min(self.max_bytes, 512 * 1024):
+            raise PipelineError(error_code, "策略页面响应异常")
+        return data
+
+    def check_policy(self, source: dict[str, Any], urls: Iterable[str]) -> dict[str, str]:
+        """核验固定 robots/条款内容，并确认全部资源路径允许访问。"""
+        parsed = urlsplit(source["base_url"])
+        robots_url = urlunsplit((parsed.scheme, parsed.netloc, "/robots.txt", "", ""))
+        user_agent = "pc-builder-agent-data/1.0 (+local-learning-project)"
+        robots = self._read_policy_url(robots_url, error_code="robots_unavailable", user_agent=user_agent)
+        terms_url = source["license_or_terms_url"]
+        terms = self._read_policy_url(terms_url, error_code="terms_unavailable", user_agent=user_agent)
+        actual = {"robots": sha256_bytes(robots), "terms": _terms_policy_digest(terms)}
+        if actual != source.get("policy_sha256"):
+            raise PipelineError("source_policy_changed", f"来源 {source['id']} robots 或条款内容发生变化")
+        parser = urllib.robotparser.RobotFileParser()
+        parser.set_url(robots_url)
+        parser.parse(robots.decode("utf-8", errors="replace").splitlines())
+        for url in urls:
+            _validate_http_endpoint(url, allow_http_for_test=self.allow_http_for_test)
+            if urlsplit(url).netloc != parsed.netloc:
+                raise PipelineError("source_host_mismatch", f"来源 {source['id']} 资源主机未登记")
+            if not parser.can_fetch(user_agent, url):
+                raise PipelineError("robots_disallowed", f"来源 {source['id']} robots.txt 禁止资源路径")
+        return actual
+
+    def _check_robots(self, source: dict[str, Any], user_agent: str, target_url: str | None = None) -> None:
         parsed = urlsplit(source["base_url"])
         robots_url = urlunsplit((parsed.scheme, parsed.netloc, "/robots.txt", "", ""))
         _validate_http_endpoint(robots_url, allow_http_for_test=self.allow_http_for_test)
@@ -421,7 +503,7 @@ class HTTPCollector:
         parser = urllib.robotparser.RobotFileParser()
         parser.set_url(robots_url)
         parser.parse(data.decode("utf-8", errors="replace").splitlines())
-        if not parser.can_fetch(user_agent, source["base_url"]):
+        if not parser.can_fetch(user_agent, target_url or source["base_url"]):
             raise PipelineError("robots_disallowed", f"来源 {source['id']} robots.txt 禁止自动访问")
 
     def collect(
@@ -429,33 +511,40 @@ class HTTPCollector:
         source: dict[str, Any],
         raw_dir: Path,
         checkpoints: CheckpointStore,
+        *,
+        resource_id: str | None = None,
+        resource_url: str | None = None,
+        check_robots: bool = True,
+        conditional: bool = True,
     ) -> dict[str, Any]:
-        if source["adapter"] != "http_snapshot":
-            raise PipelineError("adapter_mismatch", f"{source['id']} 不是 http_snapshot")
+        if source["adapter"] not in {"http_snapshot", "amd_cpu_official"}:
+            raise PipelineError("adapter_mismatch", f"{source['id']} 不是 HTTP 适配器")
         if not source["enabled"]:
             raise PipelineError("source_disabled", f"来源 {source['id']} 未启用")
         if source["automated_access"] not in {"allowed", "allowed_after_review"}:
             raise PipelineError("source_not_allowed", f"来源 {source['id']} 未允许自动访问")
         if source.get("requires_credentials"):
             raise PipelineError("credentials_required", f"来源 {source['id']} 需要凭据，定时采集不允许启用")
-        url = source["base_url"]
+        url = resource_url or source["base_url"]
+        checkpoint_id = resource_id or source["id"]
         _validate_http_endpoint(url, allow_http_for_test=self.allow_http_for_test)
 
-        previous = checkpoints.load(source["id"])
+        previous = checkpoints.load(checkpoint_id)
         attempted_at = _rfc3339()
         user_agent = "pc-builder-agent-data/1.0 (+local-learning-project)"
         try:
-            self._check_robots(source, user_agent)
+            if check_robots:
+                self._check_robots(source, user_agent, url)
         except PipelineError as exc:
-            self._record_failed_attempt(source["id"], checkpoints, previous, attempted_at, exc.code)
+            self._record_failed_attempt(checkpoint_id, checkpoints, previous, attempted_at, exc.code)
             raise
         headers = {
             "Accept": "text/html,application/json;q=0.9,*/*;q=0.1",
             "User-Agent": user_agent,
         }
-        if previous.get("etag"):
+        if conditional and previous.get("etag"):
             headers["If-None-Match"] = previous["etag"]
-        if previous.get("last_modified"):
+        if conditional and previous.get("last_modified"):
             headers["If-Modified-Since"] = previous["last_modified"]
         request = urllib.request.Request(url, headers=headers, method="GET")
         try:
@@ -470,53 +559,59 @@ class HTTPCollector:
             if exc.code == 304:
                 checkpoint = dict(previous)
                 checkpoint.update({"last_attempt_at": attempted_at, "last_success_at": attempted_at, "status": "not_modified"})
-                checkpoints.save(source["id"], checkpoint)
+                checkpoints.save(checkpoint_id, checkpoint)
                 return {
                     "source_id": source["id"],
+                    "resource_id": checkpoint_id,
                     "status": "not_modified",
                     "http_status": 304,
                     "captured_at": attempted_at,
                 }
             if 300 <= exc.code < 400:
-                self._record_failed_attempt(source["id"], checkpoints, previous, attempted_at, "redirect_blocked")
+                self._record_failed_attempt(checkpoint_id, checkpoints, previous, attempted_at, "redirect_blocked")
                 raise PipelineError("redirect_blocked", f"来源 {source['id']} 禁止 redirect") from exc
             code = "rate_limited" if exc.code == 429 else "access_denied" if exc.code in {401, 403} else "http_error"
-            self._record_failed_attempt(source["id"], checkpoints, previous, attempted_at, code)
+            self._record_failed_attempt(checkpoint_id, checkpoints, previous, attempted_at, code)
             raise PipelineError(code, f"来源 {source['id']} HTTP {exc.code}") from exc
         except TimeoutError as exc:
-            self._record_failed_attempt(source["id"], checkpoints, previous, attempted_at, "timeout")
+            self._record_failed_attempt(checkpoint_id, checkpoints, previous, attempted_at, "timeout")
             raise PipelineError("timeout", f"来源 {source['id']} 请求超时") from exc
         except urllib.error.URLError as exc:
-            self._record_failed_attempt(source["id"], checkpoints, previous, attempted_at, "network_error")
+            self._record_failed_attempt(checkpoint_id, checkpoints, previous, attempted_at, "network_error")
             raise PipelineError("network_error", f"来源 {source['id']} 网络失败") from exc
         except PipelineError as exc:
-            self._record_failed_attempt(source["id"], checkpoints, previous, attempted_at, exc.code)
+            self._record_failed_attempt(checkpoint_id, checkpoints, previous, attempted_at, exc.code)
             raise
 
         if status != 200:
-            self._record_failed_attempt(source["id"], checkpoints, previous, attempted_at, "http_error")
+            self._record_failed_attempt(checkpoint_id, checkpoints, previous, attempted_at, "http_error")
             raise PipelineError("http_error", f"来源 {source['id']} HTTP {status}")
         if len(data) > self.max_bytes:
-            self._record_failed_attempt(source["id"], checkpoints, previous, attempted_at, "response_too_large")
+            self._record_failed_attempt(checkpoint_id, checkpoints, previous, attempted_at, "response_too_large")
             raise PipelineError("response_too_large", f"来源 {source['id']} 响应超过 {self.max_bytes} 字节")
         if not data:
-            self._record_failed_attempt(source["id"], checkpoints, previous, attempted_at, "empty_response")
+            self._record_failed_attempt(checkpoint_id, checkpoints, previous, attempted_at, "empty_response")
             raise PipelineError("empty_response", f"来源 {source['id']} 返回空内容")
-        sample = data[:200_000].decode("utf-8", errors="ignore").lower()
+        sample_text = data[:200_000].decode("utf-8", errors="ignore")
+        if content_type == "text/html":
+            visible = _VisiblePolicyTextParser()
+            visible.feed(sample_text)
+            sample_text = " ".join(visible.parts)
+        sample = sample_text.lower()
         if any(marker in sample for marker in LOGIN_MARKERS):
-            self._record_failed_attempt(source["id"], checkpoints, previous, attempted_at, "access_challenge")
+            self._record_failed_attempt(checkpoint_id, checkpoints, previous, attempted_at, "access_challenge")
             raise PipelineError("access_challenge", f"来源 {source['id']} 返回登录或验证页面")
         if content_type and not (
             content_type.startswith("text/")
             or content_type in {"application/json", "application/pdf", "application/octet-stream"}
         ):
-            self._record_failed_attempt(source["id"], checkpoints, previous, attempted_at, "unexpected_content_type")
+            self._record_failed_attempt(checkpoint_id, checkpoints, previous, attempted_at, "unexpected_content_type")
             raise PipelineError("unexpected_content_type", f"来源 {source['id']} Content-Type={content_type}")
 
         digest = sha256_bytes(data)
         raw_dir.mkdir(parents=True, exist_ok=True)
-        suffix = ".json" if content_type == "application/json" else ".pdf" if content_type == "application/pdf" else ".bin"
-        raw_path = raw_dir / f"{source['id']}-{digest[:16]}{suffix}"
+        suffix = ".json" if content_type == "application/json" else ".pdf" if content_type == "application/pdf" else ".html" if content_type == "text/html" else ".bin"
+        raw_path = raw_dir / f"{checkpoint_id}-{digest[:16]}{suffix}"
         if not raw_path.exists():
             _atomic_write(raw_path, data)
         unchanged = previous.get("content_sha256") == digest
@@ -528,9 +623,10 @@ class HTTPCollector:
             "last_success_at": attempted_at,
             "status": "not_modified" if unchanged else "collected",
         }
-        checkpoints.save(source["id"], checkpoint)
+        checkpoints.save(checkpoint_id, checkpoint)
         return {
             "source_id": source["id"],
+            "resource_id": checkpoint_id,
             "status": checkpoint["status"],
             "http_status": 200,
             "content_type": content_type or None,
@@ -564,6 +660,86 @@ def _load_parts(parts_dir: Path) -> dict[str, dict[str, Any]]:
             _assert_safe(record["source_meta"], f"parts[{sku}].source_meta")
             records[sku] = record
     return records
+
+
+def _load_evidence(path: Path | None) -> dict[tuple[str, str, str], dict[str, Any]]:
+    if path is None or not path.is_file():
+        return {}
+    out: dict[tuple[str, str, str], dict[str, Any]] = {}
+    with path.open("r", encoding="utf-8", newline="") as stream:
+        for line_no, line in enumerate(stream, 1):
+            if not line.strip():
+                continue
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise PipelineError("evidence_invalid", f"{path.name}:{line_no} JSON 非法") from exc
+            required = {
+                "schema_version", "id", "sku", "field", "value", "source_id", "source_url",
+                "captured_at", "raw_sha256", "method", "evidence_excerpt", "evidence_status",
+            }
+            if not isinstance(item, dict) or set(item) != required or item.get("schema_version") != 1:
+                raise PipelineError("evidence_invalid", f"{path.name}:{line_no} evidence 结构非法")
+            if item["method"] != "deterministic" or item["evidence_status"] not in {
+                "verified", "candidate", "conflict", "rejected"
+            }:
+                raise PipelineError("evidence_invalid", f"{path.name}:{line_no} evidence 状态非法")
+            for text_field in ("sku", "field", "source_id", "source_url", "captured_at", "evidence_excerpt"):
+                if not isinstance(item[text_field], str) or (text_field != "evidence_excerpt" and not item[text_field]):
+                    raise PipelineError("evidence_invalid", f"{path.name}:{line_no} {text_field} 非法")
+            if not re.fullmatch(r"(?:model|brand|specs\.[a-z0-9_]+)", item["field"]):
+                raise PipelineError("evidence_invalid", f"{path.name}:{line_no} field 非法")
+            parsed_url = urlsplit(item["source_url"])
+            if parsed_url.scheme != "https" or not parsed_url.netloc or parsed_url.username or parsed_url.password:
+                raise PipelineError("evidence_invalid", f"{path.name}:{line_no} source_url 非法")
+            try:
+                captured = datetime.fromisoformat(item["captured_at"].replace("Z", "+00:00"))
+            except ValueError as exc:
+                raise PipelineError("evidence_invalid", f"{path.name}:{line_no} captured_at 非法") from exc
+            if captured.tzinfo is None or len(item["evidence_excerpt"]) > 500:
+                raise PipelineError("evidence_invalid", f"{path.name}:{line_no} captured_at/excerpt 非法")
+            for digest_field in ("id", "raw_sha256"):
+                digest = item[digest_field]
+                if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                    raise PipelineError("evidence_invalid", f"{path.name}:{line_no} {digest_field} 非法")
+            identity = {
+                "source_id": item["source_id"],
+                "sku": item["sku"],
+                "field": item["field"],
+                "value": item["value"],
+                "raw_sha256": item["raw_sha256"],
+            }
+            expected_id = sha256_bytes(
+                json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            )
+            if item["id"] != expected_id:
+                raise PipelineError("evidence_invalid", f"{path.name}:{line_no} evidence ID 与内容不匹配")
+            key = (item["sku"], item["field"], item["source_id"])
+            if key in out:
+                raise PipelineError("evidence_invalid", f"{path.name}:{line_no} evidence 键重复")
+            _assert_safe(item)
+            out[key] = item
+    return out
+
+
+def _write_evidence(path: Path, evidence: Iterable[dict[str, Any]]) -> None:
+    ordered = sorted(evidence, key=lambda item: (item["sku"], item["field"], item["source_id"], item["id"]))
+    payload = b"".join(
+        (json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+        for item in ordered
+    )
+    for item in ordered:
+        _assert_safe(item)
+    _atomic_write(path, payload)
+
+
+def _content_digest(parts_dir: Path, evidence_path: Path) -> tuple[str, str, str]:
+    parts_sha = _parts_digest(parts_dir)
+    evidence_sha = sha256_file(evidence_path)
+    combined = sha256_bytes(
+        stable_json_bytes({"parts_sha256": parts_sha, "evidence_sha256": evidence_sha}, safe=False)
+    )
+    return parts_sha, evidence_sha, combined
 
 
 def _parts_digest(parts_dir: Path) -> str:
@@ -621,11 +797,20 @@ def _current_parts(paths: DataPaths) -> tuple[str | None, Path | None]:
     return release_id, paths.releases / release_id / "parts"
 
 
+def _current_evidence(paths: DataPaths, release_id: str | None) -> Path | None:
+    if release_id is None:
+        return None
+    path = paths.releases / release_id / "evidence" / "fields.jsonl"
+    return path if path.is_file() else None
+
+
 def _field_changes(before: dict[str, Any], after: dict[str, Any]) -> list[dict[str, Any]]:
     changes: list[dict[str, Any]] = []
-    for field in ("category", "brand", "model", "schema_version"):
-        if before[field] != after[field]:
-            changes.append({"field": field, "before": before[field], "after": after[field]})
+    for field in ("category", "brand", "model", "schema_version", "catalog_state"):
+        old = before.get(field, "active_core") if field == "catalog_state" else before[field]
+        new = after.get(field, "active_core") if field == "catalog_state" else after[field]
+        if old != new:
+            changes.append({"field": field, "before": old, "after": new})
     keys = sorted(set(before["specs"]) | set(after["specs"]))
     for field in keys:
         old, new = before["specs"].get(field), after["specs"].get(field)
@@ -642,13 +827,45 @@ def create_review(
     candidate_parts: Path,
     base_parts: Path | None,
     base_release_id: str | None,
+    candidate_evidence: Path | None = None,
+    base_evidence: Path | None = None,
     model_used: bool = False,
 ) -> dict[str, Any]:
     """比较 candidate 与 last-known-good，并作确定性风险分类。"""
     candidate = _load_parts(candidate_parts)
     base = _load_parts(base_parts) if base_parts is not None else {}
+    evidence = _load_evidence(candidate_evidence)
+    previous_evidence = _load_evidence(base_evidence)
     changes: list[dict[str, Any]] = []
+    evidence_changes: list[dict[str, Any]] = []
     risks: list[dict[str, Any]] = []
+
+    for key in sorted(set(evidence) | set(previous_evidence)):
+        before = previous_evidence.get(key)
+        after = evidence.get(key)
+        if before == after:
+            continue
+        evidence_changes.append(
+            {
+                "sku": key[0],
+                "field": key[1],
+                "source_id": key[2],
+                "before_id": before["id"] if before else None,
+                "after_id": after["id"] if after else None,
+                "status": after["evidence_status"] if after else "removed",
+            }
+        )
+        if after is None:
+            risks.append({"code": "evidence_removed", "sku": key[0], "field": key[1], "severity": "high"})
+        elif after["evidence_status"] != "verified":
+            risks.append(
+                {
+                    "code": "evidence_not_verified",
+                    "sku": key[0],
+                    "field": key[1],
+                    "severity": "high",
+                }
+            )
 
     for sku in sorted(set(base) | set(candidate)):
         if sku not in base:
@@ -668,6 +885,12 @@ def create_review(
         critical = set(ERROR_LEVEL_FIELDS.get(category, ()))
         for change in fields:
             field = change["field"]
+            matching = [
+                item["id"]
+                for (e_sku, e_field, _), item in evidence.items()
+                if e_sku == sku and e_field == field and item["evidence_status"] == "verified"
+            ]
+            change["evidence_ids"] = sorted(matching)
             if field in {"category", "brand", "model"} or (
                 field.startswith("specs.") and field.removeprefix("specs.") in critical
             ):
@@ -679,24 +902,40 @@ def create_review(
                         "severity": "critical",
                     }
                 )
+            elif field == "catalog_state":
+                risks.append(
+                    {"code": "catalog_state_changed", "sku": sku, "field": field, "severity": "high"}
+                )
+            elif field != "source_meta" and not matching:
+                risks.append(
+                    {"code": "change_missing_evidence", "sku": sku, "field": field, "severity": "high"}
+                )
     if model_used:
         risks.append({"code": "model_output_requires_manual_review", "severity": "high"})
 
     if base_parts is None:
         decision = "manual_required"
-    elif not changes:
+    elif not changes and not evidence_changes:
         decision = "no_change"
     elif risks:
         decision = "quarantine"
     else:
         decision = "auto_publish"
+    parts_sha = _parts_digest(candidate_parts)
+    evidence_sha = sha256_file(candidate_evidence) if candidate_evidence is not None and candidate_evidence.is_file() else sha256_bytes(b"")
+    input_sha = sha256_bytes(
+        stable_json_bytes({"parts_sha256": parts_sha, "evidence_sha256": evidence_sha}, safe=False)
+    )
     return {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": REVIEW_SCHEMA_VERSION,
         "run_id": run_id,
         "created_at": _rfc3339(),
         "base_release_id": base_release_id,
-        "input_sha256": _parts_digest(candidate_parts),
+        "parts_sha256": parts_sha,
+        "evidence_sha256": evidence_sha,
+        "input_sha256": input_sha,
         "changes": changes,
+        "evidence_changes": evidence_changes,
         "risks": risks,
         "decision": decision,
     }
@@ -710,6 +949,7 @@ def _review_markdown(review: dict[str, Any]) -> str:
         f"- 基线：`{review['base_release_id'] or 'none'}`",
         f"- 输入 SHA-256：`{review['input_sha256']}`",
         f"- 变化：{len(review['changes'])}",
+        f"- 证据变化：{len(review.get('evidence_changes', []))}",
         f"- 风险：{len(review['risks'])}",
         "",
         "## 变化",
@@ -745,26 +985,34 @@ def _validate_review(review: Any, *, run_id: str) -> None:
         "created_at",
         "base_release_id",
         "input_sha256",
+        "parts_sha256",
+        "evidence_sha256",
         "changes",
+        "evidence_changes",
         "risks",
         "decision",
     }
-    if set(review) != required or review.get("schema_version") != SCHEMA_VERSION:
+    if set(review) != required or review.get("schema_version") != REVIEW_SCHEMA_VERSION:
         raise PipelineError("review_invalid", "review 结构或 schema_version 非法")
     if review.get("run_id") != run_id or not _is_canonical_uuid(run_id):
         raise PipelineError("review_invalid", "review run_id 不匹配")
     base_release_id = review.get("base_release_id")
     if base_release_id is not None and not _is_canonical_uuid(base_release_id):
         raise PipelineError("review_invalid", "review base_release_id 非法")
-    input_sha256 = review.get("input_sha256")
+    for field in ("input_sha256", "parts_sha256", "evidence_sha256"):
+        digest = review.get(field)
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(char not in "0123456789abcdef" for char in digest)
+        ):
+            raise PipelineError("review_invalid", f"review {field} 非法")
     if (
-        not isinstance(input_sha256, str)
-        or len(input_sha256) != 64
-        or any(char not in "0123456789abcdef" for char in input_sha256)
+        not isinstance(review.get("changes"), list)
+        or not isinstance(review.get("evidence_changes"), list)
+        or not isinstance(review.get("risks"), list)
     ):
-        raise PipelineError("review_invalid", "review input_sha256 非法")
-    if not isinstance(review.get("changes"), list) or not isinstance(review.get("risks"), list):
-        raise PipelineError("review_invalid", "review changes/risks 必须为数组")
+        raise PipelineError("review_invalid", "review changes/evidence_changes/risks 必须为数组")
     if review.get("decision") not in {"no_change", "auto_publish", "quarantine", "manual_required"}:
         raise PipelineError("review_invalid", "review decision 非法")
     _assert_safe(review)
@@ -793,6 +1041,7 @@ def _verify_release_dir(
     if not isinstance(manifest, dict):
         raise PipelineError("release_invalid", "release manifest 必须为对象")
     _assert_safe(manifest)
+    schema_version = manifest.get("schema_version")
     required = {
         "schema_version",
         "release_id",
@@ -805,9 +1054,11 @@ def _verify_release_dir(
         "stats",
         "manifest_sha256",
     }
+    if schema_version == RELEASE_SCHEMA_VERSION:
+        required |= {"parts_sha256", "evidence_sha256"}
     if set(manifest) != required:
         raise PipelineError("release_invalid", "release manifest 字段集合非法")
-    if manifest.get("schema_version") != SCHEMA_VERSION:
+    if schema_version not in {1, RELEASE_SCHEMA_VERSION}:
         raise PipelineError("release_invalid", "release schema_version 非法")
     release_id = manifest.get("release_id")
     if not _is_canonical_uuid(release_id):
@@ -851,9 +1102,11 @@ def _verify_release_dir(
     if expected_previous_release_id is not None and manifest.get("previous_release_id") != expected_previous_release_id:
         raise PipelineError("release_collision", "既有 release 的 last-known-good 基线不一致")
     files = manifest.get("files")
-    if not isinstance(files, list) or len(files) != len(CATEGORIES):
-        raise PipelineError("release_invalid", "release files 必须包含八类 parts")
     expected_paths = {f"parts/{category}.jsonl" for category in CATEGORIES}
+    if schema_version == RELEASE_SCHEMA_VERSION:
+        expected_paths.add("evidence/fields.jsonl")
+    if not isinstance(files, list) or len(files) != len(expected_paths):
+        raise PipelineError("release_invalid", "release files 与 schema_version 不匹配")
     actual_paths: set[str] = set()
     for entry in files:
         if not isinstance(entry, dict) or set(entry) != {"path", "sha256", "bytes"}:
@@ -875,8 +1128,20 @@ def _verify_release_dir(
             raise PipelineError("release_invalid", f"release file 哈希不匹配: {relative}")
     if actual_paths != expected_paths:
         raise PipelineError("release_invalid", "release files 缺少或重复类目")
-    if _parts_digest(release_dir / "parts") != manifest.get("input_sha256"):
-        raise PipelineError("release_invalid", "release parts 与 input_sha256 不一致")
+    parts_sha = _parts_digest(release_dir / "parts")
+    if schema_version == 1:
+        if parts_sha != manifest.get("input_sha256"):
+            raise PipelineError("release_invalid", "v1 release parts 与 input_sha256 不一致")
+    else:
+        evidence_path = release_dir / "evidence" / "fields.jsonl"
+        _load_evidence(evidence_path)
+        actual_parts, actual_evidence, actual_input = _content_digest(release_dir / "parts", evidence_path)
+        if (
+            manifest.get("parts_sha256") != actual_parts
+            or manifest.get("evidence_sha256") != actual_evidence
+            or manifest.get("input_sha256") != actual_input
+        ):
+            raise PipelineError("release_invalid", "v2 release parts/evidence/input 哈希不一致")
     return manifest
 
 
@@ -1008,6 +1273,7 @@ def _stage_release(
     paths: DataPaths,
     run_id: str,
     candidate_parts: Path,
+    candidate_evidence: Path | None,
     previous_release_id: str | None,
     decision: str,
     review: dict[str, Any],
@@ -1028,25 +1294,40 @@ def _stage_release(
         shutil.rmtree(temp_dir)
     temp_dir.mkdir(parents=True)
     _copy_parts(candidate_parts, temp_dir / "parts")
+    evidence_path = temp_dir / "evidence" / "fields.jsonl"
+    if candidate_evidence is not None and candidate_evidence.is_file():
+        _atomic_write(evidence_path, candidate_evidence.read_bytes())
+    else:
+        _atomic_write(evidence_path, b"")
     files = [
         {"path": f"parts/{path.name}", "sha256": sha256_file(path), "bytes": path.stat().st_size}
         for path in _category_files(temp_dir / "parts")
     ]
+    files.append(
+        {
+            "path": "evidence/fields.jsonl",
+            "sha256": sha256_file(evidence_path),
+            "bytes": evidence_path.stat().st_size,
+        }
+    )
     manifest = _manifest_with_hash(
         {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": RELEASE_SCHEMA_VERSION,
             "release_id": release_id,
             "previous_release_id": previous_release_id,
             "run_id": run_id,
             "created_at": _rfc3339(),
             "decision": decision,
             "input_sha256": review["input_sha256"],
+            "parts_sha256": review["parts_sha256"],
+            "evidence_sha256": review["evidence_sha256"],
             "files": files,
             "stats": {
                 "total_skus": len(_load_parts(candidate_parts)),
                 "added": sum(1 for c in review["changes"] if c["kind"] == "added"),
                 "modified": sum(1 for c in review["changes"] if c["kind"] == "modified"),
                 "removed": sum(1 for c in review["changes"] if c["kind"] == "removed"),
+                "evidence_changes": len(review["evidence_changes"]),
             },
         }
     )
@@ -1086,18 +1367,22 @@ def _bootstrap_release_unlocked(
     run_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"pcdata:bootstrap:{_parts_digest(paths.seed_parts)}"))
     run_dir = paths.runs / run_id
     candidate = run_dir / "normalized" / "parts"
+    candidate_evidence = run_dir / "normalized" / "evidence.jsonl"
     _copy_parts(paths.seed_parts, candidate)
+    _write_evidence(candidate_evidence, [])
     review = create_review(
         run_id=run_id,
         candidate_parts=candidate,
         base_parts=None,
         base_release_id=None,
+        candidate_evidence=candidate_evidence,
     )
     _write_review(run_dir, review)
     release_dir, manifest = _stage_release(
         paths=paths,
         run_id=run_id,
         candidate_parts=candidate,
+        candidate_evidence=candidate_evidence,
         previous_release_id=None,
         decision="bootstrap",
         review=review,
@@ -1153,6 +1438,7 @@ def _publish_reviewed_release_unlocked(
     *,
     run_id: str,
     candidate_parts: Path,
+    candidate_evidence: Path | None,
     review: dict[str, Any],
     policy: str,
     importer: Importer | None = None,
@@ -1160,7 +1446,20 @@ def _publish_reviewed_release_unlocked(
     _validate_review(review, run_id=run_id)
     if policy not in {"auto", "manual"}:
         raise PipelineError("invalid_policy", "policy 仅允许 auto|manual")
-    if _parts_digest(candidate_parts) != review["input_sha256"]:
+    actual_parts = _parts_digest(candidate_parts)
+    actual_evidence = (
+        sha256_file(candidate_evidence)
+        if candidate_evidence is not None and candidate_evidence.is_file()
+        else sha256_bytes(b"")
+    )
+    actual_input = sha256_bytes(
+        stable_json_bytes({"parts_sha256": actual_parts, "evidence_sha256": actual_evidence}, safe=False)
+    )
+    if (
+        actual_parts != review["parts_sha256"]
+        or actual_evidence != review["evidence_sha256"]
+        or actual_input != review["input_sha256"]
+    ):
         raise PipelineError("review_drift", "审核后输入发生变化")
     if policy == "auto" and review["decision"] != "auto_publish":
         raise PipelineError("auto_publish_blocked", f"审核决定为 {review['decision']}")
@@ -1174,6 +1473,7 @@ def _publish_reviewed_release_unlocked(
         paths=paths,
         run_id=run_id,
         candidate_parts=candidate_parts,
+        candidate_evidence=candidate_evidence,
         previous_release_id=previous,
         decision=policy,
         review=review,
@@ -1201,6 +1501,7 @@ def publish_reviewed_release(
     *,
     run_id: str,
     candidate_parts: Path,
+    candidate_evidence: Path | None = None,
     review: dict[str, Any],
     policy: str,
     importer: Importer | None = None,
@@ -1212,6 +1513,7 @@ def publish_reviewed_release(
             paths,
             run_id=run_id,
             candidate_parts=candidate_parts,
+            candidate_evidence=candidate_evidence,
             review=review,
             policy=policy,
             importer=importer,
@@ -1256,6 +1558,90 @@ def locked_source_result(source: dict[str, Any], data_root: Path) -> dict[str, A
     raise PipelineError("adapter_mismatch", f"来源 {source['id']} 不是锁定版本适配器")
 
 
+def _collect_amd_cpu_source(
+    *,
+    source: dict[str, Any],
+    paths: DataPaths,
+    run_dir: Path,
+    checkpoints: CheckpointStore,
+    collector: HTTPCollector,
+    current_parts: dict[str, dict[str, Any]],
+    evidence: dict[tuple[str, str, str], dict[str, Any]],
+) -> dict[str, Any]:
+    products = load_amd_products(paths.data_root / source["resources_path"])
+    mapped = {item["sku"] for item in products}
+    expected = {
+        sku for sku, part in current_parts.items()
+        if part["category"] == "cpu" and part["brand"].casefold() == "amd"
+    }
+    if mapped != expected:
+        raise PipelineError(
+            "amd_mapping_incomplete",
+            f"AMD 产品映射必须精确覆盖当前 AMD CPU: missing={sorted(expected - mapped)}, extra={sorted(mapped - expected)}",
+        )
+    collector.check_policy(source, (item["url"] for item in products))
+    raw_dir = run_dir / "raw" / source["id"]
+    statuses: list[dict[str, Any]] = []
+    collected = 0
+    unchanged = 0
+    for index, product in enumerate(products):
+        if index and not collector.allow_http_for_test:
+            time.sleep(1)
+        sku = product["sku"]
+        resource_id = f"{source['id']}_{sku.replace('-', '_')}"
+        has_published_evidence = any(key[0] == sku and key[2] == source["id"] for key in evidence)
+        result = collector.collect(
+            source,
+            raw_dir,
+            checkpoints,
+            resource_id=resource_id,
+            resource_url=product["url"],
+            check_robots=False,
+            conditional=has_published_evidence,
+        )
+        statuses.append(
+            {
+                "resource_id": resource_id,
+                "status": result["status"],
+                "http_status": result["http_status"],
+                "content_sha256": result.get("content_sha256"),
+                "captured_at": result["captured_at"],
+            }
+        )
+        if result["status"] == "not_modified":
+            unchanged += 1
+            continue
+        raw_path = raw_dir / result["raw_file"]
+        parsed, excerpts = parse_amd_cpu_html(raw_path.read_bytes(), product["expected_name"])
+        generated = build_amd_evidence(
+            source_id=source["id"],
+            source_url=product["url"],
+            sku=sku,
+            expected_name=product["expected_name"],
+            current=current_parts[sku],
+            parsed=parsed,
+            excerpts=excerpts,
+            raw_sha256=result["content_sha256"],
+            captured_at=result["captured_at"],
+        )
+        for item in generated:
+            evidence[(item["sku"], item["field"], item["source_id"])] = item
+        collected += 1
+    conflicts = sum(
+        1 for item in evidence.values()
+        if item["source_id"] == source["id"] and item["evidence_status"] == "conflict"
+    )
+    return {
+        "source_id": source["id"],
+        "status": "collected" if collected else "not_modified",
+        "resources": statuses,
+        "collected": collected,
+        "not_modified": unchanged,
+        "evidence": sum(1 for item in evidence.values() if item["source_id"] == source["id"]),
+        "conflicts": conflicts,
+    }
+
+
 def _write_run_manifest(run_dir: Path, manifest: dict[str, Any]) -> None:
     _atomic_json(run_dir / "manifest.json", manifest)
 
@@ -1291,7 +1677,7 @@ def run_scheduled(
         if final_manifest_path.exists():
             existing = json.loads(final_manifest_path.read_text(encoding="utf-8"))
             if existing.get("status") != "running":
-                retryable = existing.get("status") == "failed" and (
+                retryable = existing.get("status") in {"failed", "partial"} and (
                     trigger == "startup_catch_up" or profile == "retry"
                 )
                 if not retryable:
@@ -1336,56 +1722,102 @@ def run_scheduled(
                 sources = load_registry(registry_path)
                 checkpoints = CheckpointStore(paths.checkpoints)
                 http = collector or HTTPCollector()
+                base_release_id, base_parts = _current_parts(paths)
+                current_records = _load_parts(base_parts or paths.seed_parts)
+                base_evidence = _current_evidence(paths, base_release_id)
+                evidence = _load_evidence(base_evidence)
+                candidate = run_dir / "normalized" / "parts"
+                candidate_evidence = run_dir / "normalized" / "evidence.jsonl"
+                _copy_parts(base_parts or paths.seed_parts, candidate)
+                isolated_failures: list[dict[str, str]] = []
                 for source in sources.values():
                     if not _source_due(source, profile):
                         continue
-                    if source["adapter"] == "local_parts":
-                        manifest["sources"].append(
-                            {"source_id": source["id"], "status": "collected", "content_sha256": _parts_digest(paths.seed_parts)}
-                        )
-                    elif source["adapter"] == "http_snapshot":
-                        manifest["sources"].append(
-                            http.collect(source, run_dir / "raw", checkpoints)
-                        )
-                    else:
-                        # 锁定数据集/包只记录当前锁，升级必须显式改 sources.lock.json。
-                        manifest["sources"].append(locked_source_result(source, paths.data_root))
-
-                base_release_id, base_parts = _current_parts(paths)
-                candidate = run_dir / "normalized" / "parts"
-                _copy_parts(base_parts or paths.seed_parts, candidate)
+                    try:
+                        if source["adapter"] == "local_parts":
+                            result = {
+                                "source_id": source["id"],
+                                "status": "collected",
+                                "content_sha256": _parts_digest(paths.seed_parts),
+                            }
+                        elif source["adapter"] == "http_snapshot":
+                            result = http.collect(source, run_dir / "raw", checkpoints)
+                        elif source["adapter"] == "amd_cpu_official":
+                            result = _collect_amd_cpu_source(
+                                source=source,
+                                paths=paths,
+                                run_dir=run_dir,
+                                checkpoints=checkpoints,
+                                collector=http,
+                                current_parts=current_records,
+                                evidence=evidence,
+                            )
+                        else:
+                            # 锁定数据集/包只记录当前锁，升级必须显式改 sources.lock.json。
+                            result = locked_source_result(source, paths.data_root)
+                        manifest["sources"].append(result)
+                    except (PipelineError, SpecError, OSError, json.JSONDecodeError) as exc:
+                        if source["failure_mode"] == "block_run":
+                            raise
+                        code = exc.code if isinstance(exc, PipelineError) else "source_failed"
+                        failure = {"source_id": source["id"], "status": "failed", "error_code": code}
+                        manifest["sources"].append(failure)
+                        isolated_failures.append({"source_id": source["id"], "error_code": code})
+                _write_evidence(candidate_evidence, evidence.values())
                 review = create_review(
                     run_id=run_id,
                     candidate_parts=candidate,
                     base_parts=base_parts,
                     base_release_id=base_release_id,
+                    candidate_evidence=candidate_evidence,
+                    base_evidence=base_evidence,
                     model_used=False,
                 )
                 _write_review(run_dir, review)
                 if review["decision"] == "no_change":
-                    manifest["status"] = "no_change"
-                    manifest["summary"] = {"decision": "no_change", "changes": 0}
+                    manifest["status"] = "partial" if isolated_failures else "no_change"
+                    manifest["summary"] = {
+                        "decision": "no_change",
+                        "changes": 0,
+                        "evidence_changes": 0,
+                        "source_failures": isolated_failures,
+                    }
+                elif review["decision"] == "auto_publish" and isolated_failures:
+                    manifest["status"] = "partial"
+                    manifest["summary"] = {
+                        "decision": "withheld_source_partial",
+                        "changes": len(review["changes"]),
+                        "evidence_changes": len(review["evidence_changes"]),
+                        "source_failures": isolated_failures,
+                    }
                 elif review["decision"] == "auto_publish":
                     release = _publish_reviewed_release_unlocked(
                         paths,
                         run_id=run_id,
                         candidate_parts=candidate,
+                        candidate_evidence=candidate_evidence,
                         review=review,
                         policy="auto",
                         importer=importer,
                     )
                     manifest["status"] = "published"
-                    manifest["summary"] = {"decision": "auto_publish", "release_id": release["release_id"]}
+                    manifest["summary"] = {
+                        "decision": "auto_publish",
+                        "release_id": release["release_id"],
+                        "source_failures": isolated_failures,
+                    }
                 else:
                     quarantine_dir = paths.quarantine / run_id
                     quarantine_dir.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(run_dir / "review.json", quarantine_dir / "review.json")
                     shutil.copy2(run_dir / "review.md", quarantine_dir / "review.md")
+                    shutil.copy2(candidate_evidence, quarantine_dir / "evidence.jsonl")
                     manifest["status"] = "blocked" if review["decision"] == "manual_required" else "quarantined"
                     manifest["summary"] = {
                         "decision": review["decision"],
                         "changes": len(review["changes"]),
                         "risks": len(review["risks"]),
+                        "source_failures": isolated_failures,
                     }
         except (PipelineError, SpecError, OSError, json.JSONDecodeError) as exc:
             code = exc.code if isinstance(exc, PipelineError) else "pipeline_failed"

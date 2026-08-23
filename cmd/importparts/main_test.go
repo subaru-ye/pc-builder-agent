@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -18,6 +20,83 @@ import (
 	migrations "github.com/subaru-ye/pc-builder-agent/db"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
+
+func writeReleaseManifest(t *testing.T, mutate func(map[string]any)) string {
+	t.Helper()
+	value := map[string]any{
+		"schema_version":      1,
+		"release_id":          "45101c4f-2291-5d51-9a2d-1f5d8ef0fa01",
+		"previous_release_id": nil,
+		"run_id":              "7ef69660-9c17-5c60-b184-51c034db59db",
+		"created_at":          "2026-08-24T00:00:00Z",
+		"decision":            "bootstrap",
+		"input_sha256":        strings.Repeat("a", 64),
+		"files": []map[string]any{
+			{"path": "parts/cpu.jsonl", "sha256": strings.Repeat("a", 64), "bytes": 0},
+			{"path": "parts/gpu.jsonl", "sha256": strings.Repeat("a", 64), "bytes": 0},
+			{"path": "parts/motherboard.jsonl", "sha256": strings.Repeat("a", 64), "bytes": 0},
+			{"path": "parts/memory.jsonl", "sha256": strings.Repeat("a", 64), "bytes": 0},
+			{"path": "parts/ssd.jsonl", "sha256": strings.Repeat("a", 64), "bytes": 0},
+			{"path": "parts/psu.jsonl", "sha256": strings.Repeat("a", 64), "bytes": 0},
+			{"path": "parts/case.jsonl", "sha256": strings.Repeat("a", 64), "bytes": 0},
+			{"path": "parts/cooler.jsonl", "sha256": strings.Repeat("a", 64), "bytes": 0},
+		},
+		"stats":           map[string]any{"total_skus": 160},
+		"manifest_sha256": "",
+	}
+	canonical, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical = append(canonical, '\n')
+	value["manifest_sha256"] = fmt.Sprintf("%x", sha256.Sum256(canonical))
+	if mutate != nil {
+		mutate(value)
+	}
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = append(data, '\n')
+	path := filepath.Join(t.TempDir(), "manifest.json")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestLoadReleaseManifest(t *testing.T) {
+	manifest, err := loadReleaseManifest(writeReleaseManifest(t, nil))
+	if err != nil {
+		t.Fatalf("合法 manifest 应通过: %v", err)
+	}
+	if manifest.Decision != "bootstrap" || manifest.ReleaseID == "" {
+		t.Fatalf("manifest 解码不正确: %+v", manifest)
+	}
+
+	_, err = loadReleaseManifest(writeReleaseManifest(t, func(value map[string]any) {
+		value["input_sha256"] = strings.Repeat("b", 64)
+	}))
+	if err == nil || !strings.Contains(err.Error(), "manifest_sha256 不匹配") {
+		t.Fatalf("篡改后应被哈希拦截,得到 %v", err)
+	}
+}
+
+func TestSpecFingerprintStableAcrossJSONKeyOrder(t *testing.T) {
+	a := partRecord{Specs: []byte(`{"socket":"AM5","tdp_w":65}`), SourceMeta: []byte(`{"socket":"manual","tdp_w":"pcpart"}`)}
+	b := partRecord{Specs: []byte(`{"tdp_w":65,"socket":"AM5"}`), SourceMeta: []byte(`{"tdp_w":"pcpart","socket":"manual"}`)}
+	fa, err := specFingerprint(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fb, err := specFingerprint(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fa != fb || !sha256Pattern.MatchString(fa) {
+		t.Fatalf("语义相同 JSON 指纹应一致: %q != %q", fa, fb)
+	}
+}
 
 // PostgreSQL 集成测试:PG_TEST_DSN 未设置时整体跳过(与 internal/store 同约定)。
 // 本地运行(compose PG 就绪后):
@@ -142,6 +221,82 @@ func TestImportRealCatalog(t *testing.T) {
 	}
 	if distinct != 160 {
 		t.Fatalf("重跑后去重 SKU 应为 160,得到 %d", distinct)
+	}
+}
+
+func TestImportRealCatalogWithP11Release(t *testing.T) {
+	conn := setupConn(t)
+	ctx := context.Background()
+	parts, err := loadParts(partsDir(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	release := &releaseManifest{
+		SchemaVersion:  1,
+		ReleaseID:      "45101c4f-2291-5d51-9a2d-1f5d8ef0fa01",
+		RunID:          "7ef69660-9c17-5c60-b184-51c034db59db",
+		Decision:       "bootstrap",
+		InputSHA256:    strings.Repeat("a", 64),
+		Stats:          []byte(`{"total_skus":160}`),
+		ManifestSHA256: strings.Repeat("b", 64),
+	}
+	if err := importPartsWithRelease(ctx, conn, parts, release); err != nil {
+		t.Fatalf("P11 release 导入失败: %v", err)
+	}
+	var activeCore, fingerprinted, publications int
+	if err := conn.QueryRow(ctx, `
+		SELECT
+			count(*) FILTER (WHERE catalog_state = 'active_core'),
+			count(*) FILTER (WHERE spec_fingerprint IS NOT NULL)
+		FROM parts`).Scan(&activeCore, &fingerprinted); err != nil {
+		t.Fatal(err)
+	}
+	if activeCore != 160 || fingerprinted != 160 {
+		t.Fatalf("P11 目录状态/指纹不完整: active_core=%d fingerprinted=%d", activeCore, fingerprinted)
+	}
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM data_publications").Scan(&publications); err != nil {
+		t.Fatal(err)
+	}
+	if publications != 1 {
+		t.Fatalf("应记录 1 个 publication,得到 %d", publications)
+	}
+	// 同 release 重试幂等，不新增 publication。
+	if err := importPartsWithRelease(ctx, conn, parts, release); err != nil {
+		t.Fatalf("P11 release 重试失败: %v", err)
+	}
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM data_publications").Scan(&publications); err != nil {
+		t.Fatal(err)
+	}
+	if publications != 1 {
+		t.Fatalf("重试后 publication 应仍为 1,得到 %d", publications)
+	}
+}
+
+func TestLegacyImportDoesNotRetireMissingSKU(t *testing.T) {
+	conn := setupConn(t)
+	ctx := context.Background()
+	parts, err := loadParts(partsDir(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := importParts(ctx, conn, parts); err != nil {
+		t.Fatal(err)
+	}
+	retiredSKU := parts[len(parts)-1].SKU
+	if err := importParts(ctx, conn, parts[:len(parts)-1]); err != nil {
+		t.Fatal(err)
+	}
+	var active bool
+	var state string
+	if err := conn.QueryRow(ctx,
+		"SELECT active, catalog_state FROM parts WHERE sku = $1", retiredSKU).Scan(&active, &state); err != nil {
+		t.Fatal(err)
+	}
+	if !active || state != "active_core" {
+		t.Fatalf("普通导入不得通过文件缺失退休 SKU: active=%v state=%s", active, state)
+	}
+	if n := countParts(t, conn); n != 160 {
+		t.Fatalf("退休不应物理删除,得到 %d 行", n)
 	}
 }
 

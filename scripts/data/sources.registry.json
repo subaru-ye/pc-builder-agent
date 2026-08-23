@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "id": "seed_catalog",
+      "kind": "local_seed",
+      "adapter": "local_parts",
+      "base_url": null,
+      "purpose": ["spec", "bootstrap"],
+      "trust_tier": "A",
+      "license_or_terms_url": null,
+      "attribution": null,
+      "requires_credentials": false,
+      "automated_access": "local_only",
+      "robots_policy": "not_applicable",
+      "rate_limit_policy": "not_applicable",
+      "schedule": "weekly",
+      "enabled": true,
+      "terms_reviewed_at": "2026-08-24"
+    },
+    {
+      "id": "pc_part_dataset",
+      "kind": "open_dataset",
+      "adapter": "locked_git_version",
+      "base_url": "https://github.com/docyx/pc-part-dataset",
+      "purpose": ["discovery", "spec"],
+      "trust_tier": "C",
+      "license_or_terms_url": "https://github.com/docyx/pc-part-dataset/blob/master/LICENSE",
+      "attribution": "pc-part-dataset contributors",
+      "requires_credentials": false,
+      "automated_access": "version_check_only",
+      "robots_policy": "not_applicable",
+      "rate_limit_policy": "monthly",
+      "schedule": "monthly",
+      "enabled": true,
+      "terms_reviewed_at": "2026-08-23"
+    },
+    {
+      "id": "dbgpu",
+      "kind": "local_package",
+      "adapter": "locked_package",
+      "base_url": "https://pypi.org/project/dbgpu/",
+      "purpose": ["spec_fallback"],
+      "trust_tier": "C",
+      "license_or_terms_url": "https://github.com/painebenjamin/dbgpu/blob/main/LICENSE",
+      "attribution": "dbgpu contributors",
+      "requires_credentials": false,
+      "automated_access": "local_only",
+      "robots_policy": "not_applicable",
+      "rate_limit_policy": "not_applicable",
+      "schedule": "monthly",
+      "enabled": true,
+      "terms_reviewed_at": "2026-08-23"
+    },
+    {
+      "id": "amd_products",
+      "kind": "official_catalog",
+      "adapter": "http_snapshot",
+      "base_url": "https://www.amd.com/en/products/processors.html",
+      "purpose": ["discovery", "spec"],
+      "trust_tier": "A",
+      "license_or_terms_url": "https://www.amd.com/en/legal/terms-and-conditions.html",
+      "attribution": "AMD",
+      "requires_credentials": false,
+      "automated_access": "allowed_after_review",
+      "robots_policy": "obey",
+      "rate_limit_policy": "weekly_single_request",
+      "schedule": "weekly",
+      "enabled": false,
+      "terms_reviewed_at": null
+    }
+  ]
+}

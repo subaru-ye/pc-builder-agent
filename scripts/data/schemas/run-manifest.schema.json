@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pc-builder-agent.local/schemas/run-manifest.schema.json",
+  "title": "P11 run manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "profile", "trigger", "scheduled_for", "started_at", "finished_at", "status", "model_used", "sources", "summary"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "run_id": {"type": "string", "format": "uuid"},
+    "profile": {"enum": ["health", "weekly", "monthly", "retry"]},
+    "trigger": {"enum": ["manual", "schedule", "startup_catch_up"]},
+    "scheduled_for": {"type": "string", "format": "date-time"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": ["string", "null"], "format": "date-time"},
+    "status": {"enum": ["running", "no_change", "published", "quarantined", "failed", "blocked"]},
+    "model_used": {"const": false},
+    "sources": {"type": "array", "items": {"type": "object"}},
+    "summary": {"type": "object"},
+    "error": {"type": ["object", "null"]}
+  }
+}

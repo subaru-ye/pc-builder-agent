@@ -12,13 +12,18 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/dotenv"
@@ -34,6 +39,197 @@ type partRecord struct {
 	SchemaVersion int              `json:"schema_version"`
 	Specs         json.RawMessage  `json:"specs"`
 	SourceMeta    json.RawMessage  `json:"source_meta"`
+}
+
+// releaseManifest 是 P11 不可变 release 的最小导入信封。files/created_at 由
+// 文件层保留，数据库只记录可建立发布链和审计所需的字段。
+type releaseManifest struct {
+	SchemaVersion     int             `json:"schema_version"`
+	ReleaseID         string          `json:"release_id"`
+	PreviousReleaseID *string         `json:"previous_release_id"`
+	RunID             string          `json:"run_id"`
+	CreatedAt         string          `json:"created_at"`
+	Decision          string          `json:"decision"`
+	InputSHA256       string          `json:"input_sha256"`
+	Files             []releaseFile   `json:"files"`
+	Stats             json.RawMessage `json:"stats"`
+	ManifestSHA256    string          `json:"manifest_sha256"`
+}
+
+type releaseFile struct {
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
+	Bytes  int64  `json:"bytes"`
+}
+
+var sha256Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+func loadReleaseManifest(path string) (*releaseManifest, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("读取 release manifest 失败: %w", err)
+	}
+	var manifest releaseManifest
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&manifest); err != nil {
+		return nil, fmt.Errorf("release manifest 解码失败: %w", err)
+	}
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("release manifest 不得包含多个 JSON 值")
+		}
+		return nil, fmt.Errorf("release manifest 尾部非法: %w", err)
+	}
+	if manifest.SchemaVersion != 1 {
+		return nil, fmt.Errorf("release manifest schema_version 必须为 1")
+	}
+	if _, err := uuid.Parse(manifest.ReleaseID); err != nil {
+		return nil, fmt.Errorf("release_id 非法: %w", err)
+	}
+	if _, err := uuid.Parse(manifest.RunID); err != nil {
+		return nil, fmt.Errorf("run_id 非法: %w", err)
+	}
+	if manifest.PreviousReleaseID != nil {
+		if _, err := uuid.Parse(*manifest.PreviousReleaseID); err != nil {
+			return nil, fmt.Errorf("previous_release_id 非法: %w", err)
+		}
+	}
+	if manifest.Decision != "auto" && manifest.Decision != "manual" && manifest.Decision != "bootstrap" {
+		return nil, fmt.Errorf("release decision 非法: %q", manifest.Decision)
+	}
+	if !sha256Pattern.MatchString(manifest.InputSHA256) || !sha256Pattern.MatchString(manifest.ManifestSHA256) {
+		return nil, fmt.Errorf("release SHA-256 必须为 64 位小写十六进制")
+	}
+	if _, err := time.Parse(time.RFC3339, manifest.CreatedAt); err != nil {
+		return nil, fmt.Errorf("created_at 非法: %w", err)
+	}
+	var stats map[string]any
+	if err := json.Unmarshal(manifest.Stats, &stats); err != nil || stats == nil {
+		return nil, fmt.Errorf("stats 必须为 JSON 对象")
+	}
+	if len(manifest.Files) != len(schemas.AllCategories) {
+		return nil, fmt.Errorf("release files 必须包含八类 parts")
+	}
+	expected := make(map[string]struct{}, len(schemas.AllCategories))
+	for _, category := range schemas.AllCategories {
+		expected["parts/"+string(category)+".jsonl"] = struct{}{}
+	}
+	seen := make(map[string]struct{}, len(manifest.Files))
+	for _, file := range manifest.Files {
+		if _, ok := expected[file.Path]; !ok || !sha256Pattern.MatchString(file.SHA256) || file.Bytes < 0 {
+			return nil, fmt.Errorf("release file 条目非法: %+v", file)
+		}
+		if _, duplicate := seen[file.Path]; duplicate {
+			return nil, fmt.Errorf("release file 路径重复: %s", file.Path)
+		}
+		seen[file.Path] = struct{}{}
+	}
+	if len(seen) != len(expected) {
+		return nil, fmt.Errorf("release files 缺少类目")
+	}
+	var canonical map[string]any
+	if err := json.Unmarshal(data, &canonical); err != nil {
+		return nil, fmt.Errorf("release manifest 规范化失败: %w", err)
+	}
+	canonical["manifest_sha256"] = ""
+	encoded, err := json.MarshalIndent(canonical, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("release manifest 规范化失败: %w", err)
+	}
+	encoded = append(encoded, '\n')
+	sum := fmt.Sprintf("%x", sha256.Sum256(encoded))
+	if sum != manifest.ManifestSHA256 {
+		return nil, fmt.Errorf("release manifest_sha256 不匹配")
+	}
+	return &manifest, nil
+}
+
+func partsDigest(dir string) (string, error) {
+	digest := sha256.New()
+	for _, category := range schemas.AllCategories {
+		name := string(category) + ".jsonl"
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			return "", fmt.Errorf("读取 release parts %s 失败: %w", name, err)
+		}
+		_, _ = digest.Write([]byte(name))
+		_, _ = digest.Write([]byte{0})
+		_, _ = digest.Write(data)
+		_, _ = digest.Write([]byte{0})
+	}
+	return fmt.Sprintf("%x", digest.Sum(nil)), nil
+}
+
+func validateReleaseFiles(manifestPath, partsDir string, manifest *releaseManifest) error {
+	releaseDir, err := filepath.Abs(filepath.Dir(manifestPath))
+	if err != nil {
+		return fmt.Errorf("解析 release 目录失败: %w", err)
+	}
+	expectedPartsDir, err := filepath.Abs(filepath.Join(releaseDir, "parts"))
+	if err != nil {
+		return fmt.Errorf("解析 release parts 目录失败: %w", err)
+	}
+	actualPartsDir, err := filepath.Abs(partsDir)
+	if err != nil || filepath.Clean(actualPartsDir) != filepath.Clean(expectedPartsDir) {
+		return fmt.Errorf("-dir 必须指向 release manifest 同目录下的 parts")
+	}
+	for _, file := range manifest.Files {
+		path := filepath.Join(actualPartsDir, filepath.Base(file.Path))
+		info, err := os.Lstat(path)
+		if err != nil {
+			return fmt.Errorf("release file %s 不存在: %w", file.Path, err)
+		}
+		if !info.Mode().IsRegular() || info.Size() != file.Bytes {
+			return fmt.Errorf("release file %s 类型或大小不匹配", file.Path)
+		}
+		digest := sha256.New()
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("读取 release file %s 失败: %w", file.Path, err)
+		}
+		_, _ = digest.Write(content)
+		if fmt.Sprintf("%x", digest.Sum(nil)) != file.SHA256 {
+			return fmt.Errorf("release file %s SHA-256 不匹配", file.Path)
+		}
+	}
+	digest, err := partsDigest(actualPartsDir)
+	if err != nil {
+		return err
+	}
+	if digest != manifest.InputSHA256 {
+		return fmt.Errorf("release parts 与 input_sha256 不一致")
+	}
+	return nil
+}
+
+func specFingerprint(rec partRecord) (string, error) {
+	var value struct {
+		Specs      any `json:"specs"`
+		SourceMeta any `json:"source_meta"`
+	}
+	if err := json.Unmarshal(rec.Specs, &value.Specs); err != nil {
+		return "", err
+	}
+	if err := json.Unmarshal(rec.SourceMeta, &value.SourceMeta); err != nil {
+		return "", err
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", sha256.Sum256(data)), nil
+}
+
+func jsonSemanticallyEqual(a, b []byte) bool {
+	var left, right any
+	if json.Unmarshal(a, &left) != nil || json.Unmarshal(b, &right) != nil {
+		return false
+	}
+	leftBytes, leftErr := json.Marshal(left)
+	rightBytes, rightErr := json.Marshal(right)
+	return leftErr == nil && rightErr == nil && bytes.Equal(leftBytes, rightBytes)
 }
 
 // specCheckers 各类目 specs 的契约校验(严格解码,未知字段/非法枚举即错)。
@@ -89,6 +285,13 @@ func loadCategoryFile(path string, cat schemas.Category, seen map[string]string)
 		if err := dec.Decode(&rec); err != nil {
 			return nil, fmt.Errorf("%s:%d 记录解码失败: %w", name, lineNo, err)
 		}
+		var extra any
+		if err := dec.Decode(&extra); err != io.EOF {
+			if err == nil {
+				return nil, fmt.Errorf("%s:%d 不得包含多个 JSON 值", name, lineNo)
+			}
+			return nil, fmt.Errorf("%s:%d JSON 尾部非法: %w", name, lineNo, err)
+		}
 		if err := validateRecord(rec, cat); err != nil {
 			return nil, fmt.Errorf("%s:%d %w", name, lineNo, err)
 		}
@@ -140,15 +343,32 @@ func validateRecord(rec partRecord, cat schemas.Category) error {
 // importParts 单事务全量 upsert;任一条写入失败整批回滚。
 // 重跑同一批数据只更新 updated_at 等列,行数与内容保持不变(幂等)。
 func importParts(ctx context.Context, conn *pgx.Conn, parts []partRecord) error {
+	return importPartsWithRelease(ctx, conn, parts, nil)
+}
+
+// importPartsWithRelease 把 parts 与可选 P11 发布记录放入同一数据库事务。
+func importPartsWithRelease(
+	ctx context.Context,
+	conn *pgx.Conn,
+	parts []partRecord,
+	release *releaseManifest,
+) error {
 	tx, err := conn.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("开启事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }() // 提交成功后 Rollback 为空操作
+	if _, err := tx.Exec(ctx,
+		`SELECT pg_advisory_xact_lock(hashtextextended('pc_builder_agent:data_publish', 0))`); err != nil {
+		return fmt.Errorf("获取数据发布事务锁失败: %w", err)
+	}
 
 	const upsertSQL = `
-		INSERT INTO parts (sku, category, brand, model, schema_version, specs, source_meta)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO parts (
+			sku, category, brand, model, schema_version, specs, source_meta,
+			active, catalog_state, spec_fingerprint
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, 'active_core', $8)
 		ON CONFLICT (sku) DO UPDATE SET
 			category       = EXCLUDED.category,
 			brand          = EXCLUDED.brand,
@@ -157,12 +377,77 @@ func importParts(ctx context.Context, conn *pgx.Conn, parts []partRecord) error 
 			specs          = EXCLUDED.specs,
 			source_meta    = EXCLUDED.source_meta,
 			active         = TRUE,
+			catalog_state  = 'active_core',
+			spec_fingerprint = EXCLUDED.spec_fingerprint,
 			updated_at     = now()`
+	skus := make([]string, 0, len(parts))
 	for _, rec := range parts {
+		fingerprint, err := specFingerprint(rec)
+		if err != nil {
+			return fmt.Errorf("计算 SKU %q 指纹失败: %w", rec.SKU, err)
+		}
 		if _, err := tx.Exec(ctx, upsertSQL,
 			rec.SKU, rec.Category, rec.Brand, rec.Model,
-			rec.SchemaVersion, rec.Specs, rec.SourceMeta); err != nil {
+			rec.SchemaVersion, rec.Specs, rec.SourceMeta, fingerprint); err != nil {
 			return fmt.Errorf("upsert SKU %q 失败(整批回滚): %w", rec.SKU, err)
+		}
+		skus = append(skus, rec.SKU)
+	}
+	if release != nil {
+		var missing int
+		if err := tx.QueryRow(ctx, `
+			SELECT count(*) FROM parts
+			WHERE active AND NOT (sku = ANY($1::text[]))`, skus).Scan(&missing); err != nil {
+			return fmt.Errorf("检查 release 缺失 SKU 失败(整批回滚): %w", err)
+		}
+		if missing != 0 {
+			return fmt.Errorf("release 缺少 %d 个 active SKU；退休必须通过显式状态变更表示", missing)
+		}
+	}
+	if release != nil {
+		var existing struct {
+			PreviousReleaseID *string
+			RunID             *string
+			ManifestSHA256    string
+			InputSHA256       string
+			Decision          string
+			Stats             []byte
+		}
+		err := tx.QueryRow(ctx, `
+			SELECT previous_release_id::text, run_id::text, manifest_sha256,
+			       input_sha256, decision, stats::text
+			FROM data_publications WHERE release_id = $1`, release.ReleaseID).Scan(
+			&existing.PreviousReleaseID,
+			&existing.RunID,
+			&existing.ManifestSHA256,
+			&existing.InputSHA256,
+			&existing.Decision,
+			&existing.Stats,
+		)
+		if err == nil {
+			if existing.PreviousReleaseID == nil && release.PreviousReleaseID != nil ||
+				existing.PreviousReleaseID != nil && release.PreviousReleaseID == nil ||
+				existing.PreviousReleaseID != nil && release.PreviousReleaseID != nil && *existing.PreviousReleaseID != *release.PreviousReleaseID ||
+				existing.RunID == nil || *existing.RunID != release.RunID ||
+				existing.ManifestSHA256 != release.ManifestSHA256 ||
+				existing.InputSHA256 != release.InputSHA256 ||
+				existing.Decision != release.Decision ||
+				!jsonSemanticallyEqual(existing.Stats, release.Stats) {
+				return fmt.Errorf("release %q 已存在但 publication 元数据不一致", release.ReleaseID)
+			}
+		} else if err == pgx.ErrNoRows {
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO data_publications (
+					release_id, previous_release_id, run_id, manifest_sha256,
+					input_sha256, decision, stats
+				) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+				release.ReleaseID, release.PreviousReleaseID, release.RunID,
+				release.ManifestSHA256, release.InputSHA256, release.Decision, release.Stats,
+			); err != nil {
+				return fmt.Errorf("记录 release %q 失败(整批回滚): %w", release.ReleaseID, err)
+			}
+		} else {
+			return fmt.Errorf("读取 release %q publication 失败: %w", release.ReleaseID, err)
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -173,6 +458,7 @@ func importParts(ctx context.Context, conn *pgx.Conn, parts []partRecord) error 
 
 func main() {
 	dir := flag.String("dir", filepath.Join("scripts", "data", "parts"), "parts jsonl 产物目录")
+	releaseManifestPath := flag.String("release-manifest", "", "P11 release manifest 路径(可选)")
 	flag.Parse()
 
 	dotenv.Load(".env")
@@ -185,6 +471,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("加载 parts 产物失败: %v", err)
 	}
+	var release *releaseManifest
+	if *releaseManifestPath != "" {
+		release, err = loadReleaseManifest(*releaseManifestPath)
+		if err != nil {
+			log.Fatalf("加载 release manifest 失败: %v", err)
+		}
+		if filepath.Base(filepath.Dir(*releaseManifestPath)) != release.ReleaseID {
+			log.Fatalf("release manifest 所在目录必须与 release_id 一致")
+		}
+		if err := validateReleaseFiles(*releaseManifestPath, *dir, release); err != nil {
+			log.Fatalf("校验 release 文件失败: %v", err)
+		}
+	}
 
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)
@@ -193,7 +492,7 @@ func main() {
 	}
 	defer func() { _ = conn.Close(ctx) }()
 
-	if err := importParts(ctx, conn, parts); err != nil {
+	if err := importPartsWithRelease(ctx, conn, parts, release); err != nil {
 		log.Fatalf("导入失败: %v", err)
 	}
 

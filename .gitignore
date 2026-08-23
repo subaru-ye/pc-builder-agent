@@ -21,6 +21,10 @@ __pycache__/
 # 上游原始大文件快照(锁定 commit 可随时重拉,不入库)
 scripts/data/upstream/
 
+# P11 本机自动数据管道:原始响应、隔离项、不可变 release 与调度状态
+scripts/data/work/
+var/data/
+
 # 覆盖率脚本生成产物
 scripts/data/_cov.json
 

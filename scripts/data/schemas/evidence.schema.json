@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pc-builder-agent.local/schemas/evidence.schema.json",
+  "title": "P11 field evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "sku", "field", "value", "source_id", "source_url", "captured_at", "raw_sha256", "method", "evidence_excerpt", "evidence_status"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {"type": "string", "minLength": 1},
+    "sku": {"type": "string", "minLength": 1},
+    "field": {"type": "string", "minLength": 1},
+    "value": {},
+    "source_id": {"type": "string", "minLength": 1},
+    "source_url": {"type": "string", "format": "uri"},
+    "captured_at": {"type": "string", "format": "date-time"},
+    "raw_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "method": {"enum": ["deterministic", "model_assisted", "manual"]},
+    "evidence_excerpt": {"type": "string", "maxLength": 500},
+    "evidence_status": {"enum": ["verified", "candidate", "conflict", "rejected"]}
+  }
+}

@@ -10,6 +10,9 @@ dependencies = [
     "dbgpu==2025.12",
 ]
 
+[project.scripts]
+pcdata = "pcdata.cli:main"
+
 [dependency-groups]
 dev = ["pytest>=8.3"]
 

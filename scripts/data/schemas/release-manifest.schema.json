@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pc-builder-agent.local/schemas/release-manifest.schema.json",
+  "title": "P11 release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_id", "previous_release_id", "run_id", "created_at", "decision", "input_sha256", "files", "stats", "manifest_sha256"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "release_id": {"type": "string", "format": "uuid"},
+    "previous_release_id": {"type": ["string", "null"], "format": "uuid"},
+    "run_id": {"type": "string", "format": "uuid"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "decision": {"enum": ["auto", "manual", "bootstrap"]},
+    "input_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "files": {"type": "array", "items": {"type": "object"}},
+    "stats": {"type": "object"},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

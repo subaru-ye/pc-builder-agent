@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pc-builder-agent.local/schemas/price-observation.schema.json",
+  "title": "P12 price observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "observation_id", "sku", "price_cny", "currency",
+    "source_id", "product_id", "source_url", "seller", "price_type",
+    "stock_status", "variant_match", "observed_at", "raw_sha256",
+    "decision_status", "rejection_reasons"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "observation_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sku": {"type": "string", "minLength": 1},
+    "price_cny": {"type": "string", "pattern": "^[0-9]+\\.[0-9]{2}$"},
+    "currency": {"const": "CNY"},
+    "source_id": {"type": "string", "minLength": 1},
+    "product_id": {"type": "string", "minLength": 1},
+    "source_url": {"type": "string", "format": "uri", "pattern": "^https://"},
+    "seller": {"type": "string", "minLength": 1},
+    "price_type": {"enum": ["regular", "sale", "coupon", "member", "msrp", "deposit", "installment", "bundle", "unknown"]},
+    "stock_status": {"enum": ["in_stock", "out_of_stock", "unknown"]},
+    "variant_match": {"enum": ["exact", "mismatch", "unknown"]},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "raw_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "decision_status": {"enum": ["qualified", "observed_only", "rejected", "quarantined"]},
+    "rejection_reasons": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+  }
+}

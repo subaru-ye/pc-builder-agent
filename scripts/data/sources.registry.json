@@ -77,6 +77,42 @@
         "robots": "0b1fd3de47d303a51102f2e720c1f447a3666b80cbf9f36bacc4a184cb186194",
         "terms": "80572aeac8e00910fdc726e072358e85f5141721174b5240d6321d3a00fc5c3f"
       }
+    },
+    {
+      "id": "manual_price_csv",
+      "kind": "manual",
+      "adapter": "manual",
+      "base_url": null,
+      "purpose": ["price", "recovery"],
+      "trust_tier": "B",
+      "license_or_terms_url": null,
+      "attribution": "人工核验商品页",
+      "requires_credentials": false,
+      "automated_access": "local_only",
+      "robots_policy": "not_applicable",
+      "rate_limit_policy": "not_applicable",
+      "schedule": "manual",
+      "enabled": true,
+      "terms_reviewed_at": "2026-08-27",
+      "failure_mode": "isolate_source"
+    },
+    {
+      "id": "zol_price_candidate",
+      "kind": "public_retail",
+      "adapter": "http_snapshot",
+      "base_url": "https://detail.zol.com.cn",
+      "purpose": ["price_candidate"],
+      "trust_tier": "D",
+      "license_or_terms_url": null,
+      "attribution": "中关村在线",
+      "requires_credentials": false,
+      "automated_access": "permission_required",
+      "robots_policy": "obey",
+      "rate_limit_policy": "disabled_until_permission_review",
+      "schedule": "manual",
+      "enabled": false,
+      "terms_reviewed_at": null,
+      "failure_mode": "isolate_source"
     }
   ]
 }

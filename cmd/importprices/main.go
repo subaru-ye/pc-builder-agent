@@ -141,8 +141,10 @@ func importPrices(ctx context.Context, conn *pgx.Conn, batch priceBatch) (skippe
 	}
 	for _, row := range batch.Rows {
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO prices (snapshot_id, sku, price_cny, source) VALUES ($1, $2, $3, $4)`,
-			snapshotID, row.SKU, row.PriceCNY, row.Source); err != nil {
+			`INSERT INTO prices
+			 (snapshot_id, sku, price_cny, source, observed_at, price_type, carried_forward, source_snapshot_id)
+			 VALUES ($1, $2, $3, $4, $5, 'bootstrap', false, $1)`,
+			snapshotID, row.SKU, row.PriceCNY, row.Source, batch.SnapshotDate); err != nil {
 			return false, fmt.Errorf("写入 SKU %q 价格失败(整批回滚): %w", row.SKU, err)
 		}
 	}

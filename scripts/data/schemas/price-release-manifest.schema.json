@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pc-builder-agent.local/schemas/price-release-manifest.schema.json",
+  "title": "P12 immutable price release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "release_id", "previous_release_id", "run_id", "snapshot_date",
+    "created_at", "policy", "input_sha256", "observations_sha256", "selection_sha256",
+    "review_sha256", "files", "stats", "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "release_id": {"type": "string", "format": "uuid"},
+    "previous_release_id": {"type": ["string", "null"], "format": "uuid"},
+    "run_id": {"type": "string", "format": "uuid"},
+    "snapshot_date": {"type": "string", "format": "date"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "policy": {"enum": ["manual", "automatic"]},
+    "input_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "observations_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "selection_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "review_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "files": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "bytes"],
+        "properties": {
+          "path": {"enum": ["observations.jsonl", "selection.jsonl", "review.json"]},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "bytes": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "stats": {"type": "object"}
+  }
+}

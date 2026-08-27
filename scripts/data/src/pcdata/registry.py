@@ -130,12 +130,12 @@ def _validate_source(raw: Any, index: int) -> dict[str, Any]:
         raise SpecError(f"{where}.purpose 不得重复")
     _nonempty_string(f"{where}.rate_limit_policy", raw["rate_limit_policy"])
 
-    local = raw["adapter"] in {"local_parts", "locked_package"}
+    local = raw["adapter"] in {"local_parts", "locked_package", "manual"}
     _https_url(f"{where}.base_url", raw["base_url"], nullable=local)
     _https_url(
         f"{where}.license_or_terms_url",
         raw["license_or_terms_url"],
-        nullable=raw["kind"] in {"local_seed", "manual"},
+        nullable=raw["kind"] in {"local_seed", "manual"} or not raw["enabled"],
     )
     if raw["attribution"] is not None:
         _nonempty_string(f"{where}.attribution", raw["attribution"])

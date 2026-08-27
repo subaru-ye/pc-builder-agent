@@ -1,4 +1,4 @@
-"""P11 `pcdata` 统一命令入口。"""
+"""P11/P12 `pcdata` 统一命令入口。"""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from .automation import (
     PipelineError,
     _copy_parts,
     _collect_amd_cpu_source,
+    _atomic_json,
     _current_evidence,
     _current_parts,
     _load_evidence,
@@ -34,6 +35,13 @@ from .automation import (
 )
 from .canonical import SpecError
 from .registry import DEFAULT_REGISTRY_PATH, load_registry
+from .prices import (
+    create_price_review,
+    import_price_csv,
+    price_health,
+    process_price_inbox,
+    publish_price_review,
+)
 
 
 def _json(value: Any) -> None:
@@ -225,6 +233,13 @@ def _cmd_scheduled(args: argparse.Namespace) -> int:
         scheduled_for=scheduled_for,
         registry_path=Path(args.registry),
     )
+    if args.profile in {"weekly", "retry"}:
+        price_result = process_price_inbox(_paths(args))
+        result["summary"]["price_pipeline"] = price_result
+        if price_result["status"] == "partial" and result["status"] in {"no_change", "published"}:
+            result["status"] = "partial"
+        manifest_path = _paths(args).runs / result["run_id"] / "manifest.json"
+        _atomic_json(manifest_path, result)
     sync_run_to_database(
         _paths(args).repo_root,
         _paths(args).runs / result["run_id"] / "manifest.json",
@@ -233,8 +248,30 @@ def _cmd_scheduled(args: argparse.Namespace) -> int:
     return 0 if result["status"] in {"no_change", "published"} else 1
 
 
+def _cmd_price_import(args: argparse.Namespace) -> int:
+    _json(import_price_csv(_paths(args), Path(args.file), run_id=args.run_id))
+    return 0
+
+
+def _cmd_price_review(args: argparse.Namespace) -> int:
+    result = create_price_review(_paths(args), args.run_id)
+    _json(result)
+    return 1 if result["decision"] == "quarantine" else 0
+
+
+def _cmd_price_publish(args: argparse.Namespace) -> int:
+    _json(publish_price_review(_paths(args), args.run_id, policy=args.policy))
+    return 0
+
+
+def _cmd_price_health(args: argparse.Namespace) -> int:
+    result = price_health(_paths(args))
+    _json(result)
+    return 0 if result["healthy"] else 1
+
+
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="pcdata", description="P11 本机数据采集与安全发布")
+    parser = argparse.ArgumentParser(prog="pcdata", description="P11/P12 本机数据采集与安全发布")
     parser.add_argument("--runtime-root", help="覆盖本机 var/data 路径（测试/诊断用）")
     parser.add_argument("--registry", default=str(DEFAULT_REGISTRY_PATH), help="来源登记文件")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -268,6 +305,22 @@ def _parser() -> argparse.ArgumentParser:
 
     health = sub.add_parser("health", help="检查本机数据发布状态")
     health.set_defaults(func=_cmd_health)
+
+    price = sub.add_parser("price", help="P12A 价格观察与安全选价")
+    price_sub = price.add_subparsers(dest="price_command", required=True)
+    price_import = price_sub.add_parser("import", help="导入严格价格观察 CSV")
+    price_import.add_argument("--file", required=True)
+    price_import.add_argument("--run-id")
+    price_import.set_defaults(func=_cmd_price_import)
+    price_review = price_sub.add_parser("review", help="确定性选价并生成审核结果")
+    price_review.add_argument("--run-id", required=True)
+    price_review.set_defaults(func=_cmd_price_review)
+    price_publish = price_sub.add_parser("publish", help="发布已审核价格快照")
+    price_publish.add_argument("--run-id", required=True)
+    price_publish.add_argument("--policy", choices=("manual", "automatic"), required=True)
+    price_publish.set_defaults(func=_cmd_price_publish)
+    price_health_cmd = price_sub.add_parser("health", help="检查价格发布和新鲜度")
+    price_health_cmd.set_defaults(func=_cmd_price_health)
 
     scheduled = sub.add_parser("scheduled-run", help="执行一次幂等定时主链")
     scheduled.add_argument("--profile", choices=("health", "weekly", "monthly", "retry"), required=True)

@@ -43,12 +43,22 @@ function Register-PCBuilderTask {
         -Trigger $Trigger `
         -Principal $principal `
         -Settings $settings `
-        -Description "PC Builder P11 数据任务：$Name" `
+        -Description "PC Builder P11/P12 数据任务：$Name" `
         -Force | Out-Null
 }
 
 Register-PCBuilderTask -Name 'Health' -Script $runner -Arguments '-Profile health' `
     -Trigger (New-ScheduledTaskTrigger -Daily -At '03:30')
+$installedCount = 5
+$priceConfig = Get-Content -LiteralPath (Join-Path $repoRoot 'scripts\data\serpapi-baidu-products.json') -Raw | ConvertFrom-Json
+if ($priceConfig.activation_status -eq 'active') {
+    Register-PCBuilderTask -Name 'PriceDaily' -Script $runner -Arguments '-Profile price-daily' `
+        -Trigger (New-ScheduledTaskTrigger -Daily -At '03:45')
+    $installedCount = 6
+}
+else {
+    Write-Host 'SerpApi canary 尚未批准；未安装 PCBuilderData-PriceDaily。'
+}
 Register-PCBuilderTask -Name 'Weekly' -Script $runner -Arguments '-Profile weekly' `
     -Trigger (New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At '04:00')
 Register-PCBuilderTask -Name 'Retry' -Script $runner -Arguments '-Profile retry' `
@@ -62,4 +72,4 @@ $startupTrigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $startupTrigger.Delay = 'PT5M'
 Register-PCBuilderTask -Name 'CatchUp' -Script $catchup -Arguments '' -Trigger $startupTrigger
 
-Write-Host "已安装 5 个 $prefix-* 本机任务。日志目录：$repoRoot\var\data\scheduler\logs"
+Write-Host "已安装 $installedCount 个 $prefix-* 本机任务。日志目录：$repoRoot\var\data\scheduler\logs"

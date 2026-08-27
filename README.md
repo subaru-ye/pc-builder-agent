@@ -61,6 +61,7 @@
 | [P12 价格观察设计](docs/tech/P12-价格观察与安全选价设计.md) | 价格 observation、确定性选价、不可变快照、新鲜度和自动来源门禁 |
 | [P12 价格任务](docs/ops/P12价格任务.md) | 严格 CSV、review/publish/health、后台 inbox 和排障 |
 | [P12A 验收记录](docs/acceptance/P12A-验收记录.md) | P12A 自动门禁与 P12B 未完成条件 |
+| [P12B 实施记录](docs/acceptance/P12B-实施记录.md) | SerpApi/Baidu 离线门禁、真实 canary 与轮转待办 |
 | [设计方案](docs/装机Agent设计方案.md) | 架构、A2A 消息 schema、兼容性规则表、数据表结构(技术设计权威) |
 | [P2 流水线设计](docs/tech/P2-流水线设计.md) | P2 三 Agent 流水线实现层:编排拓扑、提示词 SOP、tool 契约、Loop 控制 |
 | [P7 产品 API 设计](docs/tech/P7-产品API与会话状态机设计.md) | 产品会话状态机、匿名身份、后台 run、SSE 与配置读模型 |
@@ -116,7 +117,7 @@ powershell -ExecutionPolicy Bypass -File scripts/data/ops/install-tasks.ps1 -Ski
 
 当前启用的首个外部来源是 13 个固定映射的 AMD 官方 CPU 具体型号页。每周串行条件请求，严格核对型号并只生成 socket、支持芯片组、TDP、核显和官方名称的确定性 evidence；政策、身份或页面结构变化会隔离来源。
 
-P12A 已增加价格 observation、安全选价和动态过期提示。人工价格按 `pcdata price import → review → publish` 三步处理；weekly/retry 只扫描本机 `var/data/price-inbox/`。当前没有启用自动网页价格来源，ZOL 仍是许可未确认的禁用候选，因此 P12 尚未完成。详见[P12 价格任务](docs/ops/P12价格任务.md)。
+P12A 已增加价格 observation、安全选价和动态过期提示。P12B 的 SerpApi Free/Baidu Shopping 适配、免费额度硬门禁、12 SKU canary、双商家选价和每日微批次已实现；当前未配置 Key，因此来源、96 SKU 核心池和每日任务仍保持未激活，P12 尚未完成。详见[P12 价格任务](docs/ops/P12价格任务.md)。
 
 ## MVP 进度
 
@@ -134,7 +135,7 @@ P12A 已增加价格 observation、安全选价和动态过期提示。人工价
 - [ ] P10 评测与发布准备(50 组 golden、自动门禁与 Live 18/18 已通过;3 人真人盲评待完成)
 - [x] P11 数据自动化(AMD 官方规格、字段 evidence、release v2、原子导入与本机双周期验收)
 - [x] P12A 价格基础设施(观察、人工 CSV、安全选价、快照、新鲜度提示)
-- [ ] P12B 自动价格来源与连续两周验收
+- [ ] P12B 自动价格来源（代码已就绪；真实 canary、96/64 激活与两个 14 天轮转周期待完成）
 
 2026-08-09 封板验收结果:PostgreSQL/pgvector/Redis 真实集成测试无跳过;Python 数据流水线 104 项测试通过;用例 A–H 全部验证,包括全 pass 配单、语义召回、v1→v3 回放/diff/Markdown 导出、A2A schema/contextID 以及 kill host 后从 Redis 恢复同一会话继续改单。
 

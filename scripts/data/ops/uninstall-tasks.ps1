@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Stop'
-$names = @('Health', 'Weekly', 'Retry', 'Monthly', 'CatchUp')
+$names = @('Health', 'PriceDaily', 'Weekly', 'Retry', 'Monthly', 'CatchUp')
 foreach ($name in $names) {
     $taskName = "PCBuilderData-$name"
     if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {

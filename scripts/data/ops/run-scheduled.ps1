@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('health', 'weekly', 'monthly', 'retry')]
+    [ValidateSet('health', 'price-daily', 'weekly', 'monthly', 'retry')]
     [string]$Profile,
 
     [switch]$CatchUp,

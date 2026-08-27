@@ -206,11 +206,31 @@ def _derived_identity(config: dict[str, Any], part: dict[str, Any]) -> dict[str,
     if not required:
         raise PipelineError("serpapi_mapping_invalid", f"{part['sku']} 没有可用型号 token")
     aliases = override.get("brand_aliases") or BRAND_ALIASES.get(str(part["brand"]), [_normalize(str(part["brand"]))])
+    forbidden = list(override.get("forbidden_tokens", []))
+    model = _normalize(str(part["model"]))
+    if part["category"] == "gpu" and "geforce" in model:
+        if "ti" not in model:
+            forbidden.append("ti")
+        if "super" not in model:
+            forbidden.append("super")
+    if part["category"] == "gpu" and "radeon" in model and "xt" not in model:
+        forbidden.extend(["xt", "xtx"])
+    if part["category"] == "cpu" and "ryzen" in model:
+        if not re.search(r"\d+x(?:3d)?", model):
+            forbidden.append("x")
+        if not re.search(r"\d+g", model):
+            forbidden.append("g")
+    if part["category"] == "ssd":
+        if "1tb" in model:
+            forbidden.extend(["2tb", "4tb"])
+        elif "2tb" in model:
+            forbidden.extend(["1tb", "4tb"])
+    forbidden = list(dict.fromkeys(forbidden))
     return {
         "query": config["query_template"].format(brand=part["brand"], model=part["model"]),
         "brand_aliases": aliases,
         "required_tokens": required,
-        "forbidden_tokens": override.get("forbidden_tokens", []),
+        "forbidden_tokens": forbidden,
     }
 
 
@@ -262,12 +282,19 @@ def _normalize_link(value: Any) -> str | None:
 
 def _matches(title: str, identity: dict[str, Any]) -> bool:
     normalized = _normalize(title)
+    title_tokens = set(re.findall(r"[a-z0-9]+", unicodedata.normalize("NFKC", title).lower()))
     aliases = [_normalize(value) for value in identity["brand_aliases"]]
     return (
         any(alias and alias in normalized for alias in aliases)
         and all(_normalize(token) in normalized for token in identity["required_tokens"])
-        and not any(_normalize(token) in normalized for token in identity["forbidden_tokens"])
+        and not any(_forbidden_present(_normalize(token), title_tokens) for token in identity["forbidden_tokens"])
     )
+
+
+def _forbidden_present(forbidden: str, title_tokens: set[str]) -> bool:
+    if forbidden in {"ti", "super", "xt", "xtx", "x", "x3d", "g"}:
+        return any(token == forbidden or re.search(rf"\d+{re.escape(forbidden)}$", token) for token in title_tokens)
+    return forbidden in title_tokens
 
 
 def _listing_rows(sku: str, payload: dict[str, Any], raw_sha256: str, identity: dict[str, Any], observed_at: str) -> list[dict[str, Any]]:

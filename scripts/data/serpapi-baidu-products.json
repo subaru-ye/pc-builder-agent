@@ -583,7 +583,10 @@
         "ryzen",
         "5500"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "x",
+        "g"
+      ]
     },
     "cpu-r5-5600": {
       "query": "AMD Ryzen 5 5600",
@@ -595,7 +598,10 @@
         "ryzen",
         "5600"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "x",
+        "g"
+      ]
     },
     "cpu-r5-7500f": {
       "query": "AMD Ryzen 5 7500F",
@@ -607,7 +613,10 @@
         "ryzen",
         "7500f"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "x",
+        "g"
+      ]
     },
     "cpu-r5-7600": {
       "query": "AMD Ryzen 5 7600",
@@ -619,7 +628,10 @@
         "ryzen",
         "7600"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "x",
+        "g"
+      ]
     },
     "cpu-r5-9600x": {
       "query": "AMD Ryzen 5 9600X",
@@ -631,7 +643,9 @@
         "ryzen",
         "9600x"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "g"
+      ]
     },
     "cpu-r7-7700": {
       "query": "AMD Ryzen 7 7700",
@@ -643,7 +657,10 @@
         "ryzen",
         "7700"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "x",
+        "g"
+      ]
     },
     "cpu-r7-9800x3d": {
       "query": "AMD Ryzen 7 9800X3D",
@@ -655,7 +672,9 @@
         "ryzen",
         "9800x3d"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "g"
+      ]
     },
     "cpu-ultra5-245k": {
       "query": "Intel Core Ultra 5 245K",
@@ -685,7 +704,9 @@
         "evo",
         "8gb"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "super"
+      ]
     },
     "gpu-gb-5060-windforce": {
       "query": "Gigabyte GeForce RTX 5060 WINDFORCE OC 8G",
@@ -700,7 +721,10 @@
         "windforce",
         "8g"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "ti",
+        "super"
+      ]
     },
     "gpu-gb-5060ti-windforce-16g": {
       "query": "Gigabyte GeForce RTX 5060 Ti WINDFORCE OC 16G",
@@ -716,7 +740,9 @@
         "windforce",
         "16g"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "super"
+      ]
     },
     "gpu-gb-5070-windforce-sff": {
       "query": "Gigabyte GeForce RTX 5070 WINDFORCE OC SFF 12G",
@@ -732,7 +758,10 @@
         "sff",
         "12g"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "ti",
+        "super"
+      ]
     },
     "gpu-intel-b580-le": {
       "query": "Intel Arc B580 Limited Edition 12GB",
@@ -761,7 +790,8 @@
       ],
       "forbidden_tokens": [
         "ti",
-        "white"
+        "white",
+        "super"
       ]
     },
     "gpu-msi-4070s-ventus2x": {
@@ -779,7 +809,9 @@
         "ventus",
         "2x"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "ti"
+      ]
     },
     "gpu-msi-5070ti-ventus3x": {
       "query": "MSI GeForce RTX 5070 Ti 16G VENTUS 3X OC",
@@ -796,7 +828,9 @@
         "ventus",
         "3x"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "super"
+      ]
     },
     "gpu-sapphire-6600-pulse": {
       "query": "Sapphire PULSE Radeon RX 6600 8GB",
@@ -811,7 +845,10 @@
         "6600",
         "8gb"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "xt",
+        "xtx"
+      ]
     },
     "gpu-sapphire-7600-pulse": {
       "query": "Sapphire PULSE Radeon RX 7600 8GB",
@@ -825,7 +862,8 @@
       ],
       "forbidden_tokens": [
         "xt",
-        "7700"
+        "7700",
+        "xtx"
       ]
     },
     "gpu-sapphire-9060xt-pulse-16g": {
@@ -1430,7 +1468,10 @@
         "1tb",
         "nvme"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "2tb",
+        "4tb"
+      ]
     },
     "ssd-crucial-bx500-1tb": {
       "query": "Crucial BX500 1TB SATA 2.5\"",
@@ -1443,7 +1484,10 @@
         "1tb",
         "sata"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "2tb",
+        "4tb"
+      ]
     },
     "ssd-crucial-p3plus-1tb": {
       "query": "Crucial P3 Plus 1TB NVMe M.2",
@@ -1457,7 +1501,10 @@
         "1tb",
         "nvme"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "2tb",
+        "4tb"
+      ]
     },
     "ssd-crucial-t500-2tb": {
       "query": "Crucial T500 2TB NVMe M.2",
@@ -1470,7 +1517,10 @@
         "2tb",
         "nvme"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "1tb",
+        "4tb"
+      ]
     },
     "ssd-kingston-kc3000-1tb": {
       "query": "Kingston KC3000 1024GB NVMe M.2",
@@ -1496,7 +1546,10 @@
         "1tb",
         "nvme"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "2tb",
+        "4tb"
+      ]
     },
     "ssd-samsung-870evo-1tb": {
       "query": "Samsung 870 EVO 1TB SATA 2.5\"",
@@ -1510,7 +1563,10 @@
         "1tb",
         "sata"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "2tb",
+        "4tb"
+      ]
     },
     "ssd-samsung-990pro-2tb": {
       "query": "Samsung 990 PRO 2TB NVMe M.2",
@@ -1525,7 +1581,8 @@
       ],
       "forbidden_tokens": [
         "1tb",
-        "980"
+        "980",
+        "4tb"
       ]
     },
     "ssd-wd-sa510-1tb": {
@@ -1541,7 +1598,10 @@
         "1tb",
         "sata"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "2tb",
+        "4tb"
+      ]
     },
     "ssd-wd-sn580-1tb": {
       "query": "Western Digital WD Blue SN580 1TB NVMe M.2",
@@ -1556,7 +1616,10 @@
         "1tb",
         "nvme"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "2tb",
+        "4tb"
+      ]
     },
     "ssd-wd-sn770-1tb": {
       "query": "Western Digital WD_BLACK SN770 1TB NVMe M.2",
@@ -1570,7 +1633,8 @@
       ],
       "forbidden_tokens": [
         "2tb",
-        "sn850"
+        "sn850",
+        "4tb"
       ]
     },
     "ssd-wd-sn850x-2tb": {
@@ -1586,7 +1650,10 @@
         "2tb",
         "nvme"
       ],
-      "forbidden_tokens": []
+      "forbidden_tokens": [
+        "1tb",
+        "4tb"
+      ]
     }
   }
 }

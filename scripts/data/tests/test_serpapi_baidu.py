@@ -122,6 +122,12 @@ def test_listing_matching_requires_exact_identity_and_two_merchants() -> None:
     cpu_identity = {"brand_aliases": ["intel"], "required_tokens": ["i5", "12400f"], "forbidden_tokens": []}
     assert _matches("Intel Core i5-12400F 盒装", cpu_identity) is True
     assert _matches("Intel Core i5-13400F 盒装", cpu_identity) is False
+    gpu_identity = {"brand_aliases": ["gigabyte"], "required_tokens": ["5060"], "forbidden_tokens": ["ti", "super"]}
+    assert _matches("Gigabyte GeForce RTX 5060 Windforce", gpu_identity) is True
+    assert _matches("Gigabyte GeForce RTX 5060 Ti Windforce", gpu_identity) is False
+    ryzen_identity = {"brand_aliases": ["amd"], "required_tokens": ["7600"], "forbidden_tokens": ["x", "g"]}
+    assert _matches("AMD Ryzen 5 7600", ryzen_identity) is True
+    assert _matches("AMD Ryzen 5 7600X", ryzen_identity) is False
 
 
 def test_canary_uses_exactly_twelve_calls_and_never_publishes(tmp_path: Path) -> None:

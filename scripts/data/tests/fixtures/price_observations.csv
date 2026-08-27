@@ -1,0 +1,2 @@
+sku,price_cny,currency,source_id,product_id,source_url,seller,price_type,stock_status,variant_match,observed_at,raw_sha256
+case-asus-prime-ap201,500.00,CNY,manual,test-product-1,https://example.com/products/test-product-1,Test Seller,regular,in_stock,exact,2026-08-20T08:00:00+08:00,aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

@@ -493,6 +493,20 @@ export interface components {
         PartCategory: "cpu" | "gpu" | "motherboard" | "memory" | "ssd" | "psu" | "case" | "cooler";
         /** @example 6419.90 */
         Money: string;
+        /**
+         * @description 按响应时间动态计算；0–7 天 fresh，8–14 天 aging，超过 14 天 stale，缺少观察关联为 unknown。
+         * @enum {string}
+         */
+        PriceFreshness: "fresh" | "aging" | "stale" | "unknown";
+        PriceFreshnessSummary: {
+            overall: components["schemas"]["PriceFreshness"];
+            oldest_observed_date?: string | null;
+            max_age_days?: number | null;
+            fresh_count: number;
+            aging_count: number;
+            stale_count: number;
+            unknown_count: number;
+        };
         BuildSummary: {
             /** @constant */
             schema_version: 1;
@@ -502,6 +516,7 @@ export interface components {
             total_cny: components["schemas"]["Money"];
             /** Format: date */
             snapshot_date: string;
+            price_freshness?: components["schemas"]["PriceFreshness"];
             /** @enum {string} */
             overall_status: "pass" | "review" | "fail";
             /** Format: date-time */
@@ -515,6 +530,9 @@ export interface components {
             unit_price_cny?: components["schemas"]["Money"] | null;
             subtotal_cny?: components["schemas"]["Money"] | null;
             rationale?: string;
+            /** Format: date */
+            price_observed_date?: string;
+            price_freshness?: components["schemas"]["PriceFreshness"];
         };
         ValidationCheck: {
             rule_id: string;
@@ -542,6 +560,7 @@ export interface components {
             budget_delta_cny: components["schemas"]["Money"];
             missing_count: number;
             missing_skus: string[];
+            price_freshness?: components["schemas"]["PriceFreshnessSummary"];
         };
         BuildView: {
             /** @constant */
@@ -627,6 +646,7 @@ export interface components {
             total_cny: components["schemas"]["Money"];
             /** Format: date */
             snapshot_date: string;
+            price_freshness?: components["schemas"]["PriceFreshness"];
             /** @enum {string} */
             overall_status: "pass" | "review" | "fail";
             /** Format: date-time */

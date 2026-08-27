@@ -131,14 +131,15 @@ type PublicRequirementSummary struct {
 }
 
 type PublicBuildSummary struct {
-	SchemaVersion int                   `json:"schema_version"`
-	Version       int                   `json:"version"`
-	ParentVersion *int                  `json:"parent_version"`
-	IntentLabel   string                `json:"intent_label"`
-	TotalCNY      string                `json:"total_cny"`
-	SnapshotDate  string                `json:"snapshot_date"`
-	OverallStatus schemas.OverallStatus `json:"overall_status"`
-	CreatedAt     string                `json:"created_at"`
+	SchemaVersion  int                      `json:"schema_version"`
+	Version        int                      `json:"version"`
+	ParentVersion  *int                     `json:"parent_version"`
+	IntentLabel    string                   `json:"intent_label"`
+	TotalCNY       string                   `json:"total_cny"`
+	SnapshotDate   string                   `json:"snapshot_date"`
+	PriceFreshness presenter.PriceFreshness `json:"price_freshness,omitempty"`
+	OverallStatus  schemas.OverallStatus    `json:"overall_status"`
+	CreatedAt      string                   `json:"created_at"`
 }
 
 type PublicValidationCheck struct {
@@ -236,7 +237,8 @@ func toPublic(view presenter.BuildView, createdAt time.Time) (PublicBuildView, e
 		Summary: PublicBuildSummary{SchemaVersion: 1, Version: view.Summary.Version,
 			ParentVersion: view.Summary.ParentVersion, IntentLabel: intentLabel(view.Summary.Intent),
 			TotalCNY: view.Summary.TotalCNY, SnapshotDate: view.Summary.SnapshotDate,
-			OverallStatus: view.Summary.OverallStatus, CreatedAt: view.Summary.CreatedAt},
+			PriceFreshness: view.Summary.PriceFreshness,
+			OverallStatus:  view.Summary.OverallStatus, CreatedAt: view.Summary.CreatedAt},
 		Requirement: PublicRequirementSummary{BudgetCNY: presenter.FormatFen(requirement.BudgetCNY * 100),
 			BudgetFlexPercent: int(math.Round(requirement.BudgetFlex * 100)),
 			UseCase: PublicUseCase{Type: requirement.UseCase.Type, Titles: titles, Resolution: resolution,

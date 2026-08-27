@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
@@ -16,38 +17,72 @@ type Reader interface {
 	PartNames(context.Context, []string) (map[string]string, error)
 }
 
-type Service struct{ reader Reader }
+type priceMetadataReader interface {
+	PriceMetadataBySnapshotDate(context.Context, string, []string) (map[string]store.PriceMetadata, error)
+}
 
-func New(reader Reader) *Service { return &Service{reader: reader} }
+type Service struct {
+	reader Reader
+	now    func() time.Time
+}
+
+func New(reader Reader) *Service { return &Service{reader: reader, now: time.Now} }
+
+func newWithClock(reader Reader, now func() time.Time) *Service {
+	return &Service{reader: reader, now: now}
+}
+
+type PriceFreshness string
+
+const (
+	PriceFreshnessFresh   PriceFreshness = "fresh"
+	PriceFreshnessAging   PriceFreshness = "aging"
+	PriceFreshnessStale   PriceFreshness = "stale"
+	PriceFreshnessUnknown PriceFreshness = "unknown"
+)
+
+type PriceFreshnessSummary struct {
+	Overall            PriceFreshness `json:"overall"`
+	OldestObservedDate *string        `json:"oldest_observed_date"`
+	MaxAgeDays         *int           `json:"max_age_days"`
+	FreshCount         int            `json:"fresh_count"`
+	AgingCount         int            `json:"aging_count"`
+	StaleCount         int            `json:"stale_count"`
+	UnknownCount       int            `json:"unknown_count"`
+}
 
 type BuildSummary struct {
-	SchemaVersion int                   `json:"schema_version"`
-	Version       int                   `json:"version"`
-	ParentVersion *int                  `json:"parent_version"`
-	Intent        string                `json:"intent"`
-	TotalCNY      string                `json:"total_cny"`
-	SnapshotDate  string                `json:"snapshot_date"`
-	OverallStatus schemas.OverallStatus `json:"overall_status"`
-	CreatedAt     string                `json:"created_at"`
+	SchemaVersion  int                   `json:"schema_version"`
+	Version        int                   `json:"version"`
+	ParentVersion  *int                  `json:"parent_version"`
+	Intent         string                `json:"intent"`
+	TotalCNY       string                `json:"total_cny"`
+	SnapshotDate   string                `json:"snapshot_date"`
+	PriceFreshness PriceFreshness        `json:"price_freshness,omitempty"`
+	OverallStatus  schemas.OverallStatus `json:"overall_status"`
+	CreatedAt      string                `json:"created_at"`
 }
 
 type PartLine struct {
-	Category     schemas.Category `json:"category"`
-	SKU          string           `json:"sku"`
-	Name         string           `json:"name"`
-	Quantity     int              `json:"quantity"`
-	UnitPriceCNY *string          `json:"unit_price_cny"`
-	SubtotalCNY  *string          `json:"subtotal_cny"`
-	Rationale    string           `json:"rationale"`
+	Category          schemas.Category `json:"category"`
+	SKU               string           `json:"sku"`
+	Name              string           `json:"name"`
+	Quantity          int              `json:"quantity"`
+	UnitPriceCNY      *string          `json:"unit_price_cny"`
+	SubtotalCNY       *string          `json:"subtotal_cny"`
+	Rationale         string           `json:"rationale"`
+	PriceObservedDate *string          `json:"price_observed_date,omitempty"`
+	PriceFreshness    PriceFreshness   `json:"price_freshness,omitempty"`
 }
 
 type QuoteView struct {
-	SnapshotDate   string   `json:"snapshot_date"`
-	TotalCNY       string   `json:"total_cny"`
-	BudgetCNY      string   `json:"budget_cny"`
-	BudgetDeltaCNY string   `json:"budget_delta_cny"`
-	MissingCount   int      `json:"missing_count"`
-	MissingSKUs    []string `json:"missing_skus"`
+	SnapshotDate   string                `json:"snapshot_date"`
+	TotalCNY       string                `json:"total_cny"`
+	BudgetCNY      string                `json:"budget_cny"`
+	BudgetDeltaCNY string                `json:"budget_delta_cny"`
+	MissingCount   int                   `json:"missing_count"`
+	MissingSKUs    []string              `json:"missing_skus"`
+	PriceFreshness PriceFreshnessSummary `json:"price_freshness"`
 }
 
 type ValidationView struct {
@@ -98,7 +133,13 @@ func (s *Service) Builds(ctx context.Context, sessionID string) ([]BuildSummary,
 	}
 	out := make([]BuildSummary, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, summary(row, versions))
+		item := summary(row, versions)
+		freshness, _, err := s.priceInfo(ctx, row)
+		if err != nil {
+			return nil, err
+		}
+		item.PriceFreshness = freshness.Overall
+		out = append(out, item)
 	}
 	return out, nil
 }
@@ -120,6 +161,10 @@ func (s *Service) Build(ctx context.Context, sessionID string, version int) (Bui
 	if err != nil {
 		return BuildView{}, err
 	}
+	freshness, metadata, err := s.priceInfo(ctx, row)
+	if err != nil {
+		return BuildView{}, err
+	}
 	parts := make([]PartLine, 0, len(row.Quote.Lines)+1)
 	for _, category := range schemas.AllCategories {
 		found := false
@@ -128,8 +173,18 @@ func (s *Service) Build(ctx context.Context, sessionID string, version int) (Bui
 				continue
 			}
 			found = true
-			parts = append(parts, PartLine{Category: category, SKU: line.SKU, Name: names[line.SKU], Quantity: line.Quantity,
-				UnitPriceCNY: line.UnitPriceCNY, SubtotalCNY: line.SubtotalCNY, Rationale: row.Draft.Rationale[string(category)]})
+			part := PartLine{Category: category, SKU: line.SKU, Name: names[line.SKU], Quantity: line.Quantity,
+				UnitPriceCNY: line.UnitPriceCNY, SubtotalCNY: line.SubtotalCNY, Rationale: row.Draft.Rationale[string(category)]}
+			if line.UnitPriceCNY == nil {
+				part.PriceFreshness = PriceFreshnessUnknown
+			} else if meta, ok := metadata[line.SKU]; ok && meta.ObservedAt != nil {
+				date := meta.ObservedAt.UTC().Format("2006-01-02")
+				part.PriceObservedDate = &date
+				part.PriceFreshness, _ = classifyPriceFreshness(meta.ObservedAt, s.now())
+			} else {
+				part.PriceFreshness = PriceFreshnessUnknown
+			}
+			parts = append(parts, part)
 		}
 		if !found && category == schemas.CategoryGPU && row.Draft.Selection.GPU == nil {
 			parts = append(parts, PartLine{Category: category, Name: "无独显", Quantity: 1,
@@ -148,7 +203,8 @@ func (s *Service) Build(ctx context.Context, sessionID string, version int) (Bui
 	return BuildView{
 		SchemaVersion: 1, Summary: summary(row, versions), Requirement: row.Spec, Parts: parts,
 		Quote: QuoteView{SnapshotDate: row.Quote.SnapshotDate, TotalCNY: FormatFen(totalFen), BudgetCNY: FormatFen(budgetFen),
-			BudgetDeltaCNY: FormatFen(budgetFen - totalFen), MissingCount: row.Quote.MissingCount, MissingSKUs: missing},
+			BudgetDeltaCNY: FormatFen(budgetFen - totalFen), MissingCount: row.Quote.MissingCount, MissingSKUs: missing,
+			PriceFreshness: freshness},
 		Validation:  ValidationView{OverallStatus: row.Report.OverallStatus, Checks: row.Report.Checks},
 		Disclaimers: disclaimers(row.Quote.SnapshotDate),
 	}, nil
@@ -201,7 +257,85 @@ func (s *Service) Markdown(ctx context.Context, sessionID string, version int) (
 	if err != nil {
 		return "", err
 	}
-	return RenderExport(row, names)
+	freshness, _, err := s.priceInfo(ctx, row)
+	if err != nil {
+		return "", err
+	}
+	return RenderExportWithFreshness(row, names, freshness)
+}
+
+func (s *Service) priceInfo(ctx context.Context, row BuildRow) (PriceFreshnessSummary, map[string]store.PriceMetadata, error) {
+	metadata := map[string]store.PriceMetadata{}
+	if reader, ok := s.reader.(priceMetadataReader); ok {
+		loaded, err := reader.PriceMetadataBySnapshotDate(ctx, row.Quote.SnapshotDate, row.SKUs())
+		if err != nil {
+			return PriceFreshnessSummary{}, nil, err
+		}
+		metadata = loaded
+	}
+	summary := PriceFreshnessSummary{Overall: PriceFreshnessFresh}
+	var oldest *time.Time
+	var maxAge *int
+	for _, line := range row.Quote.Lines {
+		status, age := PriceFreshnessUnknown, 0
+		meta, ok := metadata[line.SKU]
+		if line.UnitPriceCNY != nil && ok && meta.ObservedAt != nil {
+			status, age = classifyPriceFreshness(meta.ObservedAt, s.now())
+			if oldest == nil || meta.ObservedAt.Before(*oldest) {
+				value := *meta.ObservedAt
+				oldest = &value
+			}
+			if maxAge == nil || age > *maxAge {
+				value := age
+				maxAge = &value
+			}
+		}
+		switch status {
+		case PriceFreshnessFresh:
+			summary.FreshCount++
+		case PriceFreshnessAging:
+			summary.AgingCount++
+		case PriceFreshnessStale:
+			summary.StaleCount++
+		default:
+			summary.UnknownCount++
+		}
+	}
+	if oldest != nil {
+		value := oldest.UTC().Format("2006-01-02")
+		summary.OldestObservedDate = &value
+	}
+	summary.MaxAgeDays = maxAge
+	switch {
+	case summary.StaleCount > 0:
+		summary.Overall = PriceFreshnessStale
+	case summary.UnknownCount > 0:
+		summary.Overall = PriceFreshnessUnknown
+	case summary.AgingCount > 0:
+		summary.Overall = PriceFreshnessAging
+	default:
+		summary.Overall = PriceFreshnessFresh
+	}
+	return summary, metadata, nil
+}
+
+func classifyPriceFreshness(observedAt *time.Time, now time.Time) (PriceFreshness, int) {
+	if observedAt == nil {
+		return PriceFreshnessUnknown, 0
+	}
+	observedDay := time.Date(observedAt.UTC().Year(), observedAt.UTC().Month(), observedAt.UTC().Day(), 0, 0, 0, 0, time.UTC)
+	nowDay := time.Date(now.UTC().Year(), now.UTC().Month(), now.UTC().Day(), 0, 0, 0, 0, time.UTC)
+	age := int(nowDay.Sub(observedDay).Hours() / 24)
+	if age < 0 {
+		return PriceFreshnessUnknown, age
+	}
+	if age <= 7 {
+		return PriceFreshnessFresh, age
+	}
+	if age <= 14 {
+		return PriceFreshnessAging, age
+	}
+	return PriceFreshnessStale, age
 }
 
 func (s *Service) load(ctx context.Context, sessionID string, version int) (BuildRow, error) {

@@ -232,6 +232,11 @@ func RenderDiff(from, to BuildRow) (string, error) {
 }
 
 func RenderExport(row BuildRow, names map[string]string) (string, error) {
+	return RenderExportWithFreshness(row, names, PriceFreshnessSummary{})
+}
+
+// RenderExportWithFreshness 保持 CLI 既有正文格式，并为产品 API 导出追加动态价格时效。
+func RenderExportWithFreshness(row BuildRow, names map[string]string, freshness PriceFreshnessSummary) (string, error) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# 装机配置单 v%d\n\n", row.Version)
 	fmt.Fprintf(&b, "- 生成时间:%s\n", row.CreatedAt.Local().Format("2006-01-02 15:04"))
@@ -270,6 +275,18 @@ func RenderExport(row BuildRow, names map[string]string) (string, error) {
 	if row.Quote.MissingCount > 0 {
 		fmt.Fprintf(&b, "\n> 注意:%d 件零件缺价未计入合计(%s)。\n", row.Quote.MissingCount, strings.Join(row.Quote.MissingSKUs, ", "))
 	}
+	if freshness.Overall != "" {
+		message := priceFreshnessMessage(freshness.Overall)
+		fmt.Fprintf(&b, "\n> 价格时效:%s", message)
+		if freshness.OldestObservedDate != nil {
+			fmt.Fprintf(&b, "（最早观察于 %s", *freshness.OldestObservedDate)
+			if freshness.MaxAgeDays != nil {
+				fmt.Fprintf(&b, "，距今 %d 天", *freshness.MaxAgeDays)
+			}
+			b.WriteString("）")
+		}
+		b.WriteString("。\n")
+	}
 	fmt.Fprintf(&b, "\n## 校验结果\n\n- 总体:%s\n", row.Report.OverallStatus)
 	flagged := 0
 	for _, check := range row.Report.Checks {
@@ -291,6 +308,19 @@ func RenderExport(row BuildRow, names map[string]string) (string, error) {
 	b.WriteString("- 兼容性结论基于本库收录参数,下单前请以官方规格页复核。\n")
 	b.WriteString("- 本文档不构成购买建议。\n")
 	return b.String(), nil
+}
+
+func priceFreshnessMessage(value PriceFreshness) string {
+	switch value {
+	case PriceFreshnessFresh:
+		return "价格观察在 7 天内，仅供参考，非实时价格"
+	case PriceFreshnessAging:
+		return "价格可能已变化，请购买前重新核价"
+	case PriceFreshnessStale:
+		return "价格快照已过期，请购买前重新核价"
+	default:
+		return "部分价格无法关联观察日期，请购买前重新核价"
+	}
 }
 
 func ParseFen(value string) (int, bool) {

@@ -121,6 +121,7 @@ const createMessageRun_Body = z.object({
   text: z.string().min(1).max(4000),
 });
 const Money = z.string();
+const PriceFreshness = z.enum(["fresh", "aging", "stale", "unknown"]);
 const BuildSummary = z.object({
   schema_version: z.number().int(),
   version: z.number().int().gte(1),
@@ -128,6 +129,7 @@ const BuildSummary = z.object({
   intent: z.string(),
   total_cny: Money.regex(/^-?[0-9]+\.[0-9]{2}$/),
   snapshot_date: z.string(),
+  price_freshness: PriceFreshness.optional(),
   overall_status: z.enum(["pass", "review", "fail"]),
   created_at: z.string().datetime({ offset: true }),
 });
@@ -139,6 +141,17 @@ const PartLine = z.object({
   unit_price_cny: z.union([Money, z.null()]).optional(),
   subtotal_cny: z.union([Money, z.null()]).optional(),
   rationale: z.string().optional(),
+  price_observed_date: z.string().optional(),
+  price_freshness: PriceFreshness.optional(),
+});
+const PriceFreshnessSummary = z.object({
+  overall: PriceFreshness,
+  oldest_observed_date: z.union([z.string(), z.null()]).optional(),
+  max_age_days: z.union([z.number(), z.null()]).optional(),
+  fresh_count: z.number().int().gte(0),
+  aging_count: z.number().int().gte(0),
+  stale_count: z.number().int().gte(0),
+  unknown_count: z.number().int().gte(0),
 });
 const Quote = z.object({
   snapshot_date: z.string(),
@@ -147,6 +160,7 @@ const Quote = z.object({
   budget_delta_cny: Money,
   missing_count: z.number().int().gte(0),
   missing_skus: z.array(z.string()),
+  price_freshness: PriceFreshnessSummary.optional(),
 });
 const ValidationCheck = z.object({
   rule_id: z.string(),
@@ -208,6 +222,7 @@ const PublicBuildSummary = z.object({
   intent_label: z.string(),
   total_cny: Money.regex(/^-?[0-9]+\.[0-9]{2}$/),
   snapshot_date: z.string(),
+  price_freshness: PriceFreshness.optional(),
   overall_status: z.enum(["pass", "review", "fail"]),
   created_at: z.string().datetime({ offset: true }),
 });
@@ -263,8 +278,10 @@ export const schemas = {
   Session,
   createMessageRun_Body,
   Money,
+  PriceFreshness,
   BuildSummary,
   PartLine,
+  PriceFreshnessSummary,
   Quote,
   ValidationCheck,
   ValidationReport,

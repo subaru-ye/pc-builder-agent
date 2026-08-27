@@ -155,6 +155,15 @@ type Price struct {
 	Source   string
 }
 
+// PriceMetadata 是某个历史快照内逐 SKU 的可审计价格时间信息。
+// 旧快照或测试夹具可能没有 observation 关联，此时 ObservedAt 为 nil。
+type PriceMetadata struct {
+	SKU           string
+	ObservedAt    *time.Time
+	PriceType     *string
+	ObservationID *string
+}
+
 // SnapshotByDate 按快照日期(YYYY-MM-DD,仅日期部分参与匹配)取批次。
 func (s *Store) SnapshotByDate(ctx context.Context, date time.Time) (Snapshot, error) {
 	var snap Snapshot
@@ -208,6 +217,34 @@ func (s *Store) PricesBySnapshot(ctx context.Context, snapshotID int64) ([]Price
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("store: 遍历价格失败: %w", err)
+	}
+	return out, nil
+}
+
+// PriceMetadataBySnapshotDate 按 build 保存的快照日期和 SKU 读取 P12A 元数据。
+func (s *Store) PriceMetadataBySnapshotDate(ctx context.Context, snapshotDate string, skus []string) (map[string]PriceMetadata, error) {
+	if snapshotDate == "" || len(skus) == 0 {
+		return map[string]PriceMetadata{}, nil
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT p.sku, p.observed_at, p.price_type, p.observation_id
+		FROM price_snapshots s
+		JOIN prices p ON p.snapshot_id = s.id
+		WHERE s.snapshot_date = $1::date AND p.sku = ANY($2)`, snapshotDate, skus)
+	if err != nil {
+		return nil, fmt.Errorf("store: 查询价格观察元数据失败: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[string]PriceMetadata, len(skus))
+	for rows.Next() {
+		var item PriceMetadata
+		if err := rows.Scan(&item.SKU, &item.ObservedAt, &item.PriceType, &item.ObservationID); err != nil {
+			return nil, fmt.Errorf("store: 读取价格观察元数据失败: %w", err)
+		}
+		out[item.SKU] = item
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store: 遍历价格观察元数据失败: %w", err)
 	}
 	return out, nil
 }

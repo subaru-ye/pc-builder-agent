@@ -9,6 +9,7 @@ import type { BuildSummary, BuildView, PartCategory } from "@/lib/api/types";
 import { categories, categoryLabels, ruleLabels, ruleOrder, statusLabel } from "@/lib/domain";
 import { useUIStore } from "@/stores/ui";
 import { Button } from "./ui/button";
+import { freshnessLabel, PriceFreshnessNotice } from "./price-freshness";
 
 const tabs = [
   ["build", "配置"], ["validation", "校验"], ["versions", "版本"], ["requirement", "需求"],
@@ -51,6 +52,7 @@ export function BuildInspector({ sessionID, builds, build, latestVersion, canCha
         <div className="text-right"><div className="tabular text-xl font-semibold">¥{build.quote.total_cny}</div><div className="text-xs text-[var(--ink-muted)]">预算差 ¥{build.quote.budget_delta_cny}</div></div>
       </div>
       <dl className="mt-4 grid grid-cols-3 gap-3 text-xs"><Meta label="父版本" value={build.summary.parent_version ? `v${build.summary.parent_version}` : "—"} /><Meta label="价格快照" value={build.quote.snapshot_date} /><Meta label="缺价项" value={String(build.quote.missing_count)} /></dl>
+      <div className="mt-4"><PriceFreshnessNotice value={build.quote.price_freshness} compact /></div>
     </div>
     <div className="flex min-h-11 overflow-x-auto border-b px-2" role="tablist" aria-label="检查器页面">
       {tabs.map(([key, label]) => <button key={key} role="tab" aria-selected={tab === key} className={`min-h-11 border-b-2 px-4 text-sm ${tab === key ? "border-b-[var(--primary)] text-[var(--ink)]" : "border-b-transparent text-[var(--ink-muted)]"}`} onClick={() => setTab(key)}>{label}</button>)}
@@ -73,7 +75,7 @@ function Parts({ build, allowReplace, onReplace }: { build: BuildView; allowRepl
   return <div>
     {categories.map((category) => { const part = byCategory.get(category); return <div key={category} className="grid grid-cols-[88px_minmax(0,1fr)_auto] gap-3 border-b px-4 py-4 sm:px-6">
       <div className="text-xs font-medium text-[var(--ink-subtle)]">{categoryLabels[category]}</div>
-      <div className="min-w-0"><div className="font-medium">{part?.name ?? "未选择"}</div>{part?.rationale && <p className="mt-1 text-xs text-[var(--ink-muted)]">{part.rationale}</p>}{part?.quantity && part.quantity > 1 ? <span className="text-xs text-[var(--ink-subtle)]">数量 × {part.quantity}</span> : null}</div>
+      <div className="min-w-0"><div className="font-medium">{part?.name ?? "未选择"}</div>{part?.rationale && <p className="mt-1 text-xs text-[var(--ink-muted)]">{part.rationale}</p>}{part?.price_observed_date && <p className={`mt-1 text-xs ${part.price_freshness === "stale" ? "status-fail" : part.price_freshness === "aging" || part.price_freshness === "unknown" ? "status-review" : "text-[var(--ink-subtle)]"}`}>观察于 {part.price_observed_date} · {freshnessLabel(part.price_freshness)}</p>}{part?.quantity && part.quantity > 1 ? <span className="text-xs text-[var(--ink-subtle)]">数量 × {part.quantity}</span> : null}</div>
       <div className="text-right"><div className="tabular text-sm">{part?.subtotal_cny ? `¥${part.subtotal_cny}` : <span className="status-review">缺价，未计入合计</span>}</div>{allowReplace && <Button variant="ghost" size="sm" className="mt-1" onClick={() => onReplace(category)}>更换此件</Button>}</div>
     </div>; })}
     <Disclaimers values={build.disclaimers} />

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ type fakeReader struct {
 	builds []store.BuildVersion
 	specs  map[int64]json.RawMessage
 	names  map[string]string
+	prices map[string]store.PriceMetadata
 }
 
 func (f fakeReader) BuildsBySession(context.Context, string) ([]store.BuildVersion, error) {
@@ -34,6 +36,9 @@ func (f fakeReader) RequirementSpecByID(_ context.Context, id int64) (json.RawMe
 }
 func (f fakeReader) PartNames(context.Context, []string) (map[string]string, error) {
 	return f.names, nil
+}
+func (f fakeReader) PriceMetadataBySnapshotDate(context.Context, string, []string) (map[string]store.PriceMetadata, error) {
+	return f.prices, nil
 }
 
 func fixture(t *testing.T, version, budget int, total, gpu string) store.BuildVersion {
@@ -69,6 +74,42 @@ func fixture(t *testing.T, version, budget int, total, gpu string) store.BuildVe
 		Draft: marshal(draft), Quote: marshal(validate.Quote{SnapshotDate: "2026-08-09", TotalCNY: total, Lines: lines}),
 		Validation: marshal(schemas.ValidationReport{BuildRef: "build", OverallStatus: schemas.OverallPass, Checks: checks}),
 		CreatedAt:  time.Date(2026, 8, 9, 1, 2, 3, 0, time.UTC)}
+}
+
+func TestPriceFreshnessBoundaries(t *testing.T) {
+	build := fixture(t, 1, 8000, "800.00", "gpu-amd")
+	observed := map[string]store.PriceMetadata{}
+	for index, sku := range []string{"cpu-1", "gpu-amd", "board-1", "memory-1", "ssd-1", "psu-1", "case-1", "cooler-1"} {
+		day := time.Date(2026, 8, 20-index, 8, 0, 0, 0, time.UTC)
+		observed[sku] = store.PriceMetadata{SKU: sku, ObservedAt: &day}
+	}
+	reader := fakeReader{builds: []store.BuildVersion{build}, specs: map[int64]json.RawMessage{1: requirement(t, 8000)}, prices: observed}
+	service := newWithClock(reader, func() time.Time { return time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC) })
+	view, err := service.Build(context.Background(), "s1", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Quote.PriceFreshness.Overall != PriceFreshnessAging || view.Quote.PriceFreshness.FreshCount != 1 || view.Quote.PriceFreshness.AgingCount != 7 {
+		t.Fatalf("freshness=%+v", view.Quote.PriceFreshness)
+	}
+	if view.Parts[0].PriceObservedDate == nil || *view.Parts[0].PriceObservedDate != "2026-08-20" {
+		t.Fatalf("part freshness=%+v", view.Parts[0])
+	}
+	markdown, err := service.Markdown(context.Background(), "s1", 1)
+	if err != nil || !strings.Contains(markdown, "价格可能已变化") {
+		t.Fatalf("markdown freshness missing: err=%v\n%s", err, markdown)
+	}
+}
+
+func TestPriceFreshnessStaleAndUnknown(t *testing.T) {
+	staleDay := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	status, age := classifyPriceFreshness(&staleDay, time.Date(2026, 8, 27, 0, 0, 0, 0, time.UTC))
+	if status != PriceFreshnessStale || age != 26 {
+		t.Fatalf("status=%s age=%d", status, age)
+	}
+	if status, _ := classifyPriceFreshness(nil, time.Now()); status != PriceFreshnessUnknown {
+		t.Fatalf("nil observation=%s", status)
+	}
 }
 
 func requirement(t *testing.T, budget int) json.RawMessage {

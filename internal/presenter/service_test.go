@@ -83,6 +83,9 @@ func TestPriceFreshnessBoundaries(t *testing.T) {
 		day := time.Date(2026, 8, 20-index, 8, 0, 0, 0, time.UTC)
 		observed[sku] = store.PriceMetadata{SKU: sku, ObservedAt: &day}
 	}
+	cpu := observed["cpu-1"]
+	cpu.AvailabilityBasis = "search_listing"
+	observed["cpu-1"] = cpu
 	reader := fakeReader{builds: []store.BuildVersion{build}, specs: map[int64]json.RawMessage{1: requirement(t, 8000)}, prices: observed}
 	service := newWithClock(reader, func() time.Time { return time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC) })
 	view, err := service.Build(context.Background(), "s1", 1)
@@ -95,8 +98,11 @@ func TestPriceFreshnessBoundaries(t *testing.T) {
 	if view.Parts[0].PriceObservedDate == nil || *view.Parts[0].PriceObservedDate != "2026-08-20" {
 		t.Fatalf("part freshness=%+v", view.Parts[0])
 	}
+	if view.Parts[0].PriceAvailabilityBasis != "search_listing" {
+		t.Fatalf("availability basis=%q", view.Parts[0].PriceAvailabilityBasis)
+	}
 	markdown, err := service.Markdown(context.Background(), "s1", 1)
-	if err != nil || !strings.Contains(markdown, "价格可能已变化") {
+	if err != nil || !strings.Contains(markdown, "价格可能已变化") || !strings.Contains(markdown, "搜索平台报价，不代表库存") {
 		t.Fatalf("markdown freshness missing: err=%v\n%s", err, markdown)
 	}
 }

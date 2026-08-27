@@ -533,6 +533,8 @@ export interface components {
             /** Format: date */
             price_observed_date?: string;
             price_freshness?: components["schemas"]["PriceFreshness"];
+            /** @enum {string} */
+            price_availability_basis?: "confirmed_stock" | "search_listing" | "unknown";
         };
         ValidationCheck: {
             rule_id: string;

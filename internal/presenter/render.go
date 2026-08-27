@@ -237,6 +237,11 @@ func RenderExport(row BuildRow, names map[string]string) (string, error) {
 
 // RenderExportWithFreshness 保持 CLI 既有正文格式，并为产品 API 导出追加动态价格时效。
 func RenderExportWithFreshness(row BuildRow, names map[string]string, freshness PriceFreshnessSummary) (string, error) {
+	return RenderExportWithPriceMetadata(row, names, freshness, nil)
+}
+
+// RenderExportWithPriceMetadata 在不改变金额和兼容性结论的前提下，公开报价依据边界。
+func RenderExportWithPriceMetadata(row BuildRow, names map[string]string, freshness PriceFreshnessSummary, metadata map[string]store.PriceMetadata) (string, error) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# 装机配置单 v%d\n\n", row.Version)
 	fmt.Fprintf(&b, "- 生成时间:%s\n", row.CreatedAt.Local().Format("2006-01-02 15:04"))
@@ -286,6 +291,16 @@ func RenderExportWithFreshness(row BuildRow, names map[string]string, freshness 
 			b.WriteString("）")
 		}
 		b.WriteString("。\n")
+	}
+	searchListing := false
+	for _, item := range metadata {
+		if item.AvailabilityBasis == "search_listing" {
+			searchListing = true
+			break
+		}
+	}
+	if searchListing {
+		b.WriteString("\n> 报价依据：搜索平台报价，不代表库存，购买前请核对。\n")
 	}
 	fmt.Fprintf(&b, "\n## 校验结果\n\n- 总体:%s\n", row.Report.OverallStatus)
 	flagged := 0

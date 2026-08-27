@@ -64,15 +64,16 @@ type BuildSummary struct {
 }
 
 type PartLine struct {
-	Category          schemas.Category `json:"category"`
-	SKU               string           `json:"sku"`
-	Name              string           `json:"name"`
-	Quantity          int              `json:"quantity"`
-	UnitPriceCNY      *string          `json:"unit_price_cny"`
-	SubtotalCNY       *string          `json:"subtotal_cny"`
-	Rationale         string           `json:"rationale"`
-	PriceObservedDate *string          `json:"price_observed_date,omitempty"`
-	PriceFreshness    PriceFreshness   `json:"price_freshness,omitempty"`
+	Category               schemas.Category `json:"category"`
+	SKU                    string           `json:"sku"`
+	Name                   string           `json:"name"`
+	Quantity               int              `json:"quantity"`
+	UnitPriceCNY           *string          `json:"unit_price_cny"`
+	SubtotalCNY            *string          `json:"subtotal_cny"`
+	Rationale              string           `json:"rationale"`
+	PriceObservedDate      *string          `json:"price_observed_date,omitempty"`
+	PriceFreshness         PriceFreshness   `json:"price_freshness,omitempty"`
+	PriceAvailabilityBasis string           `json:"price_availability_basis,omitempty"`
 }
 
 type QuoteView struct {
@@ -181,6 +182,7 @@ func (s *Service) Build(ctx context.Context, sessionID string, version int) (Bui
 				date := meta.ObservedAt.UTC().Format("2006-01-02")
 				part.PriceObservedDate = &date
 				part.PriceFreshness, _ = classifyPriceFreshness(meta.ObservedAt, s.now())
+				part.PriceAvailabilityBasis = meta.AvailabilityBasis
 			} else {
 				part.PriceFreshness = PriceFreshnessUnknown
 			}
@@ -257,11 +259,11 @@ func (s *Service) Markdown(ctx context.Context, sessionID string, version int) (
 	if err != nil {
 		return "", err
 	}
-	freshness, _, err := s.priceInfo(ctx, row)
+	freshness, metadata, err := s.priceInfo(ctx, row)
 	if err != nil {
 		return "", err
 	}
-	return RenderExportWithFreshness(row, names, freshness)
+	return RenderExportWithPriceMetadata(row, names, freshness, metadata)
 }
 
 func (s *Service) priceInfo(ctx context.Context, row BuildRow) (PriceFreshnessSummary, map[string]store.PriceMetadata, error) {

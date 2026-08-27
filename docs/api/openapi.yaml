@@ -698,6 +698,9 @@ components:
         rationale: {type: string}
         price_observed_date: {type: string, format: date}
         price_freshness: {$ref: "#/components/schemas/PriceFreshness"}
+        price_availability_basis:
+          type: string
+          enum: [confirmed_stock, search_listing, unknown]
     ValidationCheck:
       type: object
       additionalProperties: false

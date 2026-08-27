@@ -143,6 +143,9 @@ const PartLine = z.object({
   rationale: z.string().optional(),
   price_observed_date: z.string().optional(),
   price_freshness: PriceFreshness.optional(),
+  price_availability_basis: z
+    .enum(["confirmed_stock", "search_listing", "unknown"])
+    .optional(),
 });
 const PriceFreshnessSummary = z.object({
   overall: PriceFreshness,

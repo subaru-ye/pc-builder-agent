@@ -158,10 +158,11 @@ type Price struct {
 // PriceMetadata 是某个历史快照内逐 SKU 的可审计价格时间信息。
 // 旧快照或测试夹具可能没有 observation 关联，此时 ObservedAt 为 nil。
 type PriceMetadata struct {
-	SKU           string
-	ObservedAt    *time.Time
-	PriceType     *string
-	ObservationID *string
+	SKU               string
+	ObservedAt        *time.Time
+	PriceType         *string
+	ObservationID     *string
+	AvailabilityBasis string
 }
 
 // SnapshotByDate 按快照日期(YYYY-MM-DD,仅日期部分参与匹配)取批次。
@@ -221,13 +222,14 @@ func (s *Store) PricesBySnapshot(ctx context.Context, snapshotID int64) ([]Price
 	return out, nil
 }
 
-// PriceMetadataBySnapshotDate 按 build 保存的快照日期和 SKU 读取 P12A 元数据。
+// PriceMetadataBySnapshotDate 按 build 保存的快照日期和 SKU 读取 P12 元数据。
 func (s *Store) PriceMetadataBySnapshotDate(ctx context.Context, snapshotDate string, skus []string) (map[string]PriceMetadata, error) {
 	if snapshotDate == "" || len(skus) == 0 {
 		return map[string]PriceMetadata{}, nil
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT p.sku, p.observed_at, p.price_type, p.observation_id
+		SELECT p.sku, p.observed_at, p.price_type, p.observation_id,
+		       COALESCE(p.availability_basis, 'unknown')
 		FROM price_snapshots s
 		JOIN prices p ON p.snapshot_id = s.id
 		WHERE s.snapshot_date = $1::date AND p.sku = ANY($2)`, snapshotDate, skus)
@@ -238,7 +240,7 @@ func (s *Store) PriceMetadataBySnapshotDate(ctx context.Context, snapshotDate st
 	out := make(map[string]PriceMetadata, len(skus))
 	for rows.Next() {
 		var item PriceMetadata
-		if err := rows.Scan(&item.SKU, &item.ObservedAt, &item.PriceType, &item.ObservationID); err != nil {
+		if err := rows.Scan(&item.SKU, &item.ObservedAt, &item.PriceType, &item.ObservationID, &item.AvailabilityBasis); err != nil {
 			return nil, fmt.Errorf("store: 读取价格观察元数据失败: %w", err)
 		}
 		out[item.SKU] = item

@@ -10,6 +10,7 @@ import { categories, categoryLabels, ruleLabels, ruleOrder, statusLabel } from "
 import { useUIStore } from "@/stores/ui";
 import { Button } from "./ui/button";
 import { freshnessLabel, PriceFreshnessNotice } from "./price-freshness";
+import { PriceAvailabilityNotice } from "./price-availability";
 
 const tabs = [
   ["build", "配置"], ["validation", "校验"], ["versions", "版本"], ["requirement", "需求"],
@@ -75,7 +76,7 @@ function Parts({ build, allowReplace, onReplace }: { build: BuildView; allowRepl
   return <div>
     {categories.map((category) => { const part = byCategory.get(category); return <div key={category} className="grid grid-cols-[88px_minmax(0,1fr)_auto] gap-3 border-b px-4 py-4 sm:px-6">
       <div className="text-xs font-medium text-[var(--ink-subtle)]">{categoryLabels[category]}</div>
-      <div className="min-w-0"><div className="font-medium">{part?.name ?? "未选择"}</div>{part?.rationale && <p className="mt-1 text-xs text-[var(--ink-muted)]">{part.rationale}</p>}{part?.price_observed_date && <p className={`mt-1 text-xs ${part.price_freshness === "stale" ? "status-fail" : part.price_freshness === "aging" || part.price_freshness === "unknown" ? "status-review" : "text-[var(--ink-subtle)]"}`}>观察于 {part.price_observed_date} · {freshnessLabel(part.price_freshness)}</p>}{part?.quantity && part.quantity > 1 ? <span className="text-xs text-[var(--ink-subtle)]">数量 × {part.quantity}</span> : null}</div>
+      <div className="min-w-0"><div className="font-medium">{part?.name ?? "未选择"}</div>{part?.rationale && <p className="mt-1 text-xs text-[var(--ink-muted)]">{part.rationale}</p>}{part?.price_observed_date && <p className={`mt-1 text-xs ${part.price_freshness === "stale" ? "status-fail" : part.price_freshness === "aging" || part.price_freshness === "unknown" ? "status-review" : "text-[var(--ink-subtle)]"}`}>观察于 {part.price_observed_date} · {freshnessLabel(part.price_freshness)}</p>}<PriceAvailabilityNotice value={part?.price_availability_basis} />{part?.quantity && part.quantity > 1 ? <span className="text-xs text-[var(--ink-subtle)]">数量 × {part.quantity}</span> : null}</div>
       <div className="text-right"><div className="tabular text-sm">{part?.subtotal_cny ? `¥${part.subtotal_cny}` : <span className="status-review">缺价，未计入合计</span>}</div>{allowReplace && <Button variant="ghost" size="sm" className="mt-1" onClick={() => onReplace(category)}>更换此件</Button>}</div>
     </div>; })}
     <Disclaimers values={build.disclaimers} />

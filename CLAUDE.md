@@ -12,6 +12,7 @@ go run ./cmd/host web --write-timeout=10m api --sse-write-timeout=10m webui  # �
 go run ./cmd/api                 # 终端 3:产品 API,http://localhost:8082
 go run ./cmd/modelcheck -role screening  # 显式上游检查;普通启动/测试不调用模型
 uv run --project scripts/data pcdata source check  # P11 静态来源检查;默认不联网
+uv run --project scripts/data pcdata price health  # P12A 价格快照与动态年龄
 cd web && pnpm dev               # 终端 4:产品 Web,http://localhost:3000
 go build ./... && go vet ./...
 ```
@@ -32,6 +33,8 @@ go build ./... && go vet ./...
 | docs/data/数据获取与发布规则.md | 数据来源、字段证据、价格选择、模型禁区和条件发布强制规则 |
 | docs/tech/P11-数据获取与发布管道设计.md | 本机调度、HTTP 安全采集、风险分类、不可变 release 与数据库演进 |
 | docs/ops/P11本机数据任务.md | P11 初始化、计划任务安装、日志、补跑和卸载操作 |
+| docs/tech/P12-价格观察与安全选价设计.md | P12A observation/选价/新鲜度与 P12B 自动来源门禁 |
+| docs/ops/P12价格任务.md | P12 CSV、review/publish、inbox、health 与排障操作 |
 | docs/装机Agent设计方案.md | 架构 / A2A schema / 规则表 / 表结构 |
 | docs/tech/P2-流水线设计.md | P2 实现层:编排拓扑 / 提示词 SOP / tool 契约 / Loop 控制(schema 口径仍以设计方案 §四 为准) |
 | docs/tech/P3-语义选件设计.md | P3 实现层:embedding 素材与文本 / 语义检索路径 / search_parts_semantic 契约 |
@@ -55,7 +58,7 @@ go build ./... && go vet ./...
 - **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
 - **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。
 - **schema 单一出处**:`internal/schemas` 定义一份,字段变更回写设计方案 §四,不在代码里静默漂移。
-- 当前进度:MVP P0–P6 已封板;P7 产品 API、P8 Web 工作台与 P9 分享只读页已实现。P10 的 50 组 golden、全部自动门禁和 L1–L6×3 Live Pass³ 已通过,但 3 人真人盲评尚未执行,不得创建 `stage1-freeze`。P11 已完成 AMD 官方 CPU 规格适配、字段 evidence、release v2、原子导入和两次真实 Task Scheduler 验收；下一步为 P12 价格观察。产品入口为 `web/` 的 Next.js 工作台,ADK dev UI 继续只作调试入口。
+- 当前进度:MVP P0–P6 已封板;P7 产品 API、P8 Web 工作台与 P9 分享只读页已实现。P10 的 50 组 golden、全部自动门禁和 L1–L6×3 Live Pass³ 已通过,但 3 人真人盲评尚未执行,不得创建 `stage1-freeze`。P11 已完成。P12A 已实现价格观察、人工 CSV、安全选价、不可变快照和动态过期提示；P12B 仍等待获准自动来源及连续两个 weekly 周期，P12 不得标记完成。产品入口为 `web/` 的 Next.js 工作台,ADK dev UI 继续只作调试入口。
 
 ## 已知环境坑(Windows)
 

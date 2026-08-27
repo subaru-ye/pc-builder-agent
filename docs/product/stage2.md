@@ -1,6 +1,6 @@
 # 阶段 2：可维护的数据自动化
 
-> 状态：P11 已完成，P12–P14 尚未实现。最后更新：2026-08-24。
+> 状态：P11 已完成；P12A 已实现，P12B 与 P13–P14 尚未完成。最后更新：2026-08-27。
 >
 > 本文是阶段 2（P11–P14）的产品范围与执行顺序权威。数据获取和发布的强制规则见[数据获取与发布规则](../data/数据获取与发布规则.md)，P11 的实现设计见[P11 数据获取与发布管道设计](../tech/P11-数据获取与发布管道设计.md)。阶段 1 尚未封口的事项继续由[阶段 1 待封口 Backlog](stage1-backlog.md)管理。
 >
@@ -31,13 +31,14 @@
 - `pc-part-dataset` 锁定在 commit `c52a04ca9465c83997ed335f7767b09a2005dd26`，提供产品级候选规格，美元价格被明确丢弃。
 - `dbgpu==2025.12` 作为 GPU 芯片级 TDP、板长和供电接口兜底。
 - `scripts/data/catalog/*.json` 是人工选品与 override 输入，`scripts/data/parts/*.jsonl` 是确定性 bootstrap 产物。
-- `cmd/importparts` 全量 upsert 零件，`cmd/importprices` 导入单日不可变价格快照，`cmd/embedparts` 当前全量重算 embedding。
+- `cmd/importparts` 全量 upsert 零件，`cmd/importprices` 兼容历史四列快照，P12A 使用 `pcdata price` 与 `cmd/importpriceobservations` 发布可审计快照，`cmd/embedparts` 当前全量重算 embedding。
 - P11 已增加字段 evidence、条件 GET、run/checkpoint、quarantine、release v2、last-known-good、`catalog_state` 和 Windows 本机调度。
 - AMD 官方适配器固定覆盖当前 13 个 AMD CPU；数据库当前 release 有 65 条已验证字段 evidence。
+- P12A 已具备价格 observation、确定性选价、逐 SKU last-known-good 和产品过期提示；历史 160 条价格仍是 bootstrap。
 
 阶段 2 剩余缺口为：
 
-- 价格商品变体、店铺、库存、价格类型和异常波动信息。
+- 首个许可明确的自动价格来源，以及连续两个真实 weekly 周期。
 - 八类目录扩容、新 SKU 候选生命周期和更多厂商品类证据覆盖。
 - 性能分许可、版本化刷新和变化项增量 embedding。
 
@@ -102,6 +103,8 @@
 DoD：当前 160 个零件完成零语义变化回灌；至少一个官方来源能增量采集；低风险批次自动发布、高风险批次隔离；连续两个计划周期没有发布事故。
 
 ### P12：价格观察、新鲜度与安全选价
+
+实施进度：P12A 已实现。数据库、严格人工 CSV、确定性选价、异常隔离、独立 price release、原子导入和 Web/API/Markdown 新鲜度已完成。P12B 尚未找到许可明确的自动来源，ZOL 保持 disabled candidate；连续两周验收尚未开始。实现细节见[P12 价格观察设计](../tech/P12-价格观察与安全选价设计.md)。
 
 目标：维护核心推荐池的参考价格，不做全目录实时比价。
 

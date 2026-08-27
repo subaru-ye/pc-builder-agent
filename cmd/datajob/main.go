@@ -100,7 +100,7 @@ func loadRunManifest(path string) (runManifest, error) {
 	if manifest.ModelUsed {
 		return runManifest{}, fmt.Errorf("定时 run 禁止 model_used=true")
 	}
-	if manifest.Profile != "health" && manifest.Profile != "weekly" && manifest.Profile != "monthly" && manifest.Profile != "retry" {
+	if manifest.Profile != "health" && manifest.Profile != "price-daily" && manifest.Profile != "weekly" && manifest.Profile != "monthly" && manifest.Profile != "retry" {
 		return runManifest{}, fmt.Errorf("profile 非法: %q", manifest.Profile)
 	}
 	if manifest.Trigger != "manual" && manifest.Trigger != "schedule" && manifest.Trigger != "startup_catch_up" {

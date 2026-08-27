@@ -45,11 +45,13 @@ def test_默认registry合法且京东不在实施来源():
     sources = load_registry()
     assert {
         "seed_catalog", "pc_part_dataset", "dbgpu", "amd_products",
-        "manual_price_csv", "zol_price_candidate",
+        "manual_price_csv", "zol_price_candidate", "serpapi_baidu",
     } == set(sources)
     assert sources["manual_price_csv"]["enabled"] is True
     assert sources["zol_price_candidate"]["enabled"] is False
     assert sources["zol_price_candidate"]["automated_access"] == "permission_required"
+    assert sources["serpapi_baidu"]["enabled"] is False
+    assert sources["serpapi_baidu"]["adapter"] == "serpapi_baidu"
     assert "jd" not in " ".join(sources).lower()
     assert sources["amd_products"]["enabled"]
     assert sources["amd_products"]["adapter"] == "amd_cpu_official"

@@ -27,6 +27,7 @@ _KINDS = {
     "official_catalog",
     "official_product",
     "public_retail",
+    "licensed_api",
     "manual",
 }
 _ADAPTERS = {
@@ -35,6 +36,7 @@ _ADAPTERS = {
     "locked_package",
     "http_snapshot",
     "amd_cpu_official",
+    "serpapi_baidu",
     "manual",
 }
 _TRUST_TIERS = {"A", "B", "C", "D"}
@@ -150,7 +152,7 @@ def _validate_source(raw: Any, index: int) -> dict[str, Any]:
             raise SpecError(f"{where}.terms_reviewed_at 必须为 YYYY-MM-DD") from exc
 
     if raw["enabled"]:
-        if raw["requires_credentials"]:
+        if raw["requires_credentials"] and raw["kind"] != "licensed_api":
             raise SpecError(f"{where} 需要凭据时不得启用自动采集")
         if raw["automated_access"] in {"permission_required", "disabled"}:
             raise SpecError(f"{where} 未获自动访问权限却启用")
@@ -170,8 +172,15 @@ def _validate_source(raw: Any, index: int) -> dict[str, Any]:
         for key, digest in policy.items():
             if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
                 raise SpecError(f"{where}.policy_sha256.{key} 必须为 SHA-256")
+    elif raw["adapter"] == "serpapi_baidu":
+        resources_path = _nonempty_string(f"{where}.resources_path", raw.get("resources_path"))
+        resource = Path(resources_path)
+        if resource.is_absolute() or ".." in resource.parts or resource.suffix != ".json":
+            raise SpecError(f"{where}.resources_path 必须为数据目录内的 JSON 相对路径")
+        if "policy_sha256" in raw:
+            raise SpecError(f"{where} SerpApi 来源不得配置网页抓取 policy_sha256")
     elif any(key in raw for key in _OPTIONAL_KEYS):
-        raise SpecError(f"{where} 仅 amd_cpu_official 可配置 resources_path/policy_sha256")
+        raise SpecError(f"{where} 当前适配器不允许 resources_path/policy_sha256")
 
     return dict(raw)
 

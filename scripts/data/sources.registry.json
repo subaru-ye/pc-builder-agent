@@ -113,6 +113,25 @@
       "enabled": false,
       "terms_reviewed_at": null,
       "failure_mode": "isolate_source"
+    },
+    {
+      "id": "serpapi_baidu",
+      "kind": "licensed_api",
+      "adapter": "serpapi_baidu",
+      "base_url": "https://serpapi.com",
+      "purpose": ["price"],
+      "trust_tier": "B",
+      "license_or_terms_url": "https://serpapi.com/legal",
+      "attribution": "SerpApi / Baidu Shopping",
+      "requires_credentials": true,
+      "automated_access": "allowed_after_review",
+      "robots_policy": "not_applicable",
+      "rate_limit_policy": "free_plan_240_per_month_daily_7",
+      "schedule": "daily",
+      "enabled": false,
+      "terms_reviewed_at": "2026-08-27",
+      "failure_mode": "isolate_source",
+      "resources_path": "serpapi-baidu-products.json"
     }
   ]
 }

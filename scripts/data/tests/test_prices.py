@@ -9,6 +9,7 @@ import pytest
 from pcdata.automation import DataPaths, PipelineError
 from pcdata.prices import (
     PRICE_CSV_HEADER,
+    _select_candidate,
     _stage_price_release,
     create_price_review,
     import_price_csv,
@@ -76,6 +77,25 @@ def test_three_sources_choose_actual_quote_closest_to_median(tmp_path: Path) -> 
     assert chosen["price_cny"] == "500.00"
     assert chosen["source_id"] == "source-b"
     assert review["decision"] == "publish"
+
+
+def test_search_listing_requires_two_merchants_and_uses_actual_median_quote() -> None:
+    def listing(source: str, seller: str, price: str, identity: str) -> dict[str, str]:
+        return {
+            "source_id": source, "seller": seller, "price_cny": price,
+            "price_type": "listing", "observed_at": "2026-08-27T00:00:00Z",
+            "observation_id": identity,
+        }
+
+    with pytest.raises(PipelineError) as error:
+        _select_candidate([listing("shop-a", "甲", "500.00", "a" * 64)])
+    assert error.value.code == "insufficient_listing_sources"
+    chosen = _select_candidate([
+        listing("shop-a", "甲", "480.00", "a" * 64),
+        listing("shop-b", "乙", "520.00", "b" * 64),
+        listing("shop-c", "丙", "900.00", "c" * 64),
+    ])
+    assert chosen["price_cny"] == "520.00"
 
 
 def test_over_25_percent_is_quarantined_and_keeps_last_known_good(tmp_path: Path) -> None:

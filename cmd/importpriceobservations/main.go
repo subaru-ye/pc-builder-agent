@@ -1,4 +1,4 @@
-// Command importpriceobservations 原子导入 P12A 不可变价格 release。
+// Command importpriceobservations 原子导入 P12 不可变价格 release。
 package main
 
 import (
@@ -47,22 +47,24 @@ type priceManifest struct {
 }
 
 type observation struct {
-	SchemaVersion    int      `json:"schema_version"`
-	ID               string   `json:"observation_id"`
-	SKU              string   `json:"sku"`
-	PriceCNY         string   `json:"price_cny"`
-	Currency         string   `json:"currency"`
-	SourceID         string   `json:"source_id"`
-	ProductID        string   `json:"product_id"`
-	SourceURL        string   `json:"source_url"`
-	Seller           string   `json:"seller"`
-	PriceType        string   `json:"price_type"`
-	StockStatus      string   `json:"stock_status"`
-	VariantMatch     string   `json:"variant_match"`
-	ObservedAt       string   `json:"observed_at"`
-	RawSHA256        string   `json:"raw_sha256"`
-	DecisionStatus   string   `json:"decision_status"`
-	RejectionReasons []string `json:"rejection_reasons"`
+	SchemaVersion     int      `json:"schema_version"`
+	ID                string   `json:"observation_id"`
+	SKU               string   `json:"sku"`
+	PriceCNY          string   `json:"price_cny"`
+	Currency          string   `json:"currency"`
+	SourceID          string   `json:"source_id"`
+	CollectorID       string   `json:"collector_id"`
+	ProductID         string   `json:"product_id"`
+	SourceURL         string   `json:"source_url"`
+	Seller            string   `json:"seller"`
+	PriceType         string   `json:"price_type"`
+	AvailabilityBasis string   `json:"availability_basis"`
+	StockStatus       string   `json:"stock_status"`
+	VariantMatch      string   `json:"variant_match"`
+	ObservedAt        string   `json:"observed_at"`
+	RawSHA256         string   `json:"raw_sha256"`
+	DecisionStatus    string   `json:"decision_status"`
+	RejectionReasons  []string `json:"rejection_reasons"`
 }
 
 type selection struct {
@@ -73,6 +75,7 @@ type selection struct {
 	SourceID           string  `json:"source_id"`
 	ObservedAt         string  `json:"observed_at"`
 	PriceType          string  `json:"price_type"`
+	AvailabilityBasis  string  `json:"availability_basis"`
 	CarriedForward     bool    `json:"carried_forward"`
 	SourceSnapshotDate *string `json:"source_snapshot_date"`
 }
@@ -232,6 +235,15 @@ func validateObservation(row observation) error {
 	if row.SKU == "" || row.SourceID == "" || row.ProductID == "" || row.Seller == "" || row.Currency != "CNY" {
 		return fmt.Errorf("observation 必填字段非法")
 	}
+	if row.CollectorID == "" && row.PriceType == "listing" {
+		return fmt.Errorf("listing 缺少 collector_id")
+	}
+	if row.AvailabilityBasis != "" && row.AvailabilityBasis != "confirmed_stock" && row.AvailabilityBasis != "search_listing" && row.AvailabilityBasis != "unknown" {
+		return fmt.Errorf("observation availability_basis 非法")
+	}
+	if row.PriceType == "listing" && (row.CollectorID != "serpapi_baidu" || row.AvailabilityBasis != "search_listing" || row.StockStatus != "unknown") {
+		return fmt.Errorf("listing 必须来自 serpapi_baidu 且只能表达搜索报价")
+	}
 	if !strings.HasPrefix(row.SourceURL, "https://") || strings.Contains(row.SourceURL, "@") {
 		return fmt.Errorf("source_url 非法")
 	}
@@ -248,8 +260,14 @@ func validateSelection(row selection) error {
 	if row.ObservationID != nil && !hashPattern.MatchString(*row.ObservationID) {
 		return fmt.Errorf("selection observation_id 非法")
 	}
-	if row.PriceType != "regular" && row.PriceType != "sale" && row.PriceType != "bootstrap" {
+	if row.PriceType != "regular" && row.PriceType != "sale" && row.PriceType != "listing" && row.PriceType != "bootstrap" {
 		return fmt.Errorf("selection price_type 非法")
+	}
+	if row.AvailabilityBasis == "" {
+		row.AvailabilityBasis = "unknown"
+	}
+	if row.AvailabilityBasis != "confirmed_stock" && row.AvailabilityBasis != "search_listing" && row.AvailabilityBasis != "unknown" {
+		return fmt.Errorf("selection availability_basis 非法")
 	}
 	if _, err := time.Parse(time.RFC3339, row.ObservedAt); err != nil {
 		return fmt.Errorf("selection observed_at 非法")
@@ -283,27 +301,38 @@ func importRelease(ctx context.Context, conn *pgx.Conn, releaseDir string, manif
 	}
 
 	for _, row := range observations {
+		if row.CollectorID == "" {
+			row.CollectorID = "manual_price_csv"
+		}
+		if row.AvailabilityBasis == "" {
+			if row.StockStatus == "in_stock" {
+				row.AvailabilityBasis = "confirmed_stock"
+			} else {
+				row.AvailabilityBasis = "unknown"
+			}
+		}
 		tag, insertErr := tx.Exec(ctx, `INSERT INTO price_observations
-			(observation_id, sku, source_id, product_id, source_url, seller, price_cny, currency,
-			 price_type, stock_status, variant_match, observed_at, raw_sha256, decision_status, rejection_reasons)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-			ON CONFLICT (observation_id) DO NOTHING`, row.ID, row.SKU, row.SourceID, row.ProductID,
-			row.SourceURL, row.Seller, row.PriceCNY, row.Currency, row.PriceType, row.StockStatus,
-			row.VariantMatch, row.ObservedAt, row.RawSHA256, row.DecisionStatus, row.RejectionReasons)
+			(observation_id, sku, source_id, collector_id, product_id, source_url, seller, price_cny, currency,
+			 price_type, availability_basis, stock_status, variant_match, observed_at, raw_sha256, decision_status, rejection_reasons)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+			ON CONFLICT (observation_id) DO NOTHING`, row.ID, row.SKU, row.SourceID, row.CollectorID,
+			row.ProductID, row.SourceURL, row.Seller, row.PriceCNY, row.Currency, row.PriceType,
+			row.AvailabilityBasis, row.StockStatus, row.VariantMatch, row.ObservedAt, row.RawSHA256,
+			row.DecisionStatus, row.RejectionReasons)
 		if insertErr != nil {
 			return false, fmt.Errorf("写入 observation %s 失败: %w", row.ID, insertErr)
 		}
 		if tag.RowsAffected() == 0 {
 			var identical bool
 			err = tx.QueryRow(ctx, `SELECT
-				sku=$2 AND source_id=$3 AND product_id=$4 AND source_url=$5 AND seller=$6
-				AND price_cny=$7 AND currency=$8 AND price_type=$9 AND stock_status=$10
-				AND variant_match=$11 AND observed_at=$12 AND raw_sha256=$13
-				AND decision_status=$14 AND rejection_reasons=$15::jsonb
+				sku=$2 AND source_id=$3 AND collector_id=$4 AND product_id=$5 AND source_url=$6 AND seller=$7
+				AND price_cny=$8 AND currency=$9 AND price_type=$10 AND availability_basis=$11 AND stock_status=$12
+				AND variant_match=$13 AND observed_at=$14 AND raw_sha256=$15
+				AND decision_status=$16 AND rejection_reasons=$17::jsonb
 				FROM price_observations WHERE observation_id=$1`, row.ID, row.SKU, row.SourceID,
-				row.ProductID, row.SourceURL, row.Seller, row.PriceCNY, row.Currency, row.PriceType,
-				row.StockStatus, row.VariantMatch, row.ObservedAt, row.RawSHA256, row.DecisionStatus,
-				row.RejectionReasons).Scan(&identical)
+				row.CollectorID, row.ProductID, row.SourceURL, row.Seller, row.PriceCNY, row.Currency,
+				row.PriceType, row.AvailabilityBasis, row.StockStatus, row.VariantMatch, row.ObservedAt,
+				row.RawSHA256, row.DecisionStatus, row.RejectionReasons).Scan(&identical)
 			if err != nil || !identical {
 				return false, fmt.Errorf("observation %s 与既有不可变记录冲突", row.ID)
 			}
@@ -334,6 +363,9 @@ func importRelease(ctx context.Context, conn *pgx.Conn, releaseDir string, manif
 		return false, fmt.Errorf("创建价格快照失败（同日不同 manifest 会被拒绝）: %w", err)
 	}
 	for _, row := range selections {
+		if row.AvailabilityBasis == "" {
+			row.AvailabilityBasis = "unknown"
+		}
 		sourceSnapshotID := snapshotID
 		if row.CarriedForward {
 			if row.SourceSnapshotDate != nil {
@@ -345,9 +377,9 @@ func importRelease(ctx context.Context, conn *pgx.Conn, releaseDir string, manif
 			}
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO prices
-			(snapshot_id, sku, price_cny, source, observation_id, observed_at, price_type, carried_forward, source_snapshot_id)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, snapshotID, row.SKU, row.PriceCNY, row.SourceID,
-			row.ObservationID, row.ObservedAt, row.PriceType, row.CarriedForward, sourceSnapshotID)
+			(snapshot_id, sku, price_cny, source, observation_id, observed_at, price_type, availability_basis, carried_forward, source_snapshot_id)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, snapshotID, row.SKU, row.PriceCNY, row.SourceID,
+			row.ObservationID, row.ObservedAt, row.PriceType, row.AvailabilityBasis, row.CarriedForward, sourceSnapshotID)
 		if err != nil {
 			return false, fmt.Errorf("写入 SKU %s 选价失败: %w", row.SKU, err)
 		}

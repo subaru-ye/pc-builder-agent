@@ -100,8 +100,9 @@ func TestImportReleaseAtomicAndIdempotent(t *testing.T) {
 	}
 	var observedAt *time.Time
 	var kind string
-	if err := conn.QueryRow(ctx, `SELECT observed_at, price_type FROM prices WHERE sku='cpu-a'`).Scan(&observedAt, &kind); err != nil || observedAt == nil || kind != "regular" {
-		t.Fatalf("价格元数据未保存: observed=%v kind=%q err=%v", observedAt, kind, err)
+	var basis string
+	if err := conn.QueryRow(ctx, `SELECT observed_at, price_type, availability_basis FROM prices WHERE sku='cpu-a'`).Scan(&observedAt, &kind, &basis); err != nil || observedAt == nil || kind != "regular" || basis != "unknown" {
+		t.Fatalf("价格元数据未保存: observed=%v kind=%q basis=%q err=%v", observedAt, kind, basis, err)
 	}
 	skipped, err = importRelease(ctx, conn, "", manifest, observations, selections)
 	if err != nil || !skipped {
@@ -109,6 +110,22 @@ func TestImportReleaseAtomicAndIdempotent(t *testing.T) {
 	}
 	if _, err := conn.Exec(ctx, `UPDATE price_observations SET seller='changed' WHERE observation_id=$1`, observations[0].ID); err == nil {
 		t.Fatal("不可变 observation 不应允许更新")
+	}
+}
+
+func TestListingObservationRequiresSearchBasis(t *testing.T) {
+	row := observation{SchemaVersion: 1, ID: fmt.Sprintf("%064d", 1), SKU: "cpu-a",
+		PriceCNY: "1299.00", Currency: "CNY", SourceID: "serpapi_baidu:shop", CollectorID: "serpapi_baidu",
+		ProductID: "p", SourceURL: "https://example.com/p", Seller: "shop", PriceType: "listing",
+		AvailabilityBasis: "search_listing", StockStatus: "unknown", VariantMatch: "exact",
+		ObservedAt: time.Now().UTC().Format(time.RFC3339), RawSHA256: fmt.Sprintf("%064d", 2),
+		DecisionStatus: "qualified", RejectionReasons: []string{}}
+	if err := validateObservation(row); err != nil {
+		t.Fatalf("合法 listing 被拒绝: %v", err)
+	}
+	row.StockStatus = "in_stock"
+	if err := validateObservation(row); err == nil {
+		t.Fatal("搜索报价不得宣称库存")
 	}
 }
 

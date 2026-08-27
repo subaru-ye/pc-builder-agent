@@ -601,7 +601,8 @@ func importPartsWithRelease(
 			&existing.Decision,
 			&existing.Stats,
 		)
-		if err == nil {
+		switch err {
+		case nil:
 			if existing.PreviousReleaseID == nil && release.PreviousReleaseID != nil ||
 				existing.PreviousReleaseID != nil && release.PreviousReleaseID == nil ||
 				existing.PreviousReleaseID != nil && release.PreviousReleaseID != nil && *existing.PreviousReleaseID != *release.PreviousReleaseID ||
@@ -612,7 +613,7 @@ func importPartsWithRelease(
 				!jsonSemanticallyEqual(existing.Stats, release.Stats) {
 				return fmt.Errorf("release %q 已存在但 publication 元数据不一致", release.ReleaseID)
 			}
-		} else if err == pgx.ErrNoRows {
+		case pgx.ErrNoRows:
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO data_publications (
 					release_id, previous_release_id, run_id, manifest_sha256,
@@ -623,7 +624,7 @@ func importPartsWithRelease(
 			); err != nil {
 				return fmt.Errorf("记录 release %q 失败(整批回滚): %w", release.ReleaseID, err)
 			}
-		} else {
+		default:
 			return fmt.Errorf("读取 release %q publication 失败: %w", release.ReleaseID, err)
 		}
 	}

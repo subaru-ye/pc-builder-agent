@@ -42,6 +42,7 @@ from .prices import (
     process_price_inbox,
     publish_price_review,
 )
+from .serpapi_baidu import collect_serpapi_baidu
 
 
 def _json(value: Any) -> None:
@@ -54,6 +55,9 @@ def _scheduled_for(profile: str) -> datetime:
     now = datetime.now().astimezone()
     if profile == "health":
         candidate = datetime.combine(now.date(), time(3, 30), tzinfo=now.tzinfo)
+        return candidate if candidate <= now else candidate - timedelta(days=1)
+    if profile == "price-daily":
+        candidate = datetime.combine(now.date(), time(3, 45), tzinfo=now.tzinfo)
         return candidate if candidate <= now else candidate - timedelta(days=1)
     if profile in {"weekly", "retry"}:
         weekday = 0 if profile == "weekly" else 2
@@ -226,6 +230,30 @@ def _cmd_health(args: argparse.Namespace) -> int:
 def _cmd_scheduled(args: argparse.Namespace) -> int:
     trigger = "startup_catch_up" if args.catch_up else "schedule"
     scheduled_for = args.scheduled_for or _scheduled_for(args.profile)
+    if args.profile == "price-daily":
+        started = datetime.now().astimezone()
+        price_result = collect_serpapi_baidu(_paths(args), mode="daily", scheduled_for=scheduled_for)
+        finished = datetime.now().astimezone()
+        status = price_result["status"] if price_result["status"] in {"no_change", "published"} else "partial"
+        result = {
+            "schema_version": 1,
+            "run_id": price_result["run_id"],
+            "profile": "price-daily",
+            "trigger": trigger,
+            "scheduled_for": scheduled_for.isoformat(),
+            "started_at": started.isoformat(),
+            "finished_at": finished.isoformat(),
+            "status": status,
+            "model_used": False,
+            "sources": [{"source_id": "serpapi_baidu", "status": status, "captured_at": finished.isoformat()}],
+            "summary": {"calls": price_result["calls"], "shopping_result_skus": price_result["shopping_result_skus"], "dual_match_skus": price_result["dual_match_skus"]},
+            "error": None,
+        }
+        manifest_path = _paths(args).runs / result["run_id"] / "manifest.json"
+        _atomic_json(manifest_path, result)
+        sync_run_to_database(_paths(args).repo_root, manifest_path)
+        _json(result)
+        return 0 if status in {"no_change", "published"} else 1
     result = run_scheduled(
         _paths(args),
         profile=args.profile,
@@ -270,6 +298,14 @@ def _cmd_price_health(args: argparse.Namespace) -> int:
     return 0 if result["healthy"] else 1
 
 
+def _cmd_price_collect(args: argparse.Namespace) -> int:
+    result = collect_serpapi_baidu(
+        _paths(args), mode=args.mode, scheduled_for=args.scheduled_for,
+    )
+    _json(result)
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pcdata", description="P11/P12 本机数据采集与安全发布")
     parser.add_argument("--runtime-root", help="覆盖本机 var/data 路径（测试/诊断用）")
@@ -306,7 +342,7 @@ def _parser() -> argparse.ArgumentParser:
     health = sub.add_parser("health", help="检查本机数据发布状态")
     health.set_defaults(func=_cmd_health)
 
-    price = sub.add_parser("price", help="P12A 价格观察与安全选价")
+    price = sub.add_parser("price", help="P12 价格观察与安全选价")
     price_sub = price.add_subparsers(dest="price_command", required=True)
     price_import = price_sub.add_parser("import", help="导入严格价格观察 CSV")
     price_import.add_argument("--file", required=True)
@@ -321,9 +357,13 @@ def _parser() -> argparse.ArgumentParser:
     price_publish.set_defaults(func=_cmd_price_publish)
     price_health_cmd = price_sub.add_parser("health", help="检查价格发布和新鲜度")
     price_health_cmd.set_defaults(func=_cmd_price_health)
+    price_collect = price_sub.add_parser("collect", help="执行 SerpApi/Baidu canary 或每日微批次")
+    price_collect.add_argument("--mode", choices=("canary", "daily"), required=True)
+    price_collect.add_argument("--scheduled-for", type=_parse_datetime)
+    price_collect.set_defaults(func=_cmd_price_collect)
 
     scheduled = sub.add_parser("scheduled-run", help="执行一次幂等定时主链")
-    scheduled.add_argument("--profile", choices=("health", "weekly", "monthly", "retry"), required=True)
+    scheduled.add_argument("--profile", choices=("health", "price-daily", "weekly", "monthly", "retry"), required=True)
     scheduled.add_argument("--scheduled-for", type=_parse_datetime)
     scheduled.add_argument("--catch-up", action="store_true")
     scheduled.set_defaults(func=_cmd_scheduled)

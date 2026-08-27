@@ -1,0 +1,1592 @@
+{
+  "schema_version": 1,
+  "activation_status": "pending_canary",
+  "identity_rule_version": 1,
+  "query_template": "{brand} {model}",
+  "canary_skus": [
+    "cpu-r5-7500f",
+    "cpu-i5-12400f",
+    "gpu-msi-4060-ventus2x-black",
+    "gpu-sapphire-7600-pulse",
+    "mb-msi-b650m-mortar-wifi",
+    "mb-msi-b760m-a-wifi-ddr4",
+    "mem-corsair-veng-32-6000",
+    "ssd-wd-sn770-1tb",
+    "ssd-samsung-990pro-2tb",
+    "psu-msi-mag-a750gl",
+    "case-lianli-a3-matx",
+    "cooler-thermalright-pa120se"
+  ],
+  "core_skus": {
+    "cpu": [
+      "cpu-i3-12100f",
+      "cpu-i5-12400f",
+      "cpu-i5-13400f",
+      "cpu-i5-14600kf",
+      "cpu-ultra5-245k",
+      "cpu-r5-5500",
+      "cpu-r5-5600",
+      "cpu-r5-7500f",
+      "cpu-r5-7600",
+      "cpu-r5-9600x",
+      "cpu-r7-7700",
+      "cpu-r7-9800x3d"
+    ],
+    "gpu": [
+      "gpu-msi-4060-ventus2x-black",
+      "gpu-asus-4060ti-dual-evo",
+      "gpu-gb-5060-windforce",
+      "gpu-gb-5060ti-windforce-16g",
+      "gpu-msi-4070s-ventus2x",
+      "gpu-gb-5070-windforce-sff",
+      "gpu-msi-5070ti-ventus3x",
+      "gpu-intel-b580-le",
+      "gpu-sapphire-6600-pulse",
+      "gpu-sapphire-7600-pulse",
+      "gpu-sapphire-9060xt-pulse-16g",
+      "gpu-sapphire-9070xt-pulse"
+    ],
+    "motherboard": [
+      "mb-gb-b550-aorus-elite-v2",
+      "mb-msi-b550m-pro-vdh-wifi",
+      "mb-msi-h610m-g-ddr4",
+      "mb-msi-b760m-a-wifi-ddr4",
+      "mb-msi-b760m-a-wifi",
+      "mb-msi-z790-p-wifi",
+      "mb-msi-b860m-a-wifi",
+      "mb-msi-pro-a620m-e",
+      "mb-asrock-b650m-hdv-m2",
+      "mb-msi-b650m-mortar-wifi",
+      "mb-gb-b650i-aorus-ultra",
+      "mb-msi-b850-tomahawk-max"
+    ],
+    "memory": [
+      "mem-kingston-beast-16-3200-d4",
+      "mem-kingston-beast-32-3600-d4",
+      "mem-corsair-lpx-32-3600",
+      "mem-gskill-ripjawsv-32-3200",
+      "mem-team-delta-32-3200-d4",
+      "mem-corsair-veng-32-6000",
+      "mem-gskill-flarex5-32-6000",
+      "mem-gskill-s5-32-6000",
+      "mem-gskill-z5neo-rgb-32-6000",
+      "mem-kingston-beast-16-5200",
+      "mem-kingston-beast-32-6000",
+      "mem-team-delta-32-6000-white"
+    ],
+    "ssd": [
+      "ssd-adata-legend800-1tb",
+      "ssd-crucial-bx500-1tb",
+      "ssd-crucial-p3plus-1tb",
+      "ssd-crucial-t500-2tb",
+      "ssd-kingston-kc3000-1tb",
+      "ssd-kingston-nv2-1tb",
+      "ssd-samsung-870evo-1tb",
+      "ssd-samsung-990pro-2tb",
+      "ssd-wd-sa510-1tb",
+      "ssd-wd-sn580-1tb",
+      "ssd-wd-sn770-1tb",
+      "ssd-wd-sn850x-2tb"
+    ],
+    "psu": [
+      "psu-msi-mag-a650bn",
+      "psu-msi-mag-a750gl",
+      "psu-msi-mag-a850gl",
+      "psu-bq-pp12m-750",
+      "psu-bq-pp12m-850",
+      "psu-corsair-rm750e",
+      "psu-corsair-rm850e",
+      "psu-corsair-rm1000x-2021",
+      "psu-seasonic-focus-gx750-atx30",
+      "psu-seasonic-focus-gx850-atx30",
+      "psu-seasonic-vertex-gx1000",
+      "psu-tt-gf3-850"
+    ],
+    "case": [
+      "case-asus-prime-ap201",
+      "case-coolermaster-nr200p",
+      "case-coolermaster-td500-mesh-v2",
+      "case-corsair-4000d-airflow",
+      "case-fractal-north",
+      "case-fractal-pop-air",
+      "case-lianli-a3-matx",
+      "case-lianli-lancool-216",
+      "case-lianli-o11-dynamic-evo",
+      "case-montech-air-903-max",
+      "case-nzxt-h5-flow-2024",
+      "case-nzxt-h6-flow-2023"
+    ],
+    "cooler": [
+      "cooler-arctic-lf3-240",
+      "cooler-arctic-lf3-360",
+      "cooler-bequiet-dark-rock-pro-5",
+      "cooler-deepcool-ag400",
+      "cooler-deepcool-ak620",
+      "cooler-deepcool-assassin-iv",
+      "cooler-deepcool-lt520",
+      "cooler-msi-mag-coreliquid-e360",
+      "cooler-noctua-nh-d15",
+      "cooler-thermalright-frozen-prism-240",
+      "cooler-thermalright-pa120se",
+      "cooler-thermalright-ps120se"
+    ]
+  },
+  "overrides": {
+    "gpu-msi-4060-ventus2x-black": {
+      "required_tokens": [
+        "4060",
+        "ventus",
+        "2x"
+      ],
+      "forbidden_tokens": [
+        "ti",
+        "white"
+      ]
+    },
+    "gpu-sapphire-7600-pulse": {
+      "required_tokens": [
+        "7600",
+        "pulse"
+      ],
+      "forbidden_tokens": [
+        "xt",
+        "7700"
+      ]
+    },
+    "mb-msi-b760m-a-wifi-ddr4": {
+      "required_tokens": [
+        "b760m",
+        "wifi",
+        "ddr4"
+      ],
+      "forbidden_tokens": [
+        "ddr5"
+      ]
+    },
+    "mem-corsair-veng-32-6000": {
+      "required_tokens": [
+        "32gb",
+        "6000",
+        "ddr5"
+      ],
+      "forbidden_tokens": [
+        "5200"
+      ]
+    },
+    "ssd-wd-sn770-1tb": {
+      "required_tokens": [
+        "sn770",
+        "1tb"
+      ],
+      "forbidden_tokens": [
+        "2tb",
+        "sn850"
+      ]
+    },
+    "ssd-samsung-990pro-2tb": {
+      "required_tokens": [
+        "990",
+        "pro",
+        "2tb"
+      ],
+      "forbidden_tokens": [
+        "1tb",
+        "980"
+      ]
+    },
+    "case-lianli-a3-matx": {
+      "required_tokens": [
+        "a3",
+        "matx"
+      ],
+      "forbidden_tokens": [
+        "o11"
+      ]
+    }
+  },
+  "products": {
+    "case-asus-prime-ap201": {
+      "query": "Asus Prime AP201 (Black, Mesh)",
+      "brand_aliases": [
+        "asus",
+        "华硕"
+      ],
+      "required_tokens": [
+        "prime",
+        "ap201",
+        "black",
+        "mesh"
+      ],
+      "forbidden_tokens": []
+    },
+    "case-coolermaster-nr200p": {
+      "query": "Cooler Master MasterBox NR200P (Black)",
+      "brand_aliases": [
+        "coolermaster",
+        "酷冷至尊"
+      ],
+      "required_tokens": [
+        "masterbox",
+        "nr200p",
+        "black"
+      ],
+      "forbidden_tokens": []
+    },
+    "case-coolermaster-td500-mesh-v2": {
+      "query": "Cooler Master MasterBox TD500 Mesh V2 (Black)",
+      "brand_aliases": [
+        "coolermaster",
+        "酷冷至尊"
+      ],
+      "required_tokens": [
+        "masterbox",
+        "td500",
+        "mesh",
+        "v2",
+        "black"
+      ],
+      "forbidden_tokens": []
+    },
+    "case-corsair-4000d-airflow": {
+      "query": "Corsair 4000D Airflow (Black)",
+      "brand_aliases": [
+        "corsair",
+        "海盗船",
+        "美商海盗船"
+      ],
+      "required_tokens": [
+        "4000d",
+        "airflow",
+        "black"
+      ],
+      "forbidden_tokens": []
+    },
+    "case-fractal-north": {
+      "query": "Fractal Design North (Black, TG Dark)",
+      "brand_aliases": [
+        "fractal",
+        "分形工艺"
+      ],
+      "required_tokens": [
+        "north",
+        "black",
+        "tg",
+        "dark"
+      ],
+      "forbidden_tokens": []
+    },
+    "case-fractal-pop-air": {
+      "query": "Fractal Design Pop Air (Black, TG Clear Tint)",
+      "brand_aliases": [
+        "fractal",
+        "分形工艺"
+      ],
+      "required_tokens": [
+        "pop",
+        "air",
+        "black",
+        "tg",
+        "clear",
+        "tint"
+      ],
+      "forbidden_tokens": []
+    },
+    "case-lianli-a3-matx": {
+      "query": "Lian Li A3-mATX (Black)",
+      "brand_aliases": [
+        "lianli",
+        "联力"
+      ],
+      "required_tokens": [
+        "a3",
+        "matx"
+      ],
+      "forbidden_tokens": [
+        "o11"
+      ]
+    },
+    "case-lianli-lancool-216": {
+      "query": "Lian Li LANCOOL 216 (Black)",
+      "brand_aliases": [
+        "lianli",
+        "联力"
+      ],
+      "required_tokens": [
+        "lancool",
+        "216",
+        "black"
+      ],
+      "forbidden_tokens": []
+    },
+    "case-lianli-o11-dynamic-evo": {
+      "query": "Lian Li O11 Dynamic EVO (Black)",
+      "brand_aliases": [
+        "lianli",
+        "联力"
+      ],
+      "required_tokens": [
+        "o11",
+        "dynamic",
+        "evo",
+        "black"
+      ],
+      "forbidden_tokens": []
+    },
+    "case-montech-air-903-max": {
+      "query": "Montech AIR 903 MAX (Black)",
+      "brand_aliases": [
+        "montech",
+        "君主"
+      ],
+      "required_tokens": [
+        "air",
+        "903",
+        "max",
+        "black"
+      ],
+      "forbidden_tokens": []
+    },
+    "case-nzxt-h5-flow-2024": {
+      "query": "NZXT H5 Flow (2024, Black)",
+      "brand_aliases": [
+        "nzxt",
+        "恩杰"
+      ],
+      "required_tokens": [
+        "h5",
+        "flow",
+        "2024",
+        "black"
+      ],
+      "forbidden_tokens": []
+    },
+    "case-nzxt-h6-flow-2023": {
+      "query": "NZXT H6 Flow (2023, Black)",
+      "brand_aliases": [
+        "nzxt",
+        "恩杰"
+      ],
+      "required_tokens": [
+        "h6",
+        "flow",
+        "2023",
+        "black"
+      ],
+      "forbidden_tokens": []
+    },
+    "cooler-arctic-lf3-240": {
+      "query": "Arctic Liquid Freezer III 240",
+      "brand_aliases": [
+        "arctic"
+      ],
+      "required_tokens": [
+        "liquid",
+        "freezer",
+        "iii",
+        "240"
+      ],
+      "forbidden_tokens": []
+    },
+    "cooler-arctic-lf3-360": {
+      "query": "Arctic Liquid Freezer III 360",
+      "brand_aliases": [
+        "arctic"
+      ],
+      "required_tokens": [
+        "liquid",
+        "freezer",
+        "iii",
+        "360"
+      ],
+      "forbidden_tokens": []
+    },
+    "cooler-bequiet-dark-rock-pro-5": {
+      "query": "be quiet! Dark Rock Pro 5",
+      "brand_aliases": [
+        "bequiet",
+        "德商德静界"
+      ],
+      "required_tokens": [
+        "dark",
+        "rock",
+        "pro"
+      ],
+      "forbidden_tokens": []
+    },
+    "cooler-deepcool-ag400": {
+      "query": "Deepcool AG400",
+      "brand_aliases": [
+        "deepcool"
+      ],
+      "required_tokens": [
+        "ag400"
+      ],
+      "forbidden_tokens": []
+    },
+    "cooler-deepcool-ak620": {
+      "query": "Deepcool AK620",
+      "brand_aliases": [
+        "deepcool"
+      ],
+      "required_tokens": [
+        "ak620"
+      ],
+      "forbidden_tokens": []
+    },
+    "cooler-deepcool-assassin-iv": {
+      "query": "Deepcool ASSASSIN IV",
+      "brand_aliases": [
+        "deepcool"
+      ],
+      "required_tokens": [
+        "assassin",
+        "iv"
+      ],
+      "forbidden_tokens": []
+    },
+    "cooler-deepcool-lt520": {
+      "query": "Deepcool LT520",
+      "brand_aliases": [
+        "deepcool"
+      ],
+      "required_tokens": [
+        "lt520"
+      ],
+      "forbidden_tokens": []
+    },
+    "cooler-msi-mag-coreliquid-e360": {
+      "query": "MSI MAG CORELIQUID E360",
+      "brand_aliases": [
+        "msi",
+        "微星"
+      ],
+      "required_tokens": [
+        "mag",
+        "coreliquid",
+        "e360"
+      ],
+      "forbidden_tokens": []
+    },
+    "cooler-noctua-nh-d15": {
+      "query": "Noctua NH-D15",
+      "brand_aliases": [
+        "noctua",
+        "猫头鹰"
+      ],
+      "required_tokens": [
+        "nh",
+        "d15"
+      ],
+      "forbidden_tokens": []
+    },
+    "cooler-thermalright-frozen-prism-240": {
+      "query": "Thermalright Frozen Prism 240 (Black)",
+      "brand_aliases": [
+        "thermalright",
+        "利民"
+      ],
+      "required_tokens": [
+        "frozen",
+        "prism",
+        "240",
+        "black"
+      ],
+      "forbidden_tokens": []
+    },
+    "cooler-thermalright-pa120se": {
+      "query": "Thermalright Peerless Assassin 120 SE",
+      "brand_aliases": [
+        "thermalright",
+        "利民"
+      ],
+      "required_tokens": [
+        "peerless",
+        "assassin",
+        "120",
+        "se"
+      ],
+      "forbidden_tokens": []
+    },
+    "cooler-thermalright-ps120se": {
+      "query": "Thermalright Phantom Spirit 120 SE",
+      "brand_aliases": [
+        "thermalright",
+        "利民"
+      ],
+      "required_tokens": [
+        "phantom",
+        "spirit",
+        "120",
+        "se"
+      ],
+      "forbidden_tokens": []
+    },
+    "cpu-i3-12100f": {
+      "query": "Intel Core i3-12100F",
+      "brand_aliases": [
+        "intel",
+        "英特尔"
+      ],
+      "required_tokens": [
+        "core",
+        "i3",
+        "12100f"
+      ],
+      "forbidden_tokens": []
+    },
+    "cpu-i5-12400f": {
+      "query": "Intel Core i5-12400F",
+      "brand_aliases": [
+        "intel",
+        "英特尔"
+      ],
+      "required_tokens": [
+        "core",
+        "i5",
+        "12400f"
+      ],
+      "forbidden_tokens": []
+    },
+    "cpu-i5-13400f": {
+      "query": "Intel Core i5-13400F",
+      "brand_aliases": [
+        "intel",
+        "英特尔"
+      ],
+      "required_tokens": [
+        "core",
+        "i5",
+        "13400f"
+      ],
+      "forbidden_tokens": []
+    },
+    "cpu-i5-14600kf": {
+      "query": "Intel Core i5-14600KF",
+      "brand_aliases": [
+        "intel",
+        "英特尔"
+      ],
+      "required_tokens": [
+        "core",
+        "i5",
+        "14600kf"
+      ],
+      "forbidden_tokens": []
+    },
+    "cpu-r5-5500": {
+      "query": "AMD Ryzen 5 5500",
+      "brand_aliases": [
+        "amd",
+        "锐龙"
+      ],
+      "required_tokens": [
+        "ryzen",
+        "5500"
+      ],
+      "forbidden_tokens": []
+    },
+    "cpu-r5-5600": {
+      "query": "AMD Ryzen 5 5600",
+      "brand_aliases": [
+        "amd",
+        "锐龙"
+      ],
+      "required_tokens": [
+        "ryzen",
+        "5600"
+      ],
+      "forbidden_tokens": []
+    },
+    "cpu-r5-7500f": {
+      "query": "AMD Ryzen 5 7500F",
+      "brand_aliases": [
+        "amd",
+        "锐龙"
+      ],
+      "required_tokens": [
+        "ryzen",
+        "7500f"
+      ],
+      "forbidden_tokens": []
+    },
+    "cpu-r5-7600": {
+      "query": "AMD Ryzen 5 7600",
+      "brand_aliases": [
+        "amd",
+        "锐龙"
+      ],
+      "required_tokens": [
+        "ryzen",
+        "7600"
+      ],
+      "forbidden_tokens": []
+    },
+    "cpu-r5-9600x": {
+      "query": "AMD Ryzen 5 9600X",
+      "brand_aliases": [
+        "amd",
+        "锐龙"
+      ],
+      "required_tokens": [
+        "ryzen",
+        "9600x"
+      ],
+      "forbidden_tokens": []
+    },
+    "cpu-r7-7700": {
+      "query": "AMD Ryzen 7 7700",
+      "brand_aliases": [
+        "amd",
+        "锐龙"
+      ],
+      "required_tokens": [
+        "ryzen",
+        "7700"
+      ],
+      "forbidden_tokens": []
+    },
+    "cpu-r7-9800x3d": {
+      "query": "AMD Ryzen 7 9800X3D",
+      "brand_aliases": [
+        "amd",
+        "锐龙"
+      ],
+      "required_tokens": [
+        "ryzen",
+        "9800x3d"
+      ],
+      "forbidden_tokens": []
+    },
+    "cpu-ultra5-245k": {
+      "query": "Intel Core Ultra 5 245K",
+      "brand_aliases": [
+        "intel",
+        "英特尔"
+      ],
+      "required_tokens": [
+        "core",
+        "ultra",
+        "245k"
+      ],
+      "forbidden_tokens": []
+    },
+    "gpu-asus-4060ti-dual-evo": {
+      "query": "Asus Dual GeForce RTX 4060 Ti EVO OC 8GB",
+      "brand_aliases": [
+        "asus",
+        "华硕"
+      ],
+      "required_tokens": [
+        "dual",
+        "geforce",
+        "rtx",
+        "4060",
+        "ti",
+        "evo",
+        "8gb"
+      ],
+      "forbidden_tokens": []
+    },
+    "gpu-gb-5060-windforce": {
+      "query": "Gigabyte GeForce RTX 5060 WINDFORCE OC 8G",
+      "brand_aliases": [
+        "gigabyte",
+        "技嘉"
+      ],
+      "required_tokens": [
+        "geforce",
+        "rtx",
+        "5060",
+        "windforce",
+        "8g"
+      ],
+      "forbidden_tokens": []
+    },
+    "gpu-gb-5060ti-windforce-16g": {
+      "query": "Gigabyte GeForce RTX 5060 Ti WINDFORCE OC 16G",
+      "brand_aliases": [
+        "gigabyte",
+        "技嘉"
+      ],
+      "required_tokens": [
+        "geforce",
+        "rtx",
+        "5060",
+        "ti",
+        "windforce",
+        "16g"
+      ],
+      "forbidden_tokens": []
+    },
+    "gpu-gb-5070-windforce-sff": {
+      "query": "Gigabyte GeForce RTX 5070 WINDFORCE OC SFF 12G",
+      "brand_aliases": [
+        "gigabyte",
+        "技嘉"
+      ],
+      "required_tokens": [
+        "geforce",
+        "rtx",
+        "5070",
+        "windforce",
+        "sff",
+        "12g"
+      ],
+      "forbidden_tokens": []
+    },
+    "gpu-intel-b580-le": {
+      "query": "Intel Arc B580 Limited Edition 12GB",
+      "brand_aliases": [
+        "intel",
+        "英特尔"
+      ],
+      "required_tokens": [
+        "arc",
+        "b580",
+        "limited",
+        "12gb"
+      ],
+      "forbidden_tokens": []
+    },
+    "gpu-msi-4060-ventus2x-black": {
+      "query": "MSI GeForce RTX 4060 VENTUS 2X BLACK OC",
+      "brand_aliases": [
+        "msi",
+        "微星"
+      ],
+      "required_tokens": [
+        "4060",
+        "ventus",
+        "2x"
+      ],
+      "forbidden_tokens": [
+        "ti",
+        "white"
+      ]
+    },
+    "gpu-msi-4070s-ventus2x": {
+      "query": "MSI GeForce RTX 4070 SUPER 12G VENTUS 2X OC",
+      "brand_aliases": [
+        "msi",
+        "微星"
+      ],
+      "required_tokens": [
+        "geforce",
+        "rtx",
+        "4070",
+        "super",
+        "12g",
+        "ventus",
+        "2x"
+      ],
+      "forbidden_tokens": []
+    },
+    "gpu-msi-5070ti-ventus3x": {
+      "query": "MSI GeForce RTX 5070 Ti 16G VENTUS 3X OC",
+      "brand_aliases": [
+        "msi",
+        "微星"
+      ],
+      "required_tokens": [
+        "geforce",
+        "rtx",
+        "5070",
+        "ti",
+        "16g",
+        "ventus",
+        "3x"
+      ],
+      "forbidden_tokens": []
+    },
+    "gpu-sapphire-6600-pulse": {
+      "query": "Sapphire PULSE Radeon RX 6600 8GB",
+      "brand_aliases": [
+        "sapphire",
+        "蓝宝石"
+      ],
+      "required_tokens": [
+        "pulse",
+        "radeon",
+        "rx",
+        "6600",
+        "8gb"
+      ],
+      "forbidden_tokens": []
+    },
+    "gpu-sapphire-7600-pulse": {
+      "query": "Sapphire PULSE Radeon RX 7600 8GB",
+      "brand_aliases": [
+        "sapphire",
+        "蓝宝石"
+      ],
+      "required_tokens": [
+        "7600",
+        "pulse"
+      ],
+      "forbidden_tokens": [
+        "xt",
+        "7700"
+      ]
+    },
+    "gpu-sapphire-9060xt-pulse-16g": {
+      "query": "Sapphire PULSE Radeon RX 9060 XT 16GB OC",
+      "brand_aliases": [
+        "sapphire",
+        "蓝宝石"
+      ],
+      "required_tokens": [
+        "pulse",
+        "radeon",
+        "rx",
+        "9060",
+        "xt",
+        "16gb"
+      ],
+      "forbidden_tokens": []
+    },
+    "gpu-sapphire-9070xt-pulse": {
+      "query": "Sapphire PULSE Radeon RX 9070 XT 16GB",
+      "brand_aliases": [
+        "sapphire",
+        "蓝宝石"
+      ],
+      "required_tokens": [
+        "pulse",
+        "radeon",
+        "rx",
+        "9070",
+        "xt",
+        "16gb"
+      ],
+      "forbidden_tokens": []
+    },
+    "mb-asrock-b650m-hdv-m2": {
+      "query": "ASRock B650M-HDV/M.2",
+      "brand_aliases": [
+        "asrock",
+        "华擎"
+      ],
+      "required_tokens": [
+        "b650m",
+        "hdv"
+      ],
+      "forbidden_tokens": []
+    },
+    "mb-gb-b550-aorus-elite-v2": {
+      "query": "Gigabyte B550 AORUS ELITE V2",
+      "brand_aliases": [
+        "gigabyte",
+        "技嘉"
+      ],
+      "required_tokens": [
+        "b550",
+        "aorus",
+        "elite",
+        "v2"
+      ],
+      "forbidden_tokens": []
+    },
+    "mb-gb-b650i-aorus-ultra": {
+      "query": "Gigabyte B650I AORUS ULTRA",
+      "brand_aliases": [
+        "gigabyte",
+        "技嘉"
+      ],
+      "required_tokens": [
+        "b650i",
+        "aorus",
+        "ultra"
+      ],
+      "forbidden_tokens": []
+    },
+    "mb-msi-b550m-pro-vdh-wifi": {
+      "query": "MSI B550M PRO-VDH WIFI",
+      "brand_aliases": [
+        "msi",
+        "微星"
+      ],
+      "required_tokens": [
+        "b550m",
+        "pro",
+        "vdh",
+        "wifi"
+      ],
+      "forbidden_tokens": []
+    },
+    "mb-msi-b650m-mortar-wifi": {
+      "query": "MSI MAG B650M MORTAR WIFI",
+      "brand_aliases": [
+        "msi",
+        "微星"
+      ],
+      "required_tokens": [
+        "mag",
+        "b650m",
+        "mortar",
+        "wifi"
+      ],
+      "forbidden_tokens": []
+    },
+    "mb-msi-b760m-a-wifi": {
+      "query": "MSI PRO B760M-A WIFI",
+      "brand_aliases": [
+        "msi",
+        "微星"
+      ],
+      "required_tokens": [
+        "pro",
+        "b760m",
+        "wifi"
+      ],
+      "forbidden_tokens": []
+    },
+    "mb-msi-b760m-a-wifi-ddr4": {
+      "query": "MSI PRO B760M-A WIFI DDR4",
+      "brand_aliases": [
+        "msi",
+        "微星"
+      ],
+      "required_tokens": [
+        "b760m",
+        "wifi",
+        "ddr4"
+      ],
+      "forbidden_tokens": [
+        "ddr5"
+      ]
+    },
+    "mb-msi-b850-tomahawk-max": {
+      "query": "MSI MAG B850 TOMAHAWK MAX WIFI",
+      "brand_aliases": [
+        "msi",
+        "微星"
+      ],
+      "required_tokens": [
+        "mag",
+        "b850",
+        "tomahawk",
+        "max",
+        "wifi"
+      ],
+      "forbidden_tokens": []
+    },
+    "mb-msi-b860m-a-wifi": {
+      "query": "MSI PRO B860M-A WIFI",
+      "brand_aliases": [
+        "msi",
+        "微星"
+      ],
+      "required_tokens": [
+        "pro",
+        "b860m",
+        "wifi"
+      ],
+      "forbidden_tokens": []
+    },
+    "mb-msi-h610m-g-ddr4": {
+      "query": "MSI PRO H610M-G DDR4",
+      "brand_aliases": [
+        "msi",
+        "微星"
+      ],
+      "required_tokens": [
+        "pro",
+        "h610m",
+        "ddr4"
+      ],
+      "forbidden_tokens": []
+    },
+    "mb-msi-pro-a620m-e": {
+      "query": "MSI PRO A620M-E",
+      "brand_aliases": [
+        "msi",
+        "微星"
+      ],
+      "required_tokens": [
+        "pro",
+        "a620m"
+      ],
+      "forbidden_tokens": []
+    },
+    "mb-msi-z790-p-wifi": {
+      "query": "MSI PRO Z790-P WIFI",
+      "brand_aliases": [
+        "msi",
+        "微星"
+      ],
+      "required_tokens": [
+        "pro",
+        "z790",
+        "wifi"
+      ],
+      "forbidden_tokens": []
+    },
+    "mem-corsair-lpx-32-3600": {
+      "query": "Corsair Vengeance LPX 32GB (2x16GB) DDR4-3600 CL18",
+      "brand_aliases": [
+        "corsair",
+        "海盗船",
+        "美商海盗船"
+      ],
+      "required_tokens": [
+        "vengeance",
+        "lpx",
+        "32gb",
+        "2x16gb",
+        "ddr4",
+        "3600",
+        "cl18"
+      ],
+      "forbidden_tokens": []
+    },
+    "mem-corsair-veng-32-6000": {
+      "query": "Corsair Vengeance 32GB (2x16GB) DDR5-6000 CL30",
+      "brand_aliases": [
+        "corsair",
+        "海盗船",
+        "美商海盗船"
+      ],
+      "required_tokens": [
+        "32gb",
+        "6000",
+        "ddr5"
+      ],
+      "forbidden_tokens": [
+        "5200"
+      ]
+    },
+    "mem-gskill-flarex5-32-6000": {
+      "query": "G.Skill Flare X5 32GB (2x16GB) DDR5-6000 CL30",
+      "brand_aliases": [
+        "gskill",
+        "芝奇"
+      ],
+      "required_tokens": [
+        "flare",
+        "x5",
+        "32gb",
+        "2x16gb",
+        "ddr5",
+        "6000",
+        "cl30"
+      ],
+      "forbidden_tokens": []
+    },
+    "mem-gskill-ripjawsv-32-3200": {
+      "query": "G.Skill Ripjaws V 32GB (2x16GB) DDR4-3200 CL16",
+      "brand_aliases": [
+        "gskill",
+        "芝奇"
+      ],
+      "required_tokens": [
+        "ripjaws",
+        "32gb",
+        "2x16gb",
+        "ddr4",
+        "3200",
+        "cl16"
+      ],
+      "forbidden_tokens": []
+    },
+    "mem-gskill-s5-32-6000": {
+      "query": "G.Skill Ripjaws S5 32GB (2x16GB) DDR5-6000 CL30",
+      "brand_aliases": [
+        "gskill",
+        "芝奇"
+      ],
+      "required_tokens": [
+        "ripjaws",
+        "s5",
+        "32gb",
+        "2x16gb",
+        "ddr5",
+        "6000",
+        "cl30"
+      ],
+      "forbidden_tokens": []
+    },
+    "mem-gskill-z5neo-rgb-32-6000": {
+      "query": "G.Skill Trident Z5 Neo RGB 32GB (2x16GB) DDR5-6000 CL30",
+      "brand_aliases": [
+        "gskill",
+        "芝奇"
+      ],
+      "required_tokens": [
+        "trident",
+        "z5",
+        "neo",
+        "rgb",
+        "32gb",
+        "2x16gb",
+        "ddr5",
+        "6000",
+        "cl30"
+      ],
+      "forbidden_tokens": []
+    },
+    "mem-kingston-beast-16-3200-d4": {
+      "query": "Kingston FURY Beast 16GB (2x8GB) DDR4-3200 CL16",
+      "brand_aliases": [
+        "kingston",
+        "金士顿"
+      ],
+      "required_tokens": [
+        "fury",
+        "beast",
+        "16gb",
+        "2x8gb",
+        "ddr4",
+        "3200",
+        "cl16"
+      ],
+      "forbidden_tokens": []
+    },
+    "mem-kingston-beast-16-5200": {
+      "query": "Kingston FURY Beast 16GB (2x8GB) DDR5-5200 CL40",
+      "brand_aliases": [
+        "kingston",
+        "金士顿"
+      ],
+      "required_tokens": [
+        "fury",
+        "beast",
+        "16gb",
+        "2x8gb",
+        "ddr5",
+        "5200",
+        "cl40"
+      ],
+      "forbidden_tokens": []
+    },
+    "mem-kingston-beast-32-3600-d4": {
+      "query": "Kingston FURY Beast 32GB (2x16GB) DDR4-3600 CL18",
+      "brand_aliases": [
+        "kingston",
+        "金士顿"
+      ],
+      "required_tokens": [
+        "fury",
+        "beast",
+        "32gb",
+        "2x16gb",
+        "ddr4",
+        "3600",
+        "cl18"
+      ],
+      "forbidden_tokens": []
+    },
+    "mem-kingston-beast-32-6000": {
+      "query": "Kingston FURY Beast 32GB (2x16GB) DDR5-6000 CL30",
+      "brand_aliases": [
+        "kingston",
+        "金士顿"
+      ],
+      "required_tokens": [
+        "fury",
+        "beast",
+        "32gb",
+        "2x16gb",
+        "ddr5",
+        "6000",
+        "cl30"
+      ],
+      "forbidden_tokens": []
+    },
+    "mem-team-delta-32-3200-d4": {
+      "query": "TEAMGROUP T-Force Delta RGB 32GB (2x16GB) DDR4-3200 CL16",
+      "brand_aliases": [
+        "teamgroup"
+      ],
+      "required_tokens": [
+        "force",
+        "delta",
+        "rgb",
+        "32gb",
+        "2x16gb",
+        "ddr4",
+        "3200",
+        "cl16"
+      ],
+      "forbidden_tokens": []
+    },
+    "mem-team-delta-32-6000-white": {
+      "query": "TEAMGROUP T-Force Delta RGB 32GB (2x16GB) DDR5-6000 CL30 White",
+      "brand_aliases": [
+        "teamgroup"
+      ],
+      "required_tokens": [
+        "force",
+        "delta",
+        "rgb",
+        "32gb",
+        "2x16gb",
+        "ddr5",
+        "6000",
+        "cl30",
+        "white"
+      ],
+      "forbidden_tokens": []
+    },
+    "psu-bq-pp12m-750": {
+      "query": "be quiet! Pure Power 12 M 750W 80+ Gold",
+      "brand_aliases": [
+        "bequiet",
+        "德商德静界"
+      ],
+      "required_tokens": [
+        "pure",
+        "power",
+        "12",
+        "750w",
+        "80",
+        "gold"
+      ],
+      "forbidden_tokens": []
+    },
+    "psu-bq-pp12m-850": {
+      "query": "be quiet! Pure Power 12 M 850W 80+ Gold",
+      "brand_aliases": [
+        "bequiet",
+        "德商德静界"
+      ],
+      "required_tokens": [
+        "pure",
+        "power",
+        "12",
+        "850w",
+        "80",
+        "gold"
+      ],
+      "forbidden_tokens": []
+    },
+    "psu-corsair-rm1000x-2021": {
+      "query": "Corsair RM1000x (2021) 1000W 80+ Gold",
+      "brand_aliases": [
+        "corsair",
+        "海盗船",
+        "美商海盗船"
+      ],
+      "required_tokens": [
+        "rm1000x",
+        "2021",
+        "1000w",
+        "80",
+        "gold"
+      ],
+      "forbidden_tokens": []
+    },
+    "psu-corsair-rm750e": {
+      "query": "Corsair RM750e (2023) 750W 80+ Gold",
+      "brand_aliases": [
+        "corsair",
+        "海盗船",
+        "美商海盗船"
+      ],
+      "required_tokens": [
+        "rm750e",
+        "2023",
+        "750w",
+        "80",
+        "gold"
+      ],
+      "forbidden_tokens": []
+    },
+    "psu-corsair-rm850e": {
+      "query": "Corsair RM850e (2023) 850W 80+ Gold",
+      "brand_aliases": [
+        "corsair",
+        "海盗船",
+        "美商海盗船"
+      ],
+      "required_tokens": [
+        "rm850e",
+        "2023",
+        "850w",
+        "80",
+        "gold"
+      ],
+      "forbidden_tokens": []
+    },
+    "psu-msi-mag-a650bn": {
+      "query": "MSI MAG A650BN 650W 80+ Bronze",
+      "brand_aliases": [
+        "msi",
+        "微星"
+      ],
+      "required_tokens": [
+        "mag",
+        "a650bn",
+        "650w",
+        "80",
+        "bronze"
+      ],
+      "forbidden_tokens": []
+    },
+    "psu-msi-mag-a750gl": {
+      "query": "MSI MAG A750GL PCIE5 750W 80+ Gold",
+      "brand_aliases": [
+        "msi",
+        "微星"
+      ],
+      "required_tokens": [
+        "mag",
+        "a750gl",
+        "pcie5",
+        "750w",
+        "80",
+        "gold"
+      ],
+      "forbidden_tokens": []
+    },
+    "psu-msi-mag-a850gl": {
+      "query": "MSI MAG A850GL PCIE5 850W 80+ Gold",
+      "brand_aliases": [
+        "msi",
+        "微星"
+      ],
+      "required_tokens": [
+        "mag",
+        "a850gl",
+        "pcie5",
+        "850w",
+        "80",
+        "gold"
+      ],
+      "forbidden_tokens": []
+    },
+    "psu-seasonic-focus-gx750-atx30": {
+      "query": "SeaSonic FOCUS GX-750 ATX 3.0 750W 80+ Gold",
+      "brand_aliases": [
+        "seasonic"
+      ],
+      "required_tokens": [
+        "focus",
+        "gx",
+        "750",
+        "atx",
+        "750w",
+        "80",
+        "gold"
+      ],
+      "forbidden_tokens": []
+    },
+    "psu-seasonic-focus-gx850-atx30": {
+      "query": "SeaSonic FOCUS GX-850 ATX 3.0 850W 80+ Gold",
+      "brand_aliases": [
+        "seasonic"
+      ],
+      "required_tokens": [
+        "focus",
+        "gx",
+        "850",
+        "atx",
+        "850w",
+        "80",
+        "gold"
+      ],
+      "forbidden_tokens": []
+    },
+    "psu-seasonic-vertex-gx1000": {
+      "query": "SeaSonic VERTEX GX-1000 1000W 80+ Gold",
+      "brand_aliases": [
+        "seasonic"
+      ],
+      "required_tokens": [
+        "vertex",
+        "gx",
+        "1000",
+        "1000w",
+        "80",
+        "gold"
+      ],
+      "forbidden_tokens": []
+    },
+    "psu-tt-gf3-850": {
+      "query": "Thermaltake Toughpower GF3 850W TT Premium 80+ Gold",
+      "brand_aliases": [
+        "thermaltake",
+        "曜越"
+      ],
+      "required_tokens": [
+        "toughpower",
+        "gf3",
+        "850w",
+        "tt",
+        "premium",
+        "80",
+        "gold"
+      ],
+      "forbidden_tokens": []
+    },
+    "ssd-adata-legend800-1tb": {
+      "query": "ADATA LEGEND 800 1TB NVMe M.2",
+      "brand_aliases": [
+        "adata",
+        "威刚"
+      ],
+      "required_tokens": [
+        "legend",
+        "800",
+        "1tb",
+        "nvme"
+      ],
+      "forbidden_tokens": []
+    },
+    "ssd-crucial-bx500-1tb": {
+      "query": "Crucial BX500 1TB SATA 2.5\"",
+      "brand_aliases": [
+        "crucial",
+        "英睿达"
+      ],
+      "required_tokens": [
+        "bx500",
+        "1tb",
+        "sata"
+      ],
+      "forbidden_tokens": []
+    },
+    "ssd-crucial-p3plus-1tb": {
+      "query": "Crucial P3 Plus 1TB NVMe M.2",
+      "brand_aliases": [
+        "crucial",
+        "英睿达"
+      ],
+      "required_tokens": [
+        "p3",
+        "plus",
+        "1tb",
+        "nvme"
+      ],
+      "forbidden_tokens": []
+    },
+    "ssd-crucial-t500-2tb": {
+      "query": "Crucial T500 2TB NVMe M.2",
+      "brand_aliases": [
+        "crucial",
+        "英睿达"
+      ],
+      "required_tokens": [
+        "t500",
+        "2tb",
+        "nvme"
+      ],
+      "forbidden_tokens": []
+    },
+    "ssd-kingston-kc3000-1tb": {
+      "query": "Kingston KC3000 1024GB NVMe M.2",
+      "brand_aliases": [
+        "kingston",
+        "金士顿"
+      ],
+      "required_tokens": [
+        "kc3000",
+        "1024gb",
+        "nvme"
+      ],
+      "forbidden_tokens": []
+    },
+    "ssd-kingston-nv2-1tb": {
+      "query": "Kingston NV2 1TB NVMe M.2",
+      "brand_aliases": [
+        "kingston",
+        "金士顿"
+      ],
+      "required_tokens": [
+        "nv2",
+        "1tb",
+        "nvme"
+      ],
+      "forbidden_tokens": []
+    },
+    "ssd-samsung-870evo-1tb": {
+      "query": "Samsung 870 EVO 1TB SATA 2.5\"",
+      "brand_aliases": [
+        "samsung",
+        "三星"
+      ],
+      "required_tokens": [
+        "870",
+        "evo",
+        "1tb",
+        "sata"
+      ],
+      "forbidden_tokens": []
+    },
+    "ssd-samsung-990pro-2tb": {
+      "query": "Samsung 990 PRO 2TB NVMe M.2",
+      "brand_aliases": [
+        "samsung",
+        "三星"
+      ],
+      "required_tokens": [
+        "990",
+        "pro",
+        "2tb"
+      ],
+      "forbidden_tokens": [
+        "1tb",
+        "980"
+      ]
+    },
+    "ssd-wd-sa510-1tb": {
+      "query": "Western Digital WD Blue SA510 1TB SATA 2.5\"",
+      "brand_aliases": [
+        "wd",
+        "西部数据"
+      ],
+      "required_tokens": [
+        "wd",
+        "blue",
+        "sa510",
+        "1tb",
+        "sata"
+      ],
+      "forbidden_tokens": []
+    },
+    "ssd-wd-sn580-1tb": {
+      "query": "Western Digital WD Blue SN580 1TB NVMe M.2",
+      "brand_aliases": [
+        "wd",
+        "西部数据"
+      ],
+      "required_tokens": [
+        "wd",
+        "blue",
+        "sn580",
+        "1tb",
+        "nvme"
+      ],
+      "forbidden_tokens": []
+    },
+    "ssd-wd-sn770-1tb": {
+      "query": "Western Digital WD_BLACK SN770 1TB NVMe M.2",
+      "brand_aliases": [
+        "wd",
+        "西部数据"
+      ],
+      "required_tokens": [
+        "sn770",
+        "1tb"
+      ],
+      "forbidden_tokens": [
+        "2tb",
+        "sn850"
+      ]
+    },
+    "ssd-wd-sn850x-2tb": {
+      "query": "Western Digital WD_BLACK SN850X 2TB NVMe M.2",
+      "brand_aliases": [
+        "wd",
+        "西部数据"
+      ],
+      "required_tokens": [
+        "wd",
+        "black",
+        "sn850x",
+        "2tb",
+        "nvme"
+      ],
+      "forbidden_tokens": []
+    }
+  }
+}

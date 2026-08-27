@@ -39,7 +39,7 @@ PRICE_CSV_HEADER = [
     "observed_at",
     "raw_sha256",
 ]
-QUALIFIED_PRICE_TYPES = {"regular", "sale"}
+QUALIFIED_PRICE_TYPES = {"regular", "sale", "listing"}
 OBSERVED_ONLY_PRICE_TYPES = {"coupon", "member", "msrp"}
 REJECTED_PRICE_TYPES = {"deposit", "installment", "bundle", "unknown"}
 ALL_PRICE_TYPES = QUALIFIED_PRICE_TYPES | OBSERVED_ONLY_PRICE_TYPES | REJECTED_PRICE_TYPES
@@ -146,6 +146,7 @@ def _observation_identity(row: dict[str, Any]) -> str:
     identity = {
         "sku": row["sku"],
         "source_id": row["source_id"],
+        "collector_id": row.get("collector_id", "manual_price_csv"),
         "product_id": row["product_id"],
         "price_cny": row["price_cny"],
         "observed_at": row["observed_at"],
@@ -214,10 +215,12 @@ def load_price_csv(path: Path, active_skus: set[str]) -> list[dict[str, Any]]:
             "price_cny": f"{price:.2f}",
             "currency": "CNY",
             "source_id": source_id,
+            "collector_id": "manual_price_csv",
             "product_id": product_id,
             "source_url": source_url,
             "seller": seller,
             "price_type": price_type,
+            "availability_basis": "confirmed_stock" if stock_status == "in_stock" else "unknown",
             "stock_status": stock_status,
             "variant_match": variant_match,
             "observed_at": _rfc3339(observed_at),
@@ -283,6 +286,52 @@ def import_price_csv(paths: DataPaths, csv_path: Path, *, run_id: str | None = N
     return manifest
 
 
+def import_price_observations(
+    paths: DataPaths,
+    observations: list[dict[str, Any]],
+    *,
+    run_id: str | None = None,
+    source_file_sha256: str | None = None,
+) -> dict[str, Any]:
+    """保存已获准自动适配器产出的规范观察，不把搜索结果提升为库存证据。"""
+    _ensure(paths)
+    run_id = run_id or str(uuid.uuid4())
+    try:
+        uuid.UUID(run_id)
+    except ValueError as exc:
+        raise PipelineError("invalid_run_id", "run_id 必须为 UUID") from exc
+    active_skus = _active_core_skus(paths)
+    seen: set[str] = set()
+    for row in observations:
+        if row.get("schema_version") != 1 or row.get("sku") not in active_skus:
+            raise PipelineError("invalid_price_observation", "自动观察必须属于 active_core 且 schema_version=1")
+        if row.get("collector_id") != "serpapi_baidu" or row.get("availability_basis") != "search_listing":
+            raise PipelineError("invalid_price_observation", "自动搜索报价缺少采集器或报价依据")
+        if row.get("price_type") != "listing" or row.get("stock_status") != "unknown":
+            raise PipelineError("invalid_price_observation", "搜索报价不得表述为确认库存或成交价")
+        if row.get("observation_id") != _observation_identity(row) or row["observation_id"] in seen:
+            raise PipelineError("invalid_price_observation", "自动 observation ID 非法或重复")
+        seen.add(row["observation_id"])
+    target = _price_runs(paths) / run_id / "normalized" / "observations.jsonl"
+    _write_jsonl(target, sorted(observations, key=lambda item: (item["sku"], item["source_id"], item["observation_id"])))
+    manifest = {
+        "schema_version": 1,
+        "run_id": run_id,
+        "status": "imported",
+        "model_used": False,
+        "source_file_sha256": source_file_sha256,
+        "observations_sha256": sha256_file(target),
+        "stats": {
+            "total": len(observations),
+            "qualified": sum(item["decision_status"] == "qualified" for item in observations),
+            "observed_only": sum(item["decision_status"] == "observed_only" for item in observations),
+            "rejected": sum(item["decision_status"] == "rejected" for item in observations),
+        },
+    }
+    _atomic_json(_price_runs(paths) / run_id / "import.json", manifest)
+    return manifest
+
+
 def _read_current(paths: DataPaths) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     current_path = _current_price(paths)
     if not current_path.is_file():
@@ -304,6 +353,7 @@ def _read_current(paths: DataPaths) -> tuple[dict[str, Any] | None, list[dict[st
                     "source_id": f"legacy:{item['source']}",
                     "observed_at": f"{item['captured_at']}T00:00:00Z",
                     "price_type": "bootstrap",
+                    "availability_basis": "unknown",
                     "carried_forward": True,
                     "source_snapshot_date": item["captured_at"],
                 })
@@ -336,6 +386,16 @@ def _priority(item: dict[str, Any]) -> tuple[Any, ...]:
 
 def _select_candidate(items: list[dict[str, Any]]) -> dict[str, Any]:
     sources = {str(item["source_id"]) for item in items}
+    if any(item.get("price_type") == "listing" for item in items):
+        if len(sources) < 2:
+            raise PipelineError("insufficient_listing_sources", "搜索报价至少需要两个独立商家")
+        values = sorted(Decimal(str(item["price_cny"])) for item in items)
+        middle = len(values) // 2
+        median = values[middle] if len(values) % 2 else (values[middle - 1] + values[middle]) / 2
+        return min(items, key=lambda item: (
+            abs(Decimal(str(item["price_cny"])) - median), str(item["seller"]),
+            Decimal(str(item["price_cny"])), str(item["observation_id"]),
+        ))
     if len(sources) < 3:
         return min(items, key=_priority)
     values = sorted(Decimal(str(item["price_cny"])) for item in items)
@@ -358,7 +418,11 @@ def create_price_review(paths: DataPaths, run_id: str) -> dict[str, Any]:
     provisional: dict[str, dict[str, Any]] = {}
     quarantined: list[dict[str, Any]] = []
     for sku, items in grouped.items():
-        chosen = _select_candidate(items)
+        try:
+            chosen = _select_candidate(items)
+        except PipelineError as exc:
+            quarantined.append({"sku": sku, "reason": exc.code})
+            continue
         prior = previous.get(sku)
         if prior is not None:
             old = Decimal(str(prior["price_cny"]))
@@ -386,11 +450,13 @@ def create_price_review(paths: DataPaths, run_id: str) -> dict[str, Any]:
                 "source_id": chosen["source_id"],
                 "observed_at": chosen["observed_at"],
                 "price_type": chosen["price_type"],
+                "availability_basis": chosen.get("availability_basis", "unknown"),
                 "carried_forward": False,
                 "source_snapshot_date": None,
             })
         elif sku in previous:
             carried = dict(previous[sku])
+            carried.setdefault("availability_basis", "unknown")
             carried["carried_forward"] = True
             carried["source_snapshot_date"] = carried.get("source_snapshot_date") or (
                 previous_manifest.get("snapshot_date") if previous_manifest else None

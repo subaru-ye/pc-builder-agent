@@ -317,7 +317,7 @@ func validateV2Summary(report LiveReport) []error {
 	}
 	want := SummarizeLive(report)
 	if report.Summary != want {
-		errs = append(errs, fmt.Errorf("Live 汇总与逐轮指标不一致: got %+v, want %+v", report.Summary, want))
+		errs = append(errs, fmt.Errorf("live 汇总与逐轮指标不一致: got %+v, want %+v", report.Summary, want))
 	}
 	if want.HistoricalTotalTokens != HistoricalTotalTokens {
 		errs = append(errs, fmt.Errorf("历史 Token 基线=%d,want %d", want.HistoricalTotalTokens, HistoricalTotalTokens))

@@ -24,11 +24,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if *livePath == "" && *humanPath == "" {
-		fmt.Fprintln(stderr, "必须至少提供 -live 或 -human")
+		_, _ = fmt.Fprintln(stderr, "必须至少提供 -live 或 -human")
 		return 2
 	}
 	if *final && (*livePath == "" || *humanPath == "") {
-		fmt.Fprintln(stderr, "-final 必须同时提供 -live 和 -human")
+		_, _ = fmt.Fprintln(stderr, "-final 必须同时提供 -live 和 -human")
 		return 2
 	}
 
@@ -36,7 +36,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if *livePath != "" {
 		report, err := decodeLiveFile(*livePath)
 		if err != nil {
-			fmt.Fprintf(stderr, "解码 live 报告: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "解码 live 报告: %v\n", err)
 			return 2
 		}
 		errs = append(errs, p10report.ValidateLive(report)...)
@@ -44,23 +44,23 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if *humanPath != "" {
 		report, err := decodeHumanFile(*humanPath)
 		if err != nil {
-			fmt.Fprintf(stderr, "解码 human 报告: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "解码 human 报告: %v\n", err)
 			return 2
 		}
 		errs = append(errs, p10report.ValidateHuman(report)...)
 	}
 	if len(errs) > 0 {
-		fmt.Fprintln(stderr, "P10 报告门禁未通过:")
-		fmt.Fprintln(stderr, p10report.FormatErrors(errs))
+		_, _ = fmt.Fprintln(stderr, "P10 报告门禁未通过:")
+		_, _ = fmt.Fprintln(stderr, p10report.FormatErrors(errs))
 		return 1
 	}
 	switch {
 	case *livePath != "" && *humanPath != "":
-		fmt.Fprintln(stdout, "P10 封板门禁通过:Live Pass³ + 真人 3/3 可直接照买")
+		_, _ = fmt.Fprintln(stdout, "P10 封板门禁通过:Live Pass³ + 真人 3/3 可直接照买")
 	case *livePath != "":
-		fmt.Fprintln(stdout, "P10 机器门禁通过:Harness v2 Live Pass³ + 成本与时延目标")
+		_, _ = fmt.Fprintln(stdout, "P10 机器门禁通过:Harness v2 Live Pass³ + 成本与时延目标")
 	default:
-		fmt.Fprintln(stdout, "P10 真人门禁通过:3/3 可直接照买")
+		_, _ = fmt.Fprintln(stdout, "P10 真人门禁通过:3/3 可直接照买")
 	}
 	return 0
 }

@@ -2,7 +2,7 @@
 
 > 对话式 DIY 装机助手:说清预算和用途,得到**保证兼容**、**带日期化报价**、**可多轮修改**的装机配置单。
 >
-> 个人学习向项目,目标技术栈:多 Agent 流水线 + A2A 协议 + 记忆基座。当前状态:MVP P0–P6 已封板,P7–P9 已完成;P10 尚待完整复验与 3 人真人盲评;P11 已完成,P12B 暂停;Agent Harness 2.0 已验收并默认启用。
+> 个人学习向项目,目标技术栈:多 Agent 流水线 + A2A 协议 + 记忆基座。当前状态:MVP P0–P6 已封板,P7–P9 已完成;P10 Harness v2 机器复验已完成,仅待 3 人真人盲评;P11 已完成,P12B 暂停;Agent Harness 2.0 已验收并默认启用。
 
 ## 为什么做
 
@@ -118,7 +118,7 @@ powershell -ExecutionPolicy Bypass -File scripts/data/ops/install-tasks.ps1 -Ski
 
 当前启用的首个外部来源是 13 个固定映射的 AMD 官方 CPU 具体型号页。每周串行条件请求，严格核对型号并只生成 socket、支持芯片组、TDP、核显和官方名称的确定性 evidence；政策、身份或页面结构变化会隔离来源。
 
-P12A 已增加价格 observation、安全选价和动态过期提示。P12B 的 SerpApi Free/Baidu Shopping 适配仍保留，但 2026-08-27 真实 canary 返回 0/12 购物结果，因此来源、96 SKU 核心池和每日任务均未激活；当前暂停寻找替代价格源。Agent Harness 2.0 已完成最小烟测，下一项 Agent 工作是 P10 的完整 L1–L6 Pass³ 复验。详见[P12 价格任务](docs/ops/P12价格任务.md)和[SerpApi 价格来源实测](docs/data/2026-08-27-SerpApi价格来源实测.md)。
+P12A 已增加价格 observation、安全选价和动态过期提示。P12B 的 SerpApi Free/Baidu Shopping 适配仍保留，但 2026-08-27 真实 canary 返回 0/12 购物结果，因此来源、96 SKU 核心池和每日任务均未激活；当前暂停寻找替代价格源。Agent Harness 2.0 已完成 L1–L6 Pass³ 机器复验，阶段 1 只剩 3 位独立受试者的真人盲评。详见[P12 价格任务](docs/ops/P12价格任务.md)和[SerpApi 价格来源实测](docs/data/2026-08-27-SerpApi价格来源实测.md)。
 
 ## MVP 进度
 
@@ -133,15 +133,15 @@ P12A 已增加价格 observation、安全选价和动态过期提示。P12B 的 
 - [x] P7 产品 API 与会话状态机
 - [x] P8 Web 配置工作台
 - [x] P9 分享与导出
-- [ ] P10 评测与发布准备(50 组 golden、自动门禁与 Live 18/18 已通过;3 人真人盲评待完成)
+- [ ] P10 评测与发布准备(50 组 golden、自动门禁与 Harness v2 Live 18/18 已通过;3 人真人盲评待完成)
 - [x] P11 数据自动化(AMD 官方规格、字段 evidence、release v2、原子导入与本机双周期验收)
 - [x] P12A 价格基础设施(观察、人工 CSV、安全选价、快照、新鲜度提示)
 - [ ] P12B 自动价格来源（SerpApi/Baidu 真实 canary 失败；替代来源、96/64 激活与两个 14 天轮转周期待完成）
-- [x] Agent Harness 2.0（确定性候选、预算组合与定向修复已实现；L1/L2 真实烟测通过并默认启用 v2）
+- [x] Agent Harness 2.0（确定性候选、预算组合与定向修复已实现；L1–L6×3 真实矩阵通过并默认启用 v2）
 
 2026-08-09 封板验收结果:PostgreSQL/pgvector/Redis 真实集成测试无跳过;Python 数据流水线 104 项测试通过;用例 A–H 全部验证,包括全 pass 配单、语义召回、v1→v3 回放/diff/Markdown 导出、A2A schema/contextID 以及 kill host 后从 Redis 恢复同一会话继续改单。
 
-阶段 1 的 P7–P9 已实现:P7 提供产品 API、匿名会话、需求确认、后台 run 与 Redis SSE;P8 提供 Next.js 工作台、配置/校验/版本/diff 与响应式交互;P9 提供不可变版本分享、所有者撤销、最小披露的 SSR 只读页、公开 Markdown 与 1200×630 PNG。P10 的 50 组 golden、Go/Web/Python 自动门禁和 L1–L6×3 真实模型矩阵已通过;Live 脱敏汇总见 [P10-Live 验收汇总](docs/acceptance/P10-Live验收汇总.json)。真人盲评仍为 0/3,因此尚未创建 `stage1-freeze`。
+阶段 1 的 P7–P9 已实现:P7 提供产品 API、匿名会话、需求确认、后台 run 与 Redis SSE;P8 提供 Next.js 工作台、配置/校验/版本/diff 与响应式交互;P9 提供不可变版本分享、所有者撤销、最小披露的 SSR 只读页、公开 Markdown 与 1200×630 PNG。2026-08-30，Harness v2 下的 L1–L6×3 以 18/18 通过：total Token 94,942，较历史基线下降 90.56%，builder 24 次，矩阵耗时中位数 10.218 秒。Go/Web/Python、真实 PostgreSQL/Redis 与 Linux race 门禁全部通过；脱敏汇总见 [P10-Live 验收汇总](docs/acceptance/P10-Live验收汇总.json)。真人盲评仍为 0/3,因此尚未创建 `stage1-freeze`。
 
 ## 免责声明
 

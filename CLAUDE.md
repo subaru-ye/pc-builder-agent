@@ -60,7 +60,7 @@ go build ./... && go vet ./...
 - **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
 - **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。
 - **schema 单一出处**:`internal/schemas` 定义一份,字段变更回写设计方案 §四,不在代码里静默漂移。
-- 当前进度:MVP P0–P6 已封板;P7 产品 API、P8 Web 工作台与 P9 分享只读页已实现。P10 的历史 Live Pass³ 已通过，但 Agent Harness 2.0 后的完整复验和 3 人真人盲评尚未执行，不得创建 `stage1-freeze`。P11 已完成，P12A 已实现，P12B 在真实 canary 失败后暂停。Agent Harness 2.0 的 L1/L2 真实烟测已通过并默认启用 v2。产品入口为 `web/` 的 Next.js 工作台,ADK dev UI 继续只作调试入口。
+- 当前进度:MVP P0–P6 已封板;P7 产品 API、P8 Web 工作台与 P9 分享只读页已实现。2026-08-30，Agent Harness 2.0 后的 L1–L6×3 完整 Live 复验 18/18 通过，成本与延迟硬门禁通过；3 人真人盲评仍为 0/3，因此不得创建 `stage1-freeze`。P11 已完成，P12A 已实现，P12B 在真实 canary 失败后暂停。Harness v2 已默认启用，legacy 仅供显式诊断。产品入口为 `web/` 的 Next.js 工作台,ADK dev UI 继续只作调试入口。
 
 ## 已知环境坑(Windows)
 

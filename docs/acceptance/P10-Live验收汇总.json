@@ -1,10 +1,11 @@
 {
-  "schema_version": 1,
-  "generated_at": "2026-08-10T04:07:34.105Z",
-  "status": "live_pass_human_pending",
+  "schema_version": 2,
+  "generated_at": "2026-08-29T17:26:00.287Z",
+  "status": "machine_pass_human_pending",
+  "harness_mode": "v2",
   "models": {
     "screening": "qwen3.7-plus",
-    "builder": "qwen3.7-max-2026-05-20",
+    "builder": "qwen3.7-plus-2026-05-26",
     "embedding": "qwen3.7-text-embedding"
   },
   "matrix": {
@@ -13,45 +14,63 @@
     "trial_count": 18,
     "passed": 18,
     "playwright_retries": 0,
-    "screening_calls": 15,
-    "builder_calls": 60,
-    "validation_rounds": 15
+    "screening_calls": 12,
+    "builder_calls": 24,
+    "validation_rounds": 24,
+    "upstream_error_classes": []
+  },
+  "usage": {
+    "prompt_tokens": 88865,
+    "candidate_tokens": 6077,
+    "total_tokens": 94942,
+    "reasoning_tokens": 0,
+    "cached_tokens": 59383,
+    "tool_prompt_tokens": 0,
+    "historical_total_tokens": 1006062,
+    "token_reduction_percent": 90.56
   },
   "performance": {
-    "first_progress_max_ms": 6,
+    "first_progress_max_ms": 3,
     "max_sse_gap_ms": 0,
-    "route_sample_count": 292,
-    "non_model_route_p95_ms": 175,
-    "trial_total_median_ms": 117828.5,
-    "trial_total_max_ms": 243316,
+    "route_sample_count": 223,
+    "non_model_route_p95_ms": 62,
+    "trial_total_median_ms": 10218,
+    "trial_total_max_ms": 16014,
+    "model_call_duration_ms": 148278,
     "scenarios": {
-      "L1": {"durations_ms": [143831, 176569, 218385]},
-      "L2": {"durations_ms": [135420, 186587, 243316]},
-      "L3": {"durations_ms": [68703, 74317, 121133]},
-      "L4": {"durations_ms": [52014, 69475, 94292]},
-      "L5": {"durations_ms": [3987, 4049, 4183]},
-      "L6": {"durations_ms": [114524, 145451, 171961]}
+      "L1": {"durations_ms": [8444, 8602, 10158], "builder_calls": [1, 1, 1]},
+      "L2": {"durations_ms": [15404, 15851, 16014], "builder_calls": [2, 2, 2]},
+      "L3": {"durations_ms": [10278, 10808, 10934], "builder_calls": [2, 2, 2]},
+      "L4": {"durations_ms": [12772, 13277, 15500], "builder_calls": [2, 2, 2]},
+      "L5": {"durations_ms": [2829, 2871, 2885], "builder_calls": [0, 0, 0]},
+      "L6": {"durations_ms": [8931, 9061, 9183], "builder_calls": [1, 1, 1]}
     }
   },
   "data": {
-    "parts": 160,
+    "parts_total": 160,
+    "active_core": 160,
     "prices": 160,
+    "price_observations": 0,
+    "price_snapshots": 1,
     "embeddings": 160,
     "postgres_healthy": true,
     "redis_healthy": true
   },
   "automatic_gates": {
     "golden_cases": 50,
-    "go_test_with_integrations": "pass",
+    "go_test_with_integrations": "pass_no_skip",
     "go_race_linux": "pass",
     "go_vet": "pass",
     "golangci_lint_issues": 0,
     "go_build": "pass",
-    "python_tests": "104/104",
-    "web_unit_tests": "14/14",
+    "python_tests": "155/155",
+    "web_unit_tests": "17/17",
     "web_mock_e2e": "18/18",
     "web_lint_typecheck_openapi_build": "pass"
   },
+  "fixed_during_run": [
+    "combined_validation_and_budget_repair_skipped_deterministic_preference"
+  ],
   "human_acceptance": {
     "completed": 0,
     "required": 3,

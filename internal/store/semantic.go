@@ -63,7 +63,7 @@ func (s *Store) SemanticCandidates(ctx context.Context, q SemanticQuery) (Semant
 	}
 
 	args := []any{snapID}
-	conds := []string{"p.active", "p.embedding IS NOT NULL"}
+	conds := []string{"p.active", "p.catalog_state = 'active_core'", "p.embedding IS NOT NULL"}
 	if q.Category != "" {
 		args = append(args, string(q.Category))
 		conds = append(conds, fmt.Sprintf("p.category = $%d", len(args)))

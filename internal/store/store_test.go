@@ -397,3 +397,22 @@ func TestCandidates(t *testing.T) {
 		}
 	})
 }
+
+func TestActiveCatalogSnapshot(t *testing.T) {
+	s := setupStore(t)
+	result, err := s.ActiveCatalogSnapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Snapshot.SnapshotDate.Format("2006-01-02") != "2026-07-27" {
+		t.Fatalf("snapshot=%s", result.Snapshot.SnapshotDate)
+	}
+	for _, candidate := range result.Candidates {
+		if candidate.SKU == "cpu-inactive" {
+			t.Fatal("inactive SKU 不得进入 Harness 候选快照")
+		}
+	}
+	if len(result.Candidates) != 8 {
+		t.Fatalf("active_core 候选数=%d, want 8", len(result.Candidates))
+	}
+}

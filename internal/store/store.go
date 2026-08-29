@@ -282,6 +282,47 @@ type CandidateResult struct {
 	SnapshotDate *time.Time // 报价所用快照日期;nil = 库内无任何快照
 }
 
+// CatalogSnapshot 是 Harness 一次构建使用的不可分割候选视图。
+// Snapshot 先确定价格批次，Candidates 再只关联该批次，避免长任务期间新快照
+// 发布造成同一次模型请求里的候选价格口径漂移。
+type CatalogSnapshot struct {
+	Snapshot   Snapshot
+	Candidates []Candidate
+}
+
+// ActiveCatalogSnapshot 读取最新价格快照下全部 active_core 候选。
+// Harness 会在内存中做确定性分组和裁剪；当前目录规模很小，一次批量读取比
+// 让模型逐品类往返调用 search_parts 更稳定，也能显著减少模型调用次数。
+func (s *Store) ActiveCatalogSnapshot(ctx context.Context) (CatalogSnapshot, error) {
+	snap, err := s.LatestSnapshot(ctx)
+	if err != nil {
+		return CatalogSnapshot{}, err
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT p.sku, p.brand, p.model, p.category, p.specs, pr.price_cny::text
+		FROM parts p
+		LEFT JOIN prices pr ON pr.sku = p.sku AND pr.snapshot_id = $1
+		WHERE p.active AND p.catalog_state = 'active_core'
+		ORDER BY p.category, pr.price_cny ASC NULLS LAST, p.sku`, snap.ID)
+	if err != nil {
+		return CatalogSnapshot{}, fmt.Errorf("store: 查询 active_core 候选快照失败: %w", err)
+	}
+	defer rows.Close()
+
+	out := CatalogSnapshot{Snapshot: snap}
+	for rows.Next() {
+		var c Candidate
+		if err := rows.Scan(&c.SKU, &c.Brand, &c.Model, &c.Category, &c.Specs, &c.PriceCNY); err != nil {
+			return CatalogSnapshot{}, fmt.Errorf("store: 读取 active_core 候选快照失败: %w", err)
+		}
+		out.Candidates = append(out.Candidates, c)
+	}
+	if err := rows.Err(); err != nil {
+		return CatalogSnapshot{}, fmt.Errorf("store: 遍历 active_core 候选快照失败: %w", err)
+	}
+	return out, nil
+}
+
 // Candidates 按硬约束从 parts 表结构化过滤候选件,关联最新快照价,按价升序返回前 top_n 条。
 // 过滤全走 SQL(零 LLM);超出 top_n 的部分在 Truncated 如实回报,绝不静默丢弃。
 // 库内无快照时价格均为 nil;若同时设了价格约束则返回 ErrSnapshotNotFound。

@@ -10,31 +10,48 @@ const smokeOnly = process.env.P10_SMOKE === "1";
 type MetricEvent = { component: string; name: string; fields?: Record<string, unknown> };
 type RunCapture = { runID: string; firstProgressMS: number; totalMS: number; maxGapMS: number };
 type RunCaptureOutcome = { capture?: RunCapture; error?: Error };
+type TokenUsage = {
+  prompt_tokens: number; candidate_tokens: number; total_tokens: number;
+  reasoning_tokens: number; cached_tokens: number; tool_prompt_tokens: number;
+};
 type Trial = {
   scenario: string; repetition: number; model_code: string; session_fingerprint: string; run_fingerprints: string[];
   final_phase: string; versions: number[]; first_progress_ms: number; total_ms: number; max_sse_gap_ms: number;
   screening_calls: number; builder_calls: number; validation_rounds: number; embedding_cache: string;
+  harness_mode: string; harness_runs: number; usage: TokenUsage; model_call_duration_ms: number;
+  model_error_classes: string[];
   total_cny?: string; budget_delta_cny?: string; overall_status?: string;
   diff_summary?: Record<string, unknown>; assertions: Record<string, boolean>;
 };
+type LiveSummary = {
+  trial_count: number; screening_calls: number; builder_calls: number; validation_rounds: number;
+  usage: TokenUsage; historical_total_tokens: number; token_reduction_percent: number;
+  model_call_duration_ms: number; trial_total_median_ms: number; trial_total_max_ms: number;
+  non_model_route_p95_ms: number;
+};
 type LiveReport = {
-  schema_version: 1; generated_at: string;
+  schema_version: 2; generated_at: string; harness_mode: string;
   models: { screening: string; builder: string; embedding: string };
-  trials: Trial[]; route_latency_ms: number[];
+  trials: Trial[]; route_latency_ms: number[]; summary: LiveSummary;
 };
 
 test.describe.configure({ mode: "serial" });
 
 test(smokeOnly ? "L1 and L2 provider optimization smoke" : "L1-L6 complete live matrix passes three consecutive times", async ({ browser }) => {
-  const config = await controlJSON<{ report_path: string }>("/config");
+  const config = await controlJSON<{ report_path: string; harness_mode: string }>("/config");
   const report: LiveReport = {
-    schema_version: 1,
+    schema_version: 2,
     generated_at: new Date().toISOString(),
+    harness_mode: config.harness_mode,
     models: { screening: "", builder: "", embedding: "" },
     trials: [],
     route_latency_ms: [],
+    summary: emptySummary(),
   };
-  const save = () => writeFileSync(config.report_path, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  const save = () => {
+    report.summary = summarize(report);
+    writeFileSync(config.report_path, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  };
 
   try {
     for (let repetition = 1; repetition <= (smokeOnly ? 1 : 3); repetition++) {
@@ -236,6 +253,16 @@ async function measure(
   const afterMetrics = await metricEvents();
   const delta = afterMetrics.slice(beforeMetrics.length);
   const cache = delta.filter((event) => event.name === "embedding.cache").map((event) => String(event.fields?.status ?? ""));
+  const modelEvents = delta.filter((event) => event.name === "model.call");
+  const harnessEvents = delta.filter((event) => event.component === "buildsvc" && event.name === "harness.started");
+  const harnessModes = [...new Set(harnessEvents.map((event) => String(event.fields?.mode ?? "")).filter(Boolean))];
+  const modelErrorClasses = [...new Set(modelEvents.flatMap((event) => {
+    const fields = event.fields ?? {};
+    const errors: string[] = [];
+    if (String(fields.status ?? "") !== "succeeded") errors.push(String(fields.error_class ?? "protocol"));
+    if (numberField(event, "total_tokens") <= 0) errors.push("zero_token_usage");
+    return errors;
+  }))];
   return {
     scenario, repetition,
     model_code: modelName(delta, "buildsvc", "model.call") || modelName(delta, "api", "model.call"),
@@ -248,8 +275,13 @@ async function measure(
     max_sse_gap_ms: Math.max(...runs.map((run) => run.maxGapMS)),
     screening_calls: delta.filter((event) => event.component === "api" && event.name === "model.call").length,
     builder_calls: delta.filter((event) => event.component === "buildsvc" && event.name === "model.call").length,
-    validation_rounds: delta.filter((event) => event.name === "validation.round").length,
+    validation_rounds: delta.filter((event) => event.name === "validation.round" || event.name === "validation.completed").length,
     embedding_cache: [...new Set(cache)].join(",") || "not_used",
+    harness_mode: harnessModes.length === 0 ? "not_used" : harnessModes.length === 1 ? harnessModes[0] : "mixed",
+    harness_runs: harnessEvents.length,
+    usage: usageFrom(modelEvents),
+    model_call_duration_ms: sumField(modelEvents, "duration_ms"),
+    model_error_classes: modelErrorClasses,
     total_cny: result.build?.quote.total_cny,
     budget_delta_cny: result.build?.quote.budget_delta_cny,
     overall_status: result.build?.validation.overall_status,
@@ -463,6 +495,65 @@ function modelName(events: MetricEvent[], component: string, name: string) {
 
 function fingerprint(value: string) {
   return createHash("sha256").update(value).digest("hex").slice(0, 12);
+}
+
+function emptyUsage(): TokenUsage {
+  return { prompt_tokens: 0, candidate_tokens: 0, total_tokens: 0, reasoning_tokens: 0, cached_tokens: 0, tool_prompt_tokens: 0 };
+}
+
+function emptySummary(): LiveSummary {
+  return {
+    trial_count: 0, screening_calls: 0, builder_calls: 0, validation_rounds: 0,
+    usage: emptyUsage(), historical_total_tokens: 1_006_062, token_reduction_percent: 100,
+    model_call_duration_ms: 0, trial_total_median_ms: 0, trial_total_max_ms: 0, non_model_route_p95_ms: 0,
+  };
+}
+
+function numberField(event: MetricEvent, name: string) {
+  const value = Number(event.fields?.[name] ?? 0);
+  return Number.isFinite(value) && value >= 0 ? Math.trunc(value) : 0;
+}
+
+function sumField(events: MetricEvent[], name: string) {
+  return events.reduce((total, event) => total + numberField(event, name), 0);
+}
+
+function usageFrom(events: MetricEvent[]): TokenUsage {
+  return {
+    prompt_tokens: sumField(events, "prompt_tokens"),
+    candidate_tokens: sumField(events, "candidate_tokens"),
+    total_tokens: sumField(events, "total_tokens"),
+    reasoning_tokens: sumField(events, "reasoning_tokens"),
+    cached_tokens: sumField(events, "cached_tokens"),
+    tool_prompt_tokens: sumField(events, "tool_prompt_tokens"),
+  };
+}
+
+function summarize(report: LiveReport): LiveSummary {
+  const modelUsage = emptyUsage();
+  for (const trial of report.trials) {
+    for (const key of Object.keys(modelUsage) as (keyof TokenUsage)[]) modelUsage[key] += trial.usage[key];
+  }
+  const durations = report.trials.map((trial) => trial.total_ms).sort((left, right) => left - right);
+  const middle = Math.floor(durations.length / 2);
+  const median = durations.length === 0 ? 0 : durations.length % 2 === 1
+    ? durations[middle]
+    : (durations[middle - 1] + durations[middle]) / 2;
+  const routes = [...report.route_latency_ms].sort((left, right) => left - right);
+  const p95Index = Math.max(0, Math.ceil(routes.length * 0.95) - 1);
+  return {
+    trial_count: report.trials.length,
+    screening_calls: report.trials.reduce((total, trial) => total + trial.screening_calls, 0),
+    builder_calls: report.trials.reduce((total, trial) => total + trial.builder_calls, 0),
+    validation_rounds: report.trials.reduce((total, trial) => total + trial.validation_rounds, 0),
+    usage: modelUsage,
+    historical_total_tokens: 1_006_062,
+    token_reduction_percent: Math.round((1 - modelUsage.total_tokens / 1_006_062) * 10_000) / 100,
+    model_call_duration_ms: report.trials.reduce((total, trial) => total + trial.model_call_duration_ms, 0),
+    trial_total_median_ms: median,
+    trial_total_max_ms: durations.at(-1) ?? 0,
+    non_model_route_p95_ms: routes.length === 0 ? 0 : routes[p95Index],
+  };
 }
 
 async function waitUntil(predicate: () => boolean, timeoutMS: number, message: string) {

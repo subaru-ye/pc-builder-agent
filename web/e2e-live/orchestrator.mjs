@@ -15,6 +15,10 @@ const metricsDir = join(artifactDir, "metrics");
 const reportPath = join(artifactDir, "live-results.json");
 mkdirSync(metricsDir, { recursive: true, mode: 0o700 });
 const webBaseURL = process.env.P10_WEB_BASE_URL ?? "http://127.0.0.1:3000";
+const harnessMode = (process.env.BUILD_HARNESS_MODE ?? "v2").trim().toLowerCase();
+if (harnessMode !== "legacy" && harnessMode !== "v2") {
+  throw new Error(`BUILD_HARNESS_MODE=${JSON.stringify(harnessMode)} 非法，只允许 legacy 或 v2`);
+}
 
 const childEnv = {
   ...process.env,
@@ -22,6 +26,7 @@ const childEnv = {
   PUBLIC_WEB_BASE_URL: webBaseURL,
   WEB_ALLOWED_ORIGIN: new URL(webBaseURL).origin,
   SHARE_TOKEN_SECRET: randomBytes(32).toString("base64url"),
+  BUILD_HARNESS_MODE: harnessMode,
 };
 const goCommand = process.platform === "win32" ? "go.exe" : "go";
 const executableSuffix = process.platform === "win32" ? ".exe" : "";
@@ -128,7 +133,7 @@ const server = createServer(async (request, response) => {
     return;
   }
   if (request.method === "GET" && request.url === "/config") {
-    response.end(JSON.stringify({ artifact_dir: artifactDir, metrics_dir: metricsDir, report_path: reportPath }));
+    response.end(JSON.stringify({ artifact_dir: artifactDir, metrics_dir: metricsDir, report_path: reportPath, harness_mode: harnessMode }));
     return;
   }
   if (request.method === "GET" && request.url === "/metrics") {

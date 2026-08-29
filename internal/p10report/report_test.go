@@ -25,7 +25,20 @@ func fullScores() HumanScores {
 }
 
 func TestValidateLiveRequiresPassCubed(t *testing.T) {
-	report := LiveReport{SchemaVersion: 1, Models: Models{Screening: "s", Builder: "b", Embedding: "e"}, RouteLatencyMS: []int64{10}}
+	report := validV2LiveReport()
+	if errs := ValidateLive(report); len(errs) != 0 {
+		t.Fatalf("合格 live 报告被拒绝: %s", FormatErrors(errs))
+	}
+	report.Trials = report.Trials[:17]
+	report.Summary = SummarizeLive(report)
+	if errs := ValidateLive(report); len(errs) == 0 {
+		t.Fatal("缺一次重复必须失败")
+	}
+}
+
+func validV2LiveReport() LiveReport {
+	report := LiveReport{SchemaVersion: LiveSchemaVersion, HarnessMode: "v2",
+		Models: Models{Screening: "s", Builder: "b", Embedding: "e"}, RouteLatencyMS: []int64{10}}
 	for scenario := 1; scenario <= 6; scenario++ {
 		for repetition := 1; repetition <= 3; repetition++ {
 			trial := LiveTrial{Scenario: string(rune('L')), Repetition: repetition, ModelCode: "model"}
@@ -35,24 +48,80 @@ func TestValidateLiveRequiresPassCubed(t *testing.T) {
 			trial.FinalPhase = "ready"
 			trial.Versions = []int{1}
 			trial.FirstProgressMS = 10
-			trial.TotalMS = 100
+			trial.TotalMS = 10_000
 			trial.MaxSSEGapMS = 20
+			trial.ScreeningCalls = 1
+			trial.BuilderCalls = 1
+			trial.ValidationRounds = 1
+			trial.HarnessMode = "v2"
+			trial.HarnessRuns = 1
+			trial.Usage = TokenUsage{PromptTokens: 90, CandidateTokens: 10, TotalTokens: 100}
+			trial.ModelCallDurationMS = 50
 			trial.Assertions = map[string]bool{"ok": true}
 			if scenario == 5 {
 				trial.FinalPhase = "collecting"
 				trial.Versions = nil
 				trial.BuilderCalls = 0
 				trial.ValidationRounds = 0
+				trial.HarnessMode = "not_used"
+				trial.HarnessRuns = 0
 			}
 			report.Trials = append(report.Trials, trial)
 		}
 	}
-	if errs := ValidateLive(report); len(errs) != 0 {
-		t.Fatalf("合格 live 报告被拒绝: %s", FormatErrors(errs))
+	report.Summary = SummarizeLive(report)
+	return report
+}
+
+func TestValidateLiveV2CostAndHarnessGates(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*LiveReport)
+		want   string
+	}{
+		{name: "legacy schema", mutate: func(report *LiveReport) { report.SchemaVersion = 1 }, want: "仅可读取为历史证据"},
+		{name: "legacy harness", mutate: func(report *LiveReport) { report.HarnessMode = "legacy" }, want: "want v2"},
+		{name: "per build call cap", mutate: func(report *LiveReport) {
+			report.Trials[0].BuilderCalls = 4
+			report.Summary = SummarizeLive(*report)
+		}, want: "必须在 1..3"},
+		{name: "total call cap", mutate: func(report *LiveReport) {
+			for i := range report.Trials {
+				if report.Trials[i].Scenario != "L5" {
+					report.Trials[i].BuilderCalls = 3
+					report.Trials[i].ValidationRounds = 3
+				}
+			}
+			report.Trials[0].BuilderCalls = 4
+			report.Trials[0].ValidationRounds = 4
+			report.Summary = SummarizeLive(*report)
+		}, want: "超过 45"},
+		{name: "token reduction", mutate: func(report *LiveReport) {
+			report.Trials[0].Usage.TotalTokens = MaxV2TotalTokens
+			report.Summary = SummarizeLive(*report)
+		}, want: "30% 降幅"},
+		{name: "median", mutate: func(report *LiveReport) {
+			for i := range report.Trials {
+				report.Trials[i].TotalMS = 90_001
+			}
+			report.Summary = SummarizeLive(*report)
+		}, want: "耗时中位数"},
+		{name: "upstream error", mutate: func(report *LiveReport) {
+			report.Trials[0].ModelErrorClasses = []string{"quota"}
+		}, want: "上游错误分类"},
+		{name: "summary mismatch", mutate: func(report *LiveReport) {
+			report.Summary.Usage.TotalTokens++
+		}, want: "汇总与逐轮指标不一致"},
 	}
-	report.Trials = report.Trials[:17]
-	if errs := ValidateLive(report); len(errs) == 0 {
-		t.Fatal("缺一次重复必须失败")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			report := validV2LiveReport()
+			tt.mutate(&report)
+			errs := ValidateLive(report)
+			if !strings.Contains(FormatErrors(errs), tt.want) {
+				t.Fatalf("缺少错误 %q:\n%s", tt.want, FormatErrors(errs))
+			}
+		})
 	}
 }
 

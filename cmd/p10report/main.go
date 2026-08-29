@@ -4,42 +4,81 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
+	"io"
 	"os"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/p10report"
 )
 
 func main() {
-	livePath := flag.String("live", "", "live-results.json 路径")
-	humanPath := flag.String("human", "", "human-results.json 路径")
-	flag.Parse()
-	if *livePath == "" || *humanPath == "" {
-		log.Fatal("必须同时提供 -live 和 -human")
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+func run(args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("p10report", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	livePath := flags.String("live", "", "live-results.json 路径")
+	humanPath := flags.String("human", "", "human-results.json 路径")
+	final := flags.Bool("final", false, "要求 Live 与真人报告同时通过最终封板门禁")
+	if err := flags.Parse(args); err != nil {
+		return 2
 	}
-	liveFile, err := os.Open(*livePath)
-	if err != nil {
-		log.Fatal(err)
+	if *livePath == "" && *humanPath == "" {
+		fmt.Fprintln(stderr, "必须至少提供 -live 或 -human")
+		return 2
 	}
-	defer func() { _ = liveFile.Close() }()
-	live, err := p10report.DecodeLive(liveFile)
-	if err != nil {
-		log.Fatalf("解码 live 报告: %v", err)
+	if *final && (*livePath == "" || *humanPath == "") {
+		fmt.Fprintln(stderr, "-final 必须同时提供 -live 和 -human")
+		return 2
 	}
-	humanFile, err := os.Open(*humanPath)
-	if err != nil {
-		log.Fatal(err)
+
+	var errs []error
+	if *livePath != "" {
+		report, err := decodeLiveFile(*livePath)
+		if err != nil {
+			fmt.Fprintf(stderr, "解码 live 报告: %v\n", err)
+			return 2
+		}
+		errs = append(errs, p10report.ValidateLive(report)...)
 	}
-	defer func() { _ = humanFile.Close() }()
-	human, err := p10report.DecodeHuman(humanFile)
-	if err != nil {
-		log.Fatalf("解码 human 报告: %v", err)
+	if *humanPath != "" {
+		report, err := decodeHumanFile(*humanPath)
+		if err != nil {
+			fmt.Fprintf(stderr, "解码 human 报告: %v\n", err)
+			return 2
+		}
+		errs = append(errs, p10report.ValidateHuman(report)...)
 	}
-	errs := append(p10report.ValidateLive(live), p10report.ValidateHuman(human)...)
 	if len(errs) > 0 {
-		fmt.Fprintln(os.Stderr, "P10 封板门禁未通过:")
-		fmt.Fprintln(os.Stderr, p10report.FormatErrors(errs))
-		os.Exit(1)
+		fmt.Fprintln(stderr, "P10 报告门禁未通过:")
+		fmt.Fprintln(stderr, p10report.FormatErrors(errs))
+		return 1
 	}
-	fmt.Println("P10 封板门禁通过:Live Pass³ + 真人 3/3 可直接照买")
+	switch {
+	case *livePath != "" && *humanPath != "":
+		fmt.Fprintln(stdout, "P10 封板门禁通过:Live Pass³ + 真人 3/3 可直接照买")
+	case *livePath != "":
+		fmt.Fprintln(stdout, "P10 机器门禁通过:Harness v2 Live Pass³ + 成本与时延目标")
+	default:
+		fmt.Fprintln(stdout, "P10 真人门禁通过:3/3 可直接照买")
+	}
+	return 0
+}
+
+func decodeLiveFile(path string) (p10report.LiveReport, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return p10report.LiveReport{}, err
+	}
+	defer func() { _ = file.Close() }()
+	return p10report.DecodeLive(file)
+}
+
+func decodeHumanFile(path string) (p10report.HumanReport, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return p10report.HumanReport{}, err
+	}
+	defer func() { _ = file.Close() }()
+	return p10report.DecodeHuman(file)
 }

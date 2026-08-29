@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  devIndicators: false,
   outputFileTracingIncludes: {
     "/share/[token]/image": ["./node_modules/@pdfmergy-embedpdf/fonts-sc/fonts/NotoSansHans-Regular.otf"],
   },

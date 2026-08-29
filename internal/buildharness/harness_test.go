@@ -94,6 +94,44 @@ func TestHarnessRepairsFailedRule(t *testing.T) {
 	}
 }
 
+func TestHarnessCombinesRuleAndBudgetIntoDeterministicPreference(t *testing.T) {
+	first := draftJSON("psu-a", "build-1")
+	second := strings.NewReplacer(
+		`"cpu":"cpu-a"`, `"cpu":"cpu-b"`,
+		`"gpu":"gpu-a"`, `"gpu":"gpu-b"`,
+		`"cooler":"cooler-a"`, `"cooler":"cooler-b"`,
+	).Replace(draftJSON("psu-a", "build-2"))
+	model := &fakeModel{outputs: []string{first, second}}
+	harness := newTestHarness(t, model, func(_ context.Context, selection schemas.BuildSelection) (validate.Result, error) {
+		if selection.CPU == "cpu-b" && selection.GPU != nil && *selection.GPU == "gpu-b" && selection.Cooler == "cooler-b" {
+			return passingResult("8000.00"), nil
+		}
+		result := passingResult("12000.00")
+		result.Report.OverallStatus = schemas.OverallFail
+		result.Report.Checks = []schemas.CheckResult{{
+			RuleID: schemas.RuleCoolerClearance, Outcome: schemas.OutcomeFail, Severity: schemas.SeverityError,
+		}}
+		return result, nil
+	})
+	result, err := harness.Run(context.Background(), BuildInput{Requirement: fixtureRequirement()})
+	if err != nil || !result.Succeeded || result.Attempts != 2 {
+		t.Fatalf("组合修复失败:result=%+v err=%v", result, err)
+	}
+	var envelope struct {
+		RepairPlan *RepairPlan `json:"repair_plan"`
+	}
+	prompt := model.requests[1].Contents[0].Parts[0].Text
+	if err := json.Unmarshal([]byte(prompt), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.RepairPlan == nil || len(envelope.RepairPlan.PreferredSelection) != 3 ||
+		envelope.RepairPlan.PreferredSelection[schemas.CategoryCooler] != "cooler-b" ||
+		envelope.RepairPlan.PreferredSelection[schemas.CategoryCPU] != "cpu-b" ||
+		envelope.RepairPlan.PreferredSelection[schemas.CategoryGPU] != "gpu-b" {
+		t.Fatalf("规则与预算组合未形成确定性三品类偏好:%+v", envelope.RepairPlan)
+	}
+}
+
 func TestHarnessRepairsMalformedJSONAndStopsAtThree(t *testing.T) {
 	t.Run("第二次修正", func(t *testing.T) {
 		model := &fakeModel{outputs: []string{"not-json", draftJSON("psu-a", "build-2")}}

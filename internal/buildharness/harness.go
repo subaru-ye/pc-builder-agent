@@ -171,7 +171,7 @@ func (h *runner) Run(ctx context.Context, input BuildInput) (BuildResult, error)
 			h.finish(input, started, attempt, false)
 			return BuildResult{Attempts: attempt, Draft: draft, Result: result, Message: planErr.Error()}, nil
 		}
-		if strings.HasPrefix(nextPlan.Reason, "budget_") {
+		if strings.Contains(nextPlan.Reason, "budget_") {
 			preferred, checked, preferenceErr := h.feasibleBudgetPreference(ctx, input.Requirement, draft.Selection, bundle, nextPlan.Mutable)
 			if preferenceErr != nil {
 				return BuildResult{}, preferenceErr
@@ -237,11 +237,12 @@ func trimRunes(value string, limit int) string {
 	return string(runes[:limit])
 }
 
-// feasibleBudgetPreference 用唯一的确定性 validator 枚举至多两个品类的候选
-// 组合，只向下一轮模型暴露预算内且兼容的最佳组合。
+// feasibleBudgetPreference 用唯一的确定性 validator 枚举至多三个品类的候选
+// 组合。三个品类覆盖一个规则修复品类与最多两个预算品类，最坏为 8³=512
+// 个纯本地组合；只向下一轮模型暴露预算内且兼容的最佳组合。
 func (h *runner) feasibleBudgetPreference(ctx context.Context, requirement schemas.RequirementSpec,
 	current schemas.BuildSelection, bundle CandidateBundle, categories []schemas.Category) (map[schemas.Category]string, int, error) {
-	if len(categories) == 0 || len(categories) > 2 {
+	if len(categories) == 0 || len(categories) > 3 {
 		return nil, 0, nil
 	}
 	groups := make([]*CandidateGroup, len(categories))
@@ -251,54 +252,64 @@ func (h *runner) feasibleBudgetPreference(ctx context.Context, requirement schem
 			return nil, 0, nil
 		}
 	}
-	second := []Candidate{{}}
-	if len(groups) == 2 {
-		second = groups[1].Candidates
-	}
 	target := int64(requirement.BudgetCNY) * 100
 	bestDistance := int64(math.MaxInt64)
 	bestStatus := 2
 	bestKey := ""
 	checked := 0
 	var best map[schemas.Category]string
-	for _, first := range groups[0].Candidates {
-		for _, next := range second {
-			selection := current
-			setSelectionSKU(&selection, categories[0], first.SKU)
-			key := first.SKU
-			preferred := map[schemas.Category]string{categories[0]: first.SKU}
-			if len(categories) == 2 {
-				setSelectionSKU(&selection, categories[1], next.SKU)
-				preferred[categories[1]] = next.SKU
-				key += "\x00" + next.SKU
+	var visit func(int, schemas.BuildSelection, map[schemas.Category]string, []string) error
+	visit = func(index int, selection schemas.BuildSelection, preferred map[schemas.Category]string, keyParts []string) error {
+		if index < len(groups) {
+			for _, candidate := range groups[index].Candidates {
+				next := selection
+				setSelectionSKU(&next, categories[index], candidate.SKU)
+				preferred[categories[index]] = candidate.SKU
+				if err := visit(index+1, next, preferred, append(keyParts, candidate.SKU)); err != nil {
+					return err
+				}
 			}
-			if canonicalSelection(selection) == canonicalSelection(current) {
-				continue
-			}
-			checked++
-			result, err := h.eval.Evaluate(ctx, selection)
-			if err != nil {
-				return nil, checked, err
-			}
-			if result.Report.OverallStatus == schemas.OverallFail || !inBudgetWindow(requirement, result.Quote) {
-				continue
-			}
-			total, ok := parsePriceFen(&result.Quote.TotalCNY)
-			if !ok {
-				continue
-			}
-			distance := total - target
-			if distance < 0 {
-				distance = -distance
-			}
-			status := 1
-			if result.Report.OverallStatus == schemas.OverallPass {
-				status = 0
-			}
-			if best == nil || status < bestStatus || (status == bestStatus && (distance < bestDistance || (distance == bestDistance && key < bestKey))) {
-				best, bestStatus, bestDistance, bestKey = preferred, status, distance, key
-			}
+			delete(preferred, categories[index])
+			return nil
 		}
+		if canonicalSelection(selection) == canonicalSelection(current) {
+			return nil
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		checked++
+		result, err := h.eval.Evaluate(ctx, selection)
+		if err != nil {
+			return err
+		}
+		if result.Report.OverallStatus == schemas.OverallFail || !inBudgetWindow(requirement, result.Quote) {
+			return nil
+		}
+		total, ok := parsePriceFen(&result.Quote.TotalCNY)
+		if !ok {
+			return nil
+		}
+		distance := total - target
+		if distance < 0 {
+			distance = -distance
+		}
+		status := 1
+		if result.Report.OverallStatus == schemas.OverallPass {
+			status = 0
+		}
+		key := strings.Join(keyParts, "\x00")
+		if best == nil || status < bestStatus || (status == bestStatus && (distance < bestDistance || (distance == bestDistance && key < bestKey))) {
+			best = make(map[schemas.Category]string, len(preferred))
+			for category, sku := range preferred {
+				best[category] = sku
+			}
+			bestStatus, bestDistance, bestKey = status, distance, key
+		}
+		return nil
+	}
+	if err := visit(0, current, map[schemas.Category]string{}, nil); err != nil {
+		return nil, checked, err
 	}
 	return best, checked, nil
 }

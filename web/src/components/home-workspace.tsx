@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AppHeader } from "./app-header";
 import { Composer } from "./composer";
+import { LocalProfileMenu } from "./local-profile-menu";
 import { Button } from "./ui/button";
 import { api } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/query-keys";
@@ -31,15 +32,18 @@ export function HomeWorkspace() {
     <main className="flex min-h-screen flex-col bg-[var(--canvas)]">
       <AppHeader />
       <div className="grid flex-1 md:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="hidden border-r bg-[var(--surface-1)] p-4 md:block">
-          <div className="mb-4 flex items-center gap-2 text-xs font-medium text-[var(--ink-muted)]"><Clock3 size={14} />最近会话</div>
-          <div className="space-y-1">
-            {sessions.data?.map((session) => <Link key={session.id} href={`/s/${session.id}`} className="block rounded-md px-3 py-2 hover:bg-[var(--surface-2)]">
-              <div className="truncate text-sm">{session.title}</div>
-              <div className="mt-1 flex justify-between text-xs text-[var(--ink-subtle)]"><span>{phaseLabels[session.phase]}</span><span>{session.version_count} 版</span></div>
-            </Link>)}
-            {!sessions.isPending && !sessions.data?.length && <p className="px-3 py-2 text-sm text-[var(--ink-subtle)]">发送第一条需求后，会话会显示在这里。</p>}
+        <aside className="hidden min-h-[calc(100vh-56px)] border-r bg-[var(--surface-1)] md:flex md:flex-col">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            <div className="mb-4 flex items-center gap-2 text-xs font-medium text-[var(--ink-muted)]"><Clock3 size={14} />最近会话</div>
+            <div className="space-y-1">
+              {sessions.data?.map((session) => <Link key={session.id} href={`/s/${session.id}`} className="block rounded-md px-3 py-2 hover:bg-[var(--surface-2)]">
+                <div className="truncate text-sm">{session.title}</div>
+                <div className="mt-1 flex justify-between text-xs text-[var(--ink-subtle)]"><span>{phaseLabels[session.phase]}</span><span>{session.version_count} 版</span></div>
+              </Link>)}
+              {!sessions.isPending && !sessions.data?.length && <p className="px-3 py-2 text-sm text-[var(--ink-subtle)]">发送第一条需求后，会话会显示在这里。</p>}
+            </div>
           </div>
+          <div className="shrink-0 border-t p-3"><LocalProfileMenu /></div>
         </aside>
         <section className="flex min-h-[calc(100vh-56px)] flex-col justify-between">
           <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-6 py-12 sm:px-10">

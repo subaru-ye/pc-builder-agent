@@ -33,7 +33,7 @@ func (e *countingEmbedder) EmbedOne(context.Context, string) ([]float32, error) 
 }
 
 func TestParseMode(t *testing.T) {
-	for input, want := range map[string]Mode{"": ModeLegacy, "legacy": ModeLegacy, " V2 ": ModeV2} {
+	for input, want := range map[string]Mode{"": ModeV2, "legacy": ModeLegacy, " V2 ": ModeV2} {
 		got, err := ParseMode(input)
 		if err != nil || got != want {
 			t.Fatalf("ParseMode(%q)=(%q,%v), want %q", input, got, err, want)

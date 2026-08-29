@@ -2,7 +2,7 @@
 
 > 对话式 DIY 装机助手:说清预算和用途,得到**保证兼容**、**带日期化报价**、**可多轮修改**的装机配置单。
 >
-> 个人学习向项目,目标技术栈:多 Agent 流水线 + A2A 协议 + 记忆基座。当前状态:MVP P0–P6 已封板,P7–P9 已完成;P10 尚待 3 人真人盲评;P11 本机数据发布基座与 AMD 官方规格适配已完成。
+> 个人学习向项目,目标技术栈:多 Agent 流水线 + A2A 协议 + 记忆基座。当前状态:MVP P0–P6 已封板,P7–P9 已完成;P10 尚待完整复验与 3 人真人盲评;P11 已完成,P12B 暂停;Agent Harness 2.0 已验收并默认启用。
 
 ## 为什么做
 
@@ -69,6 +69,7 @@
 | [P9 分享与导出设计](docs/tech/P9-分享与导出设计.md) | 共享 presenter、只读链接、Markdown 与分享图 |
 | [P10 评测与阶段验收](docs/tech/P10-评测与阶段验收.md) | 50+ golden、Web/Live E2E、真人 rubric 与退出门禁 |
 | [ADR-007 模型供应商与成本控制](docs/tech/ADR-007-模型供应商适配与成本控制.md) | 百炼/MiMo/通用 Responses 配置、错误策略、上下文与 Token 优化 |
+| [Agent Harness 2.0](docs/tech/Agent-Harness-2.0.md) | 确定性候选准备、无工具 builder、定向修复、双轨切换与成本门禁 |
 | [产品 API 契约](docs/api/openapi.yaml) | 阶段 1 HTTP DTO、路径与错误响应唯一线格式 |
 | [设计上下文](DESIGN_CONTEXT.md) | Linear 派生的产品视觉目标;具体 token/规则见 DESIGN.md、UI_RULES.md |
 | [技术选型](docs/tech/技术选型.md) | 语言/框架/模型供应商决策记录(栈级选择权威) |
@@ -84,7 +85,7 @@ docker compose up -d        # PG → localhost:15432,Redis → localhost:16379(�
 go run ./cmd/migrate up     # 应用 PostgreSQL 编号迁移
 ```
 
-复制 `.env.example` 为 `.env`。screening、builder、embedding 可独立配置 `PROVIDER/MODEL/API_KEY/BASE_URL`;未设置 provider 时兼容旧配置并默认百炼。系统不会在额度、鉴权或限流失败后自动切换模型或供应商。MiMo 当前只用于 chat，builder 须关闭思考；embedding 继续使用百炼。显式连通性检查使用 `go run ./cmd/modelcheck -role screening|builder|embedding`。P9 还要求独立的 `SHARE_TOKEN_SECRET`,生成方法见[本地运行手册](docs/ops/阶段1本地运行与部署准备.md)。
+复制 `.env.example` 为 `.env`。screening、builder、embedding 可独立配置 `PROVIDER/MODEL/API_KEY/BASE_URL`;未设置 provider 时兼容旧配置并默认百炼。系统不会在额度、鉴权或限流失败后自动切换模型或供应商。MiMo 当前只用于 chat，builder 须关闭思考；embedding 继续使用百炼。`BUILD_HARNESS_MODE` 默认 `v2`，使用确定性候选和最多三次无工具选配；可显式设为 `legacy` 诊断旧链，失败不会自动回退。显式连通性检查使用 `go run ./cmd/modelcheck -role screening|builder|embedding`。P9 还要求独立的 `SHARE_TOKEN_SECRET`,生成方法见[本地运行手册](docs/ops/阶段1本地运行与部署准备.md)。
 
 ```bash
 go run ./cmd/buildsvc  # 终端 1:启动「生成 + 校验」A2A 服务(http://localhost:8081)
@@ -117,7 +118,7 @@ powershell -ExecutionPolicy Bypass -File scripts/data/ops/install-tasks.ps1 -Ski
 
 当前启用的首个外部来源是 13 个固定映射的 AMD 官方 CPU 具体型号页。每周串行条件请求，严格核对型号并只生成 socket、支持芯片组、TDP、核显和官方名称的确定性 evidence；政策、身份或页面结构变化会隔离来源。
 
-P12A 已增加价格 observation、安全选价和动态过期提示。P12B 的 SerpApi Free/Baidu Shopping 适配、免费额度硬门禁、12 SKU canary、双商家选价和每日微批次已实现；2026-08-27 真实 canary 返回 0/12 购物结果，因此来源、96 SKU 核心池和每日任务仍保持未激活，P12 尚未完成。详见[P12 价格任务](docs/ops/P12价格任务.md)和[SerpApi 价格来源实测](docs/data/2026-08-27-SerpApi价格来源实测.md)。
+P12A 已增加价格 observation、安全选价和动态过期提示。P12B 的 SerpApi Free/Baidu Shopping 适配仍保留，但 2026-08-27 真实 canary 返回 0/12 购物结果，因此来源、96 SKU 核心池和每日任务均未激活；当前暂停寻找替代价格源。Agent Harness 2.0 已完成最小烟测，下一项 Agent 工作是 P10 的完整 L1–L6 Pass³ 复验。详见[P12 价格任务](docs/ops/P12价格任务.md)和[SerpApi 价格来源实测](docs/data/2026-08-27-SerpApi价格来源实测.md)。
 
 ## MVP 进度
 
@@ -136,6 +137,7 @@ P12A 已增加价格 observation、安全选价和动态过期提示。P12B 的 
 - [x] P11 数据自动化(AMD 官方规格、字段 evidence、release v2、原子导入与本机双周期验收)
 - [x] P12A 价格基础设施(观察、人工 CSV、安全选价、快照、新鲜度提示)
 - [ ] P12B 自动价格来源（SerpApi/Baidu 真实 canary 失败；替代来源、96/64 激活与两个 14 天轮转周期待完成）
+- [x] Agent Harness 2.0（确定性候选、预算组合与定向修复已实现；L1/L2 真实烟测通过并默认启用 v2）
 
 2026-08-09 封板验收结果:PostgreSQL/pgvector/Redis 真实集成测试无跳过;Python 数据流水线 104 项测试通过;用例 A–H 全部验证,包括全 pass 配单、语义召回、v1→v3 回放/diff/Markdown 导出、A2A schema/contextID 以及 kill host 后从 Redis 恢复同一会话继续改单。
 

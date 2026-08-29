@@ -15,7 +15,7 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
-// Mode 是 buildsvc 的内部构建执行模式；默认 legacy 以便烟测前安全回滚。
+// Mode 是 buildsvc 的内部构建执行模式；v2 通过真实烟测后成为默认路径。
 type Mode string
 
 const (
@@ -26,11 +26,11 @@ const (
 	MaxCandidateRunes = 24_000
 )
 
-// ParseMode 严格解析 BUILD_HARNESS_MODE，空值保持向后兼容的 legacy。
+// ParseMode 严格解析 BUILD_HARNESS_MODE；空值使用已验收的 v2，legacy 可显式回切。
 func ParseMode(value string) (Mode, error) {
 	mode := Mode(strings.ToLower(strings.TrimSpace(value)))
 	if mode == "" {
-		return ModeLegacy, nil
+		return ModeV2, nil
 	}
 	if mode != ModeLegacy && mode != ModeV2 {
 		return "", fmt.Errorf("BUILD_HARNESS_MODE=%q 无效:须为 legacy 或 v2", value)

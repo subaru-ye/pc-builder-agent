@@ -45,6 +45,7 @@ go build ./... && go vet ./...
 | docs/tech/P9-分享与导出设计.md | P9 实现层:共享 presenter / Markdown / 分享 token / 只读页与分享图 |
 | docs/tech/P10-评测与阶段验收.md | P10 实现层:50+ golden / Web 与 Live E2E / 真人 rubric / 最终门禁 |
 | docs/tech/ADR-007-模型供应商适配与成本控制.md | 百炼/MiMo/通用 Responses 装配 / 无自动 fallback / 上下文与 Token 优化 |
+| docs/tech/Agent-Harness-2.0.md | builder 双轨 / 候选包 / 无工具决策 / 定向修复 / 切换门禁 |
 | docs/api/openapi.yaml | 产品 HTTP 路径与 DTO 线格式;SSE 细节见同目录协议文档 |
 | DESIGN.md / DESIGN_CONTEXT.md / UI_RULES.md | Web 视觉来源、产品设计语境与实现规则;写 UI 前必须依次阅读 |
 | docs/tech/技术选型.md | 栈级决策(ADR)+ 版本锁定表 |
@@ -54,11 +55,12 @@ go build ./... && go vet ./...
 
 - **版本纪律**:ADK-Go/a2a-go 迭代快,文档不写死 import 路径与 API 签名;首装后回填技术选型.md 末尾版本锁定表。模型默认值集中在 `internal/modelprovider`,部署值只进未跟踪 `.env`;文档示例需与 `.env.example` 同步。
 - **模型纪律**:不得在启动时探测模型,不得自动 fallback;真实调用只通过显式 `modelcheck` 或 Live 门禁。日志/指标只写 provider、role、model、状态和安全错误类别。
+- **Harness 纪律**:`BUILD_HARNESS_MODE` 只允许 legacy/v2；默认 v2 最多三次无工具 builder 调用，失败不得自动执行 legacy。legacy 仅供操作者显式诊断。
 - **数据纪律**:网络响应和模型辅助结果默认只能进入候选区;只有精确身份、确定性证据和全部门禁通过的低风险变化可条件自动发布,其余进入 quarantine 并保持 last-known-good。定时主链模型调用必须为 0。阶段 2 以 `docs/data/数据获取与发布规则.md` 为准。
 - **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
 - **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。
 - **schema 单一出处**:`internal/schemas` 定义一份,字段变更回写设计方案 §四,不在代码里静默漂移。
-- 当前进度:MVP P0–P6 已封板;P7 产品 API、P8 Web 工作台与 P9 分享只读页已实现。P10 的 50 组 golden、全部自动门禁和 L1–L6×3 Live Pass³ 已通过,但 3 人真人盲评尚未执行,不得创建 `stage1-freeze`。P11 已完成。P12A 已实现；P12B 的 SerpApi/Baidu 代码已就绪，但真实 canary、96/64 激活、每日任务安装和两个 14 天轮转周期仍未完成，P12 不得标记完成。产品入口为 `web/` 的 Next.js 工作台,ADK dev UI 继续只作调试入口。
+- 当前进度:MVP P0–P6 已封板;P7 产品 API、P8 Web 工作台与 P9 分享只读页已实现。P10 的历史 Live Pass³ 已通过，但 Agent Harness 2.0 后的完整复验和 3 人真人盲评尚未执行，不得创建 `stage1-freeze`。P11 已完成，P12A 已实现，P12B 在真实 canary 失败后暂停。Agent Harness 2.0 的 L1/L2 真实烟测已通过并默认启用 v2。产品入口为 `web/` 的 Next.js 工作台,ADK dev UI 继续只作调试入口。
 
 ## 已知环境坑(Windows)
 

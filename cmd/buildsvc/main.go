@@ -19,9 +19,11 @@ import (
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
 	adka2a "google.golang.org/adk/v2/server/adka2a/v2"
 
+	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/runner"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
+	"github.com/subaru-ye/pc-builder-agent/internal/buildharness"
 	"github.com/subaru-ye/pc-builder-agent/internal/dotenv"
 	"github.com/subaru-ye/pc-builder-agent/internal/modelprovider"
 	"github.com/subaru-ye/pc-builder-agent/internal/redisstore"
@@ -55,6 +57,10 @@ func main() {
 	if addr == "" {
 		addr = defaultAddr
 	}
+	harnessMode, err := buildharness.ParseMode(os.Getenv("BUILD_HARNESS_MODE"))
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	st, err := store.New(ctx, dsn)
 	if err != nil {
@@ -79,11 +85,17 @@ func main() {
 	embedder := backend.WrapEmbedder(embeddingClient, embeddingCfg.CacheIdentity(),
 		string(embeddingCfg.Provider), embeddingCfg.Model)
 
-	root, err := pipeline.NewRemote(pipeline.Config{
+	pipelineConfig := pipeline.Config{
 		BuilderModel:  builderModel,
 		Store:         st,
 		QueryEmbedder: embedder,
-	})
+	}
+	var root agent.Agent
+	if harnessMode == buildharness.ModeV2 {
+		root, err = pipeline.NewRemoteV2(pipelineConfig)
+	} else {
+		root, err = pipeline.NewRemote(pipelineConfig)
+	}
 	if err != nil {
 		log.Fatalf("装配远程服务流水线失败: %v", err)
 	}
@@ -122,9 +134,9 @@ func main() {
 	mux.Handle(a2asrv.WellKnownAgentCardPath, a2asrv.NewStaticAgentCardHandler(agentCard))
 	mux.Handle(invokePath, a2asrv.NewJSONRPCHandler(a2asrv.NewHandler(executor)))
 
-	log.Printf("[buildsvc] A2A 服务启动:监听 %s,card=%s,invoke=%s,builder=%s/%s,embedding=%s/%s",
+	log.Printf("[buildsvc] A2A 服务启动:监听 %s,card=%s,invoke=%s,harness=%s,builder=%s/%s,embedding=%s/%s",
 		addr, cardURL.JoinPath(a2asrv.WellKnownAgentCardPath).String(), cardURL.JoinPath(invokePath).String(),
-		builderCfg.Provider, builderCfg.Model, embeddingCfg.Provider, embeddingCfg.Model)
+		harnessMode, builderCfg.Provider, builderCfg.Model, embeddingCfg.Provider, embeddingCfg.Model)
 	if err := http.ListenAndServe(addr, logMiddleware(mux)); err != nil {
 		log.Fatalf("[buildsvc] A2A 服务退出: %v", err)
 	}

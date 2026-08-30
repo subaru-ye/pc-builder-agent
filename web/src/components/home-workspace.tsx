@@ -30,7 +30,7 @@ export function HomeWorkspace() {
   });
   return (
     <main className="flex min-h-screen flex-col bg-[var(--canvas)]">
-      <AppHeader />
+      <AppHeader showAccount={false} />
       <div className="grid flex-1 md:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="hidden min-h-[calc(100vh-56px)] border-r bg-[var(--surface-1)] md:flex md:flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto p-4">

@@ -3,8 +3,9 @@ import { Download } from "lucide-react";
 import { HealthStatus } from "./health-status";
 import { Button } from "./ui/button";
 import { ShareManager } from "./share-manager";
+import { LocalProfileMenu } from "./local-profile-menu";
 
-export function AppHeader({ title, exportHref, share }: { title?: string; exportHref?: string; share?: { sessionID: string; version: number } }) {
+export function AppHeader({ title, exportHref, share, showAccount = true }: { title?: string; exportHref?: string; share?: { sessionID: string; version: number }; showAccount?: boolean }) {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b bg-[var(--surface-1)] px-3 sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
@@ -15,6 +16,7 @@ export function AppHeader({ title, exportHref, share }: { title?: string; export
         <HealthStatus />
         {share && <ShareManager sessionID={share.sessionID} version={share.version} />}
         {exportHref && <Button asChild variant="outline" size="sm"><a href={exportHref} aria-label="导出 Markdown"><Download size={15} /><span className="hidden sm:inline">导出 Markdown</span></a></Button>}
+        {showAccount && <LocalProfileMenu compact />}
       </div>
     </header>
   );

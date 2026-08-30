@@ -50,6 +50,26 @@
   --unknown: #8f96a3;
 }
 
+:root.light {
+  color-scheme: light;
+  --canvas: #f6f7f9;
+  --surface-1: #ffffff;
+  --surface-2: #eef0f4;
+  --surface-3: #ffffff;
+  --hairline: #d8dce5;
+  --hairline-strong: #aab1c0;
+  --ink: #17191f;
+  --ink-muted: #555d6c;
+  --ink-subtle: #626b7b;
+  --primary: #5964d8;
+  --primary-hover: #4853c5;
+  --primary-pressed: #3f49ad;
+  --success: #237a47;
+  --review: #7d4c00;
+  --error: #b93845;
+  --unknown: #5f6877;
+}
+
 * { border-color: var(--hairline); }
 html, body { min-height: 100%; background: var(--canvas); }
 body {

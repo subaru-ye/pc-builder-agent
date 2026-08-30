@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { queryKeys } from "@/lib/api/query-keys";
+import { ThemeProvider } from "./theme-provider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [client] = useState(() => new QueryClient({
@@ -20,9 +21,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return () => channel.close();
   }, [client]);
   return (
-    <QueryClientProvider client={client}>
-      <TooltipProvider>{children}</TooltipProvider>
-      <Toaster richColors position="top-right" />
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={client}>
+        <TooltipProvider>{children}</TooltipProvider>
+        <Toaster richColors position="top-right" />
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }

@@ -31,7 +31,7 @@ export function HomeWorkspace() {
   return (
     <main className="flex min-h-screen flex-col bg-[var(--canvas)]">
       <AppHeader showAccount={false} />
-      <div className="grid flex-1 md:grid-cols-[280px_minmax(0,1fr)]">
+      <div className="grid flex-1 md:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_280px] 2xl:grid-cols-[280px_minmax(0,1fr)_320px]">
         <aside className="hidden min-h-[calc(100vh-56px)] border-r bg-[var(--surface-1)] md:flex md:flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             <div className="mb-4 flex items-center gap-2 text-xs font-medium text-[var(--ink-muted)]"><Clock3 size={14} />最近会话</div>
@@ -57,6 +57,7 @@ export function HomeWorkspace() {
           </div>
           <div className="mx-auto w-full max-w-3xl px-4 pb-4 sm:px-8"><Composer value={draft} onChange={setDraft} disabled={start.isPending} onSend={() => start.mutate(draft.trim())} /></div>
         </section>
+        <aside aria-label="辅助侧栏" className="hidden min-h-[calc(100vh-56px)] border-l bg-[var(--surface-1)] xl:block" />
       </div>
     </main>
   );

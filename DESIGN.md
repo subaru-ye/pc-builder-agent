@@ -57,6 +57,8 @@ A calm, technical dark workspace built from near-black surfaces, crisp typograph
 
 Semantic colors never replace text or icons. Large tinted status backgrounds are prohibited; use compact indicators, left rules, or subtle 8–12% tints.
 
+浅色主题使用独立表面阶梯：canvas `#f6f7f9`、surface-1 `#ffffff`、surface-2 `#eef0f4`、surface-3 `#ffffff`、hairline `#d8dce5`、ink `#17191f`、ink-subtle `#626b7b`、review `#7d4c00`。浅色语义色必须达到正文对比度，不允许把深色 token 机械反相。默认偏好为「系统」，显式「深色／浅色」选择保存在浏览器本地。
+
 ### Typography
 
 - UI/display:Geist Sans, Inter, system-ui, -apple-system, Segoe UI, PingFang SC, Microsoft YaHei, sans-serif.

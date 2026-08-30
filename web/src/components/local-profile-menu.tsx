@@ -1,24 +1,33 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronUp, LogIn, LogOut, Settings, UserPlus, UserRound } from "lucide-react";
+import { ChevronUp, LogIn, LogOut, Monitor, Moon, Palette, Settings, Sun, UserPlus, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/query-keys";
 import { broadcastAuth } from "@/lib/auth-events";
+import { type ThemePreference, useTheme } from "./theme-provider";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+
+const themeLabels: Record<ThemePreference, string> = { system: "系统", dark: "深色", light: "浅色" };
 
 export function LocalProfileMenu({ compact = false, forceLocal = false }: { compact?: boolean; forceLocal?: boolean }) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { theme, setTheme } = useTheme();
   const auth = useQuery({ queryKey: queryKeys.auth, queryFn: api.authState, enabled: !forceLocal });
   const state = forceLocal ? { enabled: false, authenticated: false, account: null } : auth.data;
   const logout = useMutation({
@@ -49,6 +58,18 @@ export function LocalProfileMenu({ compact = false, forceLocal = false }: { comp
           <span className="block truncate text-sm font-medium text-[var(--ink)]">{state?.authenticated ? name : state?.enabled ? "匿名使用中" : "本地匿名模式"}</span>
           <span className="mt-0.5 block truncate font-normal text-[var(--ink-subtle)]">{secondary}</span>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className="min-h-10 gap-3 px-2.5 py-2"><Palette /><span>外观</span><span className="ml-auto text-xs text-[var(--ink-subtle)]">{themeLabels[theme]}</span></DropdownMenuSubTrigger>
+          <DropdownMenuSubContent sideOffset={8} className="w-48 border border-[var(--hairline)] bg-[var(--surface-3)] p-1.5">
+            <DropdownMenuLabel className="px-2 py-1.5">明暗模式</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as ThemePreference)}>
+              <DropdownMenuRadioItem value="system" className="min-h-10 gap-3 px-2.5 py-2"><Monitor /><span>系统</span></DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="dark" className="min-h-10 gap-3 px-2.5 py-2"><Moon /><span>深色</span></DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="light" className="min-h-10 gap-3 px-2.5 py-2"><Sun /><span>浅色</span></DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
         <DropdownMenuSeparator />
         {state?.authenticated ? <>
           <DropdownMenuItem asChild className="min-h-10 gap-3 px-2.5 py-2"><Link href="/account"><UserRound /><span>个人信息</span></Link></DropdownMenuItem>

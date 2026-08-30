@@ -10,6 +10,12 @@ const copy: Record<string, string> = {
   run_interrupted: "服务重启中断了本次运行，可以显式重试。",
   events_expired: "运行事件已过期，正在改用状态查询恢复。",
   schema_validation_failed: "需求字段没有通过校验，请检查标记的内容。",
+  auth_disabled: "当前环境尚未启用账号功能，仍可继续匿名使用。",
+  auth_invalid_credentials: "邮箱或密码不正确。",
+  auth_email_exists: "该邮箱已注册，请直接登录。",
+  auth_weak_password: "密码至少 10 位，且不能超过 128 位。",
+  auth_session_expired: "登录已失效，请重新登录。",
+  auth_unavailable: "账号服务暂不可用。登录数据没有降级为访客，请稍后重试。",
 };
 
 export function userMessage(error: unknown): string {

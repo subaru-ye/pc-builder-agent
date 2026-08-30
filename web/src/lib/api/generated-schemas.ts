@@ -11,7 +11,42 @@ const Readiness = z.object({
     postgres: z.enum(["ok", "unavailable"]),
     redis: z.enum(["ok", "degraded", "unavailable"]),
     buildsvc: z.enum(["ok", "unavailable"]),
+    auth: z.enum(["ok", "unavailable"]).optional(),
   }),
+});
+const Account = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  display_name: z.string().min(1).max(40),
+  created_at: z.string().datetime({ offset: true }),
+});
+const AuthState = z.object({
+  schema_version: z.number().int(),
+  enabled: z.boolean(),
+  authenticated: z.boolean(),
+  account: z.union([Account, z.null()]),
+  claimed_session_count: z.number().int().gte(0),
+});
+const RegisterRequest = z.object({
+  schema_version: z.number().int(),
+  email: z.string().max(254).email(),
+  password: z.string().min(10).max(128),
+  display_name: z.string().min(1).max(40),
+});
+const LoginRequest = z.object({
+  schema_version: z.number().int(),
+  email: z.string().max(254).email(),
+  password: z.string().min(1).max(128),
+});
+const ProfileRequest = z.object({
+  schema_version: z.number().int(),
+  display_name: z.string().min(1).max(40),
+});
+const PasswordChangeRequest = z.object({
+  schema_version: z.number().int(),
+  current_password: z.string().min(1).max(128),
+  new_password: z.string().min(10).max(128),
+  confirm_password: z.string().min(10).max(128),
 });
 const SessionPhase = z.enum([
   "collecting",
@@ -86,6 +121,12 @@ const Problem = z
       "generation_failed",
       "events_expired",
       "internal_error",
+      "auth_disabled",
+      "auth_invalid_credentials",
+      "auth_email_exists",
+      "auth_weak_password",
+      "auth_session_expired",
+      "auth_unavailable",
     ]),
     request_id: z.string(),
   })
@@ -271,6 +312,12 @@ const PublicBuildView = z.object({
 export const schemas = {
   Health,
   Readiness,
+  Account,
+  AuthState,
+  RegisterRequest,
+  LoginRequest,
+  ProfileRequest,
+  PasswordChangeRequest,
   SessionPhase,
   SessionSummary,
   Message,

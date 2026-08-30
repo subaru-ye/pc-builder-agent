@@ -6,7 +6,7 @@ info:
     name: MIT
     identifier: MIT
   description: |
-    阶段 1 产品 API 契约。P7 会话、run、SSE 与配置读取接口已实现;分享接口留待 P9。
+    产品 API 契约。P7 会话、run、SSE 与配置读取、P9 分享，以及本地 Supabase Auth 账号接口均已实现。
     浏览器不得绕过本契约直接依赖 ADK/A2A 线格式。
 servers:
   - url: /
@@ -22,6 +22,8 @@ tags:
     description: 配置版本、diff 与 Markdown 导出
   - name: shares
     description: 只读分享的创建、撤销与公开读取
+  - name: auth
+    description: 本地 Supabase Auth 账号与服务端认证会话
 paths:
   /healthz:
     get:
@@ -59,12 +61,99 @@ paths:
                 $ref: "#/components/schemas/Readiness"
         "4XX":
           $ref: "#/components/responses/Problem"
+  /api/v1/auth/me:
+    get:
+      summary: 读取账号功能与当前登录状态
+      tags: [auth]
+      operationId: getAuthState
+      responses:
+        "200":
+          description: 当前身份；未启用或未登录也返回 200
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AuthState"}
+        "4XX": {$ref: "#/components/responses/Problem"}
+  /api/v1/auth/register:
+    post:
+      summary: 邮箱密码注册并认领当前匿名数据
+      tags: [auth]
+      operationId: registerAccount
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/RegisterRequest"}
+      responses:
+        "201":
+          description: 注册成功并设置服务端认证会话 Cookie
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AuthState"}
+        "4XX": {$ref: "#/components/responses/Problem"}
+  /api/v1/auth/login:
+    post:
+      summary: 邮箱密码登录并认领当前匿名数据
+      tags: [auth]
+      operationId: loginAccount
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/LoginRequest"}
+      responses:
+        "200":
+          description: 登录成功
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AuthState"}
+        "4XX": {$ref: "#/components/responses/Problem"}
+  /api/v1/auth/logout:
+    post:
+      summary: 退出登录并旋转匿名身份
+      tags: [auth]
+      operationId: logoutAccount
+      responses:
+        "204": {description: 已退出}
+        "4XX": {$ref: "#/components/responses/Problem"}
+  /api/v1/auth/profile:
+    patch:
+      summary: 更新显示名称
+      tags: [auth]
+      operationId: updateAccountProfile
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ProfileRequest"}
+      responses:
+        "200":
+          description: 已更新
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AuthState"}
+        "4XX": {$ref: "#/components/responses/Problem"}
+  /api/v1/auth/password/change:
+    post:
+      summary: 校验当前密码后修改密码
+      tags: [auth]
+      operationId: changeAccountPassword
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PasswordChangeRequest"}
+      responses:
+        "204": {description: 密码已修改，当前会话已替换}
+        "4XX": {$ref: "#/components/responses/Problem"}
   /api/v1/sessions:
     post:
       summary: 创建匿名产品会话
       tags: [sessions]
       operationId: createSession
-      security: []
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
       responses:
@@ -427,6 +516,10 @@ components:
       type: apiKey
       in: cookie
       name: pcb_anonymous_id
+    authSessionCookie:
+      type: apiKey
+      in: cookie
+      name: pcb_auth_session
   parameters:
     IdempotencyKey:
       name: Idempotency-Key
@@ -487,6 +580,7 @@ components:
             postgres: {type: string, enum: [ok, unavailable]}
             redis: {type: string, enum: [ok, degraded, unavailable]}
             buildsvc: {type: string, enum: [ok, unavailable]}
+            auth: {type: string, enum: [ok, unavailable]}
     Problem:
       type: object
       additionalProperties: true
@@ -512,7 +606,68 @@ components:
             - generation_failed
             - events_expired
             - internal_error
+            - auth_disabled
+            - auth_invalid_credentials
+            - auth_email_exists
+            - auth_weak_password
+            - auth_session_expired
+            - auth_unavailable
         request_id: {type: string}
+    Account:
+      type: object
+      additionalProperties: false
+      required: [id, email, display_name, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        email: {type: string, format: email}
+        display_name: {type: string, minLength: 1, maxLength: 40}
+        created_at: {type: string, format: date-time}
+    AuthState:
+      type: object
+      additionalProperties: false
+      required: [schema_version, enabled, authenticated, account, claimed_session_count]
+      properties:
+        schema_version: {type: integer, const: 1}
+        enabled: {type: boolean}
+        authenticated: {type: boolean}
+        account:
+          oneOf:
+            - {$ref: "#/components/schemas/Account"}
+            - {type: "null"}
+        claimed_session_count: {type: integer, minimum: 0}
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [schema_version, email, password, display_name]
+      properties:
+        schema_version: {type: integer, const: 1}
+        email: {type: string, format: email, maxLength: 254}
+        password: {type: string, minLength: 10, maxLength: 128}
+        display_name: {type: string, minLength: 1, maxLength: 40}
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [schema_version, email, password]
+      properties:
+        schema_version: {type: integer, const: 1}
+        email: {type: string, format: email, maxLength: 254}
+        password: {type: string, minLength: 1, maxLength: 128}
+    ProfileRequest:
+      type: object
+      additionalProperties: false
+      required: [schema_version, display_name]
+      properties:
+        schema_version: {type: integer, const: 1}
+        display_name: {type: string, minLength: 1, maxLength: 40}
+    PasswordChangeRequest:
+      type: object
+      additionalProperties: false
+      required: [schema_version, current_password, new_password, confirm_password]
+      properties:
+        schema_version: {type: integer, const: 1}
+        current_password: {type: string, minLength: 1, maxLength: 128}
+        new_password: {type: string, minLength: 10, maxLength: 128}
+        confirm_password: {type: string, minLength: 10, maxLength: 128}
     SessionPhase:
       type: string
       enum: [collecting, requirement_ready, building, ready, changing, error]
@@ -912,3 +1067,4 @@ components:
             created_at: {type: string, format: date-time}
 security:
   - anonymousCookie: []
+  - authSessionCookie: []

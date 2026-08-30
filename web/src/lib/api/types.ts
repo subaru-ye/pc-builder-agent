@@ -15,6 +15,8 @@ export type PartCategory = components["schemas"]["PartCategory"];
 export type Share = components["schemas"]["Share"];
 export type ShareRecord = components["schemas"]["ShareRecord"];
 export type PublicBuildView = components["schemas"]["PublicBuildView"];
+export type AuthState = components["schemas"]["AuthState"];
+export type Account = components["schemas"]["Account"];
 
 const useCaseSchema = z.discriminatedUnion("type", [
   z.object({

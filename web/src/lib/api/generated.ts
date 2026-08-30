@@ -38,6 +38,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取账号功能与当前登录状态 */
+        get: operations["getAuthState"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 邮箱密码注册并认领当前匿名数据 */
+        post: operations["registerAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 邮箱密码登录并认领当前匿名数据 */
+        post: operations["loginAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 退出登录并旋转匿名身份 */
+        post: operations["logoutAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** 更新显示名称 */
+        patch: operations["updateAccountProfile"];
+        trace?: never;
+    };
+    "/api/v1/auth/password/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 校验当前密码后修改密码 */
+        post: operations["changeAccountPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions": {
         parameters: {
             query?: never;
@@ -378,6 +480,8 @@ export interface components {
                 redis: "ok" | "degraded" | "unavailable";
                 /** @enum {string} */
                 buildsvc: "ok" | "unavailable";
+                /** @enum {string} */
+                auth?: "ok" | "unavailable";
             };
         };
         Problem: {
@@ -389,10 +493,54 @@ export interface components {
             /** Format: uri-reference */
             instance?: string;
             /** @enum {string} */
-            code: "invalid_request" | "not_found" | "session_busy" | "invalid_session_phase" | "schema_validation_failed" | "upstream_unavailable" | "context_expired" | "run_timeout" | "run_interrupted" | "generation_failed" | "events_expired" | "internal_error";
+            code: "invalid_request" | "not_found" | "session_busy" | "invalid_session_phase" | "schema_validation_failed" | "upstream_unavailable" | "context_expired" | "run_timeout" | "run_interrupted" | "generation_failed" | "events_expired" | "internal_error" | "auth_disabled" | "auth_invalid_credentials" | "auth_email_exists" | "auth_weak_password" | "auth_session_expired" | "auth_unavailable";
             request_id: string;
         } & {
             [key: string]: unknown;
+        };
+        Account: {
+            /** Format: uuid */
+            id: string;
+            /** Format: email */
+            email: string;
+            display_name: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AuthState: {
+            /** @constant */
+            schema_version: 1;
+            enabled: boolean;
+            authenticated: boolean;
+            account: components["schemas"]["Account"] | null;
+            claimed_session_count: number;
+        };
+        RegisterRequest: {
+            /** @constant */
+            schema_version: 1;
+            /** Format: email */
+            email: string;
+            password: string;
+            display_name: string;
+        };
+        LoginRequest: {
+            /** @constant */
+            schema_version: 1;
+            /** Format: email */
+            email: string;
+            password: string;
+        };
+        ProfileRequest: {
+            /** @constant */
+            schema_version: 1;
+            display_name: string;
+        };
+        PasswordChangeRequest: {
+            /** @constant */
+            schema_version: 1;
+            current_password: string;
+            new_password: string;
+            confirm_password: string;
         };
         /** @enum {string} */
         SessionPhase: "collecting" | "requirement_ready" | "building" | "ready" | "changing" | "error";
@@ -755,6 +903,152 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Readiness"];
                 };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    getAuthState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前身份；未启用或未登录也返回 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthState"];
+                };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    registerAccount: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description 注册成功并设置服务端认证会话 Cookie */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthState"];
+                };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    loginAccount: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description 登录成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthState"];
+                };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    logoutAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已退出 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    updateAccountProfile: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description 已更新 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthState"];
+                };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    changeAccountPassword: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description 密码已修改，当前会话已替换 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             "4XX": components["responses"]["Problem"];
         };

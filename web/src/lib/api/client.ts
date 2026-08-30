@@ -12,6 +12,7 @@ import type {
   SessionSummary,
   Share,
   ShareRecord,
+  AuthState,
 } from "./types";
 
 const client = createClient<paths>({ baseUrl: "", credentials: "include" });
@@ -35,6 +36,38 @@ function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): T
 }
 
 export const api = {
+  async authState(): Promise<AuthState> {
+    return unwrap(await client.GET("/api/v1/auth/me"));
+  },
+  async register(email: string, password: string, displayName: string, key: string): Promise<AuthState> {
+    return unwrap(await client.POST("/api/v1/auth/register", {
+      params: { header: { "Idempotency-Key": key } },
+      body: { schema_version: 1, email, password, display_name: displayName },
+    }));
+  },
+  async login(email: string, password: string, key: string): Promise<AuthState> {
+    return unwrap(await client.POST("/api/v1/auth/login", {
+      params: { header: { "Idempotency-Key": key } },
+      body: { schema_version: 1, email, password },
+    }));
+  },
+  async logout(): Promise<void> {
+    const result = await client.POST("/api/v1/auth/logout");
+    if (!result.response.ok) unwrap(result as never);
+  },
+  async updateProfile(displayName: string, key: string): Promise<AuthState> {
+    return unwrap(await client.PATCH("/api/v1/auth/profile", {
+      params: { header: { "Idempotency-Key": key } },
+      body: { schema_version: 1, display_name: displayName },
+    }));
+  },
+  async changePassword(currentPassword: string, newPassword: string, confirmPassword: string, key: string): Promise<void> {
+    const result = await client.POST("/api/v1/auth/password/change", {
+      params: { header: { "Idempotency-Key": key } },
+      body: { schema_version: 1, current_password: currentPassword, new_password: newPassword, confirm_password: confirmPassword },
+    });
+    if (!result.response.ok) unwrap(result as never);
+  },
   async readiness(): Promise<Readiness> {
     const response = await fetch("/readyz", { credentials: "include", cache: "no-store" });
     const data = (await response.json()) as Readiness | Problem;

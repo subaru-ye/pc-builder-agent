@@ -7,4 +7,5 @@ export const queryKeys = {
   diff: (id: string, from: number, to: number) => ["diff", id, from, to] as const,
   shares: (id: string, version: number) => ["shares", id, version] as const,
   readiness: ["readiness"] as const,
+  auth: ["auth"] as const,
 };

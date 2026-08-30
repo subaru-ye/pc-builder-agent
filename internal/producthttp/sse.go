@@ -12,9 +12,8 @@ import (
 )
 
 func (a *API) streamRunEvents(w http.ResponseWriter, r *http.Request) {
-	run, err := a.service.GetRun(r.Context(), a.owner(w, r), r.PathValue("run_id"))
-	if err != nil {
-		a.writeError(w, r, err)
+	_, run, ok := a.ownerForRun(w, r, r.PathValue("run_id"))
+	if !ok {
 		return
 	}
 	lastID := strings.TrimSpace(r.Header.Get("Last-Event-ID"))

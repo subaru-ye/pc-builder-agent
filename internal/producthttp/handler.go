@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/subaru-ye/pc-builder-agent/internal/account"
 	"github.com/subaru-ye/pc-builder-agent/internal/presenter"
 	"github.com/subaru-ye/pc-builder-agent/internal/product"
 	"github.com/subaru-ye/pc-builder-agent/internal/runevents"
@@ -28,6 +30,7 @@ import (
 
 const (
 	anonymousCookieName = "pcb_anonymous_id"
+	authCookieName      = "pcb_auth_session"
 	maxJSONBody         = 64 << 10
 	maxMessageRunes     = 4000
 )
@@ -65,22 +68,35 @@ type RedisHealth interface {
 	Ping(context.Context) error
 }
 
+type AccountService interface {
+	Enabled() bool
+	Health(context.Context) error
+	Resolve(context.Context, string, string) (account.Principal, error)
+	Register(context.Context, string, string, string, string, string) (account.AuthResult, error)
+	Login(context.Context, string, string, string, string) (account.AuthResult, error)
+	Logout(context.Context, string) error
+	UpdateProfile(context.Context, account.Principal, string, string) (store.ProductUser, error)
+	ChangePassword(context.Context, account.Principal, string, string, string, string) error
+}
+
 type Config struct {
 	PublicWebBaseURL string
 	AllowedOrigin    string
 	BuildsvcURL      string
+	Accounts         AccountService
 }
 
 type API struct {
-	service ProductService
-	builds  BuildPresenter
-	shares  ShareService
-	events  runevents.Store
-	db      DatabaseHealth
-	redis   RedisHealth
-	cfg     Config
-	secure  bool
-	client  *http.Client
+	service  ProductService
+	builds   BuildPresenter
+	shares   ShareService
+	events   runevents.Store
+	db       DatabaseHealth
+	redis    RedisHealth
+	cfg      Config
+	secure   bool
+	client   *http.Client
+	accounts AccountService
 }
 
 func New(service ProductService, builds BuildPresenter, shares ShareService, events runevents.Store, db DatabaseHealth, redis RedisHealth, cfg Config) (*API, error) {
@@ -99,7 +115,7 @@ func New(service ProductService, builds BuildPresenter, shares ShareService, eve
 	}
 	return &API{
 		service: service, builds: builds, shares: shares, events: events, db: db, redis: redis, cfg: cfg,
-		secure: u.Scheme == "https", client: &http.Client{Timeout: 2 * time.Second},
+		secure: u.Scheme == "https", client: &http.Client{Timeout: 2 * time.Second}, accounts: cfg.Accounts,
 	}, nil
 }
 
@@ -107,6 +123,12 @@ func (a *API) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", a.health)
 	mux.HandleFunc("GET /readyz", a.ready)
+	mux.HandleFunc("GET /api/v1/auth/me", a.authMe)
+	mux.HandleFunc("POST /api/v1/auth/register", a.authRegister)
+	mux.HandleFunc("POST /api/v1/auth/login", a.authLogin)
+	mux.HandleFunc("POST /api/v1/auth/logout", a.authLogout)
+	mux.HandleFunc("PATCH /api/v1/auth/profile", a.authProfile)
+	mux.HandleFunc("POST /api/v1/auth/password/change", a.authChangePassword)
 	mux.HandleFunc("POST /api/v1/sessions", a.createSession)
 	mux.HandleFunc("GET /api/v1/sessions", a.listSessions)
 	mux.HandleFunc("GET /api/v1/sessions/{session_id}", a.getSession)
@@ -183,6 +205,82 @@ func (a *API) owner(w http.ResponseWriter, r *http.Request) string {
 	return owner
 }
 
+func (a *API) rotateOwner(w http.ResponseWriter) string {
+	b := make([]byte, 32)
+	_, _ = rand.Read(b)
+	owner := base64.RawURLEncoding.EncodeToString(b)
+	http.SetCookie(w, &http.Cookie{Name: anonymousCookieName, Value: owner, Path: "/", HttpOnly: true,
+		SameSite: http.SameSiteLaxMode, Secure: a.secure, MaxAge: 365 * 24 * 60 * 60,
+		Expires: time.Now().Add(365 * 24 * time.Hour)})
+	return owner
+}
+
+func (a *API) principal(w http.ResponseWriter, r *http.Request) (account.Principal, bool) {
+	guest := a.owner(w, r)
+	if a.accounts == nil {
+		return account.Principal{Owners: []string{guest}, PrimaryOwner: guest}, true
+	}
+	var token string
+	if c, err := r.Cookie(authCookieName); err == nil {
+		token = c.Value
+	}
+	if !a.accounts.Enabled() && token != "" {
+		a.clearAuthCookie(w)
+		token = ""
+	}
+	p, err := a.accounts.Resolve(r.Context(), token, guest)
+	if errors.Is(err, account.ErrOwnerClaimed) && token == "" {
+		guest = a.rotateOwner(w)
+		p, err = a.accounts.Resolve(r.Context(), "", guest)
+	}
+	if err != nil {
+		if token != "" && errors.Is(err, account.ErrSessionExpired) {
+			a.clearAuthCookie(w)
+		}
+		a.writeError(w, r, err)
+		return account.Principal{}, false
+	}
+	return p, true
+}
+
+func (a *API) ownerForSession(w http.ResponseWriter, r *http.Request, sessionID string) (string, bool) {
+	p, ok := a.principal(w, r)
+	if !ok {
+		return "", false
+	}
+	for _, owner := range p.Owners {
+		err := a.service.OwnSession(r.Context(), owner, sessionID)
+		if err == nil {
+			return owner, true
+		}
+		if !errors.Is(err, store.ErrWebSessionNotFound) {
+			a.writeError(w, r, err)
+			return "", false
+		}
+	}
+	a.writeError(w, r, store.ErrWebSessionNotFound)
+	return "", false
+}
+
+func (a *API) ownerForRun(w http.ResponseWriter, r *http.Request, runID string) (string, store.AgentRun, bool) {
+	p, ok := a.principal(w, r)
+	if !ok {
+		return "", store.AgentRun{}, false
+	}
+	for _, owner := range p.Owners {
+		run, err := a.service.GetRun(r.Context(), owner, runID)
+		if err == nil {
+			return owner, run, true
+		}
+		if !errors.Is(err, store.ErrRunNotFound) {
+			a.writeError(w, r, err)
+			return "", store.AgentRun{}, false
+		}
+	}
+	a.writeError(w, r, store.ErrRunNotFound)
+	return "", store.AgentRun{}, false
+}
+
 func validOwnerID(value string) bool {
 	b, err := base64.RawURLEncoding.DecodeString(value)
 	return err == nil && len(b) == 32
@@ -197,6 +295,13 @@ func (a *API) ready(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	deps := map[string]string{"postgres": "ok", "redis": "ok", "buildsvc": "ok"}
 	status := "ready"
+	if a.accounts != nil && a.accounts.Enabled() {
+		deps["auth"] = "ok"
+		if err := a.accounts.Health(ctx); err != nil {
+			deps["auth"] = "unavailable"
+			status = "unavailable"
+		}
+	}
 	if err := a.db.Ping(ctx); err != nil {
 		deps["postgres"] = "unavailable"
 		status = "unavailable"
@@ -231,7 +336,11 @@ func (a *API) createSession(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ws, err := a.service.CreateSession(r.Context(), a.owner(w, r), key)
+	p, ok := a.principal(w, r)
+	if !ok {
+		return
+	}
+	ws, err := a.service.CreateSession(r.Context(), p.PrimaryOwner, key)
 	if err != nil {
 		a.writeError(w, r, err)
 		return
@@ -245,11 +354,20 @@ func (a *API) createSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) listSessions(w http.ResponseWriter, r *http.Request) {
-	items, err := a.service.ListSessions(r.Context(), a.owner(w, r))
-	if err != nil {
-		a.writeError(w, r, err)
+	p, ok := a.principal(w, r)
+	if !ok {
 		return
 	}
+	var items []store.WebSession
+	for _, owner := range p.Owners {
+		owned, err := a.service.ListSessions(r.Context(), owner)
+		if err != nil {
+			a.writeError(w, r, err)
+			return
+		}
+		items = append(items, owned...)
+	}
+	sort.SliceStable(items, func(i, j int) bool { return items[i].UpdatedAt.After(items[j].UpdatedAt) })
 	out := make([]sessionSummaryDTO, 0, len(items))
 	for _, item := range items {
 		out = append(out, toSessionSummary(item))
@@ -258,7 +376,11 @@ func (a *API) listSessions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getSession(w http.ResponseWriter, r *http.Request) {
-	detail, err := a.service.GetSession(r.Context(), a.owner(w, r), r.PathValue("session_id"))
+	owner, ok := a.ownerForSession(w, r, r.PathValue("session_id"))
+	if !ok {
+		return
+	}
+	detail, err := a.service.GetSession(r.Context(), owner, r.PathValue("session_id"))
 	if err != nil {
 		a.writeError(w, r, err)
 		return
@@ -284,7 +406,11 @@ func (a *API) createMessageRun(w http.ResponseWriter, r *http.Request) {
 			"schema_version 必须为 1，text 长度必须为 1–4000 个字符。", requestID(r)))
 		return
 	}
-	result, err := a.service.StartMessage(r.Context(), a.owner(w, r), r.PathValue("session_id"), key, body.Text)
+	owner, ok := a.ownerForSession(w, r, r.PathValue("session_id"))
+	if !ok {
+		return
+	}
+	result, err := a.service.StartMessage(r.Context(), owner, r.PathValue("session_id"), key, body.Text)
 	if err != nil {
 		a.writeError(w, r, err)
 		return
@@ -305,7 +431,11 @@ func (a *API) replaceRequirement(w http.ResponseWriter, r *http.Request) {
 			err.Error(), requestID(r)))
 		return
 	}
-	if err := a.service.ReplaceRequirement(r.Context(), a.owner(w, r), r.PathValue("session_id"), raw); err != nil {
+	owner, ok := a.ownerForSession(w, r, r.PathValue("session_id"))
+	if !ok {
+		return
+	}
+	if err := a.service.ReplaceRequirement(r.Context(), owner, r.PathValue("session_id"), raw); err != nil {
 		a.writeError(w, r, err)
 		return
 	}
@@ -319,7 +449,11 @@ func (a *API) confirmRequirement(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := a.service.StartConfirm(r.Context(), a.owner(w, r), r.PathValue("session_id"), key)
+	owner, ok := a.ownerForSession(w, r, r.PathValue("session_id"))
+	if !ok {
+		return
+	}
+	result, err := a.service.StartConfirm(r.Context(), owner, r.PathValue("session_id"), key)
 	if err != nil {
 		a.writeError(w, r, err)
 		return
@@ -328,9 +462,8 @@ func (a *API) confirmRequirement(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getRun(w http.ResponseWriter, r *http.Request) {
-	run, err := a.service.GetRun(r.Context(), a.owner(w, r), r.PathValue("run_id"))
-	if err != nil {
-		a.writeError(w, r, err)
+	_, run, ok := a.ownerForRun(w, r, r.PathValue("run_id"))
+	if !ok {
 		return
 	}
 	writeJSON(w, http.StatusOK, toRun(run))
@@ -421,7 +554,11 @@ func (a *API) createBuildShare(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	share, created, err := a.shares.Create(r.Context(), a.owner(w, r), r.PathValue("session_id"), version, key)
+	owner, ok := a.ownerForSession(w, r, r.PathValue("session_id"))
+	if !ok {
+		return
+	}
+	share, created, err := a.shares.Create(r.Context(), owner, r.PathValue("session_id"), version, key)
 	if err != nil {
 		a.writeError(w, r, err)
 		return
@@ -438,7 +575,11 @@ func (a *API) listBuildShares(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	shares, err := a.shares.List(r.Context(), a.owner(w, r), r.PathValue("session_id"), version)
+	owner, ok := a.ownerForSession(w, r, r.PathValue("session_id"))
+	if !ok {
+		return
+	}
+	shares, err := a.shares.List(r.Context(), owner, r.PathValue("session_id"), version)
 	if err != nil {
 		a.writeError(w, r, err)
 		return
@@ -454,7 +595,11 @@ func (a *API) revokeBuildShareByID(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	err := a.shares.RevokeByID(r.Context(), a.owner(w, r), r.PathValue("session_id"), version, r.PathValue("share_id"))
+	owner, ok := a.ownerForSession(w, r, r.PathValue("session_id"))
+	if !ok {
+		return
+	}
+	err := a.shares.RevokeByID(r.Context(), owner, r.PathValue("session_id"), version, r.PathValue("share_id"))
 	if err != nil {
 		a.writeError(w, r, err)
 		return
@@ -466,7 +611,21 @@ func (a *API) revokeBuildShareByToken(w http.ResponseWriter, r *http.Request) {
 	if _, ok := a.idempotencyKey(w, r); !ok {
 		return
 	}
-	if err := a.shares.RevokeByToken(r.Context(), a.owner(w, r), r.PathValue("token")); err != nil {
+	p, ok := a.principal(w, r)
+	if !ok {
+		return
+	}
+	var err error = store.ErrShareNotFound
+	for _, owner := range p.Owners {
+		err = a.shares.RevokeByToken(r.Context(), owner, r.PathValue("token"))
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, store.ErrShareNotFound) {
+			break
+		}
+	}
+	if err != nil {
 		a.writeError(w, r, err)
 		return
 	}
@@ -504,11 +663,8 @@ func markdownDisposition(version int, snapshot string) string {
 }
 
 func (a *API) ownsSession(w http.ResponseWriter, r *http.Request, sessionID string) bool {
-	if err := a.service.OwnSession(r.Context(), a.owner(w, r), sessionID); err != nil {
-		a.writeError(w, r, err)
-		return false
-	}
-	return true
+	_, ok := a.ownerForSession(w, r, sessionID)
+	return ok
 }
 
 func (a *API) positiveInt(w http.ResponseWriter, r *http.Request, raw, name string) (int, bool) {
@@ -584,6 +740,22 @@ func (a *API) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 	switch {
+	case errors.Is(err, account.ErrDisabled):
+		a.writeProblem(w, r, product.NewProblem("auth_disabled", "账号功能未启用", 503, "当前环境仍可匿名使用。", requestID(r)))
+	case errors.Is(err, account.ErrInvalidCredentials):
+		a.writeProblem(w, r, product.NewProblem("auth_invalid_credentials", "邮箱或密码错误", 401, "请检查后重试。", requestID(r)))
+	case errors.Is(err, account.ErrEmailExists):
+		a.writeProblem(w, r, product.NewProblem("auth_email_exists", "邮箱已注册", 409, "请直接登录。", requestID(r)))
+	case errors.Is(err, account.ErrWeakPassword):
+		a.writeProblem(w, r, product.NewProblem("auth_weak_password", "密码强度不足", 422, "密码长度需为 10–128 位。", requestID(r)))
+	case errors.Is(err, account.ErrSessionExpired):
+		a.writeProblem(w, r, product.NewProblem("auth_session_expired", "登录已失效", 401, "请重新登录。", requestID(r)))
+	case errors.Is(err, account.ErrUnavailable):
+		a.writeProblem(w, r, product.NewProblem("auth_unavailable", "账号服务暂不可用", 503, "登录数据未降级为访客，请稍后重试。", requestID(r)))
+	case errors.Is(err, account.ErrIdempotencyConflict):
+		a.writeProblem(w, r, product.NewProblem("invalid_request", "幂等键冲突", 409, "同一个 Idempotency-Key 已用于不同请求。", requestID(r)))
+	case errors.Is(err, store.ErrOwnerAlreadyClaimed):
+		a.writeProblem(w, r, product.NewProblem("not_found", "资源不存在", 404, "", requestID(r)))
 	case errors.Is(err, store.ErrWebSessionNotFound), errors.Is(err, store.ErrRunNotFound), errors.Is(err, store.ErrBuildNotFound), errors.Is(err, store.ErrShareNotFound):
 		a.writeProblem(w, r, product.NewProblem("not_found", "资源不存在", 404, "", requestID(r)))
 	case errors.Is(err, store.ErrSessionBusy):

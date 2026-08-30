@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/subaru-ye/pc-builder-agent/internal/account"
 	"github.com/subaru-ye/pc-builder-agent/internal/dotenv"
 	"github.com/subaru-ye/pc-builder-agent/internal/hostruntime"
 	"github.com/subaru-ye/pc-builder-agent/internal/presenter"
@@ -78,10 +79,33 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	authEnabled := os.Getenv("AUTH_ENABLED") == "true"
+	var accounts *account.Service
+	if authEnabled {
+		provider, err := account.NewGoTrueClient(envOr("SUPABASE_AUTH_URL", "http://127.0.0.1:9999"), 5*time.Second)
+		if err != nil {
+			log.Fatal(err)
+		}
+		vault, err := account.NewSessionVault(backend.Client(), os.Getenv("AUTH_SESSION_SECRET"), durationEnv("AUTH_SESSION_TTL", 30*24*time.Hour))
+		if err != nil {
+			log.Fatal(err)
+		}
+		accounts, err = account.NewService(account.Config{Enabled: true}, provider, vault, st)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("[api] 本地账号功能已启用(provider=supabase_auth，token_store=redis)")
+	} else {
+		accounts, err = account.NewService(account.Config{}, nil, nil, st)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 	httpAPI, err := producthttp.New(service, buildPresenter, shareService, events, st, backend, producthttp.Config{
 		PublicWebBaseURL: publicWebBaseURL,
 		AllowedOrigin:    os.Getenv("WEB_ALLOWED_ORIGIN"),
 		BuildsvcURL:      runtimeCfg.BuildsvcURL,
+		Accounts:         accounts,
 	})
 	if err != nil {
 		log.Fatal(err)

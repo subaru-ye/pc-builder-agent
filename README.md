@@ -2,7 +2,7 @@
 
 > 对话式 DIY 装机助手:说清预算和用途,得到**保证兼容**、**带日期化报价**、**可多轮修改**的装机配置单。
 >
-> 个人学习向项目,目标技术栈:多 Agent 流水线 + A2A 协议 + 记忆基座。当前状态:MVP P0–P6 已封板,P7–P9 已完成;P10 Harness v2 机器复验已完成,仅待 3 人真人盲评;P11 已完成,P12B 暂停;Agent Harness 2.0 已验收并默认启用。
+> 个人学习向项目,目标技术栈:多 Agent 流水线 + A2A 协议 + 记忆基座。当前状态:MVP P0–P6 已封板,P7–P9 已完成;P10 Harness v2 机器复验已完成,仅待 3 人真人盲评;P11 已完成,P12B 暂停;Agent Harness 2.0 与本地 Supabase Auth 已实现。
 
 ## 为什么做
 
@@ -69,6 +69,8 @@
 | [P9 分享与导出设计](docs/tech/P9-分享与导出设计.md) | 共享 presenter、只读链接、Markdown 与分享图 |
 | [P10 评测与阶段验收](docs/tech/P10-评测与阶段验收.md) | 50+ golden、Web/Live E2E、真人 rubric 与退出门禁 |
 | [ADR-007 模型供应商与成本控制](docs/tech/ADR-007-模型供应商适配与成本控制.md) | 百炼/MiMo/通用 Responses 配置、错误策略、上下文与 Token 优化 |
+| [ADR-008 Supabase Auth](docs/tech/ADR-008-Supabase-Auth账号系统.md) | 服务端 Token 保险箱、匿名 owner 认领与账号安全边界 |
+| [Supabase Auth 本地运行](docs/ops/Supabase-Auth本地账号系统.md) | 密钥初始化、Compose 启动、账号页面和排障 |
 | [Agent Harness 2.0](docs/tech/Agent-Harness-2.0.md) | 确定性候选准备、无工具 builder、定向修复、双轨切换与成本门禁 |
 | [产品 API 契约](docs/api/openapi.yaml) | 阶段 1 HTTP DTO、路径与错误响应唯一线格式 |
 | [设计上下文](DESIGN_CONTEXT.md) | Linear 派生的产品视觉目标;具体 token/规则见 DESIGN.md、UI_RULES.md |
@@ -85,7 +87,13 @@ docker compose up -d        # PG → localhost:15432,Redis → localhost:16379(�
 go run ./cmd/migrate up     # 应用 PostgreSQL 编号迁移
 ```
 
-复制 `.env.example` 为 `.env`。screening、builder、embedding 可独立配置 `PROVIDER/MODEL/API_KEY/BASE_URL`;未设置 provider 时兼容旧配置并默认百炼。系统不会在额度、鉴权或限流失败后自动切换模型或供应商。MiMo 当前只用于 chat，builder 须关闭思考；embedding 继续使用百炼。`BUILD_HARNESS_MODE` 默认 `v2`，使用确定性候选和最多三次无工具选配；可显式设为 `legacy` 诊断旧链，失败不会自动回退。显式连通性检查使用 `go run ./cmd/modelcheck -role screening|builder|embedding`。P9 还要求独立的 `SHARE_TOKEN_SECRET`,生成方法见[本地运行手册](docs/ops/阶段1本地运行与部署准备.md)。
+复制 `.env.example` 为 `.env`。screening、builder、embedding 可独立配置 `PROVIDER/MODEL/API_KEY/BASE_URL`;未设置 provider 时兼容旧配置并默认百炼。系统不会在额度、鉴权或限流失败后自动切换模型或供应商。MiMo 当前只用于 chat，builder 须关闭思考；embedding 继续使用百炼。`BUILD_HARNESS_MODE` 默认 `v2`，使用确定性候选和最多三次无工具选配；可显式设为 `legacy` 诊断旧链，失败不会自动回退。显式连通性检查使用 `go run ./cmd/modelcheck -role screening|builder|embedding`。P9 还要求独立的 `SHARE_TOKEN_SECRET`,生成方法见[本地运行手册](docs/ops/阶段1本地运行与部署准备.md)。账号功能默认关闭；需要本地账号时运行 `go run ./cmd/authsetup`，再用 `docker-compose.auth.yml` 启动独立 GoTrue。
+
+```bash
+go run ./cmd/authsetup
+docker compose -f docker-compose.yml -f docker-compose.auth.yml up -d postgres redis auth
+go run ./cmd/migrate up
+```
 
 ```bash
 go run ./cmd/buildsvc  # 终端 1:启动「生成 + 校验」A2A 服务(http://localhost:8081)
@@ -138,6 +146,7 @@ P12A 已增加价格 observation、安全选价和动态过期提示。P12B 的 
 - [x] P12A 价格基础设施(观察、人工 CSV、安全选价、快照、新鲜度提示)
 - [ ] P12B 自动价格来源（SerpApi/Baidu 真实 canary 失败；替代来源、96/64 激活与两个 14 天轮转周期待完成）
 - [x] Agent Harness 2.0（确定性候选、预算组合与定向修复已实现；L1–L6×3 真实矩阵通过并默认启用 v2）
+- [x] 本地账号系统（Supabase Auth、HttpOnly BFF 会话、匿名数据自动认领、账号设置）
 
 2026-08-09 封板验收结果:PostgreSQL/pgvector/Redis 真实集成测试无跳过;Python 数据流水线 104 项测试通过;用例 A–H 全部验证,包括全 pass 配单、语义召回、v1→v3 回放/diff/Markdown 导出、A2A schema/contextID 以及 kill host 后从 Redis 恢复同一会话继续改单。
 

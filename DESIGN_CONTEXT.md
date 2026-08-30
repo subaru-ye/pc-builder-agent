@@ -72,7 +72,7 @@ Geist Sans/Mono 为拉丁与数字主字体,中文回退到 PingFang SC、Micros
 - 没有可信商品图片资产。
 - 生成可能持续数分钟,必须持续提供真实状态/心跳。
 - Redis 可降级,但完整验收依赖 Redis。
-- 第一阶段匿名、无账号、无正式公网 SLA。
+- 匿名完整使用仍是默认能力；本地可选 Supabase Auth 用于跨浏览器恢复，尚无正式公网 SLA。
 - Next.js 不拥有业务规则或数据库写逻辑。
 
 ## Success check

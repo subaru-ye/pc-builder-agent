@@ -6,6 +6,8 @@
 
 ```bash
 docker compose up -d             # PG → localhost:15432,Redis → localhost:16379
+go run ./cmd/authsetup            # 可选:生成本地 Auth 独立密钥,不覆盖已有 .env 值
+docker compose -f docker-compose.yml -f docker-compose.auth.yml up -d postgres redis auth
 go run ./cmd/migrate up          # 应用 PostgreSQL 编号迁移
 go run ./cmd/buildsvc            # 终端 1:A2A 生成+校验服务
 go run ./cmd/host web --write-timeout=10m api --sse-write-timeout=10m webui  # 终端 2:ADK dev UI,http://localhost:8080/ui/
@@ -18,7 +20,7 @@ go build ./... && go vet ./...
 ```
 
 - 端口非默认:本机原生 PostgreSQL 17 与 Redis 服务常驻占用 5432/6379,故 compose 用 15432/16379。
-- `.env`(不入库)存所选供应商 Key 和独立的 `SHARE_TOKEN_SECRET`;三个模型角色通过 `*_PROVIDER/MODEL/API_KEY/BASE_URL` 独立配置,见 `.env.example`。
+- `.env`(不入库)存所选供应商 Key、独立的 `SHARE_TOKEN_SECRET` 与可选 Auth 密钥;这些密钥不得复用。三个模型角色通过 `*_PROVIDER/MODEL/API_KEY/BASE_URL` 独立配置,见 `.env.example`。
 - 数据库结构统一由 `db/migrations/` 的 goose 编号迁移管理；保留数据卷运行 `go run ./cmd/migrate up`，禁止为普通迁移执行 `down -v`。
 
 ## 权威文档(冲突仲裁)
@@ -45,6 +47,8 @@ go build ./... && go vet ./...
 | docs/tech/P9-分享与导出设计.md | P9 实现层:共享 presenter / Markdown / 分享 token / 只读页与分享图 |
 | docs/tech/P10-评测与阶段验收.md | P10 实现层:50+ golden / Web 与 Live E2E / 真人 rubric / 最终门禁 |
 | docs/tech/ADR-007-模型供应商适配与成本控制.md | 百炼/MiMo/通用 Responses 装配 / 无自动 fallback / 上下文与 Token 优化 |
+| docs/tech/ADR-008-Supabase-Auth账号系统.md | GoTrue BFF / Token 保险箱 / 多 owner 认领与授权边界 |
+| docs/ops/Supabase-Auth本地账号系统.md | 本地账号初始化、启动、限制与排障 |
 | docs/tech/Agent-Harness-2.0.md | builder 双轨 / 候选包 / 无工具决策 / 定向修复 / 切换门禁 |
 | docs/api/openapi.yaml | 产品 HTTP 路径与 DTO 线格式;SSE 细节见同目录协议文档 |
 | DESIGN.md / DESIGN_CONTEXT.md / UI_RULES.md | Web 视觉来源、产品设计语境与实现规则;写 UI 前必须依次阅读 |
@@ -56,6 +60,7 @@ go build ./... && go vet ./...
 - **版本纪律**:ADK-Go/a2a-go 迭代快,文档不写死 import 路径与 API 签名;首装后回填技术选型.md 末尾版本锁定表。模型默认值集中在 `internal/modelprovider`,部署值只进未跟踪 `.env`;文档示例需与 `.env.example` 同步。
 - **模型纪律**:不得在启动时探测模型,不得自动 fallback;真实调用只通过显式 `modelcheck` 或 Live 门禁。日志/指标只写 provider、role、model、状态和安全错误类别。
 - **Harness 纪律**:`BUILD_HARNESS_MODE` 只允许 legacy/v2；默认 v2 最多三次无工具 builder 调用，失败不得自动执行 legacy。legacy 仅供操作者显式诊断。
+- **认证纪律**:浏览器和 Next.js 不接触 Supabase Token、不读取 `auth.*`;产品 API 只用 HttpOnly opaque Cookie，Token 加密存 Redis。已认领 owner 不得匿名访问，公开分享接口不得读取身份 Cookie。
 - **数据纪律**:网络响应和模型辅助结果默认只能进入候选区;只有精确身份、确定性证据和全部门禁通过的低风险变化可条件自动发布,其余进入 quarantine 并保持 last-known-good。定时主链模型调用必须为 0。阶段 2 以 `docs/data/数据获取与发布规则.md` 为准。
 - **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
 - **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。

@@ -85,17 +85,17 @@ func updateEnv(path string) error {
 		return fmt.Errorf("create temporary env: %w", err)
 	}
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
+	defer func() { _ = os.Remove(tmpName) }()
 	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("secure temporary env: %w", err)
 	}
 	if _, err := tmp.WriteString(content); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("write temporary env: %w", err)
 	}
 	if err := tmp.Sync(); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("sync temporary env: %w", err)
 	}
 	if err := tmp.Close(); err != nil {

@@ -615,7 +615,7 @@ func (a *API) revokeBuildShareByToken(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var err error = store.ErrShareNotFound
+	err := store.ErrShareNotFound
 	for _, owner := range p.Owners {
 		err = a.shares.RevokeByToken(r.Context(), owner, r.PathValue("token"))
 		if err == nil {

@@ -67,7 +67,7 @@ func (c *GoTrueClient) Health(ctx context.Context) error {
 	if err != nil {
 		return ErrUnavailable
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return ErrUnavailable
 	}
@@ -135,7 +135,7 @@ func (c *GoTrueClient) request(ctx context.Context, method, path, token string, 
 	if err != nil {
 		return ErrUnavailable
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	limited := io.LimitReader(resp.Body, 64<<10)
 	data, err := io.ReadAll(limited)
 	if err != nil {

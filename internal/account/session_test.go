@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -27,6 +29,61 @@ func authRedis(t *testing.T) *redis.Client {
 	}
 	t.Cleanup(func() { _ = rdb.Close() })
 	return rdb
+}
+
+func TestSessionVaultRefreshLockedUsesRefreshTokenOnce(t *testing.T) {
+	rdb := authRedis(t)
+	secret := base64.RawURLEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
+	vault, err := NewSessionVault(rdb, secret, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	token := strings.Repeat("r", 43)
+	if err := vault.Put(ctx, token, SessionRecord{UserID: "user-id", AccessToken: "old-access", RefreshToken: "single-use-refresh", ExpiresAt: time.Now().Add(-time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	current, err := vault.Get(ctx, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls atomic.Int32
+	refresh := func(context.Context) (SessionRecord, error) {
+		calls.Add(1)
+		time.Sleep(100 * time.Millisecond)
+		return SessionRecord{UserID: "user-id", AccessToken: "new-access", RefreshToken: "rotated-refresh", ExpiresAt: time.Now().Add(time.Hour)}, nil
+	}
+	start := make(chan struct{})
+	results := make(chan SessionRecord, 2)
+	errors := make(chan error, 2)
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			result, err := vault.RefreshLocked(ctx, token, current, refresh)
+			results <- result
+			errors <- err
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	close(errors)
+	for err := range errors {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for result := range results {
+		if result.AccessToken != "new-access" || result.Version <= current.Version {
+			t.Fatalf("refresh result=%+v current=%+v", result, current)
+		}
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("refresh 调用次数=%d，期望 1", calls.Load())
+	}
 }
 
 func TestSessionVaultEncryptsTamperRejectsAndIdempotencyConflicts(t *testing.T) {

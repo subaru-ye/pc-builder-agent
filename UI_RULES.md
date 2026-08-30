@@ -19,6 +19,7 @@
 - success/review/error/unknown 只能对应真实状态。
 - 普通容器不得使用 semantic 背景填满整个区域。
 - 系统、深色、浅色只能切换既有 token；组件不得写主题分支或新增局部十六进制颜色。
+- 菜单项的 hover、键盘高亮和展开态统一使用 interactive hover/selected token；当前选项还必须有勾选或文字状态，不能只靠颜色。
 
 ## 3. Spacing and layout
 

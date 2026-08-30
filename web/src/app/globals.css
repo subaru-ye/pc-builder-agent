@@ -17,7 +17,7 @@
   --color-secondary-foreground: var(--ink);
   --color-muted: var(--surface-2);
   --color-muted-foreground: var(--ink-muted);
-  --color-accent: var(--surface-3);
+  --color-accent: var(--interactive-hover);
   --color-accent-foreground: var(--ink);
   --color-destructive: var(--error);
   --color-border: var(--hairline);
@@ -48,6 +48,8 @@
   --review: #d39a45;
   --error: #d85c66;
   --unknown: #8f96a3;
+  --interactive-hover: color-mix(in srgb, var(--primary) 14%, var(--surface-2));
+  --interactive-selected: color-mix(in srgb, var(--primary) 22%, var(--surface-2));
 }
 
 :root.light {

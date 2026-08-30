@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => {
   }));
   await page.route("**/api/v1/sessions", (route) => route.fulfill({ json: { schema_version: 1, sessions: [] } }));
   await page.route("**/api/v1/auth/me", (route) => route.fulfill({
-    json: { schema_version: 1, enabled: false, authenticated: false, account: null, claimed_session_count: 0 },
+    json: { schema_version: 1, enabled: true, authenticated: false, account: null, claimed_session_count: 0 },
   }));
 });
 
@@ -15,7 +15,13 @@ test("appearance menu persists an explicit theme and can return to system mode",
   await page.goto("/");
 
   await page.getByRole("button", { name: "打开本地访客菜单" }).click();
-  await page.getByRole("menuitem", { name: /外观/ }).click();
+  const appearance = page.getByRole("menuitem", { name: /外观/ });
+  await appearance.hover();
+  await expect(appearance).toHaveAttribute("data-highlighted");
+  await expect.poll(() => appearance.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+
+  await appearance.click();
+  await expect(page.getByRole("menuitemradio", { name: "系统" })).toHaveAttribute("data-state", "checked");
   await page.getByRole("menuitemradio", { name: "浅色" }).click();
 
   await expect(page.locator("html")).toHaveClass(/\blight\b/);

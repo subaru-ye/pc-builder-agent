@@ -8,6 +8,7 @@ import { useState } from "react";
 import { AppHeader } from "./app-header";
 import { Composer } from "./composer";
 import { LocalProfileMenu } from "./local-profile-menu";
+import { WorkspaceOverview } from "./workspace-overview";
 import { Button } from "./ui/button";
 import { api } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/query-keys";
@@ -57,7 +58,9 @@ export function HomeWorkspace() {
           </div>
           <div className="mx-auto w-full max-w-3xl px-4 pb-4 sm:px-8"><Composer value={draft} onChange={setDraft} disabled={start.isPending} onSend={() => start.mutate(draft.trim())} /></div>
         </section>
-        <aside aria-label="辅助侧栏" className="hidden min-h-[calc(100vh-56px)] border-l bg-[var(--surface-1)] xl:block" />
+        <aside aria-label="工作台概览" className="hidden min-h-[calc(100vh-56px)] border-l bg-[var(--surface-1)] xl:block">
+          <WorkspaceOverview sessions={sessions.data} sessionsPending={sessions.isPending} sessionsError={sessions.isError} />
+        </aside>
       </div>
     </main>
   );

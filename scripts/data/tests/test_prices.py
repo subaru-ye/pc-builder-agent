@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -20,7 +21,13 @@ from pcdata.prices import (
 
 def _paths(tmp_path: Path) -> DataPaths:
     repo = Path(__file__).resolve().parents[3]
-    return DataPaths(repo_root=repo, data_root=repo / "scripts" / "data", runtime_root=tmp_path / "runtime")
+    seed = repo / "scripts" / "data"
+    data = tmp_path / "data"
+    # 固定历史价格，避免新增快照改变选价断言；运行产物也只写入临时目录。
+    shutil.copytree(seed / "parts", data / "parts")
+    (data / "prices").mkdir()
+    shutil.copy2(seed / "prices" / "2026-07-28.csv", data / "prices" / "2026-07-28.csv")
+    return DataPaths(repo_root=repo, data_root=data, runtime_root=tmp_path / "runtime")
 
 
 def _row(sku: str, price: str, source: str, *, price_type: str = "regular", stock: str = "in_stock", variant: str = "exact") -> dict[str, str]:

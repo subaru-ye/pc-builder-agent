@@ -29,7 +29,11 @@ var/data/
 scripts/data/_cov.json
 
 # P10 本地验收原始指标、trace 与截图(仓库只提交脱敏汇总)
-artifacts/p10/
+artifacts/
+
+# 本机 AI 助手记忆与任务计划
+.workbuddy/
+.zcode/
 
 # OS
 .DS_Store

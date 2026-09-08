@@ -1,0 +1,130 @@
+{
+  "batch": "2026-09-08",
+  "source_type": "aggregator_secondary",
+  "snapshot": "scripts/data/prices/2026-09-08.csv",
+  "snapshot_sha256": "2d89751dd79674ab40b069c97cf495d1e789894733f20d79af97f2a5eeb86d67",
+  "receipt_sha256": "5bf3dd138c48af8344c658145e9c64835b0af1183e973220b7d6e8cb2cd527fa",
+  "counts": {
+    "snapshot_rows": 160,
+    "updated": 102,
+    "carried_forward": 58,
+    "offers": 708
+  },
+  "raw_evidence_tracked": false,
+  "local_evidence": [
+    {
+      "original_path": "scripts/accept_links_20260908.json",
+      "local_path": "var/data/collections/2026-09-08/accept_links_20260908.json",
+      "sha256": "a03b0cce93dd312642d5052f69e0bdcdd91972558f20a416738b7150cfc35da8",
+      "bytes": 23177
+    },
+    {
+      "original_path": "scripts/accept_refs_20260908.json",
+      "local_path": "var/data/collections/2026-09-08/accept_refs_20260908.json",
+      "sha256": "7e540140e3718a675cf72f5bfb21cdfd6c68cf1d12c9bc0905b9a902db622140",
+      "bytes": 18153
+    },
+    {
+      "original_path": "scripts/maishou_full_results_20260908.json",
+      "local_path": "var/data/collections/2026-09-08/maishou_full_results_20260908.json",
+      "sha256": "57ebf0dbc4d0776b944787a86446b1bd267eb5db636b9ae808009413291dbb02",
+      "bytes": 1532068
+    },
+    {
+      "original_path": "scripts/maishou_match3_log_20260908.txt",
+      "local_path": "var/data/collections/2026-09-08/maishou_match3_log_20260908.txt",
+      "sha256": "1293aaebe0062b81d525d765eb4effc7f8c20fad413dd165490dd2c7eab6c7d6",
+      "bytes": 21964
+    },
+    {
+      "original_path": "scripts/maishou_match_candidates3_20260908.json",
+      "local_path": "var/data/collections/2026-09-08/maishou_match_candidates3_20260908.json",
+      "sha256": "24efe9602afb02c1d5af451b35108d23057681d6b2da9b3566eb04e2436bb536",
+      "bytes": 234124
+    },
+    {
+      "original_path": "scripts/maishou_match_candidates_20260908.json",
+      "local_path": "var/data/collections/2026-09-08/maishou_match_candidates_20260908.json",
+      "sha256": "8c60d7c5f2a24408706cea94e5afd327d8561f28b85000b33e856e125c1ab5ca",
+      "bytes": 216926
+    },
+    {
+      "original_path": "scripts/maishou_merged_20260908.json",
+      "local_path": "var/data/collections/2026-09-08/maishou_merged_20260908.json",
+      "sha256": "2d0e400e981997fef9895aa4ebccbd509ae08d11c6f732362362123510467cd9",
+      "bytes": 1893214
+    },
+    {
+      "original_path": "scripts/maishou_probe3_20260908.txt",
+      "local_path": "var/data/collections/2026-09-08/maishou_probe3_20260908.txt",
+      "sha256": "bb44fe50aa357406a133ead776d8343ba6b4d2a4206626f4fadde16a12fd14f2",
+      "bytes": 157760
+    },
+    {
+      "original_path": "scripts/maishou_review3_20260908.txt",
+      "local_path": "var/data/collections/2026-09-08/maishou_review3_20260908.txt",
+      "sha256": "3b617c73b6ceae93a84176c9236a1c4f95c588b3bd71ff65e034cec68864e134",
+      "bytes": 121512
+    },
+    {
+      "original_path": "scripts/maishou_review_20260908.txt",
+      "local_path": "var/data/collections/2026-09-08/maishou_review_20260908.txt",
+      "sha256": "d4dcbc016eb42cf6ee39ef2d8f0a322c493f1888d153ce48c10d49ea69a2b20c",
+      "bytes": 110990
+    },
+    {
+      "original_path": "scripts/maishou_sweep3_results_20260908.json",
+      "local_path": "var/data/collections/2026-09-08/maishou_sweep3_results_20260908.json",
+      "sha256": "cf15d08bc083c0ce4778323451e6437f0e410e173703b336e84a4a47fdab4b45",
+      "bytes": 392247
+    },
+    {
+      "original_path": "scripts/maishou_results.json",
+      "local_path": "var/data/collections/2026-09-08/maishou_results.json",
+      "sha256": "d5ba148db2a375a7e6c1ad902d7e6023025eca9570ac3a9b1489a877f9251e85",
+      "bytes": 37273
+    },
+    {
+      "original_path": "scripts/match_v3_summary.txt",
+      "local_path": "var/data/collections/2026-09-08/match_v3_summary.txt",
+      "sha256": "55dc0e6f507573a085d4948aa7c2ba237ffadc57555bf998abbe9bed3210e456",
+      "bytes": 21244
+    },
+    {
+      "original_path": "scripts/match_v4_summary.txt",
+      "local_path": "var/data/collections/2026-09-08/match_v4_summary.txt",
+      "sha256": "906f315323bd5d88078b9b10610a4e8369deb23bbc61ff8e5d73b084fa11fe97",
+      "bytes": 21238
+    },
+    {
+      "original_path": "artifacts/learning-price-notes-20260908.md",
+      "local_path": "var/data/collections/2026-09-08/learning-price-notes-20260908.md",
+      "sha256": "fd7da1a0aa082646c180992f433e2fc5d796090aae1a3699b83190c07a29a140",
+      "bytes": 4555
+    },
+    {
+      "original_path": "artifacts/learning-price-rows-20260908.jsonl",
+      "local_path": "var/data/collections/2026-09-08/learning-price-rows-20260908.jsonl",
+      "sha256": "feb1f6e5e13788fff15344a0cfcb85bb96eaf19172ddf45b7772169f7a1077df",
+      "bytes": 34949
+    },
+    {
+      "original_path": "artifacts/learning-price-rows-full-20260908.jsonl",
+      "local_path": "var/data/collections/2026-09-08/learning-price-rows-full-20260908.jsonl",
+      "sha256": "df8145558ae5684d39744e99a0609c16ed0bc08b666a9e1d18d39c8fc72b11ac",
+      "bytes": 595969
+    },
+    {
+      "original_path": "artifacts/装机配件全网比价报告-20260908.md",
+      "local_path": "var/data/collections/2026-09-08/装机配件全网比价报告-20260908.md",
+      "sha256": "f4d7d45e7ad51a318b061f6d0a28502e4c93e1640b98d660ec91e2709a9f4a57",
+      "bytes": 4631
+    },
+    {
+      "original_path": "scripts/data/prices/2026-09-08-v2-morning.csv.bak",
+      "local_path": "var/data/collections/2026-09-08/2026-09-08-v2-morning.csv.bak",
+      "sha256": "1793db5ecc63e6c21ea04d3596d434a1d9d8bc935bc8044d58e906e8fd46f1b0",
+      "bytes": 7267
+    }
+  ]
+}

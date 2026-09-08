@@ -1,0 +1,10 @@
+{
+  "id": "L1-005",
+  "title": "15K 4K 3A 大作",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 15000,
+    "use_case": {"type": "gaming", "titles": ["艾尔登法环", "地平线:西之绝境"], "resolution": "4K"}
+  },
+  "expect": {"outcome": "pass"}
+}

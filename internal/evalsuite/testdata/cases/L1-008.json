@@ -1,0 +1,11 @@
+{
+  "id": "L1-008",
+  "title": "8K 2K 游戏,要安静(noise_pref 语义路径)",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 8000,
+    "use_case": {"type": "gaming", "titles": ["巫师 3"], "resolution": "2K"},
+    "noise_pref": "silent"
+  },
+  "expect": {"outcome": "pass"}
+}

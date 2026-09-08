@@ -1,0 +1,18 @@
+{
+  "id": "L4-213",
+  "title": "游戏用途和分辨率已知，只追问已有显卡型号",
+  "stage": "screening",
+  "input": "我已有一张显卡，想配主机玩游戏，显示器是2K的，新增购买预算8000元。",
+  "expect": {
+    "kind": "clarify",
+    "clarify_fields": [
+      "owned_parts"
+    ],
+    "forbidden_clarify_fields": [
+      "budget_cny",
+      "budget_basis",
+      "resolution",
+      "use_case"
+    ]
+  }
+}

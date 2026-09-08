@@ -1,0 +1,26 @@
+{
+  "id": "L4-202",
+  "title": "已有 CPU 型号明确但预算口径不明",
+  "stage": "build",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 6000,
+    "use_case": {
+      "type": "general"
+    },
+    "existing_parts": [
+      "cpu"
+    ],
+    "owned_parts": [
+      {
+        "category": "cpu",
+        "model": "AMD Ryzen 5 7600",
+        "quantity": 1
+      }
+    ]
+  },
+  "expect": {
+    "outcome": "clarify",
+    "reason": "missing_owned_information"
+  }
+}

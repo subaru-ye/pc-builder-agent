@@ -1,0 +1,13 @@
+{
+  "id": "L1-013",
+  "title": "15K 本地开发编译机,弹性 0.15,要安静",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 15000,
+    "budget_flex": 0.15,
+    "use_case": {"type": "productivity", "titles": ["本地大模型推理", "代码编译"]},
+    "noise_pref": "silent",
+    "priority": ["cpu", "memory"]
+  },
+  "expect": {"outcome": "pass"}
+}

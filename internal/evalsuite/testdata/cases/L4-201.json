@@ -1,0 +1,20 @@
+{
+  "id": "L4-201",
+  "title": "已有 CPU 缺具体型号，必须追问",
+  "stage": "build",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 6000,
+    "use_case": {
+      "type": "general"
+    },
+    "existing_parts": [
+      "cpu"
+    ],
+    "budget_basis": "new_purchase"
+  },
+  "expect": {
+    "outcome": "clarify",
+    "reason": "missing_owned_information"
+  }
+}

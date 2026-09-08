@@ -1,0 +1,22 @@
+{
+  "id": "L4-209",
+  "title": "契约迁移：15K 2K 游戏,已有显卡，先补型号和预算口径",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 15000,
+    "use_case": {
+      "type": "gaming",
+      "titles": [
+        "荒野大镖客 2"
+      ],
+      "resolution": "2K"
+    },
+    "existing_parts": [
+      "gpu"
+    ]
+  },
+  "expect": {
+    "outcome": "clarify",
+    "reason": "missing_owned_information"
+  }
+}

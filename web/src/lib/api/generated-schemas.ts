@@ -98,6 +98,16 @@ const RequirementSpec = z.object({
     .partial()
     .optional(),
   existing_parts: z.array(PartCategory).optional().default([]),
+  budget_basis: z.enum(["new_purchase", "full_build"]).optional(),
+  owned_parts: z
+    .array(
+      z.object({
+        category: PartCategory,
+        model: z.string().min(1),
+        quantity: z.number().int().gte(1).lte(8).optional().default(1),
+      })
+    )
+    .optional(),
   priority: z.array(PartCategory).optional().default([]),
   notes: z.string().optional().default(""),
 });
@@ -175,6 +185,7 @@ const BuildSummary = z.object({
   created_at: z.string().datetime({ offset: true }),
 });
 const PartLine = z.object({
+  owned: z.boolean().optional(),
   category: PartCategory,
   sku: z.string(),
   name: z.string(),
@@ -198,6 +209,8 @@ const PriceFreshnessSummary = z.object({
   unknown_count: z.number().int().gte(0),
 });
 const Quote = z.object({
+  purchase_total_cny: Money.regex(/^-?[0-9]+\.[0-9]{2}$/).optional(),
+  budget_basis: z.enum(["new_purchase", "full_build"]).optional(),
   snapshot_date: z.string(),
   total_cny: Money.regex(/^-?[0-9]+\.[0-9]{2}$/),
   budget_cny: Money.regex(/^-?[0-9]+\.[0-9]{2}$/),

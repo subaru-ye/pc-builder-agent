@@ -119,6 +119,7 @@ func rankBudgetCategories(quote validate.Quote, bundle CandidateBundle, locked m
 }
 
 func budgetDirection(spec schemas.RequirementSpec, quote validate.Quote) (int64, string) {
+	quote = validate.BudgetQuote(spec, quote)
 	if quote.MissingCount > 0 {
 		return 0, ""
 	}

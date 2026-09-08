@@ -12,6 +12,21 @@ const requirement: RequirementSpec = {
 };
 
 describe("RequirementForm", () => {
+  it("requires an exact owned model and preserves the purchase budget basis", async () => {
+    const confirm = vi.fn();
+    render(<RequirementForm value={{ ...requirement, existing_parts: ["cpu"] }} busy={false} onSave={vi.fn()} onConfirm={confirm} />);
+    await userEvent.click(screen.getByRole("button", { name: "确认并生成配置" }));
+    expect(confirm).not.toHaveBeenCalled();
+    await userEvent.type(screen.getByLabelText("已有处理器完整型号"), "AMD Ryzen 5 7600");
+    await userEvent.click(screen.getByRole("button", { name: "确认并生成配置" }));
+    expect(confirm).not.toHaveBeenCalled();
+    await userEvent.selectOptions(screen.getByLabelText("预算口径"), "new_purchase");
+    await userEvent.click(screen.getByRole("button", { name: "确认并生成配置" }));
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({
+      budget_basis: "new_purchase",
+      owned_parts: [{ category: "cpu", model: "AMD Ryzen 5 7600", quantity: 1 }],
+    }), true);
+  });
   it("hides gaming-only fields without inventing replacement values", async () => {
     render(<RequirementForm value={requirement} busy={false} onSave={vi.fn()} onConfirm={vi.fn()} />);
     await userEvent.selectOptions(screen.getByLabelText("主要用途"), "productivity");

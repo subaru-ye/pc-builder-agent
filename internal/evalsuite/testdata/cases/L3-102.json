@@ -1,0 +1,7 @@
+{
+  "id": "L3-102",
+  "title": "陷阱:预算缺失应追问,不编造",
+  "stage": "screening",
+  "input": "我想装台电脑",
+  "expect": {"kind": "clarify", "clarify_fields": ["budget_cny"]}
+}

@@ -1,0 +1,22 @@
+{
+  "id": "L2-103",
+  "title": "基线A 改约束为 ITX",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 8000,
+    "use_case": {"type": "gaming", "titles": ["黑神话:悟空"], "resolution": "2K"},
+    "size_pref": "itx"
+  },
+  "base_selection": {
+    "schema_version": 1,
+    "build_ref": "base_a",
+    "parts": {"cpu": "cpu-r5-7600", "motherboard": "mb-msi-pro-a620m-e", "memory": "mem-team-delta-32-6000-white", "ssd": [{"sku": "ssd-adata-legend800-1tb", "quantity": 1}], "gpu": "gpu-sapphire-7700xt-pulse", "psu": "psu-msi-mag-a650bn", "case": "case-montech-air-903-max", "cooler": "cooler-deepcool-ak620"}
+  },
+  "change": {
+    "schema_version": 1,
+    "base_build_ref": "base_a",
+    "intent": "change_constraint",
+    "constraint_patch": {"size_pref": "itx"}
+  },
+  "expect": {"outcome": "pass"}
+}

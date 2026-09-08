@@ -1,0 +1,21 @@
+{
+  "id": "L2-106",
+  "title": "基线B 换 AMD 显卡",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 15000,
+    "use_case": {"type": "gaming", "titles": ["艾尔登法环", "地平线:西之绝境"], "resolution": "4K"}
+  },
+  "base_selection": {
+    "schema_version": 1,
+    "build_ref": "base_b",
+    "parts": {"cpu": "cpu-r7-9800x3d", "motherboard": "mb-msi-b650-tomahawk-wifi", "memory": "mem-gskill-s5-32-6000", "ssd": [{"sku": "ssd-wd-sn770-1tb", "quantity": 1}], "gpu": "gpu-gb-5070-windforce-sff", "psu": "psu-seasonic-focus-gx750-atx30", "case": "case-nzxt-h7-flow-2024", "cooler": "cooler-deepcool-ak620"}
+  },
+  "change": {
+    "schema_version": 1,
+    "base_build_ref": "base_b",
+    "intent": "swap_part",
+    "swap": {"category": "gpu", "target_hint": "换 AMD 显卡,性能别掉档"}
+  },
+  "expect": {"outcome": "pass"}
+}

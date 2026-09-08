@@ -1,0 +1,24 @@
+{
+  "id": "L4-204",
+  "title": "已有件型号不在目录，不能替换相似型号",
+  "stage": "build",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 6000,
+    "use_case": {
+      "type": "general"
+    },
+    "owned_parts": [
+      {
+        "category": "cpu",
+        "model": "不存在于目录的 CPU 型号 XYZ-000",
+        "quantity": 1
+      }
+    ],
+    "budget_basis": "new_purchase"
+  },
+  "expect": {
+    "outcome": "data_unavailable",
+    "reason": "owned_model_unresolved"
+  }
+}

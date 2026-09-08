@@ -1,0 +1,16 @@
+{
+  "id": "L4-203",
+  "title": "当前目录独立最低价也超过一百元预算",
+  "stage": "build",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 100,
+    "use_case": {
+      "type": "general"
+    }
+  },
+  "expect": {
+    "outcome": "catalog_infeasible",
+    "reason": "budget_lower_bound"
+  }
+}

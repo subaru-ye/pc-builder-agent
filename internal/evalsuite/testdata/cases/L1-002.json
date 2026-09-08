@@ -1,0 +1,11 @@
+{
+  "id": "L1-002",
+  "title": "8K 1080p 全 AMD 平台",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 8000,
+    "use_case": {"type": "gaming", "titles": ["CS2", "无畏契约"], "resolution": "1080p", "fps_target": 240},
+    "brand_pref": {"cpu": "amd", "gpu": "amd"}
+  },
+  "expect": {"outcome": "pass"}
+}

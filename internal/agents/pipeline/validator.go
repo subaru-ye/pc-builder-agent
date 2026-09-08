@@ -157,6 +157,12 @@ func decide(ctx context.Context, eval tools.BuildEvaluator, draftText, lastSelec
 		}
 	}
 
+	if chg != nil && len(chg.ActiveSpec) > 0 {
+		spec, err := schemas.DecodeRequirementSpec(chg.ActiveSpec)
+		if err == nil && (len(spec.ExistingParts) > 0 || len(spec.OwnedParts) > 0) {
+			return verdict{message: "已有配件需要在默认 Harness v2 路径核验型号、锁定和采购预算；legacy 本轮不交付。", escalate: true}
+		}
+	}
 	res, err := eval.Evaluate(ctx, draft.Selection)
 	if err != nil {
 		if errors.Is(err, store.ErrUnknownSKU) {
@@ -338,9 +344,15 @@ func deliveryMessage(draft schemas.BuildDraft, res validate.Result) string {
 		} else {
 			fmt.Fprintf(&b, "- %s: %s(%s)\n", ln.Category, ln.SKU, price)
 		}
+		if ln.Owned {
+			b.WriteString("  用户已有，无需购买；以上为参考价。\n")
+		}
 		if r, ok := draft.Rationale[string(ln.Category)]; ok && r != "" {
 			fmt.Fprintf(&b, "  理由:%s\n", r)
 		}
+	}
+	if res.Quote.PurchaseTotalCNY != nil {
+		fmt.Fprintf(&b, "新增购买合计:¥%s；整机参考", *res.Quote.PurchaseTotalCNY)
 	}
 	fmt.Fprintf(&b, "合计:¥%s", res.Quote.TotalCNY)
 	if res.Quote.SnapshotDate != "" {

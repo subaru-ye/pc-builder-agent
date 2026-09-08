@@ -782,6 +782,21 @@ components:
           type: array
           items: {$ref: "#/components/schemas/PartCategory"}
           default: []
+        budget_basis:
+          type: string
+          enum: [new_purchase, full_build]
+          description: 有已有件时必须明确；新增购买费用或整机参考总价。
+        owned_parts:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [category, model]
+            properties:
+              category: {$ref: "#/components/schemas/PartCategory"}
+              model: {type: string, minLength: 1}
+              quantity: {type: integer, minimum: 1, maximum: 8, default: 1}
+          description: 每品类一个准确型号；仅 SSD 可多件，其余数量为 1。程序执行前精确绑定并锁定。
         priority:
           type: array
           items: {$ref: "#/components/schemas/PartCategory"}
@@ -838,6 +853,7 @@ components:
       additionalProperties: false
       required: [category, sku, name, quantity]
       properties:
+        owned: {type: boolean, description: 用户已有，无需购买；该行价格仍为参考价。}
         category: {$ref: "#/components/schemas/PartCategory"}
         sku: {type: string}
         name: {type: string}
@@ -883,6 +899,8 @@ components:
       additionalProperties: false
       required: [snapshot_date, total_cny, budget_cny, budget_delta_cny, missing_count, missing_skus]
       properties:
+        purchase_total_cny: {$ref: "#/components/schemas/Money"}
+        budget_basis: {type: string, enum: [new_purchase, full_build]}
         snapshot_date: {type: string, format: date}
         total_cny: {$ref: "#/components/schemas/Money"}
         budget_cny: {$ref: "#/components/schemas/Money"}

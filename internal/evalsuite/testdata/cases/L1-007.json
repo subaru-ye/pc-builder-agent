@@ -1,0 +1,11 @@
+{
+  "id": "L1-007",
+  "title": "8K 视频剪辑生产力",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 8000,
+    "use_case": {"type": "productivity", "titles": ["Premiere Pro", "Photoshop"]},
+    "priority": ["cpu", "memory"]
+  },
+  "expect": {"outcome": "pass"}
+}

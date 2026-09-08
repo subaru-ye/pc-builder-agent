@@ -40,6 +40,10 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 	if err != nil {
 		return CandidateBundle{}, fmt.Errorf("buildharness: 读取候选快照失败: %w", err)
 	}
+	if d := AssessCatalog(input, catalog); d != nil {
+		return CandidateBundle{}, d
+	}
+	input, _ = bindOwned(input, catalog.Candidates)
 	byCategory := make(map[schemas.Category][]store.Candidate, len(schemas.AllCategories))
 	bySKU := make(map[string]store.Candidate, len(catalog.Candidates))
 	for _, candidate := range catalog.Candidates {
@@ -50,6 +54,23 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 	locked := categorySet(input.Locked)
 	selected := make(map[schemas.Category][]store.Candidate, len(schemas.AllCategories))
 	eligible := make(map[schemas.Category][]store.Candidate, len(schemas.AllCategories))
+	retainedBase := map[string]bool{}
+	protectedCooler := ""
+	// 改单必须允许沿用仍满足本轮硬约束的基版本零件,否则裁剪会制造额外改动。
+	retainBase := func(category schemas.Category) {
+		if input.BaseSelection == nil || locked[category] {
+			return
+		}
+		for _, sku := range selectionSKUs(*input.BaseSelection, category) {
+			for _, candidate := range eligible[category] {
+				if candidate.SKU == sku {
+					selected[category] = appendCandidateOnce(selected[category], candidate)
+					retainedBase[sku] = true
+					break
+				}
+			}
+		}
+	}
 
 	// 锁定项先固定；GPU 显式为 null 时没有候选行，但仍由 prompt 固定为 null。
 	for category := range locked {
@@ -74,7 +95,18 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 		cpus := filterCPU(byCategory[schemas.CategoryCPU], cpuPreference)
 		eligible[schemas.CategoryCPU] = cpus
 		selected[schemas.CategoryCPU] = selectByLane(cpus, cpuVendor, 3)
+		// 非游戏整机需保留各厂商最便宜的核显路径,避免分位抽样只留下贵核显。
+		if input.Requirement.UseCase.Type != schemas.UseCaseGaming {
+			seen := map[string]bool{}
+			for _, cpu := range cpus {
+				if candidateHasField(cpu, "has_igpu", true) && !seen[cpuVendor(cpu)] {
+					selected[schemas.CategoryCPU] = appendCandidateOnce(selected[schemas.CategoryCPU], cpu)
+					seen[cpuVendor(cpu)] = true
+				}
+			}
+		}
 	}
+	retainBase(schemas.CategoryCPU)
 	if len(selected[schemas.CategoryCPU]) == 0 {
 		return CandidateBundle{}, fmt.Errorf("buildharness: CPU 硬约束下没有候选")
 	}
@@ -88,6 +120,7 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 		eligible[schemas.CategoryGPU] = gpus
 		selected[schemas.CategoryGPU] = selectByLane(gpus, gpuFamily, 3)
 	}
+	retainBase(schemas.CategoryGPU)
 	if input.Requirement.UseCase.Type == schemas.UseCaseGaming && len(selected[schemas.CategoryGPU]) == 0 {
 		return CandidateBundle{}, fmt.Errorf("buildharness: 游戏需求的 GPU 硬约束下没有候选")
 	}
@@ -95,11 +128,9 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 	if !locked[schemas.CategoryMotherboard] {
 		boards := filterMotherboards(byCategory[schemas.CategoryMotherboard], selected[schemas.CategoryCPU], input.Requirement.SizePref)
 		eligible[schemas.CategoryMotherboard] = boards
-		selected[schemas.CategoryMotherboard] = selectByLane(boards, candidateSocket, 3)
-		if len(selected[schemas.CategoryMotherboard]) > 8 {
-			selected[schemas.CategoryMotherboard] = selected[schemas.CategoryMotherboard][:8]
-		}
+		selected[schemas.CategoryMotherboard] = selectByLane(boards, candidateSocket, 2)
 	}
+	retainBase(schemas.CategoryMotherboard)
 	if len(selected[schemas.CategoryMotherboard]) == 0 {
 		return CandidateBundle{}, fmt.Errorf("buildharness: 主板平台约束下没有候选")
 	}
@@ -107,8 +138,15 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 	if !locked[schemas.CategoryMemory] {
 		memory := filterMemory(byCategory[schemas.CategoryMemory], selected[schemas.CategoryMotherboard])
 		eligible[schemas.CategoryMemory] = memory
-		selected[schemas.CategoryMemory] = selectQuantiles(memory, 5)
+		selected[schemas.CategoryMemory] = selectByLane(memory, func(c store.Candidate) string {
+			var specs struct {
+				Generation string `json:"generation"`
+			}
+			_ = json.Unmarshal(c.Specs, &specs)
+			return specs.Generation
+		}, 3)
 	}
+	retainBase(schemas.CategoryMemory)
 
 	for _, category := range []schemas.Category{
 		schemas.CategorySSD, schemas.CategoryPSU, schemas.CategoryCase, schemas.CategoryCooler,
@@ -122,6 +160,17 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 		}
 		eligible[category] = items
 		selected[category] = selectQuantiles(items, 5)
+		if category == schemas.CategoryCooler {
+			for _, item := range items {
+				var specs map[string]any
+				if json.Unmarshal(item.Specs, &specs) == nil && specs["cooling_capacity_w"] != nil {
+					selected[category] = appendCandidateOnce(selected[category], item)
+					protectedCooler = item.SKU
+					break
+				}
+			}
+		}
+		retainBase(category)
 	}
 
 	for _, category := range schemas.AllCategories {
@@ -133,7 +182,7 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 		}
 	}
 
-	bundle := CandidateBundle{SchemaVersion: 1, SnapshotDate: catalog.Snapshot.SnapshotDate.Format("2006-01-02")}
+	bundle := CandidateBundle{OwnedInput: &input, SchemaVersion: 1, SnapshotDate: catalog.Snapshot.SnapshotDate.Format("2006-01-02")}
 	for _, category := range schemas.AllCategories {
 		group := CandidateGroup{Category: category}
 		protectedLanes := map[string]bool{}
@@ -144,7 +193,9 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 			}
 			view.origin = originCore
 			lane := plannerLane(category, candidate)
-			view.protected = i == 0 || locked[category] || (lane != "" && !protectedLanes[lane])
+			view.protected = i == 0 || locked[category] || retainedBase[candidate.SKU] || (lane != "" && !protectedLanes[lane]) ||
+				(category == schemas.CategoryCPU && candidateHasField(candidate, "has_igpu", true)) ||
+				(category == schemas.CategoryCooler && candidate.SKU == protectedCooler)
 			protectedLanes[lane] = true
 			group.Candidates = append(group.Candidates, view)
 		}
@@ -160,6 +211,20 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 		return CandidateBundle{}, err
 	}
 	return bundle, nil
+}
+
+func appendCandidateOnce(items []store.Candidate, candidate store.Candidate) []store.Candidate {
+	for _, item := range items {
+		if item.SKU == candidate.SKU {
+			return items
+		}
+	}
+	return append(items, candidate)
+}
+
+func candidateHasField(candidate store.Candidate, field string, value any) bool {
+	var specs map[string]any
+	return json.Unmarshal(candidate.Specs, &specs) == nil && specs[field] == value
 }
 
 func swapCPUPreference(change *schemas.ChangeRequest) schemas.CPUBrand {
@@ -198,6 +263,12 @@ func plannerLane(category schemas.Category, candidate store.Candidate) string {
 		return gpuFamily(candidate)
 	case schemas.CategoryMotherboard:
 		return candidateSocket(candidate)
+	case schemas.CategoryMemory:
+		var specs struct {
+			Generation string `json:"generation"`
+		}
+		_ = json.Unmarshal(candidate.Specs, &specs)
+		return specs.Generation
 	default:
 		return ""
 	}
@@ -620,3 +691,11 @@ func parsePriceFen(value *string) (int64, bool) {
 	}
 	return yuan*100 + fen, true
 }
+
+// CPUVendor 从品牌+型号+SKU 推断 CPU 厂商(intel/amd);空串 = 无法判定。
+// filterCPU 与评估断言(P13 A5)共用此口径,避免两处推断漂移。
+func CPUVendor(candidate store.Candidate) string { return cpuVendor(candidate) }
+
+// GPUFamily 从品牌+型号+SKU 推断显卡芯片家族(nvidia/amd/intel);空串 = 无法判定。
+// filterGPU 与评估断言(P13 A5)共用此口径,避免两处推断漂移。
+func GPUFamily(candidate store.Candidate) string { return gpuFamily(candidate) }

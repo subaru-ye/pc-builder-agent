@@ -1,0 +1,18 @@
+{
+  "id": "L4-214",
+  "title": "已有件型号和采购口径已知，只追问预算金额",
+  "stage": "screening",
+  "input": "配日常办公主机，我已有一颗 AMD Ryzen 5 7600 CPU，其他配件都需要新买。预算只算新增购买费用，金额还没告诉你。",
+  "expect": {
+    "kind": "clarify",
+    "clarify_fields": [
+      "budget_cny"
+    ],
+    "forbidden_clarify_fields": [
+      "owned_parts",
+      "budget_basis",
+      "resolution",
+      "use_case"
+    ]
+  }
+}

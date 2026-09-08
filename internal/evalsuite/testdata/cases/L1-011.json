@@ -1,0 +1,11 @@
+{
+  "id": "L1-011",
+  "title": "3K 家用机,已有 CPU 和内存",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 3000,
+    "use_case": {"type": "general", "titles": ["日常办公"]},
+    "existing_parts": ["cpu", "memory"]
+  },
+  "expect": {"outcome": "pass"}
+}

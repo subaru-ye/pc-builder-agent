@@ -1,0 +1,11 @@
+{
+  "id": "L1-003",
+  "title": "8K 2K Intel + NVIDIA 组合",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 8000,
+    "use_case": {"type": "gaming", "titles": ["赛博朋克 2077"], "resolution": "2K"},
+    "brand_pref": {"cpu": "intel", "gpu": "nvidia"}
+  },
+  "expect": {"outcome": "pass"}
+}

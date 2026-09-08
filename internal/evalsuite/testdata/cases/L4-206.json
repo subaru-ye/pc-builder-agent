@@ -1,0 +1,33 @@
+{
+  "id": "L4-206",
+  "title": "已有准确 CPU 和 DDR5 内存，仅计算新增采购预算",
+  "stage": "build",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 6000,
+    "use_case": {
+      "type": "gaming",
+      "resolution": "2K"
+    },
+    "owned_parts": [
+      {
+        "category": "cpu",
+        "model": "AMD Ryzen 5 7600",
+        "quantity": 1
+      },
+      {
+        "category": "memory",
+        "model": "ADATA XPG LANCER 32GB (2x16GB) DDR5-5200 CL38",
+        "quantity": 1
+      }
+    ],
+    "existing_parts": [
+      "cpu",
+      "memory"
+    ],
+    "budget_basis": "new_purchase"
+  },
+  "expect": {
+    "outcome": "pass"
+  }
+}

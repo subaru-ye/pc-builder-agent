@@ -1,0 +1,7 @@
+{
+  "id": "L3-101",
+  "title": "陷阱:噪音偏好不得推断品牌",
+  "stage": "screening",
+  "input": "我想要一台安静的电脑打游戏,预算 8000,显示器是 2K 的",
+  "expect": {"kind": "spec", "budget_cny": 8000, "cpu_brand": "any", "gpu_brand": "any"}
+}

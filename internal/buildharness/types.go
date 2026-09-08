@@ -59,6 +59,7 @@ type CandidateGroup struct {
 
 // CandidateBundle 是单次 run 的一致候选包。
 type CandidateBundle struct {
+	OwnedInput    *BuildInput      `json:"-"`
 	SchemaVersion int              `json:"schema_version"`
 	SnapshotDate  string           `json:"snapshot_date"`
 	Groups        []CandidateGroup `json:"groups"`
@@ -76,6 +77,7 @@ type BuildInput struct {
 
 // BuildResult 是 Harness 的确定性执行结果；Succeeded=false 表示未保存配置。
 type BuildResult struct {
+	Decision  *Decision `json:"decision,omitempty"`
 	Succeeded bool
 	Attempts  int
 	Draft     schemas.BuildDraft
@@ -123,6 +125,8 @@ type RepairPlan struct {
 	Mutable            []schemas.Category          `json:"mutable"`
 	Reason             string                      `json:"reason"`
 	PreferredSelection map[schemas.Category]string `json:"preferred_selection,omitempty"`
+	PreferredSSDs      []schemas.SSDSelection      `json:"preferred_ssd_selection,omitempty"`
+	DropGPU            bool                        `json:"drop_gpu,omitempty"`
 }
 
 // RepairPlanner 将规则报告和预算状态映射为最小修复面。

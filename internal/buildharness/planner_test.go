@@ -3,6 +3,7 @@ package buildharness
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -12,9 +13,95 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
+func TestPlannerPreservesCheapIGPUAndKnownCoolerOutsideQuantiles(t *testing.T) {
+	catalog := fixtureCatalog()
+	var candidates []store.Candidate
+	for _, candidate := range catalog.Candidates {
+		if candidate.Category == schemas.CategoryCooler {
+			continue
+		}
+		if candidate.Category == schemas.CategoryCPU && strings.HasPrefix(candidate.SKU, "cpu-amd-") {
+			var specs map[string]any
+			if err := json.Unmarshal(candidate.Specs, &specs); err != nil {
+				t.Fatal(err)
+			}
+			specs["has_igpu"] = candidate.SKU == "cpu-amd-c"
+			candidate.Specs = rawJSON(specs)
+		}
+		candidates = append(candidates, candidate)
+	}
+	for i := 0; i < 7; i++ {
+		price := fmt.Sprintf("%d.00", 100+i*10)
+		specs := map[string]any{"type": "air", "height_mm": 150}
+		if i == 2 {
+			specs["cooling_capacity_w"] = 220
+		}
+		candidates = append(candidates, store.Candidate{SKU: fmt.Sprintf("cooler-%d", i), Category: schemas.CategoryCooler, PriceCNY: &price, Specs: rawJSON(specs)})
+	}
+	catalog.Candidates = candidates
+	planner, err := NewCandidatePlanner(&fakeCatalogSource{catalog: catalog}, &countingEmbedder{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requirement := fixtureRequirement()
+	requirement.UseCase.Type = schemas.UseCaseGeneral
+	bundle, err := planner.Prepare(context.Background(), BuildInput{Requirement: requirement})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for category, want := range map[schemas.Category]string{schemas.CategoryCPU: "cpu-amd-c", schemas.CategoryCooler: "cooler-2"} {
+		found := false
+		for _, candidate := range bundleGroup(&bundle, category).Candidates {
+			if candidate.SKU == want {
+				found = candidate.protected
+			}
+		}
+		if !found {
+			t.Fatalf("lost protected feasible path %s", want)
+		}
+	}
+}
+
 type fakeCatalogSource struct {
 	catalog  store.CatalogSnapshot
 	semantic store.SemanticResult
+}
+
+func TestPlannerKeepsEligibleBaseWithoutDefeatingSwapBrandFilter(t *testing.T) {
+	planner, err := NewCandidatePlanner(&fakeCatalogSource{catalog: fixtureCatalog()}, &countingEmbedder{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gpu := "gpu-nvidia"
+	base := schemas.BuildSelection{CPU: "cpu-amd-c", Motherboard: "mb-am5", Memory: "mem", GPU: &gpu, SSDs: []schemas.SSDSelection{{SKU: "ssd", Quantity: 1}}, PSU: "psu", Case: "case", Cooler: "cooler"}
+	input := BuildInput{Requirement: fixtureRequirement(), BaseSelection: &base}
+	bundle, err := planner.Prepare(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, category := range schemas.AllCategories {
+		for _, sku := range selectionSKUs(base, category) {
+			found := false
+			for _, candidate := range bundleGroup(&bundle, category).Candidates {
+				if candidate.SKU == sku {
+					found = candidate.protected
+				}
+			}
+			if !found {
+				t.Fatalf("base %s lost or unprotected", sku)
+			}
+		}
+	}
+	input.Change = &schemas.ChangeRequest{Intent: schemas.IntentSwapPart, Swap: &schemas.SwapSpec{Category: schemas.CategoryGPU, TargetHint: "换 AMD 显卡"}}
+	bundle, err = planner.Prepare(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range bundleGroup(&bundle, schemas.CategoryGPU).Candidates {
+		if candidate.SKU == gpu {
+			t.Fatal("base retention defeated AMD swap constraint")
+		}
+	}
 }
 
 func (f *fakeCatalogSource) ActiveCatalogSnapshot(context.Context) (store.CatalogSnapshot, error) {

@@ -1,0 +1,11 @@
+{
+  "id": "L1-006",
+  "title": "25K 4K 高刷电竞,预算向 GPU 倾斜",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 25000,
+    "use_case": {"type": "gaming", "titles": ["绝地求生"], "resolution": "4K", "fps_target": 144},
+    "priority": ["gpu"]
+  },
+  "expect": {"outcome": "pass"}
+}

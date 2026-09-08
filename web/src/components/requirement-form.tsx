@@ -13,6 +13,14 @@ import { requirementSchema, type PartCategory, type RequirementFormValue, type R
 
 const selectClass = "h-11 w-full rounded-md border bg-[var(--canvas)] px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]";
 
+function editableRequirement(value: RequirementSpec) {
+  const owned = [...(value.owned_parts ?? [])];
+  for (const category of value.existing_parts ?? []) {
+    if (!owned.some((part) => part.category === category)) owned.push({ category, model: "", quantity: 1 });
+  }
+  return { ...value, owned_parts: owned };
+}
+
 export function RequirementForm({ value, busy, onSave, onConfirm }: {
   value: RequirementSpec;
   busy: boolean;
@@ -21,12 +29,13 @@ export function RequirementForm({ value, busy, onSave, onConfirm }: {
 }) {
   const form = useForm<RequirementFormValue>({
     resolver: zodResolver(requirementSchema),
-    defaultValues: value,
+    defaultValues: editableRequirement(value),
   });
   const useCase = useWatch({ control: form.control, name: "use_case.type" });
   const existingParts = useWatch({ control: form.control, name: "existing_parts" });
+  const ownedParts = useWatch({ control: form.control, name: "owned_parts" });
   const priority = useWatch({ control: form.control, name: "priority" });
-  useEffect(() => form.reset(value), [form, value]);
+  useEffect(() => form.reset(editableRequirement(value)), [form, value]);
 
   const normalized = (raw: RequirementFormValue) => requirementSchema.parse(raw) as RequirementSpec;
   const save = form.handleSubmit(async (raw) => {
@@ -39,6 +48,12 @@ export function RequirementForm({ value, busy, onSave, onConfirm }: {
     form.reset(raw);
   });
   const toggle = (field: "existing_parts" | "priority", category: PartCategory, checked: boolean) => {
+    if (field === "existing_parts") {
+      const owned = form.getValues("owned_parts") ?? [];
+      form.setValue("owned_parts", checked
+        ? owned.some((part) => part.category === category) ? owned : [...owned, { category, model: "", quantity: 1 }]
+        : owned.filter((part) => part.category !== category), { shouldDirty: true });
+    }
     const current = form.getValues(field) ?? [];
     form.setValue(field, checked ? [...new Set([...current, category])] : current.filter((item) => item !== category), { shouldDirty: true });
   };
@@ -89,7 +104,22 @@ export function RequirementForm({ value, busy, onSave, onConfirm }: {
           <select className={selectClass} {...form.register("brand_pref.gpu")}><option value="any">不限</option><option value="nvidia">NVIDIA</option><option value="amd">AMD</option></select>
         </Field>
       </div>
-      <CheckGroup title="已有配件" values={existingParts ?? []} onToggle={(item, checked) => toggle("existing_parts", item, checked)} />
+      <CheckGroup title="已有配件" values={[...new Set([...(existingParts ?? []), ...(ownedParts ?? []).map((part) => part.category)])]} onToggle={(item, checked) => toggle("existing_parts", item, checked)} />
+      {(ownedParts ?? []).map((part, index) => <div key={part.category} className="grid gap-4 sm:grid-cols-2">
+        <Field label={`已有${categoryLabels[part.category]}完整型号`} error={form.formState.errors.owned_parts?.[index]?.model?.message}>
+          <Input aria-label={`已有${categoryLabels[part.category]}完整型号`} {...form.register(`owned_parts.${index}.model`)} />
+        </Field>
+        {part.category === "ssd" && <Field label="已有 SSD 数量">
+          <Input type="number" min={1} max={8} {...form.register(`owned_parts.${index}.quantity`, { valueAsNumber: true })} />
+        </Field>}
+      </div>)}
+      {((existingParts?.length ?? 0) > 0 || (ownedParts?.length ?? 0) > 0) && <Field label="预算口径" error={form.formState.errors.budget_basis?.message}>
+        <select aria-label="预算口径" className={selectClass} {...form.register("budget_basis")} defaultValue={value.budget_basis ?? ""}>
+          <option value="" disabled>请选择预算用途</option>
+          <option value="new_purchase">仅用于新增购买</option>
+          <option value="full_build">整机参考总价（包含已有件）</option>
+        </select>
+      </Field>}
       <CheckGroup title="优先投入" values={priority ?? []} onToggle={(item, checked) => toggle("priority", item, checked)} />
       <Field label="补充说明" error={form.formState.errors.notes?.message}>
         <Textarea rows={3} {...form.register("notes")} />

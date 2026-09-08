@@ -1,0 +1,7 @@
+{
+  "id": "L3-104",
+  "title": "对照:正常需求应结构化(8000 2K 黑神话)",
+  "stage": "screening",
+  "input": "8000 元预算,2K 分辨率玩黑神话",
+  "expect": {"kind": "spec", "budget_cny": 8000, "resolution": "2K", "cpu_brand": "any", "gpu_brand": "any"}
+}

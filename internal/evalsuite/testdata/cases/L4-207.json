@@ -1,0 +1,12 @@
+{
+  "id": "L4-207",
+  "title": "初筛追问已有件具体型号",
+  "stage": "screening",
+  "input": "新装一台日常办公电脑，新增购买预算6000元，CPU和内存我已经有了。",
+  "expect": {
+    "kind": "clarify",
+    "clarify_fields": [
+      "owned_parts"
+    ]
+  }
+}

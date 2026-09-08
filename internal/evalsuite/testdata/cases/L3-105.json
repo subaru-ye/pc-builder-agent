@@ -1,0 +1,7 @@
+{
+  "id": "L3-105",
+  "title": "显式品牌应照抄(A 卡 + AMD CPU)",
+  "stage": "screening",
+  "input": "8000 块,2K 玩游戏,显卡要 A 卡,CPU 也用 AMD 的",
+  "expect": {"kind": "spec", "budget_cny": 8000, "resolution": "2K", "cpu_brand": "amd", "gpu_brand": "amd"}
+}

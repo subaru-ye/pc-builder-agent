@@ -1,0 +1,11 @@
+{
+  "id": "L1-012",
+  "title": "8K 2K ITX 小钢炮",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 8000,
+    "use_case": {"type": "gaming", "titles": ["艾尔登法环"], "resolution": "2K"},
+    "size_pref": "itx"
+  },
+  "expect": {"outcome": "pass"}
+}

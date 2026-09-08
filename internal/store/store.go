@@ -298,6 +298,22 @@ func (s *Store) ActiveCatalogSnapshot(ctx context.Context) (CatalogSnapshot, err
 	if err != nil {
 		return CatalogSnapshot{}, err
 	}
+	return s.catalogSnapshotForBatch(ctx, snap)
+}
+
+// CatalogSnapshotByDate 按指定快照日期(YYYY-MM-DD)读取该批次的 active_core 候选。
+// 评估(P13)用它钉死价格批次,消除"新快照发布后旧用例结果不可比"的口径漂移;
+// 候选集合、价格与排序语义和 ActiveCatalogSnapshot 完全一致,仅批次由日期指定。
+// 库内无该日期批次时返回 ErrSnapshotNotFound,调用方显式失败,不回退最新批次。
+func (s *Store) CatalogSnapshotByDate(ctx context.Context, date time.Time) (CatalogSnapshot, error) {
+	snap, err := s.SnapshotByDate(ctx, date)
+	if err != nil {
+		return CatalogSnapshot{}, err
+	}
+	return s.catalogSnapshotForBatch(ctx, snap)
+}
+
+func (s *Store) catalogSnapshotForBatch(ctx context.Context, snap Snapshot) (CatalogSnapshot, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT p.sku, p.brand, p.model, p.category, p.specs, pr.price_cny::text
 		FROM parts p

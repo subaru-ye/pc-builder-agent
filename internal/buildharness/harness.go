@@ -37,7 +37,29 @@ func New(cfg Config) (Harness, error) {
 	return &runner{model: cfg.Model, planner: cfg.Planner, repairer: cfg.Repairer, eval: cfg.Eval, trace: cfg.Trace}, nil
 }
 
-func (h *runner) Run(ctx context.Context, input BuildInput) (BuildResult, error) {
+func (h *runner) Run(ctx context.Context, input BuildInput) (out BuildResult, runErr error) {
+	// 每次运行使用独立 evaluator 包装，避免并发运行互相污染预算口径。
+	local := *h
+	local.eval = ownedEvaluator{base: h.eval, spec: input.Requirement}
+	h = &local
+	defer func() {
+		if runErr != nil {
+			var d *Decision
+			if errors.As(runErr, &d) {
+				out = BuildResult{Decision: d, Message: d.Message}
+				runErr = nil
+			}
+		} else if !out.Succeeded && out.Decision == nil {
+			out.Decision = &Decision{Kind: "invalid_output", Reason: "invalid_model_output", Scope: "current_run", Message: out.Message}
+		}
+	}()
+	if err := ctx.Err(); err != nil {
+		return BuildResult{}, err
+	}
+	if d := clarification(input.Requirement); d != nil {
+		return BuildResult{Decision: d, Message: d.Message}, nil
+	}
+
 	started := time.Now()
 	locked := make([]string, len(input.Locked))
 	for index, category := range input.Locked {
@@ -48,6 +70,9 @@ func (h *runner) Run(ctx context.Context, input BuildInput) (BuildResult, error)
 	if err != nil {
 		h.record(input, "harness.failed", map[string]any{"stage": "candidate_prepare"})
 		return BuildResult{}, err
+	}
+	if bundle.OwnedInput != nil {
+		input = *bundle.OwnedInput
 	}
 	counts := map[string]int{}
 	for _, group := range bundle.Groups {
@@ -97,10 +122,21 @@ func (h *runner) Run(ctx context.Context, input BuildInput) (BuildResult, error)
 		}
 
 		selectionKey := canonicalSelection(draft.Selection)
+		if plan != nil && previous != nil {
+			if err := validateRepairSelection(*plan, previous.Selection, draft.Selection); err != nil {
+				if attempt == MaxAttempts {
+					h.finish(input, started, attempt, false)
+					return BuildResult{Attempts: attempt, Draft: draft, Message: err.Error()}, nil
+				}
+				// 沿用已验证的修复计划和上一份草案,不把违规输出升级为新基线。
+				h.recordRepair(input, attempt, *plan)
+				continue
+			}
+		}
 		if lastSelection != "" && selectionKey == lastSelection {
 			message := "连续两次提交完全相同且仍未通过的 selection，Harness v2 已终止以避免死循环。"
 			h.finish(input, started, attempt, false)
-			return BuildResult{Attempts: attempt, Draft: draft, Result: lastResult, Message: message}, nil
+			return unresolvedResult(attempt, draft, lastResult, message), nil
 		}
 		membershipBundle := bundle
 		membershipCategories := schemas.AllCategories
@@ -147,6 +183,10 @@ func (h *runner) Run(ctx context.Context, input BuildInput) (BuildResult, error)
 			}
 			return BuildResult{}, evalErr
 		}
+		if validate.BudgetQuote(input.Requirement, result.Quote).MissingCount > 0 {
+			d := &Decision{Kind: "data_unavailable", Reason: "selected_price_missing", Scope: "current_catalog", SnapshotDate: bundle.SnapshotDate, Message: "所选需计入预算的配件缺少可核验报价，本轮不交付；请补充报价资料。"}
+			return BuildResult{Attempts: attempt, Draft: draft, Result: result, Decision: d, Message: d.Message}, nil
+		}
 		lastResult = result
 		ruleIDs := problematicRuleIDs(result.Report)
 		h.record(input, "validation.completed", map[string]any{
@@ -161,31 +201,64 @@ func (h *runner) Run(ctx context.Context, input BuildInput) (BuildResult, error)
 			return BuildResult{Succeeded: true, Attempts: attempt, Draft: draft, Result: result}, nil
 		}
 		if attempt == MaxAttempts {
-			message := finalFailureMessage(result, budgetOK)
+			budgetResult := result
+			budgetResult.Quote = validate.BudgetQuote(input.Requirement, result.Quote)
+			message := finalFailureMessage(budgetResult, budgetOK)
 			h.finish(input, started, attempt, false)
-			return BuildResult{Attempts: attempt, Draft: draft, Result: result, Message: message}, nil
+			return unresolvedResult(attempt, draft, result, message), nil
 		}
 
 		nextPlan, planErr := h.repairer.Plan(result, draft, constraints)
 		if planErr != nil {
-			h.finish(input, started, attempt, false)
-			return BuildResult{Attempts: attempt, Draft: draft, Result: result, Message: planErr.Error()}, nil
+			if _, direction := budgetDirection(input.Requirement, result.Quote); direction != "" {
+				// 单件价格排序无替代项时,数量调整或其他品类组合仍可能可行。
+				nextPlan = RepairPlan{Reason: "budget_" + direction}
+			} else {
+				h.finish(input, started, attempt, false)
+				return unresolvedResult(attempt, draft, result, planErr.Error()), nil
+			}
 		}
 		if strings.Contains(nextPlan.Reason, "budget_") {
-			preferred, checked, preferenceErr := h.feasibleBudgetPreference(ctx, input.Requirement, draft.Selection, bundle, nextPlan.Mutable)
+			budgetPlan, checked, preferenceErr := h.budgetRepair(ctx, input, draft.Selection, result.Quote, bundle, nextPlan)
 			if preferenceErr != nil {
 				return BuildResult{}, preferenceErr
 			}
-			nextPlan.PreferredSelection = preferred
+			nextPlan = budgetPlan
 			h.record(input, "repair.budget_candidates", map[string]any{
-				"attempt": attempt, "checked": checked, "feasible": len(preferred) > 0,
+				"attempt": attempt, "checked": checked, "feasible": len(nextPlan.PreferredSelection) > 0 || len(nextPlan.PreferredSSDs) > 0 || nextPlan.DropGPU,
 			})
+			if len(nextPlan.Mutable) == 0 {
+				h.finish(input, started, attempt, false)
+				return unresolvedResult(attempt, draft, result, "有界候选搜索未找到满足预算与兼容性的修复方案,本轮不保存版本。"), nil
+			}
 		}
 		plan = &nextPlan
 		previous, lastSelection = &draft, selectionKey
 		h.recordRepair(input, attempt, *plan)
 	}
 	return BuildResult{}, fmt.Errorf("buildharness: 不可达的执行状态")
+}
+
+func validateRepairSelection(plan RepairPlan, previous, current schemas.BuildSelection) error {
+	mutable := categorySet(plan.Mutable)
+	for _, category := range schemas.AllCategories {
+		if !mutable[category] && !sameCategorySelection(previous, current, category) {
+			return fmt.Errorf("修复改变了未开放的品类:%s", category)
+		}
+	}
+	for category, sku := range plan.PreferredSelection {
+		selected := selectionSKUs(current, category)
+		if len(selected) != 1 || selected[0] != sku {
+			return fmt.Errorf("修复未采用已验证候选:%s", category)
+		}
+	}
+	if len(plan.PreferredSSDs) > 0 && !reflect.DeepEqual(plan.PreferredSSDs, current.SSDs) {
+		return fmt.Errorf("修复未采用已验证的 SSD SKU/数量")
+	}
+	if plan.DropGPU && current.GPU != nil {
+		return fmt.Errorf("修复要求 GPU 为 null")
+	}
+	return nil
 }
 
 // enrichCandidateRationale 只补充模型省略的展示理由，不参与规则或价格真值。
@@ -286,7 +359,8 @@ func (h *runner) feasibleBudgetPreference(ctx context.Context, requirement schem
 		if result.Report.OverallStatus == schemas.OverallFail || !inBudgetWindow(requirement, result.Quote) {
 			return nil
 		}
-		total, ok := parsePriceFen(&result.Quote.TotalCNY)
+		budgetQuote := validate.BudgetQuote(requirement, result.Quote)
+		total, ok := parsePriceFen(&budgetQuote.TotalCNY)
 		if !ok {
 			return nil
 		}
@@ -440,6 +514,7 @@ func validateChangeConstraints(input BuildInput, current schemas.BuildSelection)
 }
 
 func inBudgetWindow(spec schemas.RequirementSpec, quote validate.Quote) bool {
+	quote = validate.BudgetQuote(spec, quote)
 	if quote.MissingCount > 0 {
 		return true
 	}

@@ -1,5 +1,6 @@
 // Package modelprovider 统一装配 screening、builder 与 embedding 使用的模型端点。
-// 支持百炼、MiMo 和实现 OpenAI Responses API 的通用兼容服务；不做自动供应商回退。
+// 支持百炼、MiMo 和实现 OpenAI Responses API 的通用兼容服务;不做跨供应商自动回退。
+// chat 角色可选配置额度降级链(*_MODEL_CHAIN):链内候选按序自动切换,见 chain.go。
 package modelprovider
 
 import (
@@ -43,6 +44,17 @@ type Config struct {
 	MaxRetries      int
 	Timeout         time.Duration
 	Dimensions      int
+	// ModelChain 是可选的额度降级链(仅 chat 角色):按序尝试,候选 403/404
+	// 或配额耗尽时进程内自动切下一个;非空时 Model 恒为链首。
+	ModelChain []string
+}
+
+// ModelDescription 返回可进报告/日志的模型口径描述;链模式标出链首与候选数。
+func (c Config) ModelDescription() string {
+	if len(c.ModelChain) == 0 {
+		return string(c.Provider) + "/" + c.Model
+	}
+	return fmt.Sprintf("%s/chain:%s(共 %d 个候选)", c.Provider, c.ModelChain[0], len(c.ModelChain))
 }
 
 // Redacted 返回可安全记录的运行配置；凭据永远不包含在结果中。
@@ -93,6 +105,14 @@ func Load(role Role) (Config, error) {
 			cfg.Model = embedding.DefaultModel
 		}
 	}
+	// 额度降级链(P13):仅 chat 角色;链生效时 Model 恒为链首,报表与指标
+	// 以链首为口径,实际服务者由 chain 在运行时决定并记日志。
+	if role != RoleEmbedding {
+		if chain := parseModelChain(os.Getenv(prefix + "_MODEL_CHAIN")); len(chain) > 0 {
+			cfg.ModelChain = chain
+			cfg.Model = chain[0]
+		}
+	}
 	if cfg.APIKey == "" {
 		return Config{}, fmt.Errorf("%s 缺少 API Key:设置 %s_API_KEY 或对应供应商 Key", role, prefix)
 	}
@@ -111,6 +131,10 @@ func Load(role Role) (Config, error) {
 		if cfg.ReasoningEffort == "" {
 			switch {
 			case provider == ProviderBailian && role == RoleScreening:
+				cfg.ReasoningEffort = "none"
+			case provider == ProviderBailian && role == RoleBuilder && len(cfg.ModelChain) > 0:
+				// 链成员是异构模型,统一 none 是跨模型最稳口径;需要别的档位
+				// 用 BUILDER_REASONING_EFFORT 显式覆盖。
 				cfg.ReasoningEffort = "none"
 			case provider == ProviderBailian && role == RoleBuilder && cfg.Model == DefaultBuilderModel:
 				// 2026-08-12 真实 Responses 检查:该固定版本传 low 会返回

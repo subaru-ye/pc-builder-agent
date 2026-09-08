@@ -1,0 +1,12 @@
+{
+  "id": "L4-208",
+  "title": "初筛追问已有件的预算口径",
+  "stage": "screening",
+  "input": "配一台日常办公电脑，预算6000元，我已有一颗AMD Ryzen 5 7600 CPU，其他配件都没有。",
+  "expect": {
+    "kind": "clarify",
+    "clarify_fields": [
+      "budget_basis"
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "id": "L1-004",
+  "title": "3K 入门家用办公",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 3000,
+    "use_case": {"type": "general", "titles": ["网页办公", "在线视频"]}
+  },
+  "expect": {"outcome": "pass"}
+}

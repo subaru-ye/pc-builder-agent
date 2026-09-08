@@ -1,0 +1,10 @@
+{
+  "id": "L1-001",
+  "title": "8K 预算 2K 玩黑神话(基线)",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 8000,
+    "use_case": {"type": "gaming", "titles": ["黑神话:悟空"], "resolution": "2K"}
+  },
+  "expect": {"outcome": "pass"}
+}

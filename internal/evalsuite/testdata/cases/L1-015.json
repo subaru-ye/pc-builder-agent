@@ -1,0 +1,12 @@
+{
+  "id": "L1-015",
+  "title": "25K 4K 旗舰静音游戏机",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 25000,
+    "use_case": {"type": "gaming", "titles": ["赛博朋克 2077", "星空"], "resolution": "4K"},
+    "brand_pref": {"cpu": "intel", "gpu": "nvidia"},
+    "noise_pref": "silent"
+  },
+  "expect": {"outcome": "pass"}
+}

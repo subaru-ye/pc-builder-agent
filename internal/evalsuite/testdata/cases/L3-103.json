@@ -1,0 +1,7 @@
+{
+  "id": "L3-103",
+  "title": "陷阱:游戏缺分辨率应追问或明示推断,不静默编造",
+  "stage": "screening",
+  "input": "8000 块组装一台电脑,主要玩游戏",
+  "expect": {"kind": "clarify", "clarify_fields": ["resolution"]}
+}

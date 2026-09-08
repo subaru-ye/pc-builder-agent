@@ -416,3 +416,42 @@ func TestActiveCatalogSnapshot(t *testing.T) {
 		t.Fatalf("active_core 候选数=%d, want 8", len(result.Candidates))
 	}
 }
+
+func TestCatalogSnapshotByDate(t *testing.T) {
+	s := setupStore(t)
+	ctx := context.Background()
+
+	date, err := time.Parse("2006-01-02", "2026-07-27")
+	if err != nil {
+		t.Fatal(err)
+	}
+	byDate, err := s.CatalogSnapshotByDate(ctx, date)
+	if err != nil {
+		t.Fatal(err)
+	}
+	latest, err := s.ActiveCatalogSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if byDate.Snapshot.ID != latest.Snapshot.ID || len(byDate.Candidates) != len(latest.Candidates) {
+		t.Fatalf("按日期批次与最新批次不一致: byDate=%d/%d条 latest=%d/%d条",
+			byDate.Snapshot.ID, len(byDate.Candidates), latest.Snapshot.ID, len(latest.Candidates))
+	}
+	priced := 0
+	for _, candidate := range byDate.Candidates {
+		if candidate.SKU == "cpu-inactive" {
+			t.Fatal("inactive SKU 不得进入按日期候选快照")
+		}
+		if candidate.PriceCNY != nil {
+			priced++
+		}
+	}
+	if priced != 2 {
+		t.Fatalf("该批次有价候选=%d, want 2(仅夹具录入的两条价格)", priced)
+	}
+
+	missing, _ := time.Parse("2006-01-02", "2026-07-28")
+	if _, err := s.CatalogSnapshotByDate(ctx, missing); !errors.Is(err, ErrSnapshotNotFound) {
+		t.Fatalf("无该日期批次应返回 ErrSnapshotNotFound,得到 %v", err)
+	}
+}

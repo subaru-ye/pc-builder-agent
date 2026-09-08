@@ -1,0 +1,22 @@
+{
+  "id": "L2-109",
+  "title": "基线C 换 AMD 显卡",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 25000,
+    "use_case": {"type": "gaming", "titles": ["绝地求生"], "resolution": "4K", "fps_target": 144},
+    "priority": ["gpu"]
+  },
+  "base_selection": {
+    "schema_version": 1,
+    "build_ref": "base_c",
+    "parts": {"cpu": "cpu-r7-9800x3d", "motherboard": "mb-msi-b650-tomahawk-wifi", "memory": "mem-corsair-veng-rgb-32-6000", "ssd": [{"sku": "ssd-wd-sn770-1tb", "quantity": 1}], "gpu": "gpu-gb-5080-gaming", "psu": "psu-corsair-hx1000i-2022", "case": "case-fractal-north", "cooler": "cooler-deepcool-ak620"}
+  },
+  "change": {
+    "schema_version": 1,
+    "base_build_ref": "base_c",
+    "intent": "swap_part",
+    "swap": {"category": "gpu", "target_hint": "换 AMD 旗舰显卡"}
+  },
+  "expect": {"outcome": "pass"}
+}

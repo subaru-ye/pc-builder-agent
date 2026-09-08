@@ -260,6 +260,9 @@ func RenderExportWithPriceMetadata(row BuildRow, names map[string]string, freshn
 		if name == "" {
 			name = "-"
 		}
+		if line.Owned {
+			name += "（用户已有，无需购买）"
+		}
 		unit, subtotal := "缺价", "缺价"
 		if line.UnitPriceCNY != nil {
 			unit = *line.UnitPriceCNY
@@ -271,6 +274,9 @@ func RenderExportWithPriceMetadata(row BuildRow, names map[string]string, freshn
 	}
 	if row.Draft.Selection.GPU == nil {
 		b.WriteString("| gpu | -(无独显,核显点亮) | - | - | - | - |\n")
+	}
+	if row.Quote.PurchaseTotalCNY != nil {
+		fmt.Fprintf(&b, "\n新增购买合计:¥%s；以下合计为整机参考价。\n", *row.Quote.PurchaseTotalCNY)
 	}
 	fmt.Fprintf(&b, "\n**合计:¥%s**", row.Quote.TotalCNY)
 	if row.Quote.SnapshotDate != "" {

@@ -50,7 +50,7 @@ export function BuildInspector({ sessionID, builds, build, latestVersion, canCha
     <div className="border-b px-4 py-4 sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><div className="text-xs text-[var(--ink-subtle)]">当前查看</div><div className="mt-1 flex items-center gap-2"><span className="text-lg font-semibold">v{build.summary.version}</span>{historical && <span className="rounded border px-2 py-0.5 text-xs text-[var(--ink-muted)]">历史只读</span>}<StatusMark value={build.summary.overall_status} /></div></div>
-        <div className="text-right"><div className="tabular text-xl font-semibold">¥{build.quote.total_cny}</div><div className="text-xs text-[var(--ink-muted)]">预算差 ¥{build.quote.budget_delta_cny}</div></div>
+        <div className="text-right"><div className="tabular text-xl font-semibold">¥{build.quote.budget_basis === "new_purchase" ? build.quote.purchase_total_cny ?? build.quote.total_cny : build.quote.total_cny}</div>{build.quote.purchase_total_cny != null && <div className="text-xs text-[var(--ink-muted)]">新增购买 ¥{build.quote.purchase_total_cny} · 整机参考 ¥{build.quote.total_cny}</div>}<div className="text-xs text-[var(--ink-muted)]">预算差 ¥{build.quote.budget_delta_cny}</div></div>
       </div>
       <dl className="mt-4 grid grid-cols-3 gap-3 text-xs"><Meta label="父版本" value={build.summary.parent_version ? `v${build.summary.parent_version}` : "—"} /><Meta label="价格快照" value={build.quote.snapshot_date} /><Meta label="缺价项" value={String(build.quote.missing_count)} /></dl>
       <div className="mt-4"><PriceFreshnessNotice value={build.quote.price_freshness} compact /></div>
@@ -77,7 +77,7 @@ function Parts({ build, allowReplace, onReplace }: { build: BuildView; allowRepl
     {categories.map((category) => { const part = byCategory.get(category); return <div key={category} className="grid grid-cols-[88px_minmax(0,1fr)_auto] gap-3 border-b px-4 py-4 sm:px-6">
       <div className="text-xs font-medium text-[var(--ink-subtle)]">{categoryLabels[category]}</div>
       <div className="min-w-0"><div className="font-medium">{part?.name ?? "未选择"}</div>{part?.rationale && <p className="mt-1 text-xs text-[var(--ink-muted)]">{part.rationale}</p>}{part?.price_observed_date && <p className={`mt-1 text-xs ${part.price_freshness === "stale" ? "status-fail" : part.price_freshness === "aging" || part.price_freshness === "unknown" ? "status-review" : "text-[var(--ink-subtle)]"}`}>观察于 {part.price_observed_date} · {freshnessLabel(part.price_freshness)}</p>}<PriceAvailabilityNotice value={part?.price_availability_basis} />{part?.quantity && part.quantity > 1 ? <span className="text-xs text-[var(--ink-subtle)]">数量 × {part.quantity}</span> : null}</div>
-      <div className="text-right"><div className="tabular text-sm">{part?.subtotal_cny ? `¥${part.subtotal_cny}` : <span className="status-review">缺价，未计入合计</span>}</div>{allowReplace && <Button variant="ghost" size="sm" className="mt-1" onClick={() => onReplace(category)}>更换此件</Button>}</div>
+      <div className="text-right"><div className="tabular text-sm">{part?.subtotal_cny ? `¥${part.subtotal_cny}` : <span className="status-review">缺价，未计入合计</span>}</div>{part?.owned && <div className="text-xs text-[var(--ink-muted)]">用户已有，无需购买</div>}{allowReplace && !part?.owned && <Button variant="ghost" size="sm" className="mt-1" onClick={() => onReplace(category)}>更换此件</Button>}</div>
     </div>; })}
     <Disclaimers values={build.disclaimers} />
   </div>;

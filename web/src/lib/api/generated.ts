@@ -632,6 +632,18 @@ export interface components {
             };
             /** @default [] */
             existing_parts: components["schemas"]["PartCategory"][];
+            /**
+             * @description 有已有件时必须明确；新增购买费用或整机参考总价。
+             * @enum {string}
+             */
+            budget_basis?: "new_purchase" | "full_build";
+            /** @description 每品类一个准确型号；仅 SSD 可多件，其余数量为 1。程序执行前精确绑定并锁定。 */
+            owned_parts?: {
+                category: components["schemas"]["PartCategory"];
+                model: string;
+                /** @default 1 */
+                quantity: number;
+            }[];
             /** @default [] */
             priority: components["schemas"]["PartCategory"][];
             /** @default  */
@@ -671,6 +683,8 @@ export interface components {
             created_at: string;
         };
         PartLine: {
+            /** @description 用户已有，无需购买；该行价格仍为参考价。 */
+            owned?: boolean;
             category: components["schemas"]["PartCategory"];
             sku: string;
             name: string;
@@ -702,6 +716,9 @@ export interface components {
             checks: components["schemas"]["ValidationCheck"][];
         };
         Quote: {
+            purchase_total_cny?: components["schemas"]["Money"];
+            /** @enum {string} */
+            budget_basis?: "new_purchase" | "full_build";
             /** Format: date */
             snapshot_date: string;
             total_cny: components["schemas"]["Money"];

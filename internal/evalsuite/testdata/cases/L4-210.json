@@ -1,0 +1,22 @@
+{
+  "id": "L4-210",
+  "title": "契约迁移：3K 家用机,已有 CPU 和内存，先补型号和预算口径",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 3000,
+    "use_case": {
+      "type": "general",
+      "titles": [
+        "日常办公"
+      ]
+    },
+    "existing_parts": [
+      "cpu",
+      "memory"
+    ]
+  },
+  "expect": {
+    "outcome": "clarify",
+    "reason": "missing_owned_information"
+  }
+}

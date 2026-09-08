@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/subaru-ye/pc-builder-agent/internal/agents/validate"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
@@ -64,6 +65,7 @@ type BuildSummary struct {
 }
 
 type PartLine struct {
+	Owned                  bool             `json:"owned,omitempty"`
 	Category               schemas.Category `json:"category"`
 	SKU                    string           `json:"sku"`
 	Name                   string           `json:"name"`
@@ -77,13 +79,15 @@ type PartLine struct {
 }
 
 type QuoteView struct {
-	SnapshotDate   string                `json:"snapshot_date"`
-	TotalCNY       string                `json:"total_cny"`
-	BudgetCNY      string                `json:"budget_cny"`
-	BudgetDeltaCNY string                `json:"budget_delta_cny"`
-	MissingCount   int                   `json:"missing_count"`
-	MissingSKUs    []string              `json:"missing_skus"`
-	PriceFreshness PriceFreshnessSummary `json:"price_freshness"`
+	PurchaseTotalCNY *string               `json:"purchase_total_cny,omitempty"`
+	BudgetBasis      string                `json:"budget_basis,omitempty"`
+	SnapshotDate     string                `json:"snapshot_date"`
+	TotalCNY         string                `json:"total_cny"`
+	BudgetCNY        string                `json:"budget_cny"`
+	BudgetDeltaCNY   string                `json:"budget_delta_cny"`
+	MissingCount     int                   `json:"missing_count"`
+	MissingSKUs      []string              `json:"missing_skus"`
+	PriceFreshness   PriceFreshnessSummary `json:"price_freshness"`
 }
 
 type ValidationView struct {
@@ -174,7 +178,7 @@ func (s *Service) Build(ctx context.Context, sessionID string, version int) (Bui
 				continue
 			}
 			found = true
-			part := PartLine{Category: category, SKU: line.SKU, Name: names[line.SKU], Quantity: line.Quantity,
+			part := PartLine{Owned: line.Owned, Category: category, SKU: line.SKU, Name: names[line.SKU], Quantity: line.Quantity,
 				UnitPriceCNY: line.UnitPriceCNY, SubtotalCNY: line.SubtotalCNY, Rationale: row.Draft.Rationale[string(category)]}
 			if line.UnitPriceCNY == nil {
 				part.PriceFreshness = PriceFreshnessUnknown
@@ -198,14 +202,24 @@ func (s *Service) Build(ctx context.Context, sessionID string, version int) (Bui
 	if !ok {
 		return BuildView{}, fmt.Errorf("v%d total_cny 无效:%q", row.Version, row.Quote.TotalCNY)
 	}
+	basis := "full_build"
+	budgetTotal := totalFen
+	if spec, err := schemas.DecodeRequirementSpec(row.Spec); err == nil {
+		if spec.BudgetBasis != "" {
+			basis = spec.BudgetBasis
+		}
+		if value, ok := ParseFen(validate.BudgetQuote(spec, row.Quote).TotalCNY); ok {
+			budgetTotal = value
+		}
+	}
 	missing := row.Quote.MissingSKUs
 	if missing == nil {
 		missing = []string{}
 	}
 	return BuildView{
 		SchemaVersion: 1, Summary: summary(row, versions), Requirement: row.Spec, Parts: parts,
-		Quote: QuoteView{SnapshotDate: row.Quote.SnapshotDate, TotalCNY: FormatFen(totalFen), BudgetCNY: FormatFen(budgetFen),
-			BudgetDeltaCNY: FormatFen(budgetFen - totalFen), MissingCount: row.Quote.MissingCount, MissingSKUs: missing,
+		Quote: QuoteView{PurchaseTotalCNY: row.Quote.PurchaseTotalCNY, BudgetBasis: basis, SnapshotDate: row.Quote.SnapshotDate, TotalCNY: FormatFen(totalFen), BudgetCNY: FormatFen(budgetFen),
+			BudgetDeltaCNY: FormatFen(budgetFen - budgetTotal), MissingCount: row.Quote.MissingCount, MissingSKUs: missing,
 			PriceFreshness: freshness},
 		Validation:  ValidationView{OverallStatus: row.Report.OverallStatus, Checks: row.Report.Checks},
 		Disclaimers: disclaimers(row.Quote.SnapshotDate),

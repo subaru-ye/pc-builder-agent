@@ -12,7 +12,7 @@ import (
 const builderV2Instruction = `你是装机配置选择器。候选数据已经由程序准备完毕，你不得调用工具、不得编造 SKU，也不得输出解释文字。
 只输出一个符合既有 BuildDraft schema_version=1 的 JSON 对象。selection 的每个非 null SKU 必须来自 candidate_bundle；fixed_selection 中的品类必须原样照抄。
 整机总价必须进入 budget_window_cny 的闭区间并尽量避免 specs 缺失造成 unknown；修复轮次必须满足 validation.required_adjustment_cny。游戏需求必须选择独显；非游戏仅当所选 CPU 明确有核显时 GPU 才可为 null。
-修复轮次只能修改 repair_plan.mutable 中的品类，其余品类必须照抄 previous_draft；若 repair_plan.preferred_selection 非空，必须逐项精确照抄。否则 mutable 当前 SKU 已从 candidate_bundle 移除，必须选择其中的替代 SKU。`
+修复轮次只能修改 repair_plan.mutable 中的品类，其余品类必须照抄 previous_draft；若 repair_plan.preferred_selection 非空，必须逐项精确照抄；preferred_ssd_selection 非空时完整照抄其中的 SKU 和 quantity，drop_gpu=true 时 gpu 必须为 null。否则 mutable 当前 SKU 已从 candidate_bundle 移除，必须选择其中的替代 SKU。`
 
 type promptEnvelope struct {
 	SchemaVersion   int                 `json:"schema_version"`
@@ -87,7 +87,7 @@ func buildPrompt(input BuildInput, full CandidateBundle, previous *schemas.Build
 // requirement_ref/build_ref 等没有业务判定作用、但 schema 强制要求的字段。
 func outputContract(attempt int) map[string]any {
 	return map[string]any{
-		"instruction": "只返回一个 JSON 对象，所有 required 字段都必须存在；不要返回 output_contract 外层。",
+		"instruction": "只返回一个 JSON 对象，所有 required 字段都必须存在；不要返回 output_contract 外层。fixed_selection 必须逐字照抄。budget_basis=new_purchase 时，仅将未列在 owned_parts 的配件计入 budget_window_cny，已有件仍参与兼容性校验；full_build 或未指定时预算为整机参考价。",
 		"required":    []string{"schema_version", "requirement_ref", "build_ref", "selection"},
 		"template": map[string]any{
 			"schema_version":  1,
@@ -149,6 +149,10 @@ func restrictBundle(bundle CandidateBundle, plan RepairPlan, previous schemas.Bu
 	out := CandidateBundle{SchemaVersion: bundle.SchemaVersion, SnapshotDate: bundle.SnapshotDate, Trimmed: bundle.Trimmed}
 	for _, group := range bundle.Groups {
 		if set[group.Category] {
+			if group.Category == schemas.CategoryGPU && plan.DropGPU {
+				out.Groups = append(out.Groups, CandidateGroup{Category: group.Category})
+				continue
+			}
 			preferred := plan.PreferredSelection[group.Category]
 			current := map[string]bool{}
 			for _, sku := range selectionSKUs(previous, group.Category) {
@@ -156,6 +160,15 @@ func restrictBundle(bundle CandidateBundle, plan RepairPlan, previous schemas.Bu
 			}
 			filtered := CandidateGroup{Category: group.Category}
 			for _, candidate := range group.Candidates {
+				if group.Category == schemas.CategorySSD && len(plan.PreferredSSDs) > 0 {
+					for _, disk := range plan.PreferredSSDs {
+						if disk.SKU == candidate.SKU {
+							filtered.Candidates = append(filtered.Candidates, candidate)
+							break
+						}
+					}
+					continue
+				}
 				if preferred != "" {
 					if candidate.SKU == preferred {
 						filtered.Candidates = append(filtered.Candidates, candidate)
@@ -173,7 +186,7 @@ func restrictBundle(bundle CandidateBundle, plan RepairPlan, previous schemas.Bu
 }
 
 func feedback(result validate.Result, requirement schemas.RequirementSpec) *validationFeedback {
-	out := &validationFeedback{OverallStatus: result.Report.OverallStatus, TotalCNY: result.Quote.TotalCNY}
+	out := &validationFeedback{OverallStatus: result.Report.OverallStatus, TotalCNY: validate.BudgetQuote(requirement, result.Quote).TotalCNY}
 	if delta, direction := budgetDirection(requirement, result.Quote); direction != "" {
 		out.BudgetDirection = direction
 		out.RequiredAdjustmentCNY = formatPromptFen(delta)

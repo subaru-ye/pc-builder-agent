@@ -14,7 +14,7 @@ const (
 	maxBudgetFlex     = 0.3
 )
 
-// UseCaseType 单一主用途(MVP 不做多用途混合,见 mvp.md §2.2)。
+// UseCaseType 单一主用途(当前不做多用途混合,见 docs/product/PRD.md)。
 type UseCaseType string
 
 const (
@@ -172,6 +172,8 @@ type RequirementSpec struct {
 	NoisePref     NoisePref // 缺省 any
 	BrandPref     BrandPref // 缺省 {any, any}
 	ExistingParts []Category
+	OwnedParts    []OwnedPart
+	BudgetBasis   string
 	Priority      []Category
 	Notes         string
 }
@@ -186,6 +188,8 @@ type requirementSpecWire struct {
 	NoisePref     *NoisePref     `json:"noise_pref"`
 	BrandPref     *brandPrefWire `json:"brand_pref"`
 	ExistingParts []Category     `json:"existing_parts"`
+	OwnedParts    []OwnedPart    `json:"owned_parts,omitempty"`
+	BudgetBasis   string         `json:"budget_basis,omitempty"`
 	Priority      []Category     `json:"priority"`
 	Notes         *string        `json:"notes"`
 }
@@ -238,6 +242,8 @@ func EncodeRequirementSpec(spec RequirementSpec) (json.RawMessage, error) {
 		NoisePref     NoisePref          `json:"noise_pref"`
 		BrandPref     canonicalBrandPref `json:"brand_pref"`
 		ExistingParts []Category         `json:"existing_parts"`
+		OwnedParts    []OwnedPart        `json:"owned_parts,omitempty"`
+		BudgetBasis   string             `json:"budget_basis,omitempty"`
 		Priority      []Category         `json:"priority"`
 		Notes         string             `json:"notes"`
 	}
@@ -252,7 +258,7 @@ func EncodeRequirementSpec(spec RequirementSpec) (json.RawMessage, error) {
 		},
 		SizePref: spec.SizePref, NoisePref: spec.NoisePref,
 		BrandPref:     canonicalBrandPref{CPU: spec.BrandPref.CPU, GPU: spec.BrandPref.GPU},
-		ExistingParts: existing, Priority: priority, Notes: spec.Notes,
+		ExistingParts: existing, OwnedParts: spec.OwnedParts, BudgetBasis: spec.BudgetBasis, Priority: priority, Notes: spec.Notes,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("requirement spec: 编码失败: %w", err)
@@ -322,6 +328,10 @@ func DecodeRequirementSpec(data []byte) (RequirementSpec, error) {
 		return RequirementSpec{}, err
 	}
 	if err := validateCategories("priority", w.Priority); err != nil {
+		return RequirementSpec{}, err
+	}
+	out.OwnedParts, out.BudgetBasis = w.OwnedParts, w.BudgetBasis
+	if err := validateOwned(&out); err != nil {
 		return RequirementSpec{}, err
 	}
 	out.ExistingParts = w.ExistingParts

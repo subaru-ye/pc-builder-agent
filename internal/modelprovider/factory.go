@@ -18,10 +18,33 @@ import (
 )
 
 // NewChat 创建带供应商参数、零自动重试、错误分类和脱敏指标的 ADK 模型。
+// 配置了 *_MODEL_CHAIN 时返回额度降级链(chain.go):候选按序自动切换。
 func NewChat(ctx context.Context, cfg Config, component string) (model.LLM, error) {
 	if cfg.Role != RoleScreening && cfg.Role != RoleBuilder {
 		return nil, fmt.Errorf("modelprovider: %s 不是 chat 角色", cfg.Role)
 	}
+	if len(cfg.ModelChain) > 0 {
+		chain := &chainModel{role: cfg.Role, candidates: make([]*chainCandidate, 0, len(cfg.ModelChain))}
+		for _, name := range cfg.ModelChain {
+			memberCfg := cfg
+			memberCfg.Model = name
+			candidate := &chainCandidate{name: name}
+			candidate.build = func(ctx context.Context) (model.LLM, error) {
+				return buildChat(ctx, memberCfg, component)
+			}
+			chain.candidates = append(chain.candidates, candidate)
+		}
+		return evalmetrics.WrapModelWithMeta(component, chain, string(cfg.Provider), string(cfg.Role)), nil
+	}
+	inner, err := buildChat(ctx, cfg, component)
+	if err != nil {
+		return nil, err
+	}
+	return evalmetrics.WrapModelWithMeta(component, inner, string(cfg.Provider), string(cfg.Role)), nil
+}
+
+// buildChat 装配单个模型名的已分类 ADK 模型(不含指标包装)。
+func buildChat(ctx context.Context, cfg Config, component string) (model.LLM, error) {
 	hc := &http.Client{Timeout: cfg.Timeout}
 	opts := []option.RequestOption{option.WithMaxRetries(cfg.MaxRetries)}
 	if cfg.ReasoningEffort != "" {
@@ -41,8 +64,7 @@ func NewChat(ctx context.Context, cfg Config, component string) (model.LLM, erro
 	if err != nil {
 		return nil, err
 	}
-	classified := &classifiedModel{inner: inner, provider: cfg.Provider, role: cfg.Role}
-	return evalmetrics.WrapModelWithMeta(component, classified, string(cfg.Provider), string(cfg.Role)), nil
+	return &classifiedModel{inner: inner, provider: cfg.Provider, role: cfg.Role}, nil
 }
 
 // NewEmbedding 创建通用 /embeddings 客户端；MiMo 已在 Load 阶段拒绝。

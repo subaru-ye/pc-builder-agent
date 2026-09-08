@@ -1,0 +1,11 @@
+{
+  "id": "L1-009",
+  "title": "8K 1080p 白色海景房(notes 语义路径)",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 8000,
+    "use_case": {"type": "gaming", "titles": ["原神"], "resolution": "1080p"},
+    "notes": "想要白色海景房,颜值优先"
+  },
+  "expect": {"outcome": "pass"}
+}

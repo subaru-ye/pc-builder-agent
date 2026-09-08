@@ -1,0 +1,29 @@
+{
+  "id": "L4-205",
+  "title": "已有 AM5 CPU 和 DDR4 内存不能擅自更换",
+  "stage": "build",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 6000,
+    "use_case": {
+      "type": "general"
+    },
+    "owned_parts": [
+      {
+        "category": "cpu",
+        "model": "AMD Ryzen 5 7600",
+        "quantity": 1
+      },
+      {
+        "category": "memory",
+        "model": "Corsair Vengeance LPX 16GB (2x8GB) DDR4-3200 CL16",
+        "quantity": 1
+      }
+    ],
+    "budget_basis": "new_purchase"
+  },
+  "expect": {
+    "outcome": "search_exhausted",
+    "reason": "no_verified_solution"
+  }
+}

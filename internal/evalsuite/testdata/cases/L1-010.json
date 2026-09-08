@@ -1,0 +1,11 @@
+{
+  "id": "L1-010",
+  "title": "15K 2K 游戏,已有显卡",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 15000,
+    "use_case": {"type": "gaming", "titles": ["荒野大镖客 2"], "resolution": "2K"},
+    "existing_parts": ["gpu"]
+  },
+  "expect": {"outcome": "pass"}
+}

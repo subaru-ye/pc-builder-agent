@@ -26,6 +26,7 @@ type Resolver interface {
 // QuoteLine 报价单行:一件(或同款多件)的品类、SKU、数量、单价与小计。
 // 缺价时 UnitPriceCNY/SubtotalCNY 为 nil(优雅降级,不阻断校验)。
 type QuoteLine struct {
+	Owned        bool             `json:"owned,omitempty"`
 	Category     schemas.Category `json:"category"`
 	SKU          string           `json:"sku"`
 	Quantity     int              `json:"quantity"`
@@ -36,11 +37,13 @@ type QuoteLine struct {
 // Quote 报价块(P2 流水线设计 §4.2):快照日期 + 合计 + 缺价计数。
 // 金额一律精确十进制文本(内部按「分」整数运算,不用浮点)。
 type Quote struct {
-	SnapshotDate string      `json:"snapshot_date"` // YYYY-MM-DD;库内无快照时为空
-	TotalCNY     string      `json:"total_cny"`     // 已知价部分的合计
-	MissingCount int         `json:"missing_count"` // 缺价 SKU 数(去重)
-	MissingSKUs  []string    `json:"missing_skus"`
-	Lines        []QuoteLine `json:"lines"`
+	PurchaseTotalCNY     *string     `json:"purchase_total_cny,omitempty"`
+	PurchaseMissingCount int         `json:"purchase_missing_count,omitempty"`
+	SnapshotDate         string      `json:"snapshot_date"` // YYYY-MM-DD;库内无快照时为空
+	TotalCNY             string      `json:"total_cny"`     // 已知价部分的合计
+	MissingCount         int         `json:"missing_count"` // 缺价 SKU 数(去重)
+	MissingSKUs          []string    `json:"missing_skus"`
+	Lines                []QuoteLine `json:"lines"`
 }
 
 // Result 校验节点产出:P1 校验报告 + 报价块。

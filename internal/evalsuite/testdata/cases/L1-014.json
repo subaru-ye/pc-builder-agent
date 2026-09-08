@@ -1,0 +1,11 @@
+{
+  "id": "L1-014",
+  "title": "8K 家用机,A 卡即可",
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 8000,
+    "use_case": {"type": "general", "titles": ["影音娱乐", "网游"]},
+    "brand_pref": {"gpu": "amd"}
+  },
+  "expect": {"outcome": "pass"}
+}

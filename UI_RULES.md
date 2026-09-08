@@ -7,7 +7,7 @@
 1. DESIGN.md。
 2. DESIGN_CONTEXT.md。
 3. 本文件。
-4. docs/tech/P8-Web客户端设计.md。
+4. docs/tech/Web客户端.md。
 
 已有 token/组件优先;不得为单一页面引入新配色、圆角或字体体系。
 

@@ -40,43 +40,22 @@
 | 数据层 | PostgreSQL 16 + pgvector、Redis 7(pgx / go-redis) |
 | 模型 | 统一 Responses 适配层:阿里百炼、MiMo、通用 OpenAI-compatible；三个角色独立配置 |
 | 数据管道 | Python(pc-part-dataset / dbgpu 导入、embedding 生成) |
-| 客户端 | MVP:ADK-Go 内置 dev UI;阶段 1:Next.js 16 + React 19 |
+| 客户端 | Next.js 16 + React 19；ADK dev UI 仅用于调试 |
 
 选型理由与取舍记录见 [docs/tech/技术选型.md](docs/tech/技术选型.md)(ADR 形式)。
 
 ## 文档导航
 
-| 文档 | 职责 |
+完整入口见 [docs/README.md](docs/README.md)。
+
+| 文档 | 内容 |
 |---|---|
-| [PRD](docs/product/PRD.md) | 产品定义、用户与场景、功能需求、路线图、成功指标(长期方向权威) |
-| [MVP 实现指导](docs/product/mvp.md) | 已封板 MVP 范围、P0–P6 阶段拆分与验收历史 |
-| [阶段 1 实现指导](docs/product/stage1.md) | P7–P10 Web 产品化范围、顺序、退出标准与阶段 2/3 交接(当前短期执行权威) |
-| [阶段 1 待封口 Backlog](docs/product/stage1-backlog.md) | 优化后 Pass³、成本目标、真人盲评与最终封板的剩余工作 |
-| [阶段 2 实现指导](docs/product/stage2.md) | P11–P14 本机数据自动化范围、顺序、数据分层与退出标准 |
-| [数据获取与发布规则](docs/data/数据获取与发布规则.md) | 来源、字段证据、价格、模型辅助、审核与发布的强制约束 |
-| [数据获取方式实测](docs/data/2026-08-23-数据获取方式探查.md) | 浏览器、官方 API、开放数据与模型抽取的真实对照结果 |
-| [P11 数据管道设计](docs/tech/P11-数据获取与发布管道设计.md) | 本机调度、HTTP 安全采集、风险分类、不可变 release 与 last-known-good |
-| [P11 本机数据任务](docs/ops/P11本机数据任务.md) | 初始化、手动运行、Windows 任务安装、日志和卸载方法 |
-| [P11 验收记录](docs/acceptance/P11-验收记录.md) | AMD 真实采集、release v2、数据库与两次 Task Scheduler 验收结果 |
-| [P12 价格观察设计](docs/tech/P12-价格观察与安全选价设计.md) | 价格 observation、确定性选价、不可变快照、新鲜度和自动来源门禁 |
-| [P12 价格任务](docs/ops/P12价格任务.md) | 严格 CSV、review/publish/health、后台 inbox 和排障 |
-| [P12A 验收记录](docs/acceptance/P12A-验收记录.md) | P12A 自动门禁与 P12B 未完成条件 |
-| [P12B 实施记录](docs/acceptance/P12B-实施记录.md) | SerpApi/Baidu 离线门禁、真实 canary 失败与替代来源待办 |
-| [设计方案](docs/装机Agent设计方案.md) | 架构、A2A 消息 schema、兼容性规则表、数据表结构(技术设计权威) |
-| [P2 流水线设计](docs/tech/P2-流水线设计.md) | P2 三 Agent 流水线实现层:编排拓扑、提示词 SOP、tool 契约、Loop 控制 |
-| [P7 产品 API 设计](docs/tech/P7-产品API与会话状态机设计.md) | 产品会话状态机、匿名身份、后台 run、SSE 与配置读模型 |
-| [P8 Web 客户端设计](docs/tech/P8-Web客户端设计.md) | Next.js 工作台、需求确认、配置/校验/版本交互与响应式 |
-| [P9 分享与导出设计](docs/tech/P9-分享与导出设计.md) | 共享 presenter、只读链接、Markdown 与分享图 |
-| [P10 评测与阶段验收](docs/tech/P10-评测与阶段验收.md) | 50+ golden、Web/Live E2E、真人 rubric 与退出门禁 |
-| [ADR-007 模型供应商与成本控制](docs/tech/ADR-007-模型供应商适配与成本控制.md) | 百炼/MiMo/通用 Responses 配置、错误策略、上下文与 Token 优化 |
-| [ADR-008 Supabase Auth](docs/tech/ADR-008-Supabase-Auth账号系统.md) | 服务端 Token 保险箱、匿名 owner 认领与账号安全边界 |
-| [Supabase Auth 本地运行](docs/ops/Supabase-Auth本地账号系统.md) | 密钥初始化、Compose 启动、账号页面和排障 |
-| [Agent Harness 2.0](docs/tech/Agent-Harness-2.0.md) | 确定性候选准备、无工具 builder、定向修复、双轨切换与成本门禁 |
-| [产品 API 契约](docs/api/openapi.yaml) | 阶段 1 HTTP DTO、路径与错误响应唯一线格式 |
-| [设计上下文](DESIGN_CONTEXT.md) | Linear 派生的产品视觉目标;具体 token/规则见 DESIGN.md、UI_RULES.md |
-| [技术选型](docs/tech/技术选型.md) | 语言/框架/模型供应商决策记录(栈级选择权威) |
-| [工程实践指引](docs/tech/工程实践指引.md) | 按模块/阶段筛选的 Agent 工程实践要点与阶段检查单 |
-| [产品调研](docs/装机Agent产品调研.md) | 竞品格局与数据源论证(历史依据) |
+| [产品需求](docs/product/PRD.md) | 产品定义、功能边界和质量目标 |
+| [当前路线图](docs/product/路线图.md) | 未完成事项、阻塞与验证条件 |
+| [系统架构](docs/tech/系统架构.md) | 服务边界、契约与数据职责 |
+| [本地运行与部署](docs/ops/本地运行与部署.md) | 启动、迁移、健康检查和排障 |
+| [评估](docs/eval/README.md) | 测试方法、评估集、基线与运行记录 |
+| [数据规则](docs/data/数据获取与发布规则.md) | 证据、价格和安全发布约束 |
 
 ## 快速启动
 
@@ -87,7 +66,7 @@ docker compose up -d        # PG → localhost:15432,Redis → localhost:16379(�
 go run ./cmd/migrate up     # 应用 PostgreSQL 编号迁移
 ```
 
-复制 `.env.example` 为 `.env`。screening、builder、embedding 可独立配置 `PROVIDER/MODEL/API_KEY/BASE_URL`;未设置 provider 时兼容旧配置并默认百炼。系统不会在额度、鉴权或限流失败后自动切换模型或供应商。MiMo 当前只用于 chat，builder 须关闭思考；embedding 继续使用百炼。`BUILD_HARNESS_MODE` 默认 `v2`，使用确定性候选和最多三次无工具选配；可显式设为 `legacy` 诊断旧链，失败不会自动回退。显式连通性检查使用 `go run ./cmd/modelcheck -role screening|builder|embedding`。P9 还要求独立的 `SHARE_TOKEN_SECRET`,生成方法见[本地运行手册](docs/ops/阶段1本地运行与部署准备.md)。账号功能默认关闭；需要本地账号时运行 `go run ./cmd/authsetup`，再用 `docker-compose.auth.yml` 启动独立 GoTrue。
+复制 `.env.example` 为 `.env`。screening、builder、embedding 可独立配置 `PROVIDER/MODEL/API_KEY/BASE_URL`;未设置 provider 时兼容旧配置并默认百炼。当前示例固定 Builder `qwen3.8-max-0902`、Screening `deepseek-v4-flash-0731` 并清空切换链；显式配置 `*_MODEL_CHAIN` 才启用链内额度切换，不跨供应商回退。MiMo 当前只用于 chat，builder 须关闭思考；embedding 继续使用百炼。`BUILD_HARNESS_MODE` 默认 `v2`，使用确定性候选和最多三次无工具选配；可显式设为 `legacy` 诊断旧链，失败不会自动回退。显式连通性检查使用 `go run ./cmd/modelcheck -role screening|builder|embedding`。分享功能还要求独立的 `SHARE_TOKEN_SECRET`,生成方法见[本地运行手册](docs/ops/本地运行与部署.md)。账号功能默认关闭；需要本地账号时运行 `go run ./cmd/authsetup`，再用 `docker-compose.auth.yml` 启动独立 GoTrue。
 
 ```bash
 go run ./cmd/authsetup
@@ -102,11 +81,11 @@ go run ./cmd/buildsvc  # 终端 1:启动「生成 + 校验」A2A 服务(http://l
 go run ./cmd/host web --write-timeout=10m api --sse-write-timeout=10m webui
 # 浏览器访问 http://localhost:8080/ui/
 
-# 终端 3:P7 产品 API
+# 终端 3:产品 API
 go run ./cmd/api
 # 存活/完整就绪检查:http://localhost:8082/healthz 和 /readyz
 
-# 终端 4:P8 Web 配置工作台
+# 终端 4:Web 配置工作台
 cd web
 pnpm install --frozen-lockfile
 pnpm dev
@@ -126,31 +105,13 @@ powershell -ExecutionPolicy Bypass -File scripts/data/ops/install-tasks.ps1 -Ski
 
 当前启用的首个外部来源是 13 个固定映射的 AMD 官方 CPU 具体型号页。每周串行条件请求，严格核对型号并只生成 socket、支持芯片组、TDP、核显和官方名称的确定性 evidence；政策、身份或页面结构变化会隔离来源。
 
-P12A 已增加价格 observation、安全选价和动态过期提示。P12B 的 SerpApi Free/Baidu Shopping 适配仍保留，但 2026-08-27 真实 canary 返回 0/12 购物结果，因此来源、96 SKU 核心池和每日任务均未激活；当前暂停寻找替代价格源。Agent Harness 2.0 已完成 L1–L6 Pass³ 机器复验，阶段 1 只剩 3 位独立受试者的真人盲评。详见[P12 价格任务](docs/ops/P12价格任务.md)和[SerpApi 价格来源实测](docs/data/2026-08-27-SerpApi价格来源实测.md)。
+人工价格 observation、安全选价和动态过期提示可用；自动价格来源和每日任务保持禁用。操作见[价格任务](docs/ops/价格任务.md)，依据见[数据来源决策](docs/data/数据来源决策.md)，未完成工作见[路线图](docs/product/路线图.md)。
 
-## MVP 进度
+## 当前能力
 
-- [x] 产品调研 / 设计方案 / PRD / MVP 计划 / 技术选型
-- [x] P0 环境与骨架
-- [x] P1 数据底座与规则引擎
-- [x] P2 单进程三 Agent 流水线
-- [x] P3 pgvector 语义选件
-- [x] P4 版本快照与增量改单
-- [x] P5 A2A 单跳拆分
-- [x] P6 Redis 会话层与 embedding 缓存
-- [x] P7 产品 API 与会话状态机
-- [x] P8 Web 配置工作台
-- [x] P9 分享与导出
-- [ ] P10 评测与发布准备(50 组 golden、自动门禁与 Harness v2 Live 18/18 已通过;3 人真人盲评待完成)
-- [x] P11 数据自动化(AMD 官方规格、字段 evidence、release v2、原子导入与本机双周期验收)
-- [x] P12A 价格基础设施(观察、人工 CSV、安全选价、快照、新鲜度提示)
-- [ ] P12B 自动价格来源（SerpApi/Baidu 真实 canary 失败；替代来源、96/64 激活与两个 14 天轮转周期待完成）
-- [x] Agent Harness 2.0（确定性候选、预算组合与定向修复已实现；L1–L6×3 真实矩阵通过并默认启用 v2）
-- [x] 本地账号系统（Supabase Auth、HttpOnly BFF 会话、匿名数据自动认领、账号设置）
+Web 工作台支持需求确认、配置生成、规则校验、增量改单、版本对比、分享和导出；默认 Harness v2，具备本地可选账号与数据安全发布管道。人工价格维护可用，自动价格来源保持禁用。
 
-2026-08-09 封板验收结果:PostgreSQL/pgvector/Redis 真实集成测试无跳过;Python 数据流水线 104 项测试通过;用例 A–H 全部验证,包括全 pass 配单、语义召回、v1→v3 回放/diff/Markdown 导出、A2A schema/contextID 以及 kill host 后从 Redis 恢复同一会话继续改单。
-
-阶段 1 的 P7–P9 已实现:P7 提供产品 API、匿名会话、需求确认、后台 run 与 Redis SSE;P8 提供 Next.js 工作台、配置/校验/版本/diff 与响应式交互;P9 提供不可变版本分享、所有者撤销、最小披露的 SSR 只读页、公开 Markdown 与 1200×630 PNG。2026-08-30，Harness v2 下的 L1–L6×3 以 18/18 通过：total Token 94,942，较历史基线下降 90.56%，builder 24 次，矩阵耗时中位数 10.218 秒。Go/Web/Python、真实 PostgreSQL/Redis 与 Linux race 门禁全部通过；脱敏汇总见 [P10-Live 验收汇总](docs/acceptance/P10-Live验收汇总.json)。真人盲评仍为 0/3,因此尚未创建 `stage1-freeze`。
+真人评审、固定模型回归和数据扩容等未完成事项统一见[路线图](docs/product/路线图.md)。历史质量结果保存在[评估目录](docs/eval/README.md)，不作为当前版本自动通过验收的声明。
 
 ## 免责声明
 

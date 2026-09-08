@@ -1,8 +1,8 @@
 package pipeline
 
-// P4 增量改单的确定性预处理(P4-版本快照与增量改单设计.md §4/§5):
+// P4 增量改单的确定性预处理(版本快照与增量改单.md §4/§5):
 // 初筛载荷分类(RequirementSpec / ChangeRequest)、派生需求单、锁定清单、
-// 生成 Agent 改单指令渲染,全部由代码计算,不让 LLM 自己统计(工程实践指引 §三.1)。
+// 生成 Agent 改单指令渲染,全部由代码计算,不让 LLM 自己统计(docs/tech/开发约定.md)。
 
 import (
 	"encoding/json"
@@ -27,7 +27,7 @@ const (
 const changePrepAgentName = "change_prep_agent"
 
 // buildState 改单状态块:代码维护、显式注入,覆盖改单会用到的全部维度
-// (工程实践指引 §三.1/§三.2;字段新增当"改表结构"级别对待)。
+// (docs/tech/开发约定.md;字段新增当"改表结构"级别对待)。
 type buildState struct {
 	SessionID          string          `json:"session_id"`
 	Version            int             `json:"version"`

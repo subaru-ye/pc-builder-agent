@@ -1,5 +1,5 @@
 // P5 host:装机初筛(近端)+ A2A 远程消费方。共享装配位于 internal/hostruntime，
-// cmd/host 只保留 ADK launcher 入口(P5-A2A单跳拆分设计.md)。
+// cmd/host 只保留 ADK launcher 入口(A2A服务边界.md)。
 // 运行方式(从仓库根;需先 `go run ./cmd/buildsvc` 起远程服务):
 //
 //	go run ./cmd/host                # console 模式,快速验证全链路

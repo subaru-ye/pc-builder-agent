@@ -10,7 +10,7 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
 
-// styleEntry scripts/data/styles/styles.json 的单条风格标注(P3-语义选件设计.md §2)。
+// styleEntry scripts/data/styles/styles.json 的单条风格标注(语义选件.md §2)。
 // 指针字段 nil = 未标注/未知,拼接时直接省略,不输出"未知"。
 type styleEntry struct {
 	Noise     *string  `json:"noise"`      // silent|normal|loud
@@ -44,7 +44,7 @@ func loadStyles(path string) (map[string]styleEntry, error) {
 	return out, nil
 }
 
-// categoryZH 品类中文名(embedding 文本的品类上下文,工程实践指引 §七.3)。
+// categoryZH 品类中文名(embedding 文本的品类上下文,docs/tech/开发约定.md)。
 var categoryZH = map[schemas.Category]string{
 	schemas.CategoryCPU:         "处理器",
 	schemas.CategoryGPU:         "显卡",

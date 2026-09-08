@@ -11,7 +11,7 @@ const BuildDraftSchemaVersion = 1
 // Selection 复用 §四.1 的 BuildSelection parts 口径(七类必选、gpu 显式 SKU 或
 // null、ssd 为 {sku,quantity} 数组),校验 Agent 由此走 store.ResolveBuild → 规则引擎。
 // Rationale/BudgetAllocation 是生成 Agent 的自报信息,纯展示:不进规则层、不进
-// golden 断言,仅出口翻译时透传给用户(工程实践指引 §四.1:真值不采信模型自报)。
+// golden 断言,仅出口翻译时透传给用户(docs/tech/开发约定.md:真值不采信模型自报)。
 type BuildDraft struct {
 	SchemaVersion    int
 	RequirementRef   string

@@ -39,7 +39,7 @@ type SwapSpec struct {
 // ChangeRequest 初筛 Agent → 生成 Agent 的改单请求(设计方案 §四,2026-07-26 冻结)。
 // 唯一权威出处为设计方案 §四,字段变更先改文档再改本包(CLAUDE.md 工程纪律)。
 // BaseBuildRef 是模型自报的基版本引用,仅作展示;实际基版本以代码维护的
-// 改单状态块(build_state)为真值(工程实践指引 §四.1)。
+// 改单状态块(build_state)为真值(docs/tech/开发约定.md)。
 type ChangeRequest struct {
 	SchemaVersion    int
 	BaseBuildRef     string

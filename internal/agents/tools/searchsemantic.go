@@ -15,7 +15,7 @@ import (
 )
 
 // QueryEmbedder 查询文本向量化的最小依赖面(internal/embedding.Client 实现之;
-// 接口注入便于单测 fake,P3-语义选件设计.md §6)。
+// 接口注入便于单测 fake,语义选件.md §6)。
 type QueryEmbedder interface {
 	EmbedOne(ctx context.Context, text string) ([]float32, error)
 }
@@ -51,7 +51,7 @@ type SearchPartsSemanticResult struct {
 	SnapshotDate string                  `json:"snapshot_date"` // 空 = 库内无价格快照
 }
 
-// searchPartsSemanticDescription 与 search_parts 的分工边界(工程实践指引 §四.2)。
+// searchPartsSemanticDescription 与 search_parts 的分工边界(docs/tech/开发约定.md)。
 const searchPartsSemanticDescription = `按自然语言软偏好(安静/颜值/颜色/风格等)从零件库做语义检索,按相似度降序返回候选。
 
 边界与分工:

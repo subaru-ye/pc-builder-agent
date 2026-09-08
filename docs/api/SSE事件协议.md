@@ -1,6 +1,6 @@
 # 产品 API SSE 事件协议
 
-> 状态:规划冻结,尚未实现。HTTP 路径和 DTO 以 openapi.yaml 为准;本文补充 OpenAPI 不便完整表达的流式语义。
+> 状态:已实现，事件处理见 `internal/producthttp/sse.go` 与 `internal/runevents`；本文维护协议约束。HTTP 路径和 DTO 以 openapi.yaml 为准;本文补充 OpenAPI 不便完整表达的流式语义。
 
 ## 1. 连接模型
 

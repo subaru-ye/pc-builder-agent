@@ -1,6 +1,6 @@
 // Package rules 实现 P1 兼容性规则引擎:纯 Go、零 LLM、零 IO。
 // 只允许 import 标准库与 internal/schemas(golangci-lint depguard 强制)。
-// 规则条目与判定口径的唯一权威出处:docs/装机Agent设计方案.md §四.1 / §五。
+// 规则条目与判定口径的唯一权威出处:docs/tech/系统架构.md §四.1 / §五。
 //
 // 执行模型(冻结):12 条规则按 schemas.AllRuleIDs 固定顺序全部执行、不短路;
 // Go error 仅表示输入结构非法,规则判定结果(pass|fail|unknown)一律进 CheckResult。

@@ -13,8 +13,8 @@ go run ./cmd/buildsvc            # 终端 1:A2A 生成+校验服务
 go run ./cmd/host web --write-timeout=10m api --sse-write-timeout=10m webui  # 终端 2:ADK dev UI,http://localhost:8080/ui/
 go run ./cmd/api                 # 终端 3:产品 API,http://localhost:8082
 go run ./cmd/modelcheck -role screening  # 显式上游检查;普通启动/测试不调用模型
-uv run --project scripts/data pcdata source check  # P11 静态来源检查;默认不联网
-uv run --project scripts/data pcdata price health  # P12A 价格快照与动态年龄
+uv run --project scripts/data pcdata source check  # 静态来源检查;默认不联网
+uv run --project scripts/data pcdata price health  # 价格快照与动态年龄
 cd web && pnpm dev               # 终端 4:产品 Web,http://localhost:3000
 go build ./... && go vet ./...
 ```
@@ -23,52 +23,43 @@ go build ./... && go vet ./...
 - `.env`(不入库)存所选供应商 Key、独立的 `SHARE_TOKEN_SECRET` 与可选 Auth 密钥;这些密钥不得复用。三个模型角色通过 `*_PROVIDER/MODEL/API_KEY/BASE_URL` 独立配置,见 `.env.example`。
 - 数据库结构统一由 `db/migrations/` 的 goose 编号迁移管理；保留数据卷运行 `go run ./cmd/migrate up`，禁止为普通迁移执行 `down -v`。
 
-## 权威文档(冲突仲裁)
+## 文档入口与职责
 
-| 文档 | 权威范围 |
+完整导航见 `docs/README.md`。产品需求由 `docs/product/PRD.md` 维护，当前工作只在 `docs/product/路线图.md` 维护；不要恢复旧阶段清单。
+
+| 文档 | 范围 |
 |---|---|
-| docs/product/PRD.md | 产品长期方向 |
-| docs/product/mvp.md | 已封板 MVP 范围与 P0–P6 验收历史 |
-| docs/product/stage1.md | P7–P10 Web 产品化范围、顺序与退出标准(当前短期执行唯一依据) |
-| docs/product/stage1-backlog.md | 阶段 1 未封口项、外部阻塞、恢复条件与最终封板步骤 |
-| docs/product/stage2.md | P11–P14 本机数据自动化范围、顺序、数据分层与阶段退出标准 |
-| docs/data/数据获取与发布规则.md | 数据来源、字段证据、价格选择、模型禁区和条件发布强制规则 |
-| docs/tech/P11-数据获取与发布管道设计.md | 本机调度、HTTP 安全采集、风险分类、不可变 release 与数据库演进 |
-| docs/ops/P11本机数据任务.md | P11 初始化、计划任务安装、日志、补跑和卸载操作 |
-| docs/tech/P12-价格观察与安全选价设计.md | P12A observation/选价/新鲜度与 P12B 自动来源门禁 |
-| docs/ops/P12价格任务.md | P12 CSV、SerpApi canary、review/publish、调度、health 与排障操作 |
-| docs/装机Agent设计方案.md | 架构 / A2A schema / 规则表 / 表结构 |
-| docs/tech/P2-流水线设计.md | P2 实现层:编排拓扑 / 提示词 SOP / tool 契约 / Loop 控制(schema 口径仍以设计方案 §四 为准) |
-| docs/tech/P3-语义选件设计.md | P3 实现层:embedding 素材与文本 / 语义检索路径 / search_parts_semantic 契约 |
-| docs/tech/P4-版本快照与增量改单设计.md | P4 实现层:builds/requirements 版本表 / ChangeRequest 意图解析 / 锁定校验 / cmd/builds 回放·diff·导出 |
-| docs/tech/P5-A2A单跳拆分设计.md | P5 实现层:buildsvc A2A 远程服务(生成+校验)/ host 初筛远程消费方 / 出站只传三样 + 入站 schema 校验 / contextID 会话映射 |
-| docs/tech/P7-产品API与会话状态机设计.md | P7 实现层:产品 API / 匿名所有权 / 需求确认状态机 / run 与 SSE / 产品读模型 |
-| docs/tech/P8-Web客户端设计.md | P8 实现层:Next.js 工作台 / 需求确认 / 配置·校验·版本 / 响应式与无障碍 |
-| docs/tech/P9-分享与导出设计.md | P9 实现层:共享 presenter / Markdown / 分享 token / 只读页与分享图 |
-| docs/tech/P10-评测与阶段验收.md | P10 实现层:50+ golden / Web 与 Live E2E / 真人 rubric / 最终门禁 |
-| docs/tech/ADR-007-模型供应商适配与成本控制.md | 百炼/MiMo/通用 Responses 装配 / 无自动 fallback / 上下文与 Token 优化 |
-| docs/tech/ADR-008-Supabase-Auth账号系统.md | GoTrue BFF / Token 保险箱 / 多 owner 认领与授权边界 |
-| docs/ops/Supabase-Auth本地账号系统.md | 本地账号初始化、启动、限制与排障 |
-| docs/tech/Agent-Harness-2.0.md | builder 双轨 / 候选包 / 无工具决策 / 定向修复 / 切换门禁 |
-| docs/api/openapi.yaml | 产品 HTTP 路径与 DTO 线格式;SSE 细节见同目录协议文档 |
-| DESIGN.md / DESIGN_CONTEXT.md / UI_RULES.md | Web 视觉来源、产品设计语境与实现规则;写 UI 前必须依次阅读 |
-| docs/tech/技术选型.md | 栈级决策(ADR)+ 版本锁定表 |
-| docs/tech/工程实践指引.md | 各阶段开工前扫对应小节;评审对照 §九检查单 |
+| docs/tech/系统架构.md | 服务边界与模块导航 |
+| docs/tech/开发约定.md | 目录、模型、状态与验证纪律 |
+| docs/tech/技术选型.md | 栈级决策；实际版本以锁文件为准 |
+| docs/tech/Agent-Harness-2.0.md | 默认候选准备、修复与双轨边界 |
+| docs/api/openapi.yaml | HTTP 路径与 DTO；流式细节见同目录 SSE 协议 |
+| docs/data/数据获取与发布规则.md | 数据与条件发布的强制约束 |
+| docs/ops/本地运行与部署.md | 启动、迁移和排障 |
+| docs/eval/README.md | 测试、评估、历史基线与运行记录 |
+| DESIGN.md / DESIGN_CONTEXT.md / UI_RULES.md | Web 视觉与实现规则；写 UI 前必须依次阅读 |
+
+代码契约分别以 `internal/schemas`、OpenAPI 和 `db/migrations` 为准，相关更改同步更新文档与契约测试。
 
 ## 工程纪律
 
 - **版本纪律**:ADK-Go/a2a-go 迭代快,文档不写死 import 路径与 API 签名;首装后回填技术选型.md 末尾版本锁定表。模型默认值集中在 `internal/modelprovider`,部署值只进未跟踪 `.env`;文档示例需与 `.env.example` 同步。
-- **模型纪律**:不得在启动时探测模型,不得自动 fallback;真实调用只通过显式 `modelcheck` 或 Live 门禁。日志/指标只写 provider、role、model、状态和安全错误类别。
+- **模型纪律**:不得在启动时探测模型;真实调用只通过显式 `modelcheck` 或 Live 门禁。日志/指标只写 provider、role、model、状态和安全错误类别。**额度降级链(2026-09 修订)**:chat 角色可配置 `SCREENING_MODEL_CHAIN`/`BUILDER_MODEL_CHAIN`(显式白名单,非跨供应商回退),运行中候选 403/404/配额耗尽自动切下一个并记日志,全部耗尽才失败;链外不得静默换模型。
 - **Harness 纪律**:`BUILD_HARNESS_MODE` 只允许 legacy/v2；默认 v2 最多三次无工具 builder 调用，失败不得自动执行 legacy。legacy 仅供操作者显式诊断。
 - **认证纪律**:浏览器和 Next.js 不接触 Supabase Token、不读取 `auth.*`;产品 API 只用 HttpOnly opaque Cookie，Token 加密存 Redis。已认领 owner 不得匿名访问，公开分享接口不得读取身份 Cookie。
-- **数据纪律**:网络响应和模型辅助结果默认只能进入候选区;只有精确身份、确定性证据和全部门禁通过的低风险变化可条件自动发布,其余进入 quarantine 并保持 last-known-good。定时主链模型调用必须为 0。阶段 2 以 `docs/data/数据获取与发布规则.md` 为准。
-- **目录纪律**:布局唯一出处 mvp.md §4.4;`internal/*`、`scripts/` P1 起按需建,不为架构感提前拆(工程实践指引 §一.3)。
-- **`internal/rules` 零 LLM**:P1 建包时同时配 golangci-lint depguard。
-- **schema 单一出处**:`internal/schemas` 定义一份,字段变更回写设计方案 §四,不在代码里静默漂移。
-- 当前进度:MVP P0–P6 已封板;P7 产品 API、P8 Web 工作台与 P9 分享只读页已实现。2026-08-30，Agent Harness 2.0 后的 L1–L6×3 完整 Live 复验 18/18 通过，成本与延迟硬门禁通过；3 人真人盲评仍为 0/3，因此不得创建 `stage1-freeze`。P11 已完成，P12A 已实现，P12B 在真实 canary 失败后暂停。Harness v2 已默认启用，legacy 仅供显式诊断。产品入口为 `web/` 的 Next.js 工作台,ADK dev UI 继续只作调试入口。
+- **数据纪律**:网络响应和模型辅助结果默认只能进入候选区;只有精确身份、确定性证据和全部门禁通过的低风险变化可条件自动发布,其余进入 quarantine 并保持 last-known-good。定时主链模型调用必须为 0。数据操作以 `docs/data/数据获取与发布规则.md` 为准。
+- **目录纪律**:见 `docs/tech/开发约定.md`；按实际职责建目录。
+- **`internal/rules` 零 LLM**:使用 golangci-lint depguard 保护。
+- **schema 单一出处**:`internal/schemas` 定义一份,字段变更同步对应模块设计,不在代码里静默漂移。
+- 当前能力与未完成事项见 `docs/product/路线图.md`；真人门禁未通过不能宣称最终发布验收完成。
+
+## 模型配置与评估口径
+
+当前 `.env.example` 固定 Builder `qwen3.8-max-0902`、Screening `deepseek-v4-flash-0731`，二者 `*_MODEL_CHAIN` 为空；Embedding 保持 `qwen3.7-text-embedding`。沿用百炼供应商 Key，角色专用 Key 可覆盖。固定组合已完成 v1.1 基线与修复回归；当前 v1.3 已迁移已有件旧契约题，增加禁止重复追问已知信息的负向断言，真实结果见 docs/eval/运行记录.md。
+
+额度链能力保留在 `internal/modelprovider/chain.go`，非空链会覆盖单模型配置。固定回归不得静默启用链；真实额度链评估独立标注，链首不是每次实际服务模型。历史额度不作为当前可用额度承诺。
 
 ## 已知环境坑(Windows)
 
-- ADK openaimodel 走 OpenAI **Responses API**(非 Chat Completions),百炼 compatible-mode 已支持;该包标注 EXPERIMENTAL。
-- Docker Desktop 若启动崩溃报 unix socket「cannot be accessed」:Windows 层删不掉损坏 socket,用 `wsl -d docker-desktop -e rm -f /mnt/host/c/<路径>` 删(2026-07-26 实修:dockerInference、engine.sock 等三处)。**根因是 Windows 快速启动(HiberbootEnabled=1)把 socket 冻成死文件,每次关机开机必复发,关掉快速启动才断根**(2026-07-27 确认)。
+- ADK openaimodel 走 OpenAI **Responses API**(非 Chat Completions),百炼 compatible-mode 已支持;该包标注 EXPERIMENTAL。- Docker Desktop 若启动崩溃报 unix socket「cannot be accessed」:Windows 层删不掉损坏 socket,用 `wsl -d docker-desktop -e rm -f /mnt/host/c/<路径>` 删(2026-07-26 实修:dockerInference、engine.sock 等三处)。**根因是 Windows 快速启动(HiberbootEnabled=1)把 socket 冻成死文件,每次关机开机必复发,关掉快速启动才断根**(2026-07-27 确认)。
 - `go`/`docker` 不在 PATH 时:Go 装在 `C:\Program Files\Go\bin`。

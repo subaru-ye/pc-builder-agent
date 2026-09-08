@@ -1,6 +1,6 @@
 // Package schemas 定义 P1 校验契约的全部数据类型:
 // BuildSelection(CLI 输入)/ ResolvedBuild(规则引擎输入)/ ValidationReport(输出)
-// 及各品类 canonical 规格。唯一权威出处为 docs/装机Agent设计方案.md §四.1,
+// 及各品类 canonical 规格。唯一权威出处为 docs/tech/系统架构.md §四.1,
 // 字段变更先改文档再改本包,不在代码里静默漂移(CLAUDE.md 工程纪律)。
 //
 // null 语义:标量指针 nil = 未知;集合 nil = 未知,空集合 = 已知为空。

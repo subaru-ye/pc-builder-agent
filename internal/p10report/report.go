@@ -1,4 +1,4 @@
-// Package p10report 定义阶段 1 封板的脱敏验收报告和硬门禁。
+// Package p10report 定义产品发布验收的脱敏报告和硬门禁。
 package p10report
 
 import (

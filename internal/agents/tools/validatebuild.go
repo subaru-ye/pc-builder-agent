@@ -29,7 +29,7 @@ type ValidateBuildResult struct {
 	Quote  validate.Quote           `json:"quote"`
 }
 
-// validateBuildDescription 从生成 Agent 视角描述边界与协作(工程实践指引 §四.2)。
+// validateBuildDescription 从生成 Agent 视角描述边界与协作(docs/tech/开发约定.md)。
 const validateBuildDescription = `对一份完整 BuildDraft 执行 12 条兼容性规则校验(纯规则引擎,非模型判断),并按最新价格快照报价。
 
 边界:

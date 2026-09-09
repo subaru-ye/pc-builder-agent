@@ -197,7 +197,11 @@ func (s *Service) executeScreening(ctx context.Context, r store.AgentRun, ownerI
 		s.failInternal(ctx, r, store.PhaseCollecting, "")
 		return
 	}
+	s.captureEvidence(ctx, r.ID, "screening_input", screeningEvidence(input))
 	result, err := s.agent.Screen(ctx, ownerID, r.SessionID, input)
+	if err == nil {
+		s.captureEvidence(ctx, r.ID, "screening_output", map[string]any{"kind": result.Kind, "text": result.Text, "payload": result.Payload})
+	}
 	if err != nil {
 		s.failFromError(ctx, r, err, store.PhaseCollecting, "")
 		return
@@ -291,7 +295,11 @@ func (s *Service) executeChange(ctx context.Context, r store.AgentRun, ownerID, 
 		s.failInternal(ctx, r, store.PhaseReady, "")
 		return
 	}
+	s.captureEvidence(ctx, r.ID, "screening_input", screeningEvidence(input))
 	result, err := s.agent.Screen(ctx, ownerID, r.SessionID, input)
+	if err == nil {
+		s.captureEvidence(ctx, r.ID, "screening_output", map[string]any{"kind": result.Kind, "text": result.Text, "payload": result.Payload})
+	}
 	if err != nil {
 		s.failFromError(ctx, r, err, store.PhaseReady, "")
 		return
@@ -428,6 +436,7 @@ func parseDeterministicGPUBrandSwap(text string) (string, bool) {
 }
 
 func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID string, payload json.RawMessage) {
+	s.captureEvidence(ctx, r.ID, "build_input", map[string]any{"payload": payload, "actual_builder_model": nil, "model_evidence_source": "remote_identity_unavailable"})
 	s.progress(ctx, r.ID, "remote_processing", "正在生成并校验配置", 2)
 	before, _, err := s.store.LatestBuildVersion(ctx, r.SessionID)
 	if err != nil {
@@ -446,10 +455,12 @@ func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID s
 		return
 	}
 	if !found || after != before+1 {
+		s.captureEvidence(ctx, r.ID, "build_output", map[string]any{"text": result.Text, "build_version": nil})
 		s.fail(ctx, r, NewProblem("generation_failed", "没有生成可保存的配置", 422,
 			"远程流程已经结束，但数据库没有新增预期版本。", r.ID), recoveryFor(r.Kind), result.Text)
 		return
 	}
+	s.captureEvidence(ctx, r.ID, "build_output", map[string]any{"text": result.Text, "build_version": after})
 	s.succeed(ctx, r, store.PhaseReady, nil, false, result.Text, after)
 }
 

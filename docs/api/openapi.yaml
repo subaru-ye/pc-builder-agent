@@ -296,6 +296,39 @@ paths:
               schema: {$ref: "#/components/schemas/Run"}
         "4XX":
           $ref: "#/components/responses/Problem"
+  /api/v1/runs/{run_id}/feedback:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+    get:
+      summary: 读取自己的运行反馈
+      tags: [runs]
+      operationId: getRunFeedback
+      responses:
+        "200":
+          description: 当前反馈；未提交时为 null
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FeedbackResponse"}
+        "4XX":
+          $ref: "#/components/responses/Problem"
+    post:
+      summary: 提交或修改已结束运行的负反馈
+      description: 同一运行只保留一份反馈；相同内容重复提交不重复创建，修改原因不更换证据。反馈不等于已批准的评估标准答案。
+      tags: [runs]
+      operationId: submitRunFeedback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/FeedbackInput"}
+      responses:
+        "200":
+          description: 反馈已保存
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FeedbackResponse"}
+        "4XX":
+          $ref: "#/components/responses/Problem"
   /api/v1/runs/{run_id}/events:
     parameters:
       - $ref: "#/components/parameters/RunID"
@@ -724,6 +757,39 @@ components:
             - {type: string, format: uuid}
             - {type: "null"}
         created_at: {type: string, format: date-time}
+    FeedbackReason:
+      type: string
+      enum: [unnecessary_question, requirement_mismatch, configuration_issue, price_issue, unclear_explanation, other]
+    FeedbackInput:
+      type: object
+      additionalProperties: false
+      required: [schema_version, reason]
+      properties:
+        schema_version: {type: integer, const: 1}
+        reason: {$ref: "#/components/schemas/FeedbackReason"}
+        comment: {type: string, maxLength: 2000, description: 选择 other 时必须填写非空说明}
+    Feedback:
+      type: object
+      additionalProperties: false
+      required: [id, run_id, reason, comment, fingerprint, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        run_id: {type: string, format: uuid}
+        reason: {$ref: "#/components/schemas/FeedbackReason"}
+        comment: {type: string, maxLength: 2000}
+        fingerprint: {type: string, pattern: '^[0-9a-f]{64}$'}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    FeedbackResponse:
+      type: object
+      additionalProperties: false
+      required: [schema_version, feedback]
+      properties:
+        schema_version: {type: integer, const: 1}
+        feedback:
+          oneOf:
+            - $ref: "#/components/schemas/Feedback"
+            - {type: "null"}
     Run:
       type: object
       additionalProperties: false

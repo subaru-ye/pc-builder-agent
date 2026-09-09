@@ -1,15 +1,15 @@
 # 评估 Runner 设计
 
-> 更新：2026-09-08。依据当前 `cmd/eval` 与 `internal/evalsuite` 整理；覆盖已实现能力并明确验证边界。方法见[Agent 的评估](../eval/methodology/01-Agent的评估方法论精读.md)，用例契约见[评估集建立记录](../eval/评估集建立记录.md)。
+> 更新：2026-09-09。依据当前 `cmd/eval` 与 `internal/evalsuite` 整理；覆盖已实现能力并明确验证边界。方法见[Agent 的评估](../eval/methodology/01-Agent的评估方法论精读.md)，用例契约见[评估集建立记录](../eval/评估集建立记录.md)。
 
 ## 1. 目标与范围
 
 在固定用例、快照和模型配置下，检测提示词、检索、规则与修复策略的回归。评估对象是模型与 Harness 的组合，确定性断言负责打分。
 
-- 当前 v1.3 的 13 条 L1 整机、10 条 L2 改单及 8 条 L4 构建边界题直接调用 `buildharness`，输入结构化需求，不经过产品初筛与持久化交付层。
+- 当前 v1.4 的 12 条 L1 整机、10 条 L2 改单及 9 条 L4 构建边界题直接调用 `buildharness`，输入结构化需求，不经过产品初筛与持久化交付层。
 - 5 条 L3 初筛及 4 条 L4 初筛输入自然语言，共 40 题。初筛调用 ADK InMemory 会话，使用产品同口径 `pipeline.ExtractPayload`。
 - `-seeds N` 为每个用例重复执行 N 次；编号不传入模型采样参数，不能称为不同随机种子的确定性实验。
-- 负反馈回流、消融、异构 Judge 报告质量尚不在当前实现内；完整产品链路由 Web Live 测试补充。
+- 产品已有负反馈保存和本机待复核候选导出，见[反馈与评估回流](反馈与评估回流.md)；正式入题仍需人工复核。消融、异构 Judge 报告质量尚未实现；完整产品链路由 Web Live 测试补充。
 
 ## 2. 执行入口
 
@@ -18,7 +18,7 @@ go run ./cmd/eval -mode run -snapshot-date 2026-07-28 -seeds 3
 go run ./cmd/eval -mode replay -dir artifacts/eval/<时间戳>
 ```
 
-快照日期必须显式给出，且存在于数据库；示例日期用于已有基线，不能视为最新数据。产物为 `cases.json`、`meta.json`、`results.jsonl`、`report.md`，写入带时间戳和唯一后缀的 `artifacts/eval/` 子目录，不入库。更换固定模型后需要新建基线，不能直接继承额度链成绩。当前默认版本见[评估集 v1.3](../eval/versions/v1.3.md)。
+快照日期必须显式给出，且存在于数据库；示例日期用于已有基线，不能视为最新数据。产物为 `cases.json`、`meta.json`、`results.jsonl`、`report.md`，写入带时间戳和唯一后缀的 `artifacts/eval/` 子目录，不入库。更换固定模型后需要新建基线，不能直接继承额度链成绩。当前默认版本见[评估集 v1.4](../eval/versions/v1.4.md)。
 
 ## 3. 设计
 
@@ -28,11 +28,13 @@ go run ./cmd/eval -mode replay -dir artifacts/eval/<时间戳>
 
 ### 3.2 用例契约
 
-fixtures 位于 `internal/evalsuite/testdata/cases/`，`testdata/suites/v1.3.json` 固定当前题目顺序与内容哈希；旧清单保持不变。build 包含 RequirementSpec、期望及可选 ChangeRequest、BaseSelection、Locked；screening 包含用户文字和 spec/clarify 期望。clarify 的 `clarify_fields` 指定必须追问的字段，支持 `budget_cny`、`resolution`、`owned_parts`、`budget_basis`、`use_case`；`forbidden_clarify_fields` 指定禁止追问字段，两组不能冲突。旧 fixture 未填写时仅检查基本询问形式。字段解码复用 `internal/schemas`。运行前校验清单，使用同一次读取的内容执行并保存完整副本，避免读取与执行使用不同题目。
+fixtures 位于 `internal/evalsuite/testdata/cases/`，`testdata/suites/v1.4.json` 固定当前题目顺序与内容哈希；旧清单保持不变。build 包含 RequirementSpec、期望及可选 ChangeRequest、BaseSelection、Locked；screening 包含用户文字和 spec/clarify 期望。clarify 的 `clarify_fields` 指定必须追问的字段，支持 `budget_cny`、`resolution`、`owned_parts`、`budget_basis`、`use_case`；`forbidden_clarify_fields` 指定禁止追问字段，两组不能冲突。旧 fixture 未填写时仅检查基本询问形式。字段解码复用 `internal/schemas`。运行前校验清单，使用同一次读取的内容执行并保存完整副本，避免读取与执行使用不同题目。
 
 ### 3.3 断言与否决
 
 build 成功交付断言 A1–A8 覆盖结构、快照、预算、品牌、SKU 成员、报价合计和锁定；新增 A9 复验已有件与采购报价，A4/A6/A8/A9 为 veto。期望 pass 而未交付时记录 A2；期望非交付时用 N1 校验类型、原因和证据，不把任意失败当正确拒绝。veto=0 不代表所有执行成功。
+
+v1.4 新题 L4-215 的 `budget_adaptive` 接受合格交付或预算不足证明：交付执行全部适用硬断言；非交付仅允许 `catalog_infeasible` 的独立品类/平台预算下限原因，并重建金额、范围、快照与程序说明。搜索耗尽、缺数据及接口错误均不能借此通过。旧 L1-004 的 pass 期望不改写。
 
 screening 的 S1 检查 JSON 形态，clarify 必须是非空文本且不含 JSON/代码块；S2 检查预算、分辨率和品牌；S3 检查是否追问了每个指定字段（预算、分辨率、已有件型号、预算口径），也拦截缺已有件必要信息却输出需求单的行为。S3 是中文关键词与询问/请求词在同一短句内匹配的确定性近似规则，支持常见问法和请求补充信息的句式，过滤常见否定/拒绝表达。它不等于开放域语义理解，仍可能误判生僻表达，遇到争议需查看原文并人工复核。
 
@@ -44,7 +46,13 @@ S4 仅对显式声明 `forbidden_clarify_fields` 的新题检查重复追问，�
 
 `meta.json` 的 `record_schema_version=1` 标识回复必须留存的新记录；无执行错误却缺少 screening 回复时重放报错（退出 2）。旧产物没有原文时保留旧结论，在报告标为“部分重放”，不宣称已复验；旧产物没有完整题目副本时仍无法补验 A8。执行错误保留原记录，不把残留文本当成功输出。可重判记录比较完整 Verdict（含各断言及 veto）与归因，任何差异退出 1；一致退出 0，即使复现的是失败。首跑程序标识保留，重判程序哈希单独展示。
 
+初筛程序核验启用后，新增可选 `screening.model_text`（拦截前的模型回复）和 `screening.missing_fields`（核验发现的字段）。打分及重放仍基于最终可见的 `screening.text`；原文用于判断改善来自模型还是程序兜底，不把程序拦截后的通过率称为模型原始正确率。旧记录未保存这两个字段时不补造原文，也不追溯重跑新核验。
+
+修改初筛核验规则后，可额外设置 `SCREENING_GUARD_RUN_DIR` 为完整运行产物的绝对路径，执行 `go test ./internal/agents/pipeline -run TestScreeningGuardSavedRun -v`。这项零模型审计用保存的用户题目和模型原文重新执行当前核验，逐条比较最终回复及缺失字段，检查数量和重复项；须配合正常 `eval -mode replay` 的哈希及判卷验证，不能拿重处理后的输出覆盖首跑成绩。
+
 ### 3.5 指标与门禁
+
+报告将通过项拆分为成功交付、合理非交付、初筛正确及历史未分类。Pass@1 表示任务处理正确率，不能称为装机交付率；通过的合理非交付仍保留 `Succeeded=false`、类型和证据。修改验收契约带来的跨版本分差须单列解释。
 
 真实运行 error 一律记失败，不按“没有候选”等文案排除分母；结构化 data_unavailable 作为业务结果判卷。历史成功交付缺价的 data-error 判卷兼容路径仍保留。记录级通过率以非 data-error 记录为分母；用例级 Pass^k 要求全部重复通过且零 veto，含 data-error 的用例从该比率分母排除，但 `AllGreen()` 仍要求无失败、无 data-error。版本化产物在 replay 时拒绝缺失、重复、越界或未知用例记录；历史产物仍需人工核对完整性。当前 40 条样本用于方向性回归，不能支持精细模型排名。
 

@@ -136,6 +136,8 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/sessions/{session_id}/requirement", a.replaceRequirement)
 	mux.HandleFunc("POST /api/v1/sessions/{session_id}/requirement/confirm", a.confirmRequirement)
 	mux.HandleFunc("GET /api/v1/runs/{run_id}", a.getRun)
+	mux.HandleFunc("GET /api/v1/runs/{run_id}/feedback", a.runFeedback)
+	mux.HandleFunc("POST /api/v1/runs/{run_id}/feedback", a.runFeedback)
 	mux.HandleFunc("GET /api/v1/runs/{run_id}/events", a.streamRunEvents)
 	mux.HandleFunc("GET /api/v1/sessions/{session_id}/builds", a.listBuilds)
 	mux.HandleFunc("GET /api/v1/sessions/{session_id}/builds/{version}", a.getBuild)
@@ -740,6 +742,10 @@ func (a *API) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 	switch {
+	case errors.Is(err, store.ErrFeedbackInvalid):
+		a.writeProblem(w, r, product.NewProblem("invalid_request", "反馈内容无效", 422, "请选择原因，说明不超过2000字；选择其他时请填写说明。", requestID(r)))
+	case errors.Is(err, store.ErrFeedbackRunActive):
+		a.writeProblem(w, r, product.NewProblem("run_active", "请等待本次回复完成", 409, "运行结束后可以提交反馈。", requestID(r)))
 	case errors.Is(err, account.ErrDisabled):
 		a.writeProblem(w, r, product.NewProblem("auth_disabled", "账号功能未启用", 503, "当前环境仍可匿名使用。", requestID(r)))
 	case errors.Is(err, account.ErrInvalidCredentials):

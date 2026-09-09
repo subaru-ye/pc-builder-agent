@@ -171,6 +171,32 @@ const createMessageRun_Body = z.object({
   schema_version: z.number().int(),
   text: z.string().min(1).max(4000),
 });
+const FeedbackReason = z.enum([
+  "unnecessary_question",
+  "requirement_mismatch",
+  "configuration_issue",
+  "price_issue",
+  "unclear_explanation",
+  "other",
+]);
+const Feedback = z.object({
+  id: z.string().uuid(),
+  run_id: z.string().uuid(),
+  reason: FeedbackReason,
+  comment: z.string().max(2000),
+  fingerprint: z.string().regex(/^[0-9a-f]{64}$/),
+  created_at: z.string().datetime({ offset: true }),
+  updated_at: z.string().datetime({ offset: true }),
+});
+const FeedbackResponse = z.object({
+  schema_version: z.number().int(),
+  feedback: z.union([Feedback, z.null()]),
+});
+const FeedbackInput = z.object({
+  schema_version: z.number().int(),
+  reason: FeedbackReason,
+  comment: z.string().max(2000).optional(),
+});
 const Money = z.string();
 const PriceFreshness = z.enum(["fresh", "aging", "stale", "unknown"]);
 const BuildSummary = z.object({
@@ -340,6 +366,10 @@ export const schemas = {
   Run,
   Session,
   createMessageRun_Body,
+  FeedbackReason,
+  Feedback,
+  FeedbackResponse,
+  FeedbackInput,
   Money,
   PriceFreshness,
   BuildSummary,

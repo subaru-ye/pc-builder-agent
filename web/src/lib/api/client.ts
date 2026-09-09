@@ -13,6 +13,8 @@ import type {
   Share,
   ShareRecord,
   AuthState,
+  Feedback,
+  FeedbackReason,
 } from "./types";
 
 const client = createClient<paths>({ baseUrl: "", credentials: "include" });
@@ -36,6 +38,12 @@ function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): T
 }
 
 export const api = {
+  async getFeedback(runID: string): Promise<Feedback | null> {
+    return unwrap(await client.GET("/api/v1/runs/{run_id}/feedback", { params: { path: { run_id: runID } } })).feedback;
+  },
+  async submitFeedback(runID: string, reason: FeedbackReason, comment: string): Promise<Feedback | null> {
+    return unwrap(await client.POST("/api/v1/runs/{run_id}/feedback", { params: { path: { run_id: runID } }, body: { schema_version: 1, reason, comment } })).feedback;
+  },
   async authState(): Promise<AuthState> {
     return unwrap(await client.GET("/api/v1/auth/me"));
   },

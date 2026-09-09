@@ -5,6 +5,8 @@ import { schemas } from "./generated-schemas";
 export type Session = components["schemas"]["Session"];
 export type SessionSummary = components["schemas"]["SessionSummary"];
 export type Run = components["schemas"]["Run"];
+export type Feedback = components["schemas"]["Feedback"];
+export type FeedbackReason = components["schemas"]["FeedbackReason"];
 export type RequirementSpec = components["schemas"]["RequirementSpec"];
 export type BuildSummary = components["schemas"]["BuildSummary"];
 export type BuildView = components["schemas"]["BuildView"];

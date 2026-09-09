@@ -1,5 +1,6 @@
 "use client";
 
+import { RunFeedback } from "@/components/run-feedback";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Bot, Loader2, MessageSquare, PanelRight, RefreshCw, User } from "lucide-react";
 import { useSearchParams } from "next/navigation";
@@ -110,7 +111,7 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
       <section className={`${pane === "build" ? "hidden lg:flex" : "flex"} min-h-0 flex-col border-r`} aria-label="会话">
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
           <div className="mb-4 flex items-center justify-between text-xs text-[var(--ink-muted)]"><span>{phaseLabels[data.phase]}</span><span>共 {data.version_count} 个版本</span></div>
-          <div className="space-y-5">{data.messages.map((message) => <article key={message.id} className={`flex gap-3 ${message.role === "user" ? "pl-8" : "pr-8"}`}><div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border bg-[var(--surface-1)]">{message.role === "user" ? <User size={14} /> : <Bot size={14} />}</div><div className="min-w-0 flex-1"><div className="mb-1 text-xs text-[var(--ink-subtle)]">{message.role === "user" ? "你" : "装机助手"}</div><div className="prose-chat whitespace-pre-wrap text-sm"><ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown></div></div></article>)}</div>
+          <div className="space-y-5">{data.messages.map((message) => <article key={message.id} className={`flex gap-3 ${message.role === "user" ? "pl-8" : "pr-8"}`}><div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border bg-[var(--surface-1)]">{message.role === "user" ? <User size={14} /> : <Bot size={14} />}</div><div className="min-w-0 flex-1"><div className="mb-1 text-xs text-[var(--ink-subtle)]">{message.role === "user" ? "你" : "装机助手"}</div><div className="prose-chat whitespace-pre-wrap text-sm"><ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown></div>{message.role === "assistant" && message.run_id && message.run_id !== currentRun?.id && <RunFeedback runID={message.run_id} />}</div></article>)}</div>
           {busy && <RunProgress stage={stage} connection={connection} />}
           {data.phase === "requirement_ready" && <div className="mt-6 rounded-md border border-[var(--primary)]/45 bg-[var(--primary)]/5 p-4 text-sm"><p className="font-medium">需求已经整理好</p><p className="mt-1 text-[var(--ink-muted)]">请在配置面板核对并确认，确认前不会生成配置。</p><Button variant="outline" className="mt-3 lg:hidden" onClick={() => setPane("build")}>打开需求表</Button></div>}
           {data.phase === "error" && <div role="alert" className="mt-6 border-l-2 border-l-[var(--error)] bg-[var(--surface-1)] p-4"><p className="font-medium status-fail">{data.last_error?.title ?? "本次运行失败"}</p><p className="mt-1 text-sm text-[var(--ink-muted)]">{data.last_error ? userMessage(new ApiError(data.last_error)) : "已保存此前数据，你可以显式重试。"}</p><Button variant="outline" className="mt-3" disabled={send.isPending || confirm.isPending} onClick={retry}><RefreshCw size={15} />重试上一步</Button></div>}

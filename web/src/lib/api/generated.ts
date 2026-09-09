@@ -256,6 +256,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: components["parameters"]["RunID"];
+            };
+            cookie?: never;
+        };
+        /** 读取自己的运行反馈 */
+        get: operations["getRunFeedback"];
+        put?: never;
+        /**
+         * 提交或修改已结束运行的负反馈
+         * @description 同一运行只保留一份反馈；相同内容重复提交不重复创建，修改原因不更换证据。反馈不等于已批准的评估标准答案。
+         */
+        post: operations["submitRunFeedback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/events": {
         parameters: {
             query?: never;
@@ -575,6 +598,33 @@ export interface components {
             run_id?: string | null;
             /** Format: date-time */
             created_at: string;
+        };
+        /** @enum {string} */
+        FeedbackReason: "unnecessary_question" | "requirement_mismatch" | "configuration_issue" | "price_issue" | "unclear_explanation" | "other";
+        FeedbackInput: {
+            /** @constant */
+            schema_version: 1;
+            reason: components["schemas"]["FeedbackReason"];
+            /** @description 选择 other 时必须填写非空说明 */
+            comment?: string;
+        };
+        Feedback: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            run_id: string;
+            reason: components["schemas"]["FeedbackReason"];
+            comment: string;
+            fingerprint: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        FeedbackResponse: {
+            /** @constant */
+            schema_version: 1;
+            feedback: components["schemas"]["Feedback"] | null;
         };
         Run: {
             /** @constant */
@@ -1265,6 +1315,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"];
+                };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    getRunFeedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: components["parameters"]["RunID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前反馈；未提交时为 null */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackResponse"];
+                };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    submitRunFeedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: components["parameters"]["RunID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackInput"];
+            };
+        };
+        responses: {
+            /** @description 反馈已保存 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackResponse"];
                 };
             };
             "4XX": components["responses"]["Problem"];

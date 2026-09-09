@@ -128,5 +128,10 @@ func AssessCatalog(input BuildInput, catalog store.CatalogSnapshot) *Decision {
 	if !unknown && total > upper {
 		return &Decision{Kind: "catalog_infeasible", Reason: "budget_lower_bound", Scope: "current_catalog", SnapshotDate: date, LowerBoundCNY: fmt.Sprintf("%d.%02d", total/100, total%100), Message: fmt.Sprintf("按当前目录及 %s 价格快照，各必需品类独立最低价合计至少 ¥%d.%02d，已超过预算上限 ¥%d.%02d。当前目录无法满足该预算；请调整预算或补充可核验的商品资料。这不是整个市场无解的结论。", date, total/100, total%100, upper/100, upper%100)}
 	}
+	if minimum, ok := generalPlatformLowerBound(input, catalog); ok && minimum > upper {
+		return &Decision{Kind: "catalog_infeasible", Reason: "platform_budget_lower_bound", Scope: "current_catalog", SnapshotDate: date,
+			LowerBoundCNY: fmt.Sprintf("%d.%02d", minimum/100, minimum%100),
+			Message:       fmt.Sprintf("按当前目录及 %s 价格快照，仅考虑显示输出、CPU 与主板平台、内存代际后，乐观最低成本已达 ¥%d.%02d，超过预算上限 ¥%d.%02d。当前目录无法满足该预算；这不是整个市场无解的结论。该下限不是可交付报价，增加到该金额也不保证配成。可以调整预算后重新校验、提供已有配件的完整型号与预算口径，或补充可核验的商品资料；未经确认不会提高预算或交付超预算配置。", date, minimum/100, minimum%100, upper/100, upper%100)}
+	}
 	return nil
 }

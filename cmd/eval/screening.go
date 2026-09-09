@@ -14,6 +14,7 @@ import (
 	"google.golang.org/genai"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
+	"github.com/subaru-ye/pc-builder-agent/internal/evalsuite"
 	"github.com/subaru-ye/pc-builder-agent/internal/hostruntime"
 	"github.com/subaru-ye/pc-builder-agent/internal/modelprovider"
 )
@@ -44,6 +45,16 @@ func newADKScreeningRunner(ctx context.Context, cfg modelprovider.Config) (*adkS
 }
 
 func (a *adkScreeningRunner) Run(ctx context.Context, input string) (string, error) {
+	output, err := a.RunDetailed(ctx, input)
+	return output.Text, err
+}
+
+func (a *adkScreeningRunner) RunDetailed(ctx context.Context, input string) (evalsuite.ScreeningOutput, error) {
+	var output evalsuite.ScreeningOutput
+	ctx = pipeline.WithScreeningObserver(ctx, func(raw string, missing []string) {
+		output.ModelText = raw
+		output.MissingFields = append([]string(nil), missing...)
+	})
 	a.mu.Lock()
 	a.seq++
 	n := a.seq
@@ -51,7 +62,8 @@ func (a *adkScreeningRunner) Run(ctx context.Context, input string) (string, err
 	userID, sessionID := "eval-user", fmt.Sprintf("eval-screening-%d", n)
 	text, err := collectEvents(a.runner.Run(ctx, userID, sessionID,
 		genai.NewContentFromText(input, genai.RoleUser), agent.RunConfig{}))
-	return text, err
+	output.Text = text
+	return output, err
 }
 
 func collectEvents(seq func(func(*session.Event, error) bool)) (string, error) {

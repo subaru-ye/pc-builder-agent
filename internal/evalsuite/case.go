@@ -24,7 +24,7 @@ const (
 
 // Expect 是用例的期望。build 用例用 outcome;screening 用例用 kind 与字段口径。
 type Expect struct {
-	// build 期望:pass 或带明确原因和证据的非交付结果。
+	// build 期望:pass、budget_adaptive(合格交付或可重建预算证明)、或明确非交付结果。
 	Outcome string `json:"outcome,omitempty"`
 	Reason  string `json:"reason,omitempty"`
 	// screening 期望:kind = spec(应输出需求单 JSON)| clarify(应只追问,不输出 JSON)。
@@ -126,9 +126,9 @@ func decodeCase(data []byte) (Case, error) {
 			return Case{}, fmt.Errorf("build 用例不使用 forbidden_clarify_fields")
 		}
 		switch w.Expect.Outcome {
-		case "pass":
+		case "pass", "budget_adaptive":
 			if w.Expect.Reason != "" {
-				return Case{}, fmt.Errorf("pass 不使用 reason")
+				return Case{}, fmt.Errorf("%s 不使用 reason", w.Expect.Outcome)
 			}
 		case "clarify", "catalog_infeasible", "data_unavailable", "search_exhausted":
 			if w.Expect.Reason == "" {

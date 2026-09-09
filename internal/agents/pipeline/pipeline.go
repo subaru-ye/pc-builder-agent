@@ -68,9 +68,9 @@ func New(cfg Config) (agent.Agent, error) {
 func newScreeningAgent(m model.LLM, includeContents llmagent.IncludeContents) (agent.Agent, error) {
 	screening, err := llmagent.New(llmagent.Config{
 		Name:                     "requirement_agent",
-		Model:                    m,
+		Model:                    screeningGuard{LLM: m},
 		Description:              "初筛 Agent:把用户自然语言装机需求整理成 RequirementSpec JSON,信息不足时追问。",
-		Instruction:              screeningInstruction,
+		Instruction:              screeningInstruction + ownedScreeningDraftInstruction,
 		IncludeContents:          includeContents,
 		OutputKey:                stateKeyRequirementSpec,
 		DisallowTransferToParent: true,

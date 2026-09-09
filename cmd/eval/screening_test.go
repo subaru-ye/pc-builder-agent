@@ -52,7 +52,7 @@ func TestScreeningRequestsKeepInstructionsAndIsolateSessions(t *testing.T) {
 	}
 	for i, request := range requests {
 		var instruction string
-		if err := json.Unmarshal(request["instructions"], &instruction); err != nil || !strings.Contains(instruction, "已有配件") || !strings.Contains(instruction, "游戏名称") {
+		if err := json.Unmarshal(request["instructions"], &instruction); err != nil || !strings.Contains(instruction, "已有配件") || !strings.Contains(instruction, "游戏名称") || !strings.Contains(instruction, "所有新装机需求的内部草稿协议") {
 			t.Fatalf("request %d lost screening instructions", i)
 		}
 		var input []struct {

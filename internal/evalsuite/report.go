@@ -39,18 +39,22 @@ type CodeIdentity struct {
 // Summary 是一次评估的汇总。记录级指标按 (case, seed) 统计;用例级 Pass^k =
 // 该用例全部 seed pass 且零 veto、无 data-error(P13 §3.3/§七)。
 type Summary struct {
-	Meta         ReportMeta   `json:"meta"`
-	Seeds        int          `json:"seeds"`
-	CaseCount    int          `json:"case_count"`
-	Total        int          `json:"total"` // 记录数 = 用例数 × seeds
-	Passed       int          `json:"passed"`
-	Failed       int          `json:"failed"`
-	DataErrors   int          `json:"data_errors"`
-	PassRate     float64      `json:"pass_rate"`   // 记录级
-	PassKRate    float64      `json:"pass_k_rate"` // 用例级 Pass^k
-	PassKPassed  int          `json:"pass_k_passed"`
-	VetoTriggers int          `json:"veto_triggers"`
-	Records      []CaseRecord `json:"records"`
+	Meta               ReportMeta   `json:"meta"`
+	Seeds              int          `json:"seeds"`
+	CaseCount          int          `json:"case_count"`
+	Total              int          `json:"total"` // 记录数 = 用例数 × seeds
+	Passed             int          `json:"passed"`
+	Delivered          int          `json:"delivered"`     // 通过硬校验的 build 交付,不含合理非交付。
+	NonDelivered       int          `json:"non_delivered"` // 按该题契约和证据校验通过的非交付。
+	ScreeningCorrect   int          `json:"screening_correct"`
+	UnclassifiedPassed int          `json:"unclassified_passed"` // 历史轨迹缺少结果时不补造交付分类。
+	Failed             int          `json:"failed"`
+	DataErrors         int          `json:"data_errors"`
+	PassRate           float64      `json:"pass_rate"`   // 记录级
+	PassKRate          float64      `json:"pass_k_rate"` // 用例级 Pass^k
+	PassKPassed        int          `json:"pass_k_passed"`
+	VetoTriggers       int          `json:"veto_triggers"`
+	Records            []CaseRecord `json:"records"`
 }
 
 // Summarize 汇总逐用例记录(记录按首见顺序分组)。
@@ -73,6 +77,16 @@ func Summarize(meta ReportMeta, records []CaseRecord) Summary {
 			s.DataErrors++
 		case record.Verdict.Passed:
 			s.Passed++
+			switch {
+			case record.Stage == StageScreening:
+				s.ScreeningCorrect++
+			case record.Result != nil && record.Result.Succeeded:
+				s.Delivered++
+			case record.Result != nil && record.Result.Decision != nil:
+				s.NonDelivered++
+			default:
+				s.UnclassifiedPassed++
+			}
 		default:
 			s.Failed++
 		}
@@ -165,6 +179,7 @@ func (s Summary) WriteReport(dir string) error {
 	fmt.Fprintf(&b, "- 用例 %d 条 × %d seed:记录级通过 %d / 失败 %d / data-error %d,**Pass@1 = %.1f%%**;用例级 **Pass^%d = %.1f%%**(%d/%d);veto 触发 %d 次\n\n",
 		s.CaseCount, s.Seeds, s.Passed, s.Failed, s.DataErrors, s.PassRate*100,
 		s.Seeds, s.PassKRate*100, s.PassKPassed, s.CaseCount-s.countDataErrorCases(), s.VetoTriggers)
+	fmt.Fprintf(&b, "- 通过项拆分:成功交付 %d / 合理非交付 %d / 初筛正确 %d / 历史未分类 %d。Pass@1 表示任务处理正确率,不是装机交付率；合理非交付必须满足各题的原因与证据契约。\n\n", s.Delivered, s.NonDelivered, s.ScreeningCorrect, s.UnclassifiedPassed)
 	if s.Meta.Mode == "replay" {
 		b.WriteString("> replay 模式:结论由首跑轨迹重放断言得出,零模型调用。\n\n")
 		if len(s.Meta.ReplaySkipped) > 0 {
@@ -234,6 +249,8 @@ func describeCase(records []CaseRecord) (outcome, perSeed, detail string) {
 		case !record.Verdict.Passed:
 			mark = "❌"
 			allPassed = false
+		case record.Stage != StageScreening && record.Result != nil && record.Result.Decision != nil && !record.Result.Succeeded:
+			mark = "✅ 合理非交付(" + record.Result.Decision.Reason + ")"
 		}
 		parts = append(parts, fmt.Sprintf("seed%d %s", record.Seed, mark))
 		if record.RunErr != "" {

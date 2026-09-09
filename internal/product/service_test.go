@@ -409,6 +409,38 @@ func TestScreenInputUsesOnlyRecentSameKindStableMessages(t *testing.T) {
 	if input.Text != "当前消息" || utf8.RuneCountInString(input.Context) > maxScreenRunes {
 		t.Fatalf("input=%+v", input)
 	}
+	if len(input.UserSources) != maxScreenMessages || input.UserSources[len(input.UserSources)-1] != "当前消息" {
+		t.Fatalf("核验来源与用户上下文不一致: %v", input.UserSources)
+	}
+}
+
+func TestScreenInputGroundingExcludesAssistantExamples(t *testing.T) {
+	st := newFakeProductStore()
+	runID := "prior-screen"
+	st.runs[runID] = store.AgentRun{ID: runID, Kind: store.RunScreening}
+	st.messages = append(st.messages,
+		store.WebMessage{Role: "user", Content: "已有CPU，办公。", RunID: &runID},
+		store.WebMessage{Role: "assistant", Content: "例如 AMD Ryzen 5 7600；新增预算是多少？", RunID: &runID})
+	svc, _ := NewService(context.Background(), st, &fakeAgent{}, newFakeSink())
+	input, err := svc.screenInput(context.Background(), store.AgentRun{SessionID: st.session.ID, Kind: store.RunScreening}, "预算6000元")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(input.UserSources) != 2 || strings.Contains(strings.Join(input.UserSources, ""), "7600") {
+		t.Fatalf("助手示例混入来源: %v", input.UserSources)
+	}
+}
+
+func TestScreenInputGroundingDoesNotRestoreTruncatedText(t *testing.T) {
+	st := newFakeProductStore()
+	svc, _ := NewService(context.Background(), st, &fakeAgent{}, newFakeSink())
+	input, err := svc.screenInput(context.Background(), store.AgentRun{SessionID: st.session.ID, Kind: store.RunScreening}, strings.Repeat("长", maxScreenRunes+1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if input.UserSources == nil || len(input.UserSources) != 0 {
+		t.Fatal("截断后的空来源不能回退到完整原文")
+	}
 }
 
 func TestScreeningQuotaErrorIsExplicitAndDoesNotFallback(t *testing.T) {

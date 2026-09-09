@@ -29,7 +29,7 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
-const defaultSuitePath = "internal/evalsuite/testdata/suites/v1.3.json"
+const defaultSuitePath = "internal/evalsuite/testdata/suites/v1.4.json"
 
 const defaultCasesDir = "internal/evalsuite/testdata/cases"
 

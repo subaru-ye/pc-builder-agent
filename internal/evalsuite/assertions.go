@@ -77,6 +77,17 @@ type Verdict struct {
 // AssertCase 对一条 build 用例的执行结果运行全部断言。Succeeded=false 时 A2 即
 // 失败,其余断言依赖交付产物,标记跳过(不计失败)。
 func AssertCase(c Case, result buildharness.BuildResult, snap SnapshotView) Verdict {
+	if c.Expect.Outcome == "budget_adaptive" {
+		if result.Succeeded {
+			c.Expect = Expect{Outcome: "pass"}
+		} else {
+			d := result.Decision
+			if d == nil || d.Kind != "catalog_infeasible" || (d.Reason != "budget_lower_bound" && d.Reason != "platform_budget_lower_bound") {
+				return Verdict{Failures: []AssertionFailure{{ID: "N1", Name: "合理非交付", Detail: "预算自适应期望仅接受合格交付或可重建的目录预算不足证明;搜索耗尽、缺数据与普通错误不通过"}}}
+			}
+			c.Expect = Expect{Outcome: "catalog_infeasible", Reason: d.Reason}
+		}
+	}
 	if c.Expect.Outcome != "pass" {
 		return assertNonDelivery(c, result, snap)
 	}

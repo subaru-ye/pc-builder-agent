@@ -41,8 +41,9 @@ type RemoteResult struct {
 // ScreenInput 区分本轮原始文本与发给模型的有界上下文。品牌/预算纠偏只依据
 // 本轮原文，避免历史表达被误判为用户本轮的明确要求。
 type ScreenInput struct {
-	Text    string
-	Context string
+	Text        string
+	Context     string
+	UserSources []string // 与上下文同范围的用户原话，排除助手消息。
 }
 
 type AgentGateway interface {
@@ -87,6 +88,11 @@ func NewADKAgentGateway(runtime *hostruntime.Runtime, sessions session.Service, 
 }
 
 func (g *ADKAgentGateway) Screen(ctx context.Context, userID, sessionID string, input ScreenInput) (ScreenResult, error) {
+	sources := input.UserSources
+	if sources == nil {
+		sources = []string{input.Text}
+	}
+	ctx = pipeline.WithScreeningSources(ctx, sources)
 	lastText, err := collectAgentText(g.screeningRunner.Run(ctx, userID, sessionID,
 		genai.NewContentFromText(input.Context, genai.RoleUser), agent.RunConfig{}), "")
 	if err != nil {

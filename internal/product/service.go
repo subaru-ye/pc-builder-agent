@@ -359,21 +359,31 @@ func (s *Service) screenInput(ctx context.Context, r store.AgentRun, current str
 	if len(prior) > maxScreenMessages-1 {
 		prior = prior[len(prior)-(maxScreenMessages-1):]
 	}
-	var lines []string
+	var lines, sources []string
 	for _, message := range prior {
 		role := "用户"
 		if message.Role == "assistant" {
 			role = "助手"
+		} else {
+			sources = append(sources, message.Content)
 		}
 		lines = append(lines, role+"："+message.Content)
 	}
 	lines = append(lines, "用户："+current)
+	sources = append(sources, current)
 	contextText := strings.Join(lines, "\n")
 	runes := []rune(contextText)
 	if len(runes) > maxScreenRunes {
 		contextText = string(runes[len(runes)-maxScreenRunes:])
 	}
-	return ScreenInput{Text: current, Context: contextText}, nil
+	// 核验来源不得比模型所见上下文更宽；过长而未完整出现的旧消息不作证据。
+	visibleSources := make([]string, 0, len(sources))
+	for _, source := range sources {
+		if strings.Contains(contextText, "用户："+source) {
+			visibleSources = append(visibleSources, source)
+		}
+	}
+	return ScreenInput{Text: current, Context: contextText, UserSources: visibleSources}, nil
 }
 
 var deterministicBudgetDeltaRE = regexp.MustCompile(`^(?:(?:把)?预算)?(?:再)?(降低|减少|下调|降|减|增加|提高|上调|加)([1-9][0-9]{0,5})(?:元)?$`)

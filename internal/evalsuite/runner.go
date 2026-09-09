@@ -18,7 +18,13 @@ type ScreeningRunner interface {
 
 // ScreeningOutput 使用指针留存:缺失表示旧产物,Text 为空表示实际空回复。
 type ScreeningOutput struct {
-	Text string `json:"text"`
+	Text          string   `json:"text"`
+	ModelText     string   `json:"model_text,omitempty"` // 程序拦截前原文，与最终可见输出区分。
+	MissingFields []string `json:"missing_fields,omitempty"`
+}
+
+type detailedScreeningRunner interface {
+	RunDetailed(context.Context, string) (ScreeningOutput, error)
 }
 
 // Deps 是执行评估集所需的运行时依赖。
@@ -98,11 +104,15 @@ func runOne(ctx context.Context, c Case, seed int, deps Deps) (CaseRecord, error
 		if deps.Screening == nil {
 			return CaseRecord{}, fmt.Errorf("evalsuite: 用例 %s 为 screening 阶段,但未提供 Screening runner", c.ID)
 		}
-		var text string
-		text, runErr = deps.Screening.Run(runCtx, c.Input)
-		record.Screening = &ScreeningOutput{Text: text}
+		var output ScreeningOutput
+		if detailed, ok := deps.Screening.(detailedScreeningRunner); ok {
+			output, runErr = detailed.RunDetailed(runCtx, c.Input)
+		} else {
+			output.Text, runErr = deps.Screening.Run(runCtx, c.Input)
+		}
+		record.Screening = &output
 		if runErr == nil {
-			verdict = AssertScreeningCase(c, text)
+			verdict = AssertScreeningCase(c, output.Text)
 		}
 	default: // StageBuild
 		raw, err := schemas.EncodeRequirementSpec(c.Requirement)

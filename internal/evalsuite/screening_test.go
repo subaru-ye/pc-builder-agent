@@ -68,6 +68,32 @@ type screeningStub struct {
 
 func (s screeningStub) Run(context.Context, string) (string, error) { return s.text, s.err }
 
+type detailedScreeningStub struct{ screeningStub }
+
+func (s detailedScreeningStub) RunDetailed(context.Context, string) (ScreeningOutput, error) {
+	return ScreeningOutput{Text: "请提供已有显卡的完整型号。", ModelText: s.text, MissingFields: []string{"owned_parts.gpu.model"}}, s.err
+}
+
+func TestScreeningRecordsPreserveGuardTrace(t *testing.T) {
+	c := Case{ID: "Q", Stage: StageScreening, Expect: Expect{Kind: "clarify", ClarifyFields: []string{"owned_parts"}}}
+	stub := detailedScreeningStub{screeningStub{text: `{"schema_version":1,"existing_parts":["gpu"]}`}}
+	records, err := RunCases(context.Background(), []Case{c}, Deps{Screening: stub})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !records[0].Verdict.Passed || AssertScreeningCase(c, records[0].Screening.ModelText).Passed {
+		t.Fatal("没有区分模型原始错误与程序兜底后的正确回复")
+	}
+	dir := t.TempDir()
+	if err := Summarize(ReportMeta{}, records).WriteJSONL(dir); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := ReadRecords(filepath.Join(dir, "results.jsonl"))
+	if err != nil || !reflect.DeepEqual(saved, records) {
+		t.Fatalf("原文或拦截原因丢失: %v", err)
+	}
+}
+
 func TestScreeningRecordsPreserveTextAndErrors(t *testing.T) {
 	c := Case{ID: "Q", Stage: StageScreening, Expect: Expect{Kind: "clarify", ClarifyFields: []string{"budget_cny"}}}
 	for _, stub := range []screeningStub{{text: "  您的预算是多少？\n"}, {}, {text: "预算多少？", err: errors.New("transport failed")}} {

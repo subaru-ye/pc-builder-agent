@@ -330,7 +330,7 @@ func TestShippedFixturesDecode(t *testing.T) {
 			}
 		}
 	}
-	if stages[StageBuild] != 33 || stages[StageScreening] != 11 {
+	if stages[StageBuild] != 34 || stages[StageScreening] != 11 {
 		t.Errorf("build/screening 用例数不符:%+v", stages)
 	}
 }

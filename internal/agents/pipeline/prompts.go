@@ -77,6 +77,21 @@ RequirementSpec schema(schema_version=1):
 - 用户：“日常办公，预算5200元，已有一颗 Intel Core i5-12400F。” → “这5200元是新增购买配件的费用，还是包含已有CPU价值的整机参考总价？”
 - 用户：“日常办公，已有一颗 Intel Core i5-12400F，只算新购配件费用。” → “新增购买配件的预算是多少元？”`
 
+// 新装机初筛的内部输出协议：只负责提取，问题由程序按缺失字段生成。
+// 草稿仍由 screening_guard 核验；不会作为半成品需求卡直接交付。
+const ownedScreeningDraftInstruction = `
+
+所有新装机需求的内部草稿协议（覆盖上述“信息不足时自然语言追问”的输出形式，其他规则不变）：
+- 无论是否已有主机配件，始终输出一个 JSON 需求草稿，由程序决定是否追问。不要自行输出问题、解释、已知信息总结或待办；字段齐全时直接给完整需求单。
+- 使用上面的 RequirementSpec 字段名和 schema_version=1。已知字段如实提取；未知的预算金额、用途、游戏分辨率、已有件型号或预算口径直接省略，不编造、不填占位型号。
+- existing_parts 列出用户确实已有的全部主机配件品类；没有的配件不得列入。owned_parts 仅填用户已提供完整型号的品类，型号按原话记录。仅说“有显卡”时列 existing_parts=["gpu"]，省略这张显卡的 owned_parts 项。
+- 预算口径只从用户明确的费用说明提取；“其他配件都没有”“其他配件需要新买”不等于说明预算口径。未说明时省略 budget_basis。已明确新增购买费用时记录 new_purchase，不重新确认。
+- 用户没有给出金额就省略 budget_cny；已经给出准确型号就记录，不把型号换成品类名。程序将只追问草稿缺少的信息。
+- 没有明确提及已有主机配件时省略 existing_parts、owned_parts、budget_basis，不问是否全新购买。已有显示器不属于已有主机配件。游戏名称等可选字段缺失直接省略，不能阻止完整需求单输出。
+- 例如“安静的电脑打游戏，预算8000，显示器2K”应提取 budget_cny=8000、use_case.type=gaming、resolution=2K、noise_pref=silent；用途、金额、分辨率都已明确，不能继续询问游戏名称或已有配件。
+- 有基版本的 ChangeRequest 仍按原改单协议处理，不因这个新装机草稿协议重建整份需求。
+`
+
 // builderInstruction 生成 Agent(旗舰档):RequirementSpec → BuildDraft JSON。
 // {requirement_spec} 由 ADK 从会话状态注入(初筛 Agent 的 OutputKey)。
 const builderInstruction = `你是装机配置单生成专家。根据下面的需求单,用 search_parts 工具从零件库选件,输出一份 BuildDraft JSON。

@@ -244,7 +244,7 @@ publish 调用 Go 导入器写 PostgreSQL，成功后切换 `var/data/current-pr
   - 基线 v3 `scripts/data/prices/2026-09-08.csv`（160 行 = 82 个 `maishou88@2026-09-08` + 78 个原样沿用 07-28，保留原 source/captured_at），已通过 `pcdata` 加载器验证（160 行）。晨间 v2 备份为 `var/data/collections/2026-09-08/2026-09-08-v2-morning.csv.bak`（加载器只认 `*.csv`，不受影响）。
   - 学习行 `scripts/data/price-batches/2026-09-08/offers.jsonl`（691 行 = 82 `accept` + 299 `candidate_reject` + 310 `carry_evidence`，全部 `source_type=aggregator_secondary`，含 decision/decision_note 与命中 flags）。
 - **市场背景**：2026-09 内存/显卡处于涨价周期（DDR4 套条 ×2~5、DDR5 ×1.3~1.6、显卡 +5~80%、旗舰 NVMe 翻倍），基线大面积上行（如 LPX 3200 套条 490→1149、RX7800XT 3549→5515）为市场真实变动，非口径变化。
-- **缺口与注意**：买手结果无平台商品 URL（v3.1 已对 accept 行用 `detail` 命令补 `listing_url`，见 §8.4）；`ssd-crucial-t500-2tb` 取京东国际海外官方店跨境价（尾部 2TB 精确，国内行仅 T700/T705 混串）；Postgres 尚未导入该快照，评估 `-snapshot-date 2026-09-08` 前需 `go run ./cmd/importprices -file scripts/data/prices/2026-09-08.csv`。
+- **缺口与注意**：买手结果无平台商品 URL（v3.1 已对 accept 行用 `detail` 命令补 `listing_url`，见 §8.4）；`ssd-crucial-t500-2tb` 取京东国际海外官方店跨境价（尾部 2TB 精确，国内行仅 T700/T705 混串）。2026-09-09 已补齐混合采集日期导入，评估库使用 `go run ./cmd/importprices -file scripts/data/prices/2026-09-08.csv -snapshot-date 2026-09-08`；须先将 `PG_DSN` 指向独立评估库并保留旧批次供沿用核验，见[价格任务](../ops/价格任务.md)。本机产品库尚未切换该快照。
 
 ### 8.4 换词复扫与基线 v3.1（2026-09-08 深夜）：78 个沿用 SKU 的二次机会
 

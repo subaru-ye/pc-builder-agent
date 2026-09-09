@@ -184,3 +184,78 @@ func TestLoadPriceCSVRejects(t *testing.T) {
 		})
 	}
 }
+
+func TestExplicitSnapshotPreservesObservationDates(t *testing.T) {
+	path := writeCSV(t, "sku,price_cny,source,captured_at\ncpu-a,1299.00,jd,2026-07-28\ngpu-b,4000.00,maishou88,2026-09-08\n")
+	batch, err := loadPriceCSVForSnapshot(path, "2026-09-08")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if batch.SnapshotDate.Format("2006-01-02") != "2026-09-08" || batch.Rows[0].ObservedAt.Format("2006-01-02") != "2026-07-28" {
+		t.Fatalf("批次与观察日期必须分开: %+v", batch)
+	}
+	for _, date := range []string{"2026-09-07", "2026/09/08"} {
+		if _, err := loadPriceCSVForSnapshot(path, date); err == nil {
+			t.Fatalf("应拒绝非法/早于观察日期的批次 %q", date)
+		}
+	}
+}
+
+func TestMixedSnapshotProvenanceAndRollback(t *testing.T) {
+	conn := setupConn(t)
+	ctx := context.Background()
+	base, err := loadPriceCSV(writeCSV(t, goodCSV))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := importPrices(ctx, conn, base); err != nil {
+		t.Fatal(err)
+	}
+	// 新价先写入,随后发现伪造的沿用记录时,新价与批次必须一并回滚。
+	for _, oldRow := range []string{
+		"cpu-a,1200.00,jd,2026-07-28",        // 金额被改动。
+		"cpu-a,1299.00,maishou88,2026-07-28", // 来源被改动。
+		"cpu-a,1299.00,jd,2026-07-27",        // 观察日期被改动。
+	} {
+		bad, err := loadPriceCSVForSnapshot(writeCSV(t, "sku,price_cny,source,captured_at\ngpu-b,4000.00,maishou88,2026-09-08\n"+oldRow+"\n"), "2026-09-08")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := importPrices(ctx, conn, bad); err == nil || !strings.Contains(err.Error(), "缺少同价同源") {
+			t.Fatalf("必须拒绝无匹配历史的沿用: %v", err)
+		}
+		var snaps, prices int
+		if err := conn.QueryRow(ctx, "SELECT (SELECT count(*) FROM price_snapshots), (SELECT count(*) FROM prices)").Scan(&snaps, &prices); err != nil || snaps != 1 || prices != 2 {
+			t.Fatalf("失败导入未完整回滚: %d/%d %v", snaps, prices, err)
+		}
+	}
+	batch, err := loadPriceCSVForSnapshot(writeCSV(t, "sku,price_cny,source,captured_at\ncpu-a,1299.00,jd,2026-07-28\ngpu-b,4000.00,maishou88,2026-09-08\n"), "2026-09-08")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if skipped, err := importPrices(ctx, conn, batch); err != nil || skipped {
+		t.Fatalf("混合批次导入失败: %v %v", skipped, err)
+	}
+	var carried bool
+	var observed, sourceDate, policy string
+	if err := conn.QueryRow(ctx, `SELECT p.carried_forward, to_char(p.observed_at AT TIME ZONE 'UTC','YYYY-MM-DD'), s.snapshot_date::text, p.price_type
+		FROM prices p JOIN price_snapshots s ON s.id=p.source_snapshot_id
+		WHERE p.snapshot_id=(SELECT id FROM price_snapshots WHERE snapshot_date='2026-09-08') AND p.sku='cpu-a'`).Scan(&carried, &observed, &sourceDate, &policy); err != nil {
+		t.Fatal(err)
+	}
+	if !carried || observed != "2026-07-28" || sourceDate != "2026-07-28" || policy != "bootstrap" {
+		t.Fatalf("旧价溯源丢失: %v %s %s %s", carried, observed, sourceDate, policy)
+	}
+	if err := conn.QueryRow(ctx, `SELECT p.carried_forward, to_char(p.observed_at AT TIME ZONE 'UTC','YYYY-MM-DD'), s.snapshot_date::text
+		FROM prices p JOIN price_snapshots s ON s.id=p.source_snapshot_id
+		WHERE p.snapshot_id=(SELECT id FROM price_snapshots WHERE snapshot_date='2026-09-08') AND p.sku='gpu-b'`).Scan(&carried, &observed, &sourceDate); err != nil || carried || observed != "2026-09-08" || sourceDate != "2026-09-08" {
+		t.Fatalf("新价日期错误: %v %s %s %v", carried, observed, sourceDate, err)
+	}
+	if skipped, err := importPrices(ctx, conn, batch); err != nil || !skipped {
+		t.Fatalf("相同批次应幂等跳过: %v %v", skipped, err)
+	}
+	batch.SnapshotDate = batch.SnapshotDate.AddDate(0, 0, 1)
+	if _, err := importPrices(ctx, conn, batch); err == nil {
+		t.Fatal("同文件改批次日期应报冲突")
+	}
+}

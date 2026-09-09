@@ -35,3 +35,29 @@ func TestUsageCountsEachLogicalCallAndOnlyFinalUsage(t *testing.T) {
 		t.Fatalf("usage=%+v", s)
 	}
 }
+
+func TestCallCapSharedByModelsAndEmbedding(t *testing.T) {
+	u := &usageCounter{maxCalls: 2}
+	for _, err := range u.wrap(usageTestModel{present: true}).GenerateContent(context.Background(), &model.LLMRequest{}, false) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := u.reserve(true); err != nil {
+		t.Fatal(err)
+	}
+	denied := false
+	for response, err := range u.wrap(usageTestModel{present: true}).GenerateContent(context.Background(), &model.LLMRequest{}, false) {
+		if response != nil || err == nil {
+			t.Fatal("cap allowed upstream output")
+		}
+		denied = true
+	}
+	if !denied || u.stopReason() == nil {
+		t.Fatal("cap not enforced")
+	}
+	s := u.snapshot()
+	if s.ModelCalls != 1 || s.EmbeddingCalls != 1 || s.UsageResponses != 1 {
+		t.Fatalf("denied request counted as sent: %+v", s)
+	}
+}

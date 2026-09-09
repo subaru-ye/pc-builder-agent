@@ -1,0 +1,33 @@
+name: eval-offline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frozen-suite-and-grader:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: 校验当前可运行的冻结题库（零模型调用）
+        shell: bash
+        run: |
+          go build -o /tmp/eval ./cmd/eval
+          # v1 的两条追问期望已迁移；原卷须从历史产物恢复，不能用当前题目重写旧哈希。
+          for suite in internal/evalsuite/testdata/suites/v1.*.json; do
+            /tmp/eval -mode check -suite "$suite"
+          done
+      - name: 判卷反例、调用上限与修改前后报告
+        run: go test -count=1 ./internal/evalsuite ./cmd/eval ./cmd/evalchange ./cmd/evalcompare ./cmd/evaljudge
+
+# 此工作流不注入 API key，不连接生产库，不上传用户轨迹。
+# 真实模型回归须在可信本机显式执行 evalchange -mode run -max-calls N。

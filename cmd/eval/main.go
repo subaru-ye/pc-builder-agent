@@ -50,6 +50,9 @@ func run() int {
 		seeds        = flag.Int("seeds", 1, "每条用例独立重复次数;>1 即 Pass^k 口径(全 seed pass 且零 veto)")
 		attemptLimit = flag.Int("attempt-limit", buildharness.MaxAttempts, "最多生成次数，1–3；交付校验始终启用")
 		semantic     = flag.Bool("semantic", true, "是否启用语义候选扩充（评估实验开关）")
+		baseline     = flag.String("baseline", "", "变更回归基线目录；执行冻结题目并在调用前核对配置与完整目录")
+		maxCalls     = flag.Int64("max-calls", 0, "模型与 Embedding 合计逻辑调用上限，0 表示不设上限")
+		resultPath   = flag.String("result-path", "", "将新产物目录写入此文件，供变更回归入口使用")
 	)
 	flag.Parse()
 	if flag.NArg() > 0 {
@@ -74,7 +77,7 @@ func run() int {
 		fmt.Printf("评估集 %s: %d 条用例，哈希校验通过（零模型调用）\n", suite.Manifest.Version, len(cases))
 		return 0
 	case "run":
-		return runReal(*snapshotDate, *casesDir, *outRoot, *caseTimeout, *seeds, *suitePath, evalsuite.HarnessProfile{AttemptLimit: *attemptLimit, Semantic: *semantic})
+		return runReal(*snapshotDate, *casesDir, *outRoot, *caseTimeout, *seeds, *suitePath, evalsuite.HarnessProfile{AttemptLimit: *attemptLimit, Semantic: *semantic}, *baseline, *maxCalls, *resultPath)
 	case "replay":
 		return runReplay(*replayDir)
 	default:
@@ -83,7 +86,11 @@ func run() int {
 	}
 }
 
-func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seeds int, suitePath string, profile evalsuite.HarnessProfile) int {
+func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seeds int, suitePath string, profile evalsuite.HarnessProfile, baseline string, maxCalls int64, resultPath string) int {
+	if maxCalls < 0 {
+		log.Println("max-calls 不能为负数")
+		return 2
+	}
 	if profile.AttemptLimit < 1 || profile.AttemptLimit > buildharness.MaxAttempts {
 		fmt.Fprintln(os.Stderr, "-attempt-limit 必须为 1–3")
 		return 2
@@ -103,6 +110,14 @@ func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seed
 		return 2
 	}
 	suite, cases, err := evalsuite.LoadSuite(suitePath, casesDir)
+	var baseMeta evalsuite.ReportMeta
+	var baseRecords []evalsuite.CaseRecord
+	if baseline != "" {
+		baseMeta, baseRecords, err = evalsuite.ReadVerifiedRun(baseline)
+		if err == nil {
+			suite, cases, err = evalsuite.ReadSuiteSnapshot(filepath.Join(baseline, "cases.json"), baseMeta.SuiteSHA256)
+		}
+	}
 	if err != nil {
 		log.Println(err)
 		return 2
@@ -151,7 +166,7 @@ func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seed
 		log.Println("创建 embedding 客户端失败:", err)
 		return 2
 	}
-	usage := &usageCounter{}
+	usage := &usageCounter{maxCalls: maxCalls}
 	planner, err := buildharness.NewCandidatePlannerWithOptions(pinnedCatalogSource{store: st, pinned: cat}, measuredEmbedder{base: embeddingClient, usage: usage}, buildharness.PlannerOptions{DisableSemantic: !profile.Semantic})
 	if err != nil {
 		log.Println(err)
@@ -196,6 +211,8 @@ func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seed
 
 	identity := codeIdentity()
 	meta := evalsuite.ReportMeta{
+		MaxCalls:            maxCalls,
+		GraderVersion:       evalsuite.CurrentGraderVersion,
 		RecordSchemaVersion: 1,
 		HarnessProfile:      &profile,
 		SuiteVersion:        suite.Manifest.Version, SuiteSHA256: suiteHash, RequestedSeeds: seeds, Code: &identity,
@@ -209,6 +226,22 @@ func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seed
 	if screeningRunner != nil {
 		meta.ScreeningModel = screeningCfg.ModelDescription()
 		meta.Models["screening"] = modelIdentity(screeningCfg)
+	}
+	if baseline != "" {
+		if err := evalsuite.CheckChangeConditions(baseMeta, meta); err != nil {
+			log.Println(err)
+			return 2
+		}
+		for _, record := range baseRecords {
+			a, _ := json.Marshal(record.Snapshot)
+			b, _ := json.Marshal(snapshotView)
+			x, _ := evalsuite.JSONHash(a)
+			y, _ := evalsuite.JSONHash(b)
+			if x != y {
+				log.Println("当前数据库完整目录与基线不同，未调用模型")
+				return 2
+			}
+		}
 	}
 	if err := os.MkdirAll(outRoot, 0o755); err != nil {
 		log.Println(err)
@@ -228,24 +261,55 @@ func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seed
 		log.Println(err)
 		return 2
 	}
+	if resultPath != "" {
+		if err := os.WriteFile(resultPath, []byte(outDir), 0o644); err != nil {
+			log.Println(err)
+			return 2
+		}
+	}
+	journal, err := os.OpenFile(filepath.Join(outDir, "results.jsonl"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		log.Println(err)
+		return 2
+	}
+	defer func() { _ = journal.Close() }() // 正常完成的 Close 错误在下方显式处理。
+	var persistErr error
+	encoder := json.NewEncoder(journal)
 	records, err := evalsuite.RunCases(ctx, cases, evalsuite.Deps{
-		ReadUsage: usage.snapshot,
-		Harness:   recordingHarness{Harness: harness, planner: evidencePlanner},
-		Snapshot:  snapshotView,
-		Screening: screeningRunner,
-		Timeout:   caseTimeout,
-		Seeds:     seeds,
+		StopReason: func() error {
+			if persistErr != nil {
+				return persistErr
+			}
+			return usage.stopReason()
+		},
+		GraderVersion: meta.GraderVersion,
+		ReadUsage:     usage.snapshot,
+		Harness:       recordingHarness{Harness: harness, planner: evidencePlanner},
+		Snapshot:      snapshotView,
+		Screening:     screeningRunner,
+		Timeout:       caseTimeout,
+		Seeds:         seeds,
 		OnRecord: func(record evalsuite.CaseRecord) {
+			if persistErr == nil {
+				persistErr = encoder.Encode(record)
+				if persistErr == nil {
+					persistErr = journal.Sync()
+				}
+			}
 			fmt.Printf("%s seed=%d passed=%v data_error=%v duration_ms=%d\n", record.CaseID, record.Seed, record.Verdict.Passed, record.Verdict.DataError, record.DurationMS)
 		},
 	})
+	if persistErr != nil {
+		log.Println("保存逐题证据失败:", persistErr)
+		return 2
+	}
 	if err != nil {
 		log.Println(err)
 		return 2
 	}
 
 	summary := evalsuite.Summarize(meta, records)
-	if err := summary.WriteJSONL(outDir); err != nil {
+	if err := journal.Close(); err != nil {
 		log.Println(err)
 		return 2
 	}
@@ -286,6 +350,10 @@ func runReplay(dir string) int {
 	}
 	if meta.RecordSchemaVersion > 1 {
 		log.Println("不支持的记录格式版本")
+		return 2
+	}
+	if err := evalsuite.ValidateGraderVersion(meta.GraderVersion); err != nil {
+		log.Println(err)
 		return 2
 	}
 	meta.ReplaySkipped = nil
@@ -349,7 +417,12 @@ func runReplay(dir string) int {
 				}
 				c.Requirement = spec
 			}
-			verdict = evalsuite.AssertCase(c, *record.Result, record.Snapshot)
+			var err error
+			verdict, err = evalsuite.GradeBuild(c, record, meta.GraderVersion)
+			if err != nil {
+				log.Println(err)
+				return 2
+			}
 		}
 		attribution := evalsuite.Attribute(verdict.Failures)
 		if !reflect.DeepEqual(verdict, record.Verdict) || !reflect.DeepEqual(attribution, record.Attribution) {

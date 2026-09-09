@@ -25,7 +25,7 @@
 | 账号 | [账号决策](tech/ADR-008-Supabase-Auth账号系统.md)、[本地账号操作](ops/Supabase-Auth本地账号系统.md) |
 | 模型接入 | [供应商与成本决策](tech/ADR-007-模型供应商适配与成本控制.md) |
 | 数据维护 | [发布管道](tech/数据获取与发布管道.md)、[价格选取](tech/价格观察与安全选价.md)、[本机任务](ops/本机数据任务.md)、[价格任务](ops/价格任务.md) |
-| 评估工具 | [Runner 设计](tech/评估Runner设计.md)、[测试与验收](eval/测试与验收.md) |
+| 评估工具 | [Runner 设计](tech/评估Runner设计.md)、[变更回归](tech/变更回归.md)、[测试与验收](eval/测试与验收.md) |
 | 显式诊断路径 | [legacy 流水线与工具调用](tech/流水线与工具调用.md) |
 
 ## 维护规则

@@ -42,10 +42,12 @@ type candidateEvidenceHarness interface {
 
 // Deps 是执行评估集所需的运行时依赖。
 type Deps struct {
-	ReadUsage func() Usage // 顺序 runner 的累计用量快照；nil 表示未测量。
-	Harness   buildharness.Harness
-	Snapshot  SnapshotView
-	Screening ScreeningRunner // 用例含 screening 阶段时必填
+	StopReason    func() error // 不再执行时仍保存未完成记录，不缩小分母。
+	GraderVersion string
+	ReadUsage     func() Usage // 顺序 runner 的累计用量快照；nil 表示未测量。
+	Harness       buildharness.Harness
+	Snapshot      SnapshotView
+	Screening     ScreeningRunner // 用例含 screening 阶段时必填
 	// Timeout 是单条用例的执行上限;0 表示不设单用例超时(仍受 ctx 约束)。
 	Timeout time.Duration
 	// Seeds 是每条用例的独立重复次数(≥1);>1 即 Pass^k 口径:全部 seed
@@ -79,6 +81,9 @@ type CaseRecord struct {
 // RunCases 逐条执行评估集。harness 返回 error 时的分类:
 // 结构化业务结果按期望判卷；实际执行 error 一律计失败，不按错误文案剔除分母。
 func RunCases(ctx context.Context, cases []Case, deps Deps) ([]CaseRecord, error) {
+	if err := ValidateGraderVersion(deps.GraderVersion); err != nil {
+		return nil, err
+	}
 	seeds := deps.Seeds
 	if seeds < 1 {
 		seeds = 1
@@ -86,6 +91,24 @@ func RunCases(ctx context.Context, cases []Case, deps Deps) ([]CaseRecord, error
 	records := make([]CaseRecord, 0, len(cases)*seeds)
 	for _, c := range cases {
 		for seed := 1; seed <= seeds; seed++ {
+			if deps.StopReason != nil {
+				if stopped := deps.StopReason(); stopped != nil {
+					v := Verdict{Failures: []AssertionFailure{{ID: "RUN", Name: "执行错误", Detail: stopped.Error()}}}
+					r := CaseRecord{CaseID: c.ID, Title: c.Title, Stage: c.Stage, Seed: seed, Expect: c.Expect, Snapshot: deps.Snapshot, RunErr: stopped.Error(), Verdict: v, Attribution: Attribute(v.Failures), Usage: &Usage{}}
+					if c.Stage == StageBuild {
+						var err error
+						r.Requirement, err = schemas.EncodeRequirementSpec(c.Requirement)
+						if err != nil {
+							return records, err
+						}
+					}
+					records = append(records, r)
+					if deps.OnRecord != nil {
+						deps.OnRecord(r)
+					}
+					continue
+				}
+			}
 			record, err := runOne(ctx, c, seed, deps)
 			if err != nil {
 				return nil, err
@@ -161,8 +184,11 @@ func runOne(ctx context.Context, c Case, seed int, deps Deps) (CaseRecord, error
 			record.Candidates = evidence.CandidateBundle()
 		}
 		if runErr == nil {
-			verdict = AssertCase(c, result, deps.Snapshot)
 			record.Result = &result
+			verdict, err = GradeBuild(c, record, deps.GraderVersion)
+			if err != nil {
+				return record, err
+			}
 		}
 	}
 	record.DurationMS = time.Since(started).Milliseconds()

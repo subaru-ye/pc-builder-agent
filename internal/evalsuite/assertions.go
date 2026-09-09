@@ -316,6 +316,10 @@ func Attribute(failures []AssertionFailure) []Attribution {
 			code = "B8"
 		case "A7":
 			code = "C1"
+		case "A10":
+			code = "B6"
+		case "E1":
+			code = "E1"
 		case "A2":
 			if strings.Contains(failure.Detail, "schema") {
 				code = "B7"

@@ -13,6 +13,8 @@ import (
 // ReportMeta 描述一次评估运行的环境口径;结论只对"用例分布 × 快照批次 × 模型"
 // 负责(P13 §3.5)。
 type ReportMeta struct {
+	MaxCalls            int64                     `json:"max_calls,omitempty"`             // 模型与 Embedding 合计的逻辑调用上限。
+	GraderVersion       string                    `json:"grader_version,omitempty"`        // 空值为历史断言口径。
 	HarnessProfile      *HarnessProfile           `json:"harness_profile,omitempty"`       // 旧产物未记录时不补造。
 	RecordSchemaVersion int                       `json:"record_schema_version,omitempty"` // 1: screening 原文必存
 	ReplaySkipped       []string                  `json:"replay_skipped,omitempty"`
@@ -168,6 +170,7 @@ func (s Summary) WriteJSONL(dir string) error {
 func (s Summary) WriteReport(dir string) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# 评估报告(%s)\n\n", s.Meta.Mode)
+	fmt.Fprintf(&b, "- 判卷版本:%s（空值表示历史口径）；逻辑调用上限:%d（0 表示未设置）\n", s.Meta.GraderVersion, s.Meta.MaxCalls)
 	if s.Meta.SuiteVersion != "" {
 		fmt.Fprintf(&b, "- 评估集:%s;清单 SHA256:%s;完整题目见 cases.json\n", s.Meta.SuiteVersion, s.Meta.SuiteSHA256)
 	} else {

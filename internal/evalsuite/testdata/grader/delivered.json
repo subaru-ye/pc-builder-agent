@@ -1,0 +1,620 @@
+{
+  "candidates": {
+    "schema_version": 1,
+    "snapshot_date": "2026-09-08",
+    "groups": [
+      {
+        "category": "cpu",
+        "candidates": [
+          {
+            "sku": "cpu-i5-13400f",
+            "brand": "Intel",
+            "model": "Core i5-13400F",
+            "price_cny": "1233.00",
+            "specs": {
+              "has_igpu": false,
+              "socket": "LGA1700",
+              "supported_chipsets": [
+                "H610",
+                "B660",
+                "H670",
+                "Z690",
+                "B760",
+                "H770",
+                "Z790"
+              ],
+              "tdp_w": 65
+            }
+          }
+        ]
+      },
+      {
+        "category": "gpu",
+        "candidates": [
+          {
+            "sku": "gpu-gb-5070-windforce-sff",
+            "brand": "Gigabyte",
+            "model": "GeForce RTX 5070 WINDFORCE OC SFF 12G",
+            "price_cny": "4599.00",
+            "specs": {
+              "length_mm": 282,
+              "power_connectors": [
+                "pcie_16pin"
+              ],
+              "tdp_w": 250
+            }
+          }
+        ]
+      },
+      {
+        "category": "motherboard",
+        "candidates": [
+          {
+            "sku": "mb-msi-h610m-g-ddr4",
+            "brand": "MSI",
+            "model": "PRO H610M-G DDR4",
+            "price_cny": "549.00",
+            "specs": {
+              "chipset": "H610",
+              "form_factor": "matx",
+              "m2_slots": 1,
+              "memory_generation": "ddr4",
+              "memory_speed_max_mts": 3200,
+              "socket": "LGA1700"
+            }
+          }
+        ]
+      },
+      {
+        "category": "memory",
+        "candidates": [
+          {
+            "sku": "mem-gskill-ripjawsv-32-3200",
+            "brand": "G.Skill",
+            "model": "Ripjaws V 32GB (2x16GB) DDR4-3200 CL16",
+            "price_cny": "399.00",
+            "specs": {
+              "generation": "ddr4",
+              "speed_mts": 3200
+            }
+          }
+        ]
+      },
+      {
+        "category": "ssd",
+        "candidates": [
+          {
+            "sku": "ssd-adata-legend800-1tb",
+            "brand": "ADATA",
+            "model": "LEGEND 800 1TB NVMe M.2",
+            "price_cny": "329.00",
+            "specs": {
+              "form_factor": "m2"
+            }
+          }
+        ]
+      },
+      {
+        "category": "psu",
+        "candidates": [
+          {
+            "sku": "psu-tt-gf3-850",
+            "brand": "Thermaltake",
+            "model": "Toughpower GF3 850W TT Premium 80+ Gold",
+            "price_cny": "699.00",
+            "specs": {
+              "power_connectors": [
+                "pcie_8pin",
+                "pcie_8pin",
+                "pcie_8pin",
+                "pcie_8pin",
+                "pcie_16pin"
+              ],
+              "wattage_w": 850
+            }
+          }
+        ]
+      },
+      {
+        "category": "case",
+        "candidates": [
+          {
+            "sku": "case-montech-air-903-max",
+            "brand": "Montech",
+            "model": "AIR 903 MAX (Black)",
+            "price_cny": "349.00",
+            "specs": {
+              "cooler_height_max_mm": 180,
+              "gpu_length_max_mm": 400,
+              "radiator_sizes_mm": [
+                120,
+                140,
+                240,
+                280,
+                360
+              ],
+              "supported_form_factors": [
+                "atx",
+                "matx",
+                "itx"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "category": "cooler",
+        "candidates": [
+          {
+            "sku": "cooler-deepcool-ag400",
+            "brand": "Deepcool",
+            "model": "AG400",
+            "price_cny": "79.00",
+            "specs": {
+              "cooling_capacity_w": 220,
+              "height_mm": 150,
+              "radiator_size_mm": null,
+              "type": "air"
+            }
+          }
+        ]
+      }
+    ],
+    "trimmed": 0
+  },
+  "usage": {
+    "model_calls": 1,
+    "embedding_calls": 0,
+    "usage_responses": 1,
+    "input_tokens": 4618,
+    "output_tokens": 156,
+    "total_tokens": 4774
+  },
+  "case_id": "L1-001",
+  "title": "8K 预算 2K 玩黑神话(基线)",
+  "stage": "build",
+  "seed": 1,
+  "requirement": {
+    "schema_version": 1,
+    "budget_cny": 8000,
+    "budget_flex": 0.1,
+    "use_case": {
+      "type": "gaming",
+      "titles": [
+        "黑神话:悟空"
+      ],
+      "resolution": "2K"
+    },
+    "size_pref": "any",
+    "noise_pref": "any",
+    "brand_pref": {
+      "cpu": "any",
+      "gpu": "any"
+    },
+    "existing_parts": [],
+    "priority": [],
+    "notes": ""
+  },
+  "expect": {
+    "outcome": "pass"
+  },
+  "snapshot": {
+    "snapshot_date": "2026-09-08",
+    "catalog": {
+      "Snapshot": {
+        "ID": 2,
+        "SnapshotDate": "2026-09-08T00:00:00Z",
+        "FileSHA256": "2d89751dd79674ab40b069c97cf495d1e789894733f20d79af97f2a5eeb86d67",
+        "ImportedAt": "2026-09-09T09:17:35.585961+08:00"
+      },
+      "Candidates": [
+        {
+          "SKU": "case-montech-air-903-max",
+          "Brand": "Montech",
+          "Model": "AIR 903 MAX (Black)",
+          "Category": "case",
+          "Specs": {
+            "gpu_length_max_mm": 400,
+            "radiator_sizes_mm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "cooler_height_max_mm": 180,
+            "supported_form_factors": [
+              "atx",
+              "matx",
+              "itx"
+            ]
+          },
+          "PriceCNY": "349.00"
+        },
+        {
+          "SKU": "cooler-deepcool-ag400",
+          "Brand": "Deepcool",
+          "Model": "AG400",
+          "Category": "cooler",
+          "Specs": {
+            "type": "air",
+            "height_mm": 150,
+            "radiator_size_mm": null,
+            "cooling_capacity_w": 220
+          },
+          "PriceCNY": "79.00"
+        },
+        {
+          "SKU": "cpu-i5-13400f",
+          "Brand": "Intel",
+          "Model": "Core i5-13400F",
+          "Category": "cpu",
+          "Specs": {
+            "tdp_w": 65,
+            "socket": "LGA1700",
+            "has_igpu": false,
+            "supported_chipsets": [
+              "H610",
+              "B660",
+              "H670",
+              "Z690",
+              "B760",
+              "H770",
+              "Z790"
+            ]
+          },
+          "PriceCNY": "1233.00"
+        },
+        {
+          "SKU": "gpu-gb-5070-windforce-sff",
+          "Brand": "Gigabyte",
+          "Model": "GeForce RTX 5070 WINDFORCE OC SFF 12G",
+          "Category": "gpu",
+          "Specs": {
+            "tdp_w": 250,
+            "length_mm": 282,
+            "power_connectors": [
+              "pcie_16pin"
+            ]
+          },
+          "PriceCNY": "4599.00"
+        },
+        {
+          "SKU": "mem-gskill-ripjawsv-32-3200",
+          "Brand": "G.Skill",
+          "Model": "Ripjaws V 32GB (2x16GB) DDR4-3200 CL16",
+          "Category": "memory",
+          "Specs": {
+            "speed_mts": 3200,
+            "generation": "ddr4"
+          },
+          "PriceCNY": "399.00"
+        },
+        {
+          "SKU": "mb-msi-h610m-g-ddr4",
+          "Brand": "MSI",
+          "Model": "PRO H610M-G DDR4",
+          "Category": "motherboard",
+          "Specs": {
+            "socket": "LGA1700",
+            "chipset": "H610",
+            "m2_slots": 1,
+            "form_factor": "matx",
+            "memory_generation": "ddr4",
+            "memory_speed_max_mts": 3200
+          },
+          "PriceCNY": "549.00"
+        },
+        {
+          "SKU": "psu-tt-gf3-850",
+          "Brand": "Thermaltake",
+          "Model": "Toughpower GF3 850W TT Premium 80+ Gold",
+          "Category": "psu",
+          "Specs": {
+            "wattage_w": 850,
+            "power_connectors": [
+              "pcie_8pin",
+              "pcie_8pin",
+              "pcie_8pin",
+              "pcie_8pin",
+              "pcie_16pin"
+            ]
+          },
+          "PriceCNY": "699.00"
+        },
+        {
+          "SKU": "ssd-adata-legend800-1tb",
+          "Brand": "ADATA",
+          "Model": "LEGEND 800 1TB NVMe M.2",
+          "Category": "ssd",
+          "Specs": {
+            "form_factor": "m2"
+          },
+          "PriceCNY": "329.00"
+        }
+      ]
+    },
+    "skus": {
+      "case-montech-air-903-max": true,
+      "cooler-deepcool-ag400": true,
+      "cpu-i5-13400f": true,
+      "gpu-gb-5070-windforce-sff": true,
+      "mb-msi-h610m-g-ddr4": true,
+      "mem-gskill-ripjawsv-32-3200": true,
+      "psu-tt-gf3-850": true,
+      "ssd-adata-legend800-1tb": true
+    },
+    "brand_by_sku": {
+      "case-montech-air-903-max": "Montech",
+      "cooler-deepcool-ag400": "Deepcool",
+      "cpu-i5-13400f": "Intel",
+      "gpu-gb-5070-windforce-sff": "Gigabyte",
+      "mb-msi-h610m-g-ddr4": "MSI",
+      "mem-gskill-ripjawsv-32-3200": "G.Skill",
+      "psu-tt-gf3-850": "Thermaltake",
+      "ssd-adata-legend800-1tb": "ADATA"
+    },
+    "cpu_vendor_by_sku": {
+      "cpu-i5-13400f": "intel"
+    },
+    "gpu_family_by_sku": {
+      "gpu-gb-5070-windforce-sff": "nvidia"
+    }
+  },
+  "result": {
+    "Succeeded": true,
+    "Attempts": 1,
+    "Draft": {
+      "SchemaVersion": 1,
+      "RequirementRef": "req_harness_v2",
+      "BuildRef": "build_harness_v2_1",
+      "Selection": {
+        "SchemaVersion": 1,
+        "BuildRef": "build_harness_v2_1",
+        "CPU": "cpu-i5-13400f",
+        "Motherboard": "mb-msi-h610m-g-ddr4",
+        "Memory": "mem-gskill-ripjawsv-32-3200",
+        "SSDs": [
+          {
+            "sku": "ssd-adata-legend800-1tb",
+            "quantity": 1
+          }
+        ],
+        "GPU": "gpu-gb-5070-windforce-sff",
+        "PSU": "psu-tt-gf3-850",
+        "Case": "case-montech-air-903-max",
+        "Cooler": "cooler-deepcool-ag400"
+      },
+      "Rationale": null,
+      "BudgetAllocation": null
+    },
+    "Result": {
+      "Report": {
+        "build_ref": "build_harness_v2_1",
+        "overall_status": "pass",
+        "checks": [
+          {
+            "rule_id": "SOCKET_MATCH",
+            "outcome": "pass",
+            "severity": "none",
+            "observed": {
+              "cpu_socket": "LGA1700",
+              "motherboard_socket": "LGA1700"
+            },
+            "missing_fields": [],
+            "detail": "CPU 与主板插槽一致"
+          },
+          {
+            "rule_id": "CHIPSET_SUPPORT",
+            "outcome": "pass",
+            "severity": "none",
+            "observed": {
+              "cpu_supported_chipsets": [
+                "H610",
+                "B660",
+                "H670",
+                "Z690",
+                "B760",
+                "H770",
+                "Z790"
+              ],
+              "motherboard_chipset": "H610"
+            },
+            "missing_fields": [],
+            "detail": "主板芯片组在 CPU 支持列表内"
+          },
+          {
+            "rule_id": "MEMORY_GENERATION",
+            "outcome": "pass",
+            "severity": "none",
+            "observed": {
+              "memory_generation": "ddr4",
+              "motherboard_memory_generation": "ddr4"
+            },
+            "missing_fields": [],
+            "detail": "内存代际与主板一致"
+          },
+          {
+            "rule_id": "MEMORY_SPEED",
+            "outcome": "pass",
+            "severity": "none",
+            "observed": {
+              "memory_speed_mts": 3200,
+              "motherboard_memory_speed_max_mts": 3200
+            },
+            "missing_fields": [],
+            "detail": "内存额定频率不超过主板标称上限"
+          },
+          {
+            "rule_id": "GPU_CLEARANCE",
+            "outcome": "pass",
+            "severity": "none",
+            "observed": {
+              "case_gpu_length_max_mm": 400,
+              "gpu_length_mm": 282,
+              "gpu_present": true
+            },
+            "missing_fields": [],
+            "detail": "显卡长度在机箱限长内"
+          },
+          {
+            "rule_id": "COOLER_CLEARANCE",
+            "outcome": "pass",
+            "severity": "none",
+            "observed": {
+              "case_cooler_height_max_mm": 180,
+              "cooler_height_mm": 150,
+              "cooler_type": "air"
+            },
+            "missing_fields": [],
+            "detail": "风冷高度在机箱限高内"
+          },
+          {
+            "rule_id": "PSU_HEADROOM",
+            "outcome": "pass",
+            "severity": "none",
+            "observed": {
+              "cpu_tdp_w": 65,
+              "gpu_present": true,
+              "gpu_tdp_w": 250,
+              "load_w": 415,
+              "psu_wattage_w": 850
+            },
+            "missing_fields": [],
+            "detail": "电源 850W 对估算负载 415W 余量不低于 1.30"
+          },
+          {
+            "rule_id": "FORM_FACTOR_SUPPORT",
+            "outcome": "pass",
+            "severity": "none",
+            "observed": {
+              "case_supported_form_factors": [
+                "atx",
+                "matx",
+                "itx"
+              ],
+              "motherboard_form_factor": "matx"
+            },
+            "missing_fields": [],
+            "detail": "主板板型在机箱支持范围内"
+          },
+          {
+            "rule_id": "M2_SLOT_CAPACITY",
+            "outcome": "pass",
+            "severity": "none",
+            "observed": {
+              "m2_ssd_count": 1,
+              "motherboard_m2_slots": 1
+            },
+            "missing_fields": [],
+            "detail": "M.2 SSD 数量不超过主板槽位数"
+          },
+          {
+            "rule_id": "GPU_POWER_CONNECTORS",
+            "outcome": "pass",
+            "severity": "none",
+            "observed": {
+              "gpu_present": true,
+              "gpu_required_pcie_16pin": 1,
+              "gpu_required_pcie_8pin": 0,
+              "psu_available_pcie_16pin": 1,
+              "psu_available_pcie_8pin": 4
+            },
+            "missing_fields": [],
+            "detail": "电源供电接口满足显卡需求"
+          },
+          {
+            "rule_id": "DISPLAY_OUTPUT",
+            "outcome": "pass",
+            "severity": "none",
+            "observed": {
+              "gpu_present": true
+            },
+            "missing_fields": [],
+            "detail": "有独显,具备显示输出"
+          },
+          {
+            "rule_id": "COOLER_THERMAL_CAPACITY",
+            "outcome": "pass",
+            "severity": "none",
+            "observed": {
+              "cooler_cooling_capacity_w": 220,
+              "cpu_tdp_w": 65
+            },
+            "missing_fields": [],
+            "detail": "散热器解热能力不低于 CPU TDP"
+          }
+        ]
+      },
+      "Quote": {
+        "snapshot_date": "2026-09-08",
+        "total_cny": "8236.00",
+        "missing_count": 0,
+        "missing_skus": [],
+        "lines": [
+          {
+            "category": "cpu",
+            "sku": "cpu-i5-13400f",
+            "quantity": 1,
+            "unit_price_cny": "1233.00",
+            "subtotal_cny": "1233.00"
+          },
+          {
+            "category": "gpu",
+            "sku": "gpu-gb-5070-windforce-sff",
+            "quantity": 1,
+            "unit_price_cny": "4599.00",
+            "subtotal_cny": "4599.00"
+          },
+          {
+            "category": "motherboard",
+            "sku": "mb-msi-h610m-g-ddr4",
+            "quantity": 1,
+            "unit_price_cny": "549.00",
+            "subtotal_cny": "549.00"
+          },
+          {
+            "category": "memory",
+            "sku": "mem-gskill-ripjawsv-32-3200",
+            "quantity": 1,
+            "unit_price_cny": "399.00",
+            "subtotal_cny": "399.00"
+          },
+          {
+            "category": "ssd",
+            "sku": "ssd-adata-legend800-1tb",
+            "quantity": 1,
+            "unit_price_cny": "329.00",
+            "subtotal_cny": "329.00"
+          },
+          {
+            "category": "psu",
+            "sku": "psu-tt-gf3-850",
+            "quantity": 1,
+            "unit_price_cny": "699.00",
+            "subtotal_cny": "699.00"
+          },
+          {
+            "category": "case",
+            "sku": "case-montech-air-903-max",
+            "quantity": 1,
+            "unit_price_cny": "349.00",
+            "subtotal_cny": "349.00"
+          },
+          {
+            "category": "cooler",
+            "sku": "cooler-deepcool-ag400",
+            "quantity": 1,
+            "unit_price_cny": "79.00",
+            "subtotal_cny": "79.00"
+          }
+        ]
+      }
+    },
+    "Message": ""
+  },
+  "verdict": {
+    "passed": true
+  },
+  "duration_ms": 3173
+}

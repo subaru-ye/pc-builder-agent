@@ -20,9 +20,18 @@ func ReadVerifiedRun(dir string) (ReportMeta, []CaseRecord, error) {
 	if err := json.Unmarshal(raw, &meta); err != nil {
 		return meta, nil, err
 	}
-	_, cases, err := ReadSuiteSnapshot(filepath.Join(dir, "cases.json"), meta.SuiteSHA256)
+	if meta.RecordSchemaVersion < 0 || meta.RecordSchemaVersion > 1 {
+		return meta, nil, fmt.Errorf("不支持的运行记录格式版本")
+	}
+	if err := ValidateGraderVersion(meta.GraderVersion); err != nil {
+		return meta, nil, err
+	}
+	suite, cases, err := ReadSuiteSnapshot(filepath.Join(dir, "cases.json"), meta.SuiteSHA256)
 	if err != nil {
 		return meta, nil, err
+	}
+	if meta.SuiteVersion != "" && meta.SuiteVersion != suite.Manifest.Version {
+		return meta, nil, fmt.Errorf("运行元数据与冻结题库版本名不一致")
 	}
 	records, err := ReadRecords(filepath.Join(dir, "results.jsonl"))
 	if err != nil {
@@ -78,7 +87,10 @@ func ReadVerifiedRun(dir string) (ReportMeta, []CaseRecord, error) {
 			if r.Result == nil {
 				return meta, nil, fmt.Errorf("缺少构建轨迹")
 			}
-			v = AssertCase(c, *r.Result, r.Snapshot)
+			v, err = GradeBuild(c, r, meta.GraderVersion)
+			if err != nil {
+				return meta, nil, err
+			}
 		}
 		if !reflect.DeepEqual(v, r.Verdict) || !reflect.DeepEqual(Attribute(v.Failures), r.Attribution) {
 			return meta, nil, fmt.Errorf("%s 判卷与保存结果不一致", key)

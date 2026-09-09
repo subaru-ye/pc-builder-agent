@@ -39,6 +39,9 @@ type Comparison struct {
 // bootstrap 以用例为抽样单位，重复运行不冒充独立题目；区间只是本题库上的描述。
 func Compare(a ReportMeta, ar []CaseRecord, b ReportMeta, br []CaseRecord, factor string) (Comparison, error) {
 	out := Comparison{Factor: factor, A: a, B: b}
+	if a.GraderVersion != b.GraderVersion {
+		return out, fmt.Errorf("判卷版本不同，请先显式采用同一版本复核；不能混作单变量实验")
+	}
 	out.Stage = StageBuild
 	if factor == "screening" {
 		out.Stage = StageScreening

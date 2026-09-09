@@ -18,6 +18,8 @@ type Decision struct {
 	SnapshotDate  string   `json:"snapshot_date,omitempty"`
 	LowerBoundCNY string   `json:"lower_bound_cny,omitempty"`
 	Message       string   `json:"message"`
+	// ExplanationVersion 仅用于可重放的说明模板演进；0 为旧模板。
+	ExplanationVersion int `json:"explanation_version,omitempty"`
 }
 
 func (d *Decision) Error() string { return d.Message }
@@ -27,8 +29,22 @@ func clarification(spec schemas.RequirementSpec) *Decision {
 	if len(fields) == 0 {
 		return nil
 	}
-	return &Decision{Kind: "clarify", Reason: "missing_owned_information", Fields: fields, Scope: "requirement",
-		Message: "请补充已有配件的完整型号和数量，并确认预算是仅用于新增购买，还是包含已有件的整机参考总价？缺失项：" + strings.Join(fields, "、")}
+	var requests []string
+	labels := map[string]string{"cpu": "CPU", "gpu": "显卡", "motherboard": "主板", "memory": "内存", "ssd": "SSD", "psu": "电源", "case": "机箱", "cooler": "散热器"}
+	for _, field := range fields {
+		if field == "budget_basis" {
+			requests = append(requests, "确认预算是仅用于新增购买，还是包含已有件的整机参考总价")
+			continue
+		}
+		category := strings.TrimSuffix(strings.TrimPrefix(field, "owned_parts."), ".model")
+		label := labels[category]
+		if label == "" {
+			label = category
+		}
+		requests = append(requests, "补充已有"+label+"的完整型号")
+	}
+	return &Decision{Kind: "clarify", Reason: "missing_owned_information", Fields: fields, Scope: "requirement", ExplanationVersion: 1,
+		Message: "请" + strings.Join(requests, "；并") + "。"}
 }
 
 // bindOwned 只接受准确匹配；副本内增加锁定，不改写调用者的基版本。

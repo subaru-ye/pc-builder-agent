@@ -52,6 +52,8 @@ S4 仅对显式声明 `forbidden_clarify_fields` 的新题检查重复追问，�
 
 多轮保存 turns、context、user_sources 及规范化前 guard_text。`CheckDialogueEvidence` 在 replay 和对照工具中共用：从冻结题目和前轮真实输出重建上下文与有效载荷，拒绝缺轮、串题和额外答案。初筛格式重试最多一次，所有尝试保存于 model_attempts，最后一次仍在 model_text；重放不调用模型、不重新执行重试。
 
+已有件澄清文案通过 Decision 的 `explanation_version` 演进：0 保留原精确模板，1 按已证明缺失的字段生成针对性追问。N1 仍逐字段、逐字重建相应版本，拒绝未知版本或任意说明；修复追问文案不会覆盖旧成绩。
+
 修改初筛核验规则后，可额外设置 `SCREENING_GUARD_RUN_DIR` 为完整运行产物的绝对路径，执行 `go test ./internal/agents/pipeline -run TestScreeningGuardSavedRun -v`。这项零模型审计用保存的用户题目和模型原文重新执行当前核验，逐条比较最终回复及缺失字段，检查数量和重复项；须配合正常 `eval -mode replay` 的哈希及判卷验证，不能拿重处理后的输出覆盖首跑成绩。
 
 ### 3.5 指标与门禁

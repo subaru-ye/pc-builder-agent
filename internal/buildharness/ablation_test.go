@@ -2,6 +2,7 @@ package buildharness
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/validate"
@@ -29,6 +30,9 @@ func TestAttemptAblationPreservesDeliveryGates(t *testing.T) {
 		}
 		if limit == 1 && (result.Succeeded || len(m.requests) != 1 || result.Attempts != 1) {
 			t.Fatalf("single attempt bypassed checks: %+v", result)
+		}
+		if limit == 1 && !strings.Contains(result.Message, "1 次选配后") {
+			t.Fatalf("message contradicts execution count: %s", result.Message)
 		}
 		if limit == 3 && (!result.Succeeded || result.Attempts != 2) {
 			t.Fatalf("repair stopped prematurely: %+v", result)

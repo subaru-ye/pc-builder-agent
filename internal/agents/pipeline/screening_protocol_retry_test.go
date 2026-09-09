@@ -3,6 +3,8 @@ package pipeline
 import (
 	"context"
 	"iter"
+	"reflect"
+	"strings"
 	"testing"
 
 	"google.golang.org/adk/v2/model"
@@ -12,6 +14,47 @@ import (
 type protocolSequenceModel struct {
 	outputs []string
 	calls   int
+}
+
+func TestTruncatedOuterDraftCannotBecomeAnInnerRequirement(t *testing.T) {
+	// 来自单次生成对照 L4-213 的真实格式缺陷：外层缺结束符，内部 use_case 完整。
+	truncated := `{"schema_version":1,"budget_cny":8000,"use_case":{"type":"gaming","resolution":"2K"},"existing_parts":["gpu"],"budget_basis":"new_purchase"`
+	input := "我已有一张显卡，想配主机玩游戏，显示器是2K的，新增购买预算8000元。"
+	for _, fix := range []bool{true, false} {
+		outputs := []string{truncated}
+		if fix {
+			outputs = append(outputs, truncated+"}")
+		}
+		m := &protocolSequenceModel{outputs: outputs}
+		ctx := WithScreeningBuildState(WithScreeningSources(context.Background(), []string{input}), false)
+		var original []string
+		var missing []string
+		ctx = WithScreeningObserver(ctx, func(raw string, fields []string) { original = append(original, raw); missing = fields })
+		var text string
+		var gotErr error
+		for r, err := range (screeningGuard{LLM: m}).GenerateContent(ctx, &model.LLMRequest{}, false) {
+			if err != nil {
+				gotErr = err
+				continue
+			}
+			if r != nil {
+				text = screeningText(r.Content)
+			}
+		}
+		if m.calls != 2 || len(original) != 2 || original[0] != truncated {
+			t.Fatalf("lost retry evidence: calls=%d raw=%v", m.calls, original)
+		}
+		if fix {
+			if gotErr != nil || !reflect.DeepEqual(missing, []string{"owned_parts.gpu.model"}) || strings.Contains(text, "预算") {
+				t.Fatalf("nested object caused false questions: %s %v %v", text, missing, gotErr)
+			}
+		} else if gotErr == nil || text != "" {
+			t.Fatalf("still truncated draft escaped as visible question: %s %v", text, gotErr)
+		}
+	}
+	if malformedOuterDraft("请提供预算。") || malformedOuterDraft("需求如下："+truncated+"}") {
+		t.Fatal("plain text or complete outer object rejected")
+	}
 }
 
 func (m *protocolSequenceModel) Name() string { return "protocol-sequence" }

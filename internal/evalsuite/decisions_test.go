@@ -3,6 +3,7 @@ package evalsuite
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +12,35 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
+
+func TestClarificationReplaysExactLegacyAndCurrentTemplates(t *testing.T) {
+	c := testCase()
+	c.Requirement.ExistingParts = []schemas.Category{schemas.CategoryCPU}
+	c.Requirement.BudgetBasis = "new_purchase"
+	c.Expect = Expect{Outcome: "clarify", Reason: "missing_owned_information"}
+	cat := store.CatalogSnapshot{}
+	d := buildharness.AssessCatalog(buildharness.BuildInput{Requirement: c.Requirement}, cat)
+	for _, version := range []int{0, 1} {
+		copyDecision := *d
+		copyDecision.ExplanationVersion = version
+		if version == 0 {
+			copyDecision.Message = "请补充已有配件的完整型号和数量，并确认预算是仅用于新增购买，还是包含已有件的整机参考总价？缺失项：" + strings.Join(d.Fields, "、")
+		}
+		r := buildharness.BuildResult{Decision: &copyDecision, Message: copyDecision.Message}
+		if v := AssertCase(c, r, NewSnapshotView(cat)); !v.Passed {
+			t.Fatalf("version %d rejected: %+v", version, v)
+		}
+		copyDecision.Message = "资料齐全，可以直接交付"
+		r.Message = copyDecision.Message
+		if AssertCase(c, r, NewSnapshotView(cat)).Passed {
+			t.Fatal("arbitrary explanation accepted")
+		}
+	}
+	d.ExplanationVersion = 99
+	if AssertCase(c, buildharness.BuildResult{Decision: d, Message: d.Message}, NewSnapshotView(cat)).Passed {
+		t.Fatal("unknown explanation version accepted")
+	}
+}
 
 func TestNonDeliveryRequiresReproducibleEvidence(t *testing.T) {
 	cat := store.CatalogSnapshot{Snapshot: store.Snapshot{SnapshotDate: time.Date(2026, 9, 8, 0, 0, 0, 0, time.UTC)}}

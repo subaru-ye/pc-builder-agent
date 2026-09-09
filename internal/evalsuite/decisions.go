@@ -47,6 +47,12 @@ func assertNonDelivery(c Case, r buildharness.BuildResult, snap SnapshotView) Ve
 		return fail("轨迹未保存用于复验的完整目录")
 	}
 	want := buildharness.AssessCatalog(buildharness.BuildInput{Requirement: c.Requirement, Change: c.Change, BaseSelection: c.BaseSelection, Locked: c.Locked}, *snap.Catalog)
+	// 保留旧说明的逐字复验，不因现行模板改善而把历史通过改成失败。
+	// 仅兼容已发布的精确模板；字段、类型和其他证据仍须完整一致。
+	if want != nil && want.Reason == "missing_owned_information" && d.ExplanationVersion == 0 {
+		want.ExplanationVersion = 0
+		want.Message = "请补充已有配件的完整型号和数量，并确认预算是仅用于新增购买，还是包含已有件的整机参考总价？缺失项：" + strings.Join(want.Fields, "、")
+	}
 	if want == nil || !reflect.DeepEqual(d, want) || r.Attempts != 0 {
 		return fail("无法从冻结输入与完整目录重建非交付证据")
 	}

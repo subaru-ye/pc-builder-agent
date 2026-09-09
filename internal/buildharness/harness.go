@@ -210,7 +210,7 @@ func (h *runner) Run(ctx context.Context, input BuildInput) (out BuildResult, ru
 		if attempt == h.attemptLimit {
 			budgetResult := result
 			budgetResult.Quote = validate.BudgetQuote(input.Requirement, result.Quote)
-			message := finalFailureMessage(budgetResult, budgetOK)
+			message := finalFailureMessage(budgetResult, budgetOK, attempt)
 			h.finish(input, started, attempt, false)
 			return unresolvedResult(attempt, draft, result, message), nil
 		}
@@ -268,7 +268,8 @@ func validateRepairSelection(plan RepairPlan, previous, current schemas.BuildSel
 	return nil
 }
 
-// enrichCandidateRationale 只补充模型省略的展示理由，不参与规则或价格真值。
+// enrichCandidateRationale 补充缺失说明；显式机箱颜色冲突时以 SKU 事实纠正机箱理由。
+// 展示修正不参与规则或价格真值。
 // 语义证据来自本轮已通过硬过滤的 Candidate Bundle，不追加模型调用。
 func enrichCandidateRationale(draft *schemas.BuildDraft, bundle CandidateBundle, requirement schemas.RequirementSpec) {
 	if draft.Rationale == nil {
@@ -293,20 +294,63 @@ func enrichCandidateRationale(draft *schemas.BuildDraft, bundle CandidateBundle,
 			}
 		}
 	}
-	// 软偏好缺少硬规格字段时，只展示“接近目标、仍需核对”，不把颜色或
-	// 噪声表现伪装成已验证事实。
+	// 系列检索文本不能覆盖所选 SKU 的明确颜色；未核验的外观、噪声不写成已满足。
 	notes := strings.ToLower(requirement.Notes)
-	if draft.Rationale[string(schemas.CategoryCase)] == "" &&
-		(strings.Contains(notes, "白色") || strings.Contains(notes, "white") || strings.Contains(notes, "海景房")) {
-		draft.Rationale[string(schemas.CategoryCase)] = "接近海景房风格；候选缺少可靠颜色字段，白色版本需购买前核对。"
+	wantsWhite := strings.Contains(notes, "白色") || strings.Contains(notes, "white")
+	for _, negative := range []string{"不要白色", "不需要白色", "不想要白色", "不要求白色", "不强求白色", "not white", "no white", "non-white"} {
+		if strings.Contains(notes, negative) {
+			wantsWhite = false
+		}
+	}
+	if wantsWhite {
+		modelName := ""
+		if group := bundleGroup(&bundle, schemas.CategoryCase); group != nil {
+			for _, candidate := range group.Candidates {
+				if candidate.SKU == draft.Selection.Case {
+					modelName = strings.ToLower(candidate.Model)
+					break
+				}
+			}
+		}
+		black := hasColorLabel(modelName, "black", "黑色")
+		white := hasColorLabel(modelName, "white", "白色")
+		switch {
+		case black && !white:
+			draft.Rationale[string(schemas.CategoryCase)] = "所选机箱型号标注为黑色（Black），未满足白色机箱偏好；系列中的白色版本不能证明该 SKU 为白色。需要白色机箱时，须补充并核验对应白色 SKU 后再选配。"
+		case white && !black:
+			if draft.Rationale[string(schemas.CategoryCase)] == "" {
+				draft.Rationale[string(schemas.CategoryCase)] = "所选机箱型号名称标注为 White（白色），购买前请核对准确 SKU 与具体款式。"
+			}
+		default:
+			warning := "当前所选 SKU 的颜色尚未核验，白色版本需购买前核对。"
+			if previous := draft.Rationale[string(schemas.CategoryCase)]; previous != "" {
+				warning = previous + " " + warning
+			}
+			draft.Rationale[string(schemas.CategoryCase)] = warning
+		}
+	} else if draft.Rationale[string(schemas.CategoryCase)] == "" && strings.Contains(notes, "海景房") {
+		draft.Rationale[string(schemas.CategoryCase)] = "候选缺少可核验的外观款式字段，海景房风格需购买前核对。"
 	}
 	if draft.Rationale[string(schemas.CategoryGPU)] == "" &&
 		(requirement.NoisePref == schemas.NoisePrefSilent || strings.Contains(notes, "安静") || strings.Contains(notes, "低噪")) {
-		draft.Rationale[string(schemas.CategoryGPU)] = "按安静低噪偏好筛选；候选缺少统一噪声数值，需购买前核对实测。"
+		draft.Rationale[string(schemas.CategoryGPU)] = "用户希望安静低噪；候选缺少统一噪声数值，需购买前核对实测。"
 	}
 	if len(draft.Rationale) == 0 {
 		draft.Rationale = nil
 	}
+}
+
+func hasColorLabel(name, english, chinese string) bool {
+	if strings.Contains(name, chinese) {
+		return true
+	}
+	normalized := strings.NewReplacer("(", " ", ")", " ", "（", " ", "）", " ", "[", " ", "]", " ", "/", " ", ",", " ").Replace(name)
+	for _, word := range strings.Fields(normalized) {
+		if word == english {
+			return true
+		}
+	}
+	return false
 }
 
 func trimRunes(value string, limit int) string {
@@ -553,9 +597,9 @@ func problematicRuleIDs(report schemas.ValidationReport) []string {
 	return out
 }
 
-func finalFailureMessage(result validate.Result, budgetOK bool) string {
+func finalFailureMessage(result validate.Result, budgetOK bool, attempts int) string {
 	if !budgetOK {
-		return fmt.Sprintf("三次选配后总价 ¥%s 仍未进入预算弹性区间，本轮不保存版本。", result.Quote.TotalCNY)
+		return fmt.Sprintf("%d 次选配后总价 ¥%s 仍未进入预算弹性区间，本轮不保存版本。", attempts, result.Quote.TotalCNY)
 	}
 	var rules []string
 	for _, check := range result.Report.Checks {
@@ -563,7 +607,7 @@ func finalFailureMessage(result validate.Result, budgetOK bool) string {
 			rules = append(rules, string(check.RuleID))
 		}
 	}
-	return "三次选配后兼容性仍未通过，本轮不保存版本。失败规则:" + strings.Join(rules, ",")
+	return fmt.Sprintf("%d 次选配后兼容性仍未通过，本轮不保存版本。失败规则:", attempts) + strings.Join(rules, ",")
 }
 
 func canonicalSelection(selection schemas.BuildSelection) string {

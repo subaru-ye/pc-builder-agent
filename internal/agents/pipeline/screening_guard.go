@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"iter"
 	"regexp"
 	"strconv"
@@ -70,23 +71,31 @@ func (g screeningGuard) GenerateContent(ctx context.Context, req *model.LLMReque
 				}
 				raw := screeningText(response.Content)
 				candidate := raw
-				if known && !hasBuild {
+				malformed := known && !hasBuild && malformedOuterDraft(raw)
+				if known && !hasBuild && !malformed {
 					candidate = normalizeDraftProtocol(raw)
 				}
-				text, missing := guardOwnedScreening(candidate, sources)
+				text, missing := raw, []string(nil)
+				if !malformed {
+					text, missing = guardOwnedScreening(candidate, sources)
+				}
 				if observe, ok := ctx.Value(screeningObserverKey{}).(func(string, []string)); ok {
 					observe(raw, missing)
 				}
 				// 只对程序明确处于新需求阶段的非法 JSON 协议重试一次。
 				// 缺失业务信息已生成安全追问时无需重试；不在程序中猜填或删除业务字段。
-				if known && !hasBuild && attempt == 0 && len(missing) == 0 && invalidDraftProtocol(candidate) {
+				if known && !hasBuild && attempt == 0 && len(missing) == 0 && (malformed || invalidDraftProtocol(candidate)) {
 					copyReq := *req
 					copyReq.Contents = append(append([]*genai.Content(nil), req.Contents...),
 						genai.NewContentFromText(raw, genai.RoleModel),
-						genai.NewContentFromText("上一条输出未通过需求草稿结构检查。请重新依据原用户消息输出一个符合既定字段和枚举的需求 JSON：schema_version 为数字 1，不含 intent 或改单字段；priority 只能包含硬件品类，notes 必须是字符串。缺少的需求信息省略对应字段，不猜填、不改变已知业务事实。", genai.RoleUser))
+						genai.NewContentFromText("上一条输出未通过需求草稿结构检查。请重新依据原用户消息输出一个完整闭合、符合既定字段和枚举的需求 JSON：schema_version 为数字 1，不含 intent 或改单字段；priority 只能包含硬件品类，notes 必须是字符串。缺少的需求信息省略对应字段，不猜填、不改变已知业务事实。", genai.RoleUser))
 					req = &copyReq
 					retry = true
 					break
+				}
+				if malformed {
+					yield(nil, fmt.Errorf("初筛模型在格式重试后仍返回不完整 JSON，未将内部对象当作需求"))
+					return
 				}
 				if text != raw {
 					copyResponse := *response
@@ -102,6 +111,17 @@ func (g screeningGuard) GenerateContent(ctx context.Context, req *model.LLMReque
 			}
 		}
 	}
+}
+
+// 草稿的第一个外层对象必须完整；不能在外层截断后捞出 use_case 等内部对象。
+// 保留完整对象前后的普通说明/代码围栏兼容性，不改通用历史 payload 提取口径。
+func malformedOuterDraft(text string) bool {
+	i := strings.IndexByte(text, '{')
+	if i < 0 {
+		return false
+	}
+	var raw json.RawMessage
+	return json.NewDecoder(strings.NewReader(text[i:])).Decode(&raw) != nil
 }
 
 func invalidDraftProtocol(text string) bool {

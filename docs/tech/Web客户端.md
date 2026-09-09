@@ -82,6 +82,10 @@ Next.js 不定义业务 Route Handler 或 Server Action。开发环境由 next.c
 
 ## 4. 页面与导航
 
+### 本机评估 `/eval`
+
+显式设置 `EVALDESK_API_BASE_URL` 后，通过现有 rewrite 连接独立 `cmd/evaldesk`，前后端均绑定 loopback。运行列表、条件对比、共同题指标和逐题双栏证据复用现有主题、Button、React Query；「溯源时间线」串起历史运行、完整冻结题库与当时的 Git 提交，题库可逐题查看输入和期望并跳转运行结果。所有读取、判卷及脱敏在 Go 完成。该入口不依赖产品 API 或模型配置，详见[本机评估工作台](本机评估工作台.md)。
+
 ### 4.1 /
 
 - 显示品牌名「装机配置单 Agent」、一句功能说明和直接可用的 composer。

@@ -16,12 +16,14 @@ type usageCounter struct {
 	mu       sync.Mutex
 	total    evalsuite.Usage
 	maxCalls int64
+	denied   bool // 至少一项计划内请求或题目因调用上限未执行。
 }
 
 func (u *usageCounter) reserve(embedding bool) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	if u.maxCalls > 0 && u.total.ModelCalls+u.total.EmbeddingCalls >= u.maxCalls {
+		u.denied = true
 		return fmt.Errorf("评估调用上限 %d 已耗尽；未继续请求模型", u.maxCalls)
 	}
 	if embedding {
@@ -33,12 +35,16 @@ func (u *usageCounter) reserve(embedding bool) error {
 }
 
 func (u *usageCounter) stopReason() error {
-	s := u.snapshot()
-	if u.maxCalls > 0 && s.ModelCalls+s.EmbeddingCalls >= u.maxCalls {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.maxCalls > 0 && u.total.ModelCalls+u.total.EmbeddingCalls >= u.maxCalls {
+		u.denied = true
 		return fmt.Errorf("调用上限已耗尽，本题未执行")
 	}
 	return nil
 }
+
+func (u *usageCounter) limitDenied() bool { u.mu.Lock(); defer u.mu.Unlock(); return u.denied }
 
 func (u *usageCounter) snapshot() evalsuite.Usage  { u.mu.Lock(); defer u.mu.Unlock(); return u.total }
 func (u *usageCounter) wrap(m model.LLM) model.LLM { return measuredModel{LLM: m, usage: u} }

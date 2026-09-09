@@ -88,7 +88,7 @@ func (g screeningGuard) GenerateContent(ctx context.Context, req *model.LLMReque
 					copyReq := *req
 					copyReq.Contents = append(append([]*genai.Content(nil), req.Contents...),
 						genai.NewContentFromText(raw, genai.RoleModel),
-						genai.NewContentFromText("上一条输出未通过需求草稿结构检查。请重新依据原用户消息输出一个完整闭合、符合既定字段和枚举的需求 JSON：schema_version 为数字 1，不含 intent 或改单字段；priority 只能包含硬件品类，notes 必须是字符串。缺少的需求信息省略对应字段，不猜填、不改变已知业务事实。", genai.RoleUser))
+						genai.NewContentFromText(screeningFormatRetryInstruction, genai.RoleUser))
 					req = &copyReq
 					retry = true
 					break

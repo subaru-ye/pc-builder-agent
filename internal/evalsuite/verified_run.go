@@ -40,6 +40,9 @@ func ReadVerifiedRun(dir string) (ReportMeta, []CaseRecord, error) {
 	if len(records) != len(cases)*meta.RequestedSeeds {
 		return meta, nil, fmt.Errorf("首跑记录数量不完整")
 	}
+	if err := VerifyRunEvidence(dir, meta, records); err != nil {
+		return meta, nil, err
+	}
 	byID := map[string]Case{}
 	for _, c := range cases {
 		byID[c.ID] = c

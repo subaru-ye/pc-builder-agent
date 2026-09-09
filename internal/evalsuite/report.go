@@ -13,6 +13,11 @@ import (
 // ReportMeta 描述一次评估运行的环境口径;结论只对"用例分布 × 快照批次 × 模型"
 // 负责(P13 §3.5)。
 type ReportMeta struct {
+	Prompts             *PromptIdentity           `json:"prompts,omitempty"`    // 编译静态提示词的独立身份；原文另存 prompts.json。
+	Data                *DataIdentity             `json:"data,omitempty"`       // 实际加载目录和价格的内容指纹，不含向量索引。
+	StartedAt           *time.Time                `json:"started_at,omitempty"` // 仅新运行记录；历史缺失不补造。
+	FinishedAt          *time.Time                `json:"finished_at,omitempty"`
+	Status              string                    `json:"status,omitempty"`                // running | completed | incomplete；完成不代表全部通过。
 	MaxCalls            int64                     `json:"max_calls,omitempty"`             // 模型与 Embedding 合计的逻辑调用上限。
 	GraderVersion       string                    `json:"grader_version,omitempty"`        // 空值为历史断言口径。
 	HarnessProfile      *HarnessProfile           `json:"harness_profile,omitempty"`       // 旧产物未记录时不补造。

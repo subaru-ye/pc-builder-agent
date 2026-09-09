@@ -1,0 +1,68 @@
+.sectionHead { display: flex; align-items: center; justify-content: space-between; gap: calc(var(--spacing) * 4); padding: calc(var(--spacing) * 6) 0 calc(var(--spacing) * 4); }
+.sectionHead p { margin-top: var(--spacing); color: var(--ink-muted); }
+.muted, .help { color: var(--ink-muted); }
+.help { font-size: var(--text-xs); margin-block: calc(var(--spacing) * 2); line-height: 1.7; }
+.empty { padding-block: calc(var(--spacing) * 8); color: var(--ink-muted); }
+.empty button { margin-top: calc(var(--spacing) * 3); }
+.search { display: flex; align-items: center; gap: calc(var(--spacing) * 2); padding-inline: calc(var(--spacing) * 3); border: 1px solid var(--hairline); border-radius: var(--radius-md); color: var(--ink-muted); min-width: 0; }
+.search:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
+.search input { min-width: 0; min-height: calc(var(--spacing) * 11); background: transparent; outline: none; color: var(--ink); width: 100%; }
+.events { list-style: none; padding: 0; }
+.timelineRow { display: grid; grid-template-columns: minmax(150px, .6fr) minmax(0, 3fr); gap: calc(var(--spacing) * 8); padding-block: calc(var(--spacing) * 6); border-bottom: 1px solid var(--hairline); }
+.runDate { font-variant-numeric: tabular-nums; display: flex; flex-direction: column; gap: var(--spacing); }
+.runDate > span { font-size: var(--text-xs); color: var(--ink-muted); }
+.event { border-left: 2px solid var(--hairline-strong); padding-left: calc(var(--spacing) * 6); min-width: 0; overflow-wrap: anywhere; }
+.event > p { margin-top: calc(var(--spacing) * 2); font-size: var(--text-xs); }
+.commitLine { display: flex; gap: calc(var(--spacing) * 2); margin-top: calc(var(--spacing) * 3); font-size: var(--text-xs); }
+.commitLine > svg { color: var(--ink-muted); flex-shrink: 0; margin-top: var(--spacing); }
+.actions { display: flex; align-items: center; flex-wrap: wrap; gap: calc(var(--spacing) * 3); margin-top: calc(var(--spacing) * 4); }
+.actions button[aria-pressed="true"] { color: var(--primary); background: var(--interactive-selected); }
+.undated { margin-top: calc(var(--spacing) * 8); }
+.provenance:focus { outline: none; }
+.provenance { scroll-margin-top: calc(var(--spacing) * 4); }
+.crossLinks { display: flex; flex-wrap: wrap; gap: calc(var(--spacing) * 3); border-bottom: 1px solid var(--hairline); padding-bottom: calc(var(--spacing) * 3); }
+.notice { color: var(--ink-muted); border-left: 2px solid var(--review); padding-left: calc(var(--spacing) * 3); margin-top: calc(var(--spacing) * 4); }
+.commit, .versions { padding-block: calc(var(--spacing) * 6); border-bottom: 1px solid var(--hairline); scroll-margin-top: calc(var(--spacing) * 4); }
+.commitSubject { margin-block: calc(var(--spacing) * 3); font-size: var(--text-lg); overflow-wrap: anywhere; }
+.facts { display: flex; flex-wrap: wrap; gap: calc(var(--spacing) * 4) calc(var(--spacing) * 8); margin-block: calc(var(--spacing) * 4); }
+.facts > div { min-width: 0; }
+.facts dt { color: var(--ink-muted); font-size: var(--text-xs); margin-bottom: var(--spacing); }
+.facts dd { overflow-wrap: anywhere; }
+.evidence { color: var(--ink-muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.evidence summary { cursor: pointer; min-height: calc(var(--spacing) * 11); align-content: center; }
+.evidence p { margin-block: calc(var(--spacing) * 2); }
+.evidence code { color: var(--ink); font-family: var(--font-mono); }
+.files { margin-block: calc(var(--spacing) * 2); }
+.files li { display: flex; gap: calc(var(--spacing) * 3); padding-block: var(--spacing); }
+.files li > span { flex-shrink: 0; }
+.identifiers > div { padding-block: var(--spacing); }
+.identifiers dd { color: var(--ink); font-family: var(--font-mono); }
+.suite { scroll-margin-top: calc(var(--spacing) * 4); }
+.stage { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--spacing) * 3); color: var(--ink-muted); font-size: var(--text-xs); padding-bottom: calc(var(--spacing) * 4); }
+.stage select { color: var(--ink); background: var(--surface-1); border: 1px solid var(--hairline); border-radius: var(--radius-md); padding-inline: calc(var(--spacing) * 3); }
+.question { border-bottom: 1px solid var(--hairline); }
+.question > summary { cursor: pointer; display: list-item; padding: calc(var(--spacing) * 4) 0; min-height: calc(var(--spacing) * 11); }
+.question > summary b { font-family: var(--font-mono); margin-right: var(--spacing); }
+.question > summary small { display: block; margin-top: var(--spacing); color: var(--ink-muted); font-size: var(--text-xs); }
+.question[open] > summary { color: var(--primary); }
+.questionBody { padding: 0 calc(var(--spacing) * 4) calc(var(--spacing) * 6); border-left: 2px solid var(--primary); }
+.frozenTurn { padding-block: calc(var(--spacing) * 4); border-bottom: 1px solid var(--hairline); }
+.frozenTurn h4 { margin-bottom: calc(var(--spacing) * 3); font-weight: 600; }
+.frozenColumns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--spacing) * 8); }
+.frozenColumns > div { min-width: 0; }
+.frozenColumns h5 { color: var(--ink-muted); font-size: var(--text-xs); margin-bottom: calc(var(--spacing) * 2); }
+.frozenColumns ul { padding-left: calc(var(--spacing) * 4); list-style: disc; }
+.frozenColumns li + li { margin-top: calc(var(--spacing) * 2); }
+.frozenColumns pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.frozenColumns .evidence pre { font-family: var(--font-mono); font-size: var(--text-xs); }
+@media (max-width: 767px) {
+  .sectionHead { align-items: start; flex-direction: column; }
+  .search { width: 100%; }
+  .timelineRow { grid-template-columns: minmax(0, 1fr); gap: calc(var(--spacing) * 3); }
+  .runDate { flex-wrap: wrap; flex-direction: row; gap: calc(var(--spacing) * 3); }
+  .event { padding-left: calc(var(--spacing) * 4); }
+  .frozenColumns { grid-template-columns: minmax(0, 1fr); gap: calc(var(--spacing) * 6); }
+  .questionBody { padding-inline: calc(var(--spacing) * 3); }
+  .facts { flex-direction: column; gap: calc(var(--spacing) * 3); }
+  .crossLinks { gap: var(--spacing); }
+}

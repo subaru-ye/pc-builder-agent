@@ -17,7 +17,7 @@ import { userMessage } from "@/lib/api/problem";
 
 const examples = ["8000 元，2K 玩黑神话：悟空", "预算 6000，主要剪 4K 视频，尽量安静", "一万元游戏主机，机箱要小，显卡优先"];
 
-export function HomeWorkspace() {
+export function HomeWorkspace({ showEvaldesk = false }: { showEvaldesk?: boolean }) {
   const router = useRouter();
   const [draft, setDraft] = useState("");
   const sessions = useQuery({ queryKey: queryKeys.sessions, queryFn: api.listSessions });
@@ -31,7 +31,7 @@ export function HomeWorkspace() {
   });
   return (
     <main className="flex min-h-screen flex-col bg-[var(--canvas)]">
-      <AppHeader showAccount={false} />
+      <AppHeader showAccount={false} showEvaldesk={showEvaldesk} />
       <div className="grid flex-1 md:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_280px] 2xl:grid-cols-[280px_minmax(0,1fr)_320px]">
         <aside className="hidden min-h-[calc(100vh-56px)] border-r bg-[var(--surface-1)] md:flex md:flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto p-4">

@@ -210,7 +210,22 @@ func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seed
 	}
 
 	identity := codeIdentity()
+	promptSnapshot, promptIdentity, err := runPromptEvidence(cases)
+	if err != nil {
+		log.Println("记录提示词版本失败:", err)
+		return 2
+	}
+	dataIdentity, err := evalsuite.NewDataIdentity(snapshotView)
+	if err != nil {
+		log.Println("记录商品数据指纹失败:", err)
+		return 2
+	}
+	startedAt := time.Now()
 	meta := evalsuite.ReportMeta{
+		Prompts:             &promptIdentity,
+		Data:                &dataIdentity,
+		StartedAt:           &startedAt,
+		Status:              "running",
 		MaxCalls:            maxCalls,
 		GraderVersion:       evalsuite.CurrentGraderVersion,
 		RecordSchemaVersion: 1,
@@ -220,7 +235,7 @@ func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seed
 		SnapshotDate:   snapshotView.SnapshotDate,
 		BuilderModel:   builderCfg.ModelDescription(),
 		EmbeddingModel: string(embeddingCfg.Provider) + "/" + embeddingCfg.Model,
-		GeneratedAt:    time.Now(),
+		GeneratedAt:    startedAt,
 		Mode:           "run",
 	}
 	if screeningRunner != nil {
@@ -257,10 +272,24 @@ func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seed
 		log.Println(err)
 		return 2
 	}
+	if err := promptSnapshot.Write(outDir); err != nil {
+		log.Println("保存提示词原文失败:", err)
+		return 2
+	}
 	if err := writeMeta(outDir, meta); err != nil {
 		log.Println(err)
 		return 2
 	}
+	finalized := false
+	defer func() {
+		if !finalized {
+			finishedAt := time.Now()
+			meta.Status, meta.FinishedAt = "incomplete", &finishedAt
+			if err := writeMeta(outDir, meta); err != nil {
+				log.Println("保存未完成运行状态失败:", err)
+			}
+		}
+	}()
 	if resultPath != "" {
 		if err := os.WriteFile(resultPath, []byte(outDir), 0o644); err != nil {
 			log.Println(err)
@@ -308,11 +337,16 @@ func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seed
 		return 2
 	}
 
-	summary := evalsuite.Summarize(meta, records)
 	if err := journal.Close(); err != nil {
 		log.Println(err)
 		return 2
 	}
+	finishedAt := time.Now()
+	meta.Status, meta.FinishedAt = "completed", &finishedAt
+	if usage.limitDenied() {
+		meta.Status = "incomplete"
+	}
+	summary := evalsuite.Summarize(meta, records)
 	if err := summary.WriteReport(outDir); err != nil {
 		log.Println(err)
 		return 2
@@ -321,6 +355,7 @@ func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seed
 		log.Println(err)
 		return 2
 	}
+	finalized = true
 
 	fmt.Printf("评估完成:%s\n  报告:%s\n  Pass@1 = %.1f%%(通过 %d / 失败 %d / data-error %d,共 %d 条)\n",
 		meta.SnapshotDate, filepath.Join(outDir, "report.md"),
@@ -345,6 +380,10 @@ func runReplay(dir string) int {
 
 	meta, err := readMeta(dir)
 	if err != nil {
+		log.Println(err)
+		return 2
+	}
+	if err := evalsuite.VerifyRunEvidence(dir, meta, records); err != nil {
 		log.Println(err)
 		return 2
 	}

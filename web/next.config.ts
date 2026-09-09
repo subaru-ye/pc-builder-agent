@@ -7,7 +7,14 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     const apiBase = process.env.GO_API_BASE_URL ?? "http://localhost:8082";
+    // 本机评估服务显式启用，且只为本机 Host 代理；不接入生产 API。
+    const evaldeskBase = process.env.EVALDESK_API_BASE_URL;
     return [
+      ...(evaldeskBase ? [{
+        source: "/api/evaldesk/:path*",
+        destination: `${evaldeskBase}/api/evaldesk/:path*`,
+        has: [{ type: "host" as const, value: "(?:localhost|127\\.0\\.0\\.1|\\[::1\\])" }],
+      }] : []),
       { source: "/api/:path*", destination: `${apiBase}/api/:path*` },
       { source: "/healthz", destination: `${apiBase}/healthz` },
       { source: "/readyz", destination: `${apiBase}/readyz` },

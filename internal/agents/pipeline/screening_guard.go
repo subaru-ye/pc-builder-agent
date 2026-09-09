@@ -17,6 +17,12 @@ import (
 
 type screeningSourcesKey struct{}
 type screeningObserverKey struct{}
+type screeningBuildStateKey struct{}
+
+// WithScreeningBuildState 由产品层传入真实运行状态；聊天里的“已整理需求”不等于已有配置。
+func WithScreeningBuildState(ctx context.Context, hasBuild bool) context.Context {
+	return context.WithValue(ctx, screeningBuildStateKey{}, hasBuild)
+}
 
 // WithScreeningSources 由产品层提供有界的真实用户消息；助手示例不能成为字段证据。
 func WithScreeningSources(ctx context.Context, sources []string) context.Context {
@@ -34,6 +40,17 @@ type screeningGuard struct{ model.LLM }
 
 func (g screeningGuard) GenerateContent(ctx context.Context, req *model.LLMRequest, _ bool) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {
+		hasBuild, known := ctx.Value(screeningBuildStateKey{}).(bool)
+		if known && !hasBuild {
+			copyReq := *req
+			config := genai.GenerateContentConfig{}
+			if req.Config != nil {
+				config = *req.Config
+			}
+			config.SystemInstruction = &genai.Content{Parts: []*genai.Part{{Text: newBuildOnlyInstruction}}}
+			copyReq.Config = &config
+			req = &copyReq
+		}
 		sources, supplied := ctx.Value(screeningSourcesKey{}).([]string)
 		if !supplied {
 			for _, content := range req.Contents {
@@ -42,28 +59,91 @@ func (g screeningGuard) GenerateContent(ctx context.Context, req *model.LLMReque
 				}
 			}
 		}
-		for response, err := range g.LLM.GenerateContent(ctx, req, false) {
-			if err != nil || response == nil || response.ErrorCode != "" || response.ErrorMessage != "" {
-				if !yield(response, err) {
+		for attempt := 0; attempt < 2; attempt++ {
+			retry := false
+			for response, err := range g.LLM.GenerateContent(ctx, req, false) {
+				if err != nil || response == nil || response.ErrorCode != "" || response.ErrorMessage != "" {
+					if !yield(response, err) {
+						return
+					}
+					continue
+				}
+				raw := screeningText(response.Content)
+				candidate := raw
+				if known && !hasBuild {
+					candidate = normalizeDraftProtocol(raw)
+				}
+				text, missing := guardOwnedScreening(candidate, sources)
+				if observe, ok := ctx.Value(screeningObserverKey{}).(func(string, []string)); ok {
+					observe(raw, missing)
+				}
+				// 只对程序明确处于新需求阶段的非法 JSON 协议重试一次。
+				// 缺失业务信息已生成安全追问时无需重试；不在程序中猜填或删除业务字段。
+				if known && !hasBuild && attempt == 0 && len(missing) == 0 && invalidDraftProtocol(candidate) {
+					copyReq := *req
+					copyReq.Contents = append(append([]*genai.Content(nil), req.Contents...),
+						genai.NewContentFromText(raw, genai.RoleModel),
+						genai.NewContentFromText("上一条输出未通过需求草稿结构检查。请重新依据原用户消息输出一个符合既定字段和枚举的需求 JSON：schema_version 为数字 1，不含 intent 或改单字段；priority 只能包含硬件品类，notes 必须是字符串。缺少的需求信息省略对应字段，不猜填、不改变已知业务事实。", genai.RoleUser))
+					req = &copyReq
+					retry = true
+					break
+				}
+				if text != raw {
+					copyResponse := *response
+					copyResponse.Content = genai.NewContentFromText(text, genai.RoleModel)
+					response = &copyResponse
+				}
+				if !yield(response, nil) {
 					return
 				}
-				continue
 			}
-			raw := screeningText(response.Content)
-			text, missing := guardOwnedScreening(raw, sources)
-			if observe, ok := ctx.Value(screeningObserverKey{}).(func(string, []string)); ok {
-				observe(raw, missing)
-			}
-			if text != raw {
-				copyResponse := *response
-				copyResponse.Content = genai.NewContentFromText(text, genai.RoleModel)
-				response = &copyResponse
-			}
-			if !yield(response, nil) {
+			if !retry {
 				return
 			}
 		}
 	}
+}
+
+func invalidDraftProtocol(text string) bool {
+	raw := extractJSONObject(text)
+	if raw == nil {
+		return false
+	} // 自然语言仍由现有产品/评估路径判断，不能把格式重试扩大成业务重答。
+	_, err := schemas.DecodeRequirementSpec(raw)
+	return err != nil
+}
+
+// 只规范明确新需求的协议常量和空 notes，不替模型更改预算、型号等业务值。
+func normalizeDraftProtocol(text string) string {
+	raw := extractJSONObject(text)
+	if raw == nil || hasTopLevelKey(raw, "intent") {
+		return text
+	}
+	if !hasTopLevelKey(raw, "budget_cny") && !hasTopLevelKey(raw, "use_case") {
+		return text
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
+		return text
+	}
+	changed := false
+	if version, ok := fields["schema_version"]; !ok || string(version) == `"1"` {
+		fields["schema_version"] = json.RawMessage("1")
+		changed = true
+	}
+	var notes []json.RawMessage
+	if rawNotes, ok := fields["notes"]; ok && json.Unmarshal(rawNotes, &notes) == nil && notes != nil && len(notes) == 0 {
+		fields["notes"] = json.RawMessage(`""`)
+		changed = true
+	}
+	if !changed {
+		return text
+	}
+	result, err := json.Marshal(fields)
+	if err != nil {
+		return text
+	}
+	return string(result)
 }
 
 func screeningText(content *genai.Content) string {
@@ -128,7 +208,7 @@ func guardOwnedScreening(text string, sources []string) (string, []string) {
 	if input.UseCase.Type == "" {
 		missing = append(missing, "use_case")
 		questions = append(questions, "这台电脑主要用于什么用途？")
-	} else if input.UseCase.Type == "gaming" && input.UseCase.Resolution == "" {
+	} else if input.UseCase.Type == "gaming" && (input.UseCase.Resolution == "" || !groundedResolution(input.UseCase.Resolution, sources)) {
 		missing = append(missing, "resolution")
 		questions = append(questions, "主要使用的游戏分辨率是1080p、2K还是4K？")
 	}
@@ -157,6 +237,13 @@ var budgetAmount = regexp.MustCompile(`(?i)(?:预算(?:金额)?(?:为|是|大约
 var moneyAmount = regexp.MustCompile(`(?i)` + budgetNumberPattern + `\s*(?:元|块钱|块)`)
 
 func groundedBudget(budget int, sources []string) bool {
+	// 用户显式撤回预算后，之前的金额不再提供依据；后续新消息仍可重新给出金额。
+	for i, source := range sources {
+		if budgetUnspecified.MatchString(source) {
+			sources = sources[i+1:]
+			return groundedBudget(budget, sources)
+		}
+	}
 	for _, source := range sources {
 		for _, pattern := range []*regexp.Regexp{budgetAmount, moneyAmount} {
 			for _, match := range pattern.FindAllStringSubmatch(source, -1) {
@@ -247,6 +334,7 @@ var budgetClauses = regexp.MustCompile(`[。！？!?；;\n]`)
 func explicitBudgetBasis(sources []string) string {
 	var basis string
 	for _, source := range sources {
+		var sourceBasis string
 		for _, clause := range budgetClauses.Split(source, -1) {
 			clause = strings.Join(strings.Fields(clause), "")
 			if containsAny(clause, "不是", "不只", "不单", "不要", "不能", "不用", "无需", "不需要", "并非", "是否", "还是", "如果", "假如") {
@@ -265,12 +353,15 @@ func explicitBudgetBasis(sources []string) string {
 			if fullBuild && !newPurchase {
 				candidate = "full_build"
 			}
-			if (newPurchase && fullBuild) || (basis != "" && candidate != "" && basis != candidate) {
+			if (newPurchase && fullBuild) || (sourceBasis != "" && candidate != "" && sourceBasis != candidate) {
 				return ""
 			}
 			if candidate != "" {
-				basis = candidate
+				sourceBasis = candidate
 			}
+		}
+		if sourceBasis != "" {
+			basis = sourceBasis
 		}
 	}
 	return basis

@@ -20,6 +20,8 @@ import (
 
 type ScreenKind string
 
+const ScreeningReadyMessage = "需求已经整理好，请确认或编辑后再生成配置。"
+
 const (
 	ScreenQuestion    ScreenKind = "question"
 	ScreenRequirement ScreenKind = "requirement"
@@ -44,6 +46,7 @@ type ScreenInput struct {
 	Text        string
 	Context     string
 	UserSources []string // 与上下文同范围的用户原话，排除助手消息。
+	HasBuild    bool     // 来自产品运行类型，不能从助手的需求确认提示推断。
 }
 
 type AgentGateway interface {
@@ -93,16 +96,22 @@ func (g *ADKAgentGateway) Screen(ctx context.Context, userID, sessionID string, 
 		sources = []string{input.Text}
 	}
 	ctx = pipeline.WithScreeningSources(ctx, sources)
+	ctx = pipeline.WithScreeningBuildState(ctx, input.HasBuild)
 	lastText, err := collectAgentText(g.screeningRunner.Run(ctx, userID, sessionID,
 		genai.NewContentFromText(input.Context, genai.RoleUser), agent.RunConfig{}), "")
 	if err != nil {
 		return ScreenResult{}, err
 	}
+	return ParseScreeningResult(lastText, input.Text)
+}
+
+// ParseScreeningResult 共用产品初筛的字段规范化和严格解码，不调用模型。
+func ParseScreeningResult(lastText, userText string) (ScreenResult, error) {
 	payload := pipeline.ExtractPayload(lastText)
 	if payload == nil {
 		return ScreenResult{Kind: ScreenQuestion, Text: strings.TrimSpace(lastText)}, nil
 	}
-	if normalized, changed := normalizeUnstatedBudgetFlex(payload, input.Text); changed {
+	if normalized, changed := normalizeUnstatedBudgetFlex(payload, userText); changed {
 		payload = normalized
 		log.Printf("[host] 初筛纠偏:移除用户未明确指定的预算弹性")
 	}

@@ -21,7 +21,7 @@ func TestNewBuildDraftOnlyAsksRequiredMissingFields(t *testing.T) {
 		{"change stays change", `{"schema_version":1,"intent":"adjust_budget","budget_delta_cny":1000}`, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			text, missing := guardOwnedScreening(tc.draft, []string{"预算8000元、4500元、12000元"})
+			text, missing := guardOwnedScreening(tc.draft, []string{"预算8000元、4500元、12000元，分辨率2K"})
 			if !reflect.DeepEqual(missing, tc.missing) {
 				t.Fatalf("missing %v want %v", missing, tc.missing)
 			}

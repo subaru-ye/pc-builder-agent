@@ -400,6 +400,13 @@ func TestScreenInputUsesOnlyRecentSameKindStableMessages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if input.HasBuild {
+		t.Fatal("screening invented a build")
+	}
+	changeInput, err := svc.screenInput(context.Background(), store.AgentRun{SessionID: st.session.ID, Kind: store.RunChange}, "改预算")
+	if err != nil || !changeInput.HasBuild {
+		t.Fatal("change run lost authoritative build state")
+	}
 	if strings.Contains(input.Context, "完整配置") || strings.Contains(input.Context, "screening-0") || strings.Contains(input.Context, "screening-1") {
 		t.Fatalf("上下文未正确过滤/截断:%s", input.Context)
 	}

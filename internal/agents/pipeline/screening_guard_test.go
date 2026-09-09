@@ -206,18 +206,22 @@ func TestScreeningGuardSavedRun(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	type savedCase struct {
+		ID, Input, Stage string
+		Turns            []struct{ Input string } `json:"turns"`
+	}
 	var suite struct {
-		Cases []struct{ ID, Input, Stage string } `json:"cases"`
+		Cases []savedCase `json:"cases"`
 	}
 	var meta struct {
 		Repeats int `json:"requested_seeds"`
 	}
 	read("cases.json", &suite)
 	read("meta.json", &meta)
-	inputs := map[string]string{}
+	inputs := map[string]savedCase{}
 	for _, c := range suite.Cases {
 		if c.Stage == "screening" {
-			inputs[c.ID] = c.Input
+			inputs[c.ID] = c
 		}
 	}
 	f, err := os.Open(filepath.Join(dir, "results.jsonl"))
@@ -227,15 +231,41 @@ func TestScreeningGuardSavedRun(t *testing.T) {
 	defer func() { _ = f.Close() }()
 	decoder := json.NewDecoder(f)
 	seen := map[string]bool{}
+	type savedOutput struct {
+		Text          string        `json:"text"`
+		ModelText     string        `json:"model_text"`
+		ModelAttempts []string      `json:"model_attempts"`
+		Missing       []string      `json:"missing_fields"`
+		GuardText     string        `json:"guard_text"`
+		UserSources   []string      `json:"user_sources"`
+		Turns         []savedOutput `json:"turns"`
+	}
+	check := func(key string, output savedOutput, sources []string) {
+		t.Helper()
+		if output.ModelText == "" {
+			t.Fatalf("missing model text: %s", key)
+		}
+		raw := output.ModelText
+		if len(output.ModelAttempts) > 0 {
+			if output.ModelAttempts[len(output.ModelAttempts)-1] != raw || len(output.ModelAttempts) > 2 {
+				t.Fatalf("invalid attempt evidence: %s", key)
+			}
+			raw = normalizeDraftProtocol(raw)
+		}
+		text, missing := guardOwnedScreening(raw, sources)
+		want := output.Text
+		if output.GuardText != "" {
+			want = output.GuardText
+		}
+		if text != want || !reflect.DeepEqual(missing, output.Missing) {
+			t.Errorf("current guard differs: %s", key)
+		}
+	}
 	for {
 		var record struct {
-			ID        string `json:"case_id"`
-			Seed      int    `json:"seed"`
-			Screening *struct {
-				Text      string   `json:"text"`
-				ModelText string   `json:"model_text"`
-				Missing   []string `json:"missing_fields"`
-			} `json:"screening"`
+			ID        string       `json:"case_id"`
+			Seed      int          `json:"seed"`
+			Screening *savedOutput `json:"screening"`
 		}
 		if err := decoder.Decode(&record); err == io.EOF {
 			break
@@ -247,13 +277,33 @@ func TestScreeningGuardSavedRun(t *testing.T) {
 		}
 		input, ok := inputs[record.ID]
 		key := record.ID + "/" + strconv.Itoa(record.Seed)
-		if !ok || seen[key] || record.Seed < 1 || record.Seed > meta.Repeats || record.Screening.ModelText == "" {
+		if !ok || seen[key] || record.Seed < 1 || record.Seed > meta.Repeats {
 			t.Fatalf("incomplete or duplicate trace: %s", record.ID)
 		}
 		seen[key] = true
-		text, missing := guardOwnedScreening(record.Screening.ModelText, []string{input})
-		if text != record.Screening.Text || !reflect.DeepEqual(missing, record.Screening.Missing) {
-			t.Errorf("current guard differs: %s/%d", record.ID, record.Seed)
+		if len(input.Turns) == 0 {
+			check(key, *record.Screening, []string{input.Input})
+			continue
+		}
+		if len(input.Turns) != len(record.Screening.Turns) {
+			t.Fatalf("missing dialogue rounds: %s", key)
+		}
+		for i, output := range record.Screening.Turns {
+			// 完整有界上下文重建由正常 replay 负责；本审计还要求来源是本题截至本轮的有序用户原话。
+			at := 0
+			for _, source := range output.UserSources {
+				for at <= i && input.Turns[at].Input != source {
+					at++
+				}
+				if at > i {
+					t.Fatalf("invalid user source: %s/%d", key, i+1)
+				}
+				at++
+			}
+			if len(output.UserSources) == 0 || output.UserSources[len(output.UserSources)-1] != input.Turns[i].Input {
+				t.Fatalf("missing latest input: %s/%d", key, i+1)
+			}
+			check(key+"/turn"+strconv.Itoa(i+1), output, output.UserSources)
 		}
 	}
 	if len(inputs) == 0 || meta.Repeats < 1 || len(seen) != len(inputs)*meta.Repeats {

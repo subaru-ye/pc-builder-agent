@@ -210,7 +210,7 @@ func (s *Service) executeScreening(ctx context.Context, r store.AgentRun, ownerI
 	case ScreenQuestion:
 		s.succeed(ctx, r, store.PhaseCollecting, nil, false, result.Text, 0)
 	case ScreenRequirement:
-		message := "需求已经整理好，请确认或编辑后再生成配置。"
+		message := ScreeningReadyMessage
 		s.succeedRequirement(ctx, r, result.Payload, message)
 	case ScreenChange:
 		s.fail(ctx, r, NewProblem("schema_validation_failed", "初筛结果类型错误", 422,
@@ -364,6 +364,13 @@ func (s *Service) screenInput(ctx context.Context, r store.AgentRun, current str
 		}
 		prior = append(prior, message)
 	}
+	input := BuildScreenInput(prior, current)
+	input.HasBuild = r.Kind == store.RunChange
+	return input, nil
+}
+
+// BuildScreenInput 让产品请求和多轮评估共用同一上下文边界；调用方先过滤运行类型。
+func BuildScreenInput(prior []store.WebMessage, current string) ScreenInput {
 	if len(prior) > maxScreenMessages-1 {
 		prior = prior[len(prior)-(maxScreenMessages-1):]
 	}
@@ -391,7 +398,7 @@ func (s *Service) screenInput(ctx context.Context, r store.AgentRun, current str
 			visibleSources = append(visibleSources, source)
 		}
 	}
-	return ScreenInput{Text: current, Context: contextText, UserSources: visibleSources}, nil
+	return ScreenInput{Text: current, Context: contextText, UserSources: visibleSources}
 }
 
 var deterministicBudgetDeltaRE = regexp.MustCompile(`^(?:(?:把)?预算)?(?:再)?(降低|减少|下调|降|减|增加|提高|上调|加)([1-9][0-9]{0,5})(?:元)?$`)

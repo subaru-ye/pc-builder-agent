@@ -1,0 +1,44 @@
+{
+  "id": "L5-301",
+  "title": "补分辨率前修改预算，以新金额为准",
+  "stage": "screening",
+  "turns": [
+    {
+      "input": "预算8000元的新主机，主要玩游戏。",
+      "expect": {
+        "kind": "clarify",
+        "clarify_fields": [
+          "resolution"
+        ],
+        "forbidden_clarify_fields": [
+          "budget_cny",
+          "use_case"
+        ]
+      }
+    },
+    {
+      "input": "预算改为6000元，分辨率等下补充。",
+      "expect": {
+        "kind": "clarify",
+        "clarify_fields": [
+          "resolution"
+        ],
+        "forbidden_clarify_fields": [
+          "budget_cny",
+          "use_case"
+        ]
+      }
+    },
+    {
+      "input": "用2K分辨率。",
+      "expect": {
+        "kind": "spec",
+        "budget_cny": 6000,
+        "resolution": "2K",
+        "spec_fields": {
+          "use_case.type": "gaming"
+        }
+      }
+    }
+  ]
+}

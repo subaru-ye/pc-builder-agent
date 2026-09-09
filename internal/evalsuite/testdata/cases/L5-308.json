@@ -1,0 +1,41 @@
+{
+  "id": "L5-308",
+  "title": "更正已有CPU型号，不能保留旧型号",
+  "stage": "screening",
+  "turns": [
+    {
+      "input": "办公电脑，新增购买预算6000元，已有一颗 AMD Ryzen 5 7600。",
+      "expect": {
+        "kind": "spec",
+        "budget_cny": 6000,
+        "spec_fields": {
+          "owned_parts": [
+            {
+              "category": "cpu",
+              "model": "AMD Ryzen 5 7600",
+              "quantity": 1
+            }
+          ],
+          "budget_basis": "new_purchase"
+        }
+      }
+    },
+    {
+      "input": "我看错了，实际已有CPU是一颗 Intel Core i5-12400F，请以这个型号为准。",
+      "expect": {
+        "kind": "spec",
+        "budget_cny": 6000,
+        "spec_fields": {
+          "owned_parts": [
+            {
+              "category": "cpu",
+              "model": "Intel Core i5-12400F",
+              "quantity": 1
+            }
+          ],
+          "budget_basis": "new_purchase"
+        }
+      }
+    }
+  ]
+}

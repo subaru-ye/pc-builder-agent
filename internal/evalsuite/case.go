@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -37,6 +38,13 @@ type Expect struct {
 	ClarifyFields []string `json:"clarify_fields,omitempty"` // budget_cny / resolution
 	// ForbiddenClarifyFields 明确禁止追问的已知/不适用字段；仅用于新 clarify 题。
 	ForbiddenClarifyFields []string `json:"forbidden_clarify_fields,omitempty"`
+	// SpecFields 仅新题显式指定：对需求单字段作精确复验，不从模型回复生成期望。
+	SpecFields map[string]json.RawMessage `json:"spec_fields,omitempty"`
+}
+
+type ScreeningTurn struct {
+	Input  string `json:"input"`
+	Expect Expect `json:"expect"`
 }
 
 // Case 是一条评估用例。build 用例锁可独立复核的约束、不写死期望配置单;
@@ -53,6 +61,7 @@ type Case struct {
 	// screening 专有
 	Input  string
 	Expect Expect
+	Turns  []ScreeningTurn
 }
 
 // caseWire 是 fixture 的线上形态;requirement/change/base_selection 二次走严格
@@ -67,6 +76,7 @@ type caseWire struct {
 	Locked        []schemas.Category `json:"locked"`
 	Input         string             `json:"input"`
 	Expect        Expect             `json:"expect"`
+	Turns         []ScreeningTurn    `json:"turns,omitempty"`
 }
 
 // LoadCases 按文件名顺序加载目录下全部 *.json 用例;任一 fixture 不合法即报错
@@ -118,7 +128,27 @@ func decodeCase(data []byte) (Case, error) {
 	if stage == "" {
 		stage = StageBuild
 	}
-	c := Case{ID: w.ID, Title: w.Title, Stage: stage, Input: w.Input, Expect: w.Expect, Locked: w.Locked}
+	c := Case{ID: w.ID, Title: w.Title, Stage: stage, Input: w.Input, Expect: w.Expect, Locked: w.Locked, Turns: w.Turns}
+	if len(w.Turns) > 0 {
+		if stage != StageScreening || w.Input != "" || !reflect.DeepEqual(w.Expect, Expect{}) || len(w.Turns) < 2 || len(w.Turns) > 8 {
+			return Case{}, fmt.Errorf("turns 仅用于 2–8 轮 screening，不能混用 input/expect")
+		}
+		for i, turn := range w.Turns {
+			raw, err := json.Marshal(caseWire{ID: w.ID, Title: w.Title, Stage: StageScreening, Input: turn.Input, Expect: turn.Expect})
+			if err != nil {
+				return Case{}, err
+			}
+			if _, err := decodeCase(raw); err != nil {
+				return Case{}, fmt.Errorf("turn %d: %w", i+1, err)
+			}
+		}
+		return c, nil
+	}
+	for field, value := range w.Expect.SpecFields {
+		if stage != StageScreening || w.Expect.Kind != "spec" || !validSpecField(field) || !json.Valid(value) {
+			return Case{}, fmt.Errorf("spec_fields 含不支持的字段或期望: %s", field)
+		}
+	}
 
 	switch stage {
 	case StageBuild:
@@ -190,4 +220,13 @@ func decodeCase(data []byte) (Case, error) {
 
 func validQuestionField(field string) bool {
 	return field == "budget_cny" || field == "resolution" || field == "owned_parts" || field == "budget_basis" || field == "use_case"
+}
+
+func validSpecField(field string) bool {
+	switch field {
+	case "use_case.type", "noise_pref", "size_pref", "budget_basis", "budget_flex", "owned_parts", "existing_parts":
+		return true
+	default:
+		return false
+	}
 }

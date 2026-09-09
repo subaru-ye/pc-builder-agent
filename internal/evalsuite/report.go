@@ -13,6 +13,7 @@ import (
 // ReportMeta 描述一次评估运行的环境口径;结论只对"用例分布 × 快照批次 × 模型"
 // 负责(P13 §3.5)。
 type ReportMeta struct {
+	HarnessProfile      *HarnessProfile           `json:"harness_profile,omitempty"`       // 旧产物未记录时不补造。
 	RecordSchemaVersion int                       `json:"record_schema_version,omitempty"` // 1: screening 原文必存
 	ReplaySkipped       []string                  `json:"replay_skipped,omitempty"`
 	SuiteVersion        string                    `json:"suite_version,omitempty"`
@@ -27,6 +28,11 @@ type ReportMeta struct {
 	EmbeddingModel      string                    `json:"embedding_model"`
 	GeneratedAt         time.Time                 `json:"generated_at"`
 	Mode                string                    `json:"mode"` // run | replay
+}
+
+type HarnessProfile struct {
+	AttemptLimit int  `json:"attempt_limit"`
+	Semantic     bool `json:"semantic"`
 }
 
 type CodeIdentity struct {
@@ -47,6 +53,7 @@ type Summary struct {
 	Delivered          int          `json:"delivered"`     // 通过硬校验的 build 交付,不含合理非交付。
 	NonDelivered       int          `json:"non_delivered"` // 按该题契约和证据校验通过的非交付。
 	ScreeningCorrect   int          `json:"screening_correct"`
+	DialogueCorrect    int          `json:"dialogue_correct"`
 	UnclassifiedPassed int          `json:"unclassified_passed"` // 历史轨迹缺少结果时不补造交付分类。
 	Failed             int          `json:"failed"`
 	DataErrors         int          `json:"data_errors"`
@@ -78,6 +85,8 @@ func Summarize(meta ReportMeta, records []CaseRecord) Summary {
 		case record.Verdict.Passed:
 			s.Passed++
 			switch {
+			case record.Stage == StageScreening && record.Screening != nil && len(record.Screening.Turns) > 0:
+				s.DialogueCorrect++
 			case record.Stage == StageScreening:
 				s.ScreeningCorrect++
 			case record.Result != nil && record.Result.Succeeded:
@@ -179,7 +188,26 @@ func (s Summary) WriteReport(dir string) error {
 	fmt.Fprintf(&b, "- 用例 %d 条 × %d seed:记录级通过 %d / 失败 %d / data-error %d,**Pass@1 = %.1f%%**;用例级 **Pass^%d = %.1f%%**(%d/%d);veto 触发 %d 次\n\n",
 		s.CaseCount, s.Seeds, s.Passed, s.Failed, s.DataErrors, s.PassRate*100,
 		s.Seeds, s.PassKRate*100, s.PassKPassed, s.CaseCount-s.countDataErrorCases(), s.VetoTriggers)
-	fmt.Fprintf(&b, "- 通过项拆分:成功交付 %d / 合理非交付 %d / 初筛正确 %d / 历史未分类 %d。Pass@1 表示任务处理正确率,不是装机交付率；合理非交付必须满足各题的原因与证据契约。\n\n", s.Delivered, s.NonDelivered, s.ScreeningCorrect, s.UnclassifiedPassed)
+	fmt.Fprintf(&b, "- 通过项拆分:成功交付 %d / 合理非交付 %d / 初筛正确 %d / 多轮对话正确 %d / 历史未分类 %d。Pass@1 表示任务处理正确率,不是装机交付率；合理非交付必须满足各题的原因与证据契约。多轮对话按整段计数，每一轮均正确才通过。\n\n", s.Delivered, s.NonDelivered, s.ScreeningCorrect, s.DialogueCorrect, s.UnclassifiedPassed)
+	if p := s.Meta.HarnessProfile; p != nil {
+		fmt.Fprintf(&b, "- Harness 配置:最多生成 %d 次；语义候选扩充=%t；交付检查始终启用。\n\n", p.AttemptLimit, p.Semantic)
+	}
+	var usage Usage
+	measured := 0
+	for _, r := range s.Records {
+		if r.Usage != nil {
+			measured++
+			usage.ModelCalls += r.Usage.ModelCalls
+			usage.EmbeddingCalls += r.Usage.EmbeddingCalls
+			usage.UsageResponses += r.Usage.UsageResponses
+			usage.InputTokens += r.Usage.InputTokens
+			usage.OutputTokens += r.Usage.OutputTokens
+			usage.TotalTokens += r.Usage.TotalTokens
+		}
+	}
+	if measured > 0 {
+		fmt.Fprintf(&b, "- 用量实测:覆盖 %d/%d 条记录；模型逻辑调用 %d 次，Embedding 逻辑调用 %d 次；%d/%d 次模型调用返回用量，已知 input/output/total tokens=%d/%d/%d。未返回用量部分不计为零；逻辑调用不含适配器内部 HTTP 重试，不直接换算费用。\n\n", measured, len(s.Records), usage.ModelCalls, usage.EmbeddingCalls, usage.UsageResponses, usage.ModelCalls, usage.InputTokens, usage.OutputTokens, usage.TotalTokens)
+	}
 	if s.Meta.Mode == "replay" {
 		b.WriteString("> replay 模式:结论由首跑轨迹重放断言得出,零模型调用。\n\n")
 		if len(s.Meta.ReplaySkipped) > 0 {

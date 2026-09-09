@@ -218,6 +218,7 @@ func AssertScreeningCase(c Case, text string) Verdict {
 
 	// S2 字段口径符合期望。
 	if spec != nil {
+		failures = append(failures, assertSpecFields(*spec, c.Expect.SpecFields)...)
 		if c.Expect.BudgetCNY != nil && spec.BudgetCNY != *c.Expect.BudgetCNY {
 			add("S2", "字段口径", "budget_cny=%d,期望 %d", spec.BudgetCNY, *c.Expect.BudgetCNY)
 		}

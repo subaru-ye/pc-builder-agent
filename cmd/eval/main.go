@@ -29,7 +29,7 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
-const defaultSuitePath = "internal/evalsuite/testdata/suites/v1.4.json"
+const defaultSuitePath = "internal/evalsuite/testdata/suites/v1.5.json"
 
 const defaultCasesDir = "internal/evalsuite/testdata/cases"
 
@@ -48,6 +48,8 @@ func run() int {
 		replayDir    = flag.String("dir", "", "replay 模式必填:首跑结果目录")
 		caseTimeout  = flag.Duration("timeout", 15*time.Minute, "单条用例执行上限")
 		seeds        = flag.Int("seeds", 1, "每条用例独立重复次数;>1 即 Pass^k 口径(全 seed pass 且零 veto)")
+		attemptLimit = flag.Int("attempt-limit", buildharness.MaxAttempts, "最多生成次数，1–3；交付校验始终启用")
+		semantic     = flag.Bool("semantic", true, "是否启用语义候选扩充（评估实验开关）")
 	)
 	flag.Parse()
 	if flag.NArg() > 0 {
@@ -72,7 +74,7 @@ func run() int {
 		fmt.Printf("评估集 %s: %d 条用例，哈希校验通过（零模型调用）\n", suite.Manifest.Version, len(cases))
 		return 0
 	case "run":
-		return runReal(*snapshotDate, *casesDir, *outRoot, *caseTimeout, *seeds, *suitePath)
+		return runReal(*snapshotDate, *casesDir, *outRoot, *caseTimeout, *seeds, *suitePath, evalsuite.HarnessProfile{AttemptLimit: *attemptLimit, Semantic: *semantic})
 	case "replay":
 		return runReplay(*replayDir)
 	default:
@@ -81,7 +83,11 @@ func run() int {
 	}
 }
 
-func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seeds int, suitePath string) int {
+func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seeds int, suitePath string, profile evalsuite.HarnessProfile) int {
+	if profile.AttemptLimit < 1 || profile.AttemptLimit > buildharness.MaxAttempts {
+		fmt.Fprintln(os.Stderr, "-attempt-limit 必须为 1–3")
+		return 2
+	}
 	if dateText == "" {
 		fmt.Fprintln(os.Stderr, "-snapshot-date 必填:评估结论只对钉死的快照批次负责(P13 §3.4)")
 		return 2
@@ -145,7 +151,8 @@ func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seed
 		log.Println("创建 embedding 客户端失败:", err)
 		return 2
 	}
-	planner, err := buildharness.NewCandidatePlanner(pinnedCatalogSource{store: st, pinned: cat}, embeddingClient)
+	usage := &usageCounter{}
+	planner, err := buildharness.NewCandidatePlannerWithOptions(pinnedCatalogSource{store: st, pinned: cat}, measuredEmbedder{base: embeddingClient, usage: usage}, buildharness.PlannerOptions{DisableSemantic: !profile.Semantic})
 	if err != nil {
 		log.Println(err)
 		return 2
@@ -155,11 +162,13 @@ func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seed
 		log.Println("创建生成模型失败:", err)
 		return 2
 	}
+	evidencePlanner := &recordingPlanner{CandidatePlanner: planner}
 	harness, err := buildharness.New(buildharness.Config{
-		Model:    builderModel,
-		Planner:  planner,
-		Repairer: buildharness.NewRepairPlanner(),
-		Eval:     validate.New(pinnedResolver{store: st, snap: cat.Snapshot}),
+		AttemptLimit: profile.AttemptLimit,
+		Model:        usage.wrap(builderModel),
+		Planner:      evidencePlanner,
+		Repairer:     buildharness.NewRepairPlanner(),
+		Eval:         validate.New(pinnedResolver{store: st, snap: cat.Snapshot}),
 	})
 	if err != nil {
 		log.Println(err)
@@ -176,7 +185,7 @@ func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seed
 				log.Println(err)
 				return 2
 			}
-			screeningRunner, err = newADKScreeningRunner(ctx, screeningCfg)
+			screeningRunner, err = newADKScreeningRunner(ctx, screeningCfg, usage.wrap)
 			if err != nil {
 				log.Println(err)
 				return 2
@@ -188,6 +197,7 @@ func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seed
 	identity := codeIdentity()
 	meta := evalsuite.ReportMeta{
 		RecordSchemaVersion: 1,
+		HarnessProfile:      &profile,
 		SuiteVersion:        suite.Manifest.Version, SuiteSHA256: suiteHash, RequestedSeeds: seeds, Code: &identity,
 		Models:         map[string]map[string]any{"builder": modelIdentity(builderCfg), "embedding": modelIdentity(embeddingCfg)},
 		SnapshotDate:   snapshotView.SnapshotDate,
@@ -219,7 +229,8 @@ func runReal(dateText, casesDir, outRoot string, caseTimeout time.Duration, seed
 		return 2
 	}
 	records, err := evalsuite.RunCases(ctx, cases, evalsuite.Deps{
-		Harness:   harness,
+		ReadUsage: usage.snapshot,
+		Harness:   recordingHarness{Harness: harness, planner: evidencePlanner},
 		Snapshot:  snapshotView,
 		Screening: screeningRunner,
 		Timeout:   caseTimeout,
@@ -320,7 +331,11 @@ func runReplay(dir string) int {
 				replayed = append(replayed, record)
 				continue
 			}
-			verdict = evalsuite.AssertScreeningCase(c, record.Screening.Text)
+			if err := evalsuite.CheckDialogueEvidence(c, *record.Screening); err != nil {
+				log.Printf("用例 %s seed=%d 对话证据不完整: %v", record.CaseID, record.Seed, err)
+				return 2
+			}
+			verdict = evalsuite.AssertScreeningOutput(c, *record.Screening)
 		} else {
 			if record.Result == nil {
 				log.Printf("用例 %s 缺少 build 结果且无执行错误", record.CaseID)

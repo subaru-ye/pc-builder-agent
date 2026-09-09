@@ -1,0 +1,41 @@
+{
+  "id": "L5-309",
+  "title": "办公改游戏后仅补问分辨率",
+  "stage": "screening",
+  "turns": [
+    {
+      "input": "新主机预算8000元，用来日常办公。",
+      "expect": {
+        "kind": "spec",
+        "budget_cny": 8000,
+        "spec_fields": {
+          "use_case.type": "general"
+        }
+      }
+    },
+    {
+      "input": "用途改成主要玩游戏，分辨率还没说。",
+      "expect": {
+        "kind": "clarify",
+        "clarify_fields": [
+          "resolution"
+        ],
+        "forbidden_clarify_fields": [
+          "budget_cny",
+          "use_case"
+        ]
+      }
+    },
+    {
+      "input": "分辨率2K，预算仍是8000元。",
+      "expect": {
+        "kind": "spec",
+        "budget_cny": 8000,
+        "resolution": "2K",
+        "spec_fields": {
+          "use_case.type": "gaming"
+        }
+      }
+    }
+  ]
+}

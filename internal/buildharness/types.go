@@ -151,11 +151,13 @@ func (noopTrace) Record(HarnessEvent) {}
 
 // Config 装配 v2；模型不注册工具，SDK 重试策略仍由 modelprovider 控制。
 type Config struct {
-	Model    model.LLM
-	Planner  CandidatePlanner
-	Repairer RepairPlanner
-	Eval     Evaluator
-	Trace    TraceSink
+	// AttemptLimit 为显式实验上限，0 沿用生产默认；不能超过 MaxAttempts。
+	AttemptLimit int
+	Model        model.LLM
+	Planner      CandidatePlanner
+	Repairer     RepairPlanner
+	Eval         Evaluator
+	Trace        TraceSink
 }
 
 func rawJSON(value any) json.RawMessage {

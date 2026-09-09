@@ -21,18 +21,25 @@ const (
 
 // Planner 确定性准备 Candidate Bundle，不调用 chat model。
 type Planner struct {
-	source   CatalogSource
-	embedder QueryEmbedder
+	source          CatalogSource
+	embedder        QueryEmbedder
+	disableSemantic bool
 }
 
+type PlannerOptions struct{ DisableSemantic bool }
+
 func NewCandidatePlanner(source CatalogSource, embedder QueryEmbedder) (*Planner, error) {
+	return NewCandidatePlannerWithOptions(source, embedder, PlannerOptions{})
+}
+
+func NewCandidatePlannerWithOptions(source CatalogSource, embedder QueryEmbedder, options PlannerOptions) (*Planner, error) {
 	if source == nil {
 		return nil, fmt.Errorf("buildharness: CatalogSource 不能为空")
 	}
-	if embedder == nil {
+	if embedder == nil && !options.DisableSemantic {
 		return nil, fmt.Errorf("buildharness: QueryEmbedder 不能为空")
 	}
-	return &Planner{source: source, embedder: embedder}, nil
+	return &Planner{source: source, embedder: embedder, disableSemantic: options.DisableSemantic}, nil
 }
 
 func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundle, error) {
@@ -202,7 +209,7 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 		bundle.Groups = append(bundle.Groups, group)
 	}
 
-	if softQuery := softPreferenceQuery(input.Requirement); softQuery != "" {
+	if softQuery := softPreferenceQuery(input.Requirement); softQuery != "" && !p.disableSemantic {
 		if err := p.enrichSemantic(ctx, softQuery, eligible, &bundle); err != nil {
 			return CandidateBundle{}, err
 		}

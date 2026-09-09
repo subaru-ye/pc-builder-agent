@@ -1,0 +1,27 @@
+{
+  "id": "L5-307",
+  "title": "品牌偏好改变后其他条件保持",
+  "stage": "screening",
+  "turns": [
+    {
+      "input": "新主机预算10000元，2K游戏，CPU选AMD，显卡不限品牌。",
+      "expect": {
+        "kind": "spec",
+        "budget_cny": 10000,
+        "resolution": "2K",
+        "cpu_brand": "amd",
+        "gpu_brand": "any"
+      }
+    },
+    {
+      "input": "CPU改成Intel，其他条件不变。",
+      "expect": {
+        "kind": "spec",
+        "budget_cny": 10000,
+        "resolution": "2K",
+        "cpu_brand": "intel",
+        "gpu_brand": "any"
+      }
+    }
+  ]
+}

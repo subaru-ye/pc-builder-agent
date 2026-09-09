@@ -20,11 +20,12 @@ import (
 )
 
 type runner struct {
-	model    model.LLM
-	planner  CandidatePlanner
-	repairer RepairPlanner
-	eval     Evaluator
-	trace    TraceSink
+	attemptLimit int
+	model        model.LLM
+	planner      CandidatePlanner
+	repairer     RepairPlanner
+	eval         Evaluator
+	trace        TraceSink
 }
 
 func New(cfg Config) (Harness, error) {
@@ -34,7 +35,13 @@ func New(cfg Config) (Harness, error) {
 	if cfg.Trace == nil {
 		cfg.Trace = noopTrace{}
 	}
-	return &runner{model: cfg.Model, planner: cfg.Planner, repairer: cfg.Repairer, eval: cfg.Eval, trace: cfg.Trace}, nil
+	if cfg.AttemptLimit == 0 {
+		cfg.AttemptLimit = MaxAttempts
+	}
+	if cfg.AttemptLimit < 1 || cfg.AttemptLimit > MaxAttempts {
+		return nil, fmt.Errorf("buildharness: AttemptLimit 须为 1–%d", MaxAttempts)
+	}
+	return &runner{model: cfg.Model, planner: cfg.Planner, repairer: cfg.Repairer, eval: cfg.Eval, trace: cfg.Trace, attemptLimit: cfg.AttemptLimit}, nil
 }
 
 func (h *runner) Run(ctx context.Context, input BuildInput) (out BuildResult, runErr error) {
@@ -90,7 +97,7 @@ func (h *runner) Run(ctx context.Context, input BuildInput) (out BuildResult, ru
 	var plan *RepairPlan
 	lastSelection := ""
 	var lastResult validate.Result
-	for attempt := 1; attempt <= MaxAttempts; attempt++ {
+	for attempt := 1; attempt <= h.attemptLimit; attempt++ {
 		h.record(input, "decision.started", map[string]any{"attempt": attempt})
 		prompt, err := buildPrompt(input, bundle, previous, plan, lastResult, attempt)
 		if err != nil {
@@ -108,8 +115,8 @@ func (h *runner) Run(ctx context.Context, input BuildInput) (out BuildResult, ru
 
 		draft, decodeErr := ExtractBuildDraft(text)
 		if decodeErr != nil {
-			if attempt == MaxAttempts {
-				message := fmt.Sprintf("第 %d/%d 次模型输出仍不符合 BuildDraft schema:%v", attempt, MaxAttempts, decodeErr)
+			if attempt == h.attemptLimit {
+				message := fmt.Sprintf("第 %d/%d 次模型输出仍不符合 BuildDraft schema:%v", attempt, h.attemptLimit, decodeErr)
 				h.finish(input, started, attempt, false)
 				return BuildResult{Attempts: attempt, Message: message}, nil
 			}
@@ -124,7 +131,7 @@ func (h *runner) Run(ctx context.Context, input BuildInput) (out BuildResult, ru
 		selectionKey := canonicalSelection(draft.Selection)
 		if plan != nil && previous != nil {
 			if err := validateRepairSelection(*plan, previous.Selection, draft.Selection); err != nil {
-				if attempt == MaxAttempts {
+				if attempt == h.attemptLimit {
 					h.finish(input, started, attempt, false)
 					return BuildResult{Attempts: attempt, Draft: draft, Message: err.Error()}, nil
 				}
@@ -145,7 +152,7 @@ func (h *runner) Run(ctx context.Context, input BuildInput) (out BuildResult, ru
 			membershipCategories = plan.Mutable
 		}
 		if categories, membershipErr := validateMembershipCategories(membershipBundle, draft.Selection, membershipCategories); membershipErr != nil {
-			if attempt == MaxAttempts {
+			if attempt == h.attemptLimit {
 				h.finish(input, started, attempt, false)
 				return BuildResult{Attempts: attempt, Draft: draft, Message: membershipErr.Error()}, nil
 			}
@@ -159,7 +166,7 @@ func (h *runner) Run(ctx context.Context, input BuildInput) (out BuildResult, ru
 			continue
 		}
 		if constraintErr := validateChangeConstraints(input, draft.Selection); constraintErr != nil {
-			if attempt == MaxAttempts {
+			if attempt == h.attemptLimit {
 				h.finish(input, started, attempt, false)
 				return BuildResult{Attempts: attempt, Draft: draft, Message: constraintErr.Error()}, nil
 			}
@@ -195,12 +202,12 @@ func (h *runner) Run(ctx context.Context, input BuildInput) (out BuildResult, ru
 
 		budgetOK := inBudgetWindow(input.Requirement, result.Quote)
 		retryUnknown := hasUnknown(result.Report)
-		if result.Report.OverallStatus != schemas.OverallFail && budgetOK && (!retryUnknown || attempt == MaxAttempts) {
+		if result.Report.OverallStatus != schemas.OverallFail && budgetOK && (!retryUnknown || attempt == h.attemptLimit) {
 			enrichCandidateRationale(&draft, bundle, input.Requirement)
 			h.finish(input, started, attempt, true)
 			return BuildResult{Succeeded: true, Attempts: attempt, Draft: draft, Result: result}, nil
 		}
-		if attempt == MaxAttempts {
+		if attempt == h.attemptLimit {
 			budgetResult := result
 			budgetResult.Quote = validate.BudgetQuote(input.Requirement, result.Quote)
 			message := finalFailureMessage(budgetResult, budgetOK)

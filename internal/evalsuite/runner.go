@@ -18,17 +18,31 @@ type ScreeningRunner interface {
 
 // ScreeningOutput 使用指针留存:缺失表示旧产物,Text 为空表示实际空回复。
 type ScreeningOutput struct {
-	Text          string   `json:"text"`
-	ModelText     string   `json:"model_text,omitempty"` // 程序拦截前原文，与最终可见输出区分。
-	MissingFields []string `json:"missing_fields,omitempty"`
+	Text          string            `json:"text"`
+	ModelText     string            `json:"model_text,omitempty"`     // 程序拦截前原文，与最终可见输出区分。
+	ModelAttempts []string          `json:"model_attempts,omitempty"` // 包含格式重试前的原文；ModelText 仍为最后一次。
+	MissingFields []string          `json:"missing_fields,omitempty"`
+	Turns         []ScreeningOutput `json:"turns,omitempty"` // 对话按轮保存；顶层 Text 不代替逐轮证据。
+	Context       string            `json:"context,omitempty"`
+	UserSources   []string          `json:"user_sources,omitempty"`
+	GuardText     string            `json:"guard_text,omitempty"` // 多轮需求单经过产品规范化前的核验输出。
 }
 
 type detailedScreeningRunner interface {
 	RunDetailed(context.Context, string) (ScreeningOutput, error)
 }
 
+type dialogueScreeningRunner interface {
+	RunDialogue(context.Context, []string) ([]ScreeningOutput, error)
+}
+
+type candidateEvidenceHarness interface {
+	CandidateBundle() *buildharness.CandidateBundle
+}
+
 // Deps 是执行评估集所需的运行时依赖。
 type Deps struct {
+	ReadUsage func() Usage // 顺序 runner 的累计用量快照；nil 表示未测量。
 	Harness   buildharness.Harness
 	Snapshot  SnapshotView
 	Screening ScreeningRunner // 用例含 screening 阶段时必填
@@ -45,19 +59,21 @@ type Deps struct {
 // Requirement 以 EncodeRequirementSpec 的稳定线上 JSON 留存,便于人工审阅;
 // seeds>1 时每个 (case, seed) 一条记录。
 type CaseRecord struct {
-	CaseID      string                    `json:"case_id"`
-	Title       string                    `json:"title"`
-	Stage       Stage                     `json:"stage"`
-	Seed        int                       `json:"seed"`
-	Requirement json.RawMessage           `json:"requirement,omitempty"`
-	Expect      Expect                    `json:"expect"`
-	Snapshot    SnapshotView              `json:"snapshot"`
-	Result      *buildharness.BuildResult `json:"result,omitempty"`
-	Screening   *ScreeningOutput          `json:"screening,omitempty"`
-	Verdict     Verdict                   `json:"verdict"`
-	Attribution []Attribution             `json:"attribution,omitempty"`
-	DurationMS  int64                     `json:"duration_ms"`
-	RunErr      string                    `json:"run_err,omitempty"`
+	Candidates  *buildharness.CandidateBundle `json:"candidates,omitempty"` // 本轮实际发送的候选；缺失表示未记录或未准备候选。
+	Usage       *Usage                        `json:"usage,omitempty"`
+	CaseID      string                        `json:"case_id"`
+	Title       string                        `json:"title"`
+	Stage       Stage                         `json:"stage"`
+	Seed        int                           `json:"seed"`
+	Requirement json.RawMessage               `json:"requirement,omitempty"`
+	Expect      Expect                        `json:"expect"`
+	Snapshot    SnapshotView                  `json:"snapshot"`
+	Result      *buildharness.BuildResult     `json:"result,omitempty"`
+	Screening   *ScreeningOutput              `json:"screening,omitempty"`
+	Verdict     Verdict                       `json:"verdict"`
+	Attribution []Attribution                 `json:"attribution,omitempty"`
+	DurationMS  int64                         `json:"duration_ms"`
+	RunErr      string                        `json:"run_err,omitempty"`
 }
 
 // RunCases 逐条执行评估集。harness 返回 error 时的分类:
@@ -95,6 +111,10 @@ func runOne(ctx context.Context, c Case, seed int, deps Deps) (CaseRecord, error
 		runCtx, cancel = context.WithTimeout(ctx, deps.Timeout)
 	}
 	started := time.Now()
+	var before Usage
+	if deps.ReadUsage != nil {
+		before = deps.ReadUsage()
+	}
 	defer cancel()
 
 	var verdict Verdict
@@ -105,14 +125,24 @@ func runOne(ctx context.Context, c Case, seed int, deps Deps) (CaseRecord, error
 			return CaseRecord{}, fmt.Errorf("evalsuite: 用例 %s 为 screening 阶段,但未提供 Screening runner", c.ID)
 		}
 		var output ScreeningOutput
-		if detailed, ok := deps.Screening.(detailedScreeningRunner); ok {
+		if len(c.Turns) > 0 {
+			dialogue, ok := deps.Screening.(dialogueScreeningRunner)
+			if !ok {
+				return CaseRecord{}, fmt.Errorf("evalsuite: %s 缺少多轮 runner", c.ID)
+			}
+			inputs := make([]string, len(c.Turns))
+			for i, turn := range c.Turns {
+				inputs[i] = turn.Input
+			}
+			output.Turns, runErr = dialogue.RunDialogue(runCtx, inputs)
+		} else if detailed, ok := deps.Screening.(detailedScreeningRunner); ok {
 			output, runErr = detailed.RunDetailed(runCtx, c.Input)
 		} else {
 			output.Text, runErr = deps.Screening.Run(runCtx, c.Input)
 		}
 		record.Screening = &output
 		if runErr == nil {
-			verdict = AssertScreeningCase(c, output.Text)
+			verdict = AssertScreeningOutput(c, output)
 		}
 	default: // StageBuild
 		raw, err := schemas.EncodeRequirementSpec(c.Requirement)
@@ -127,12 +157,19 @@ func runOne(ctx context.Context, c Case, seed int, deps Deps) (CaseRecord, error
 			BaseSelection: c.BaseSelection,
 			Locked:        c.Locked,
 		})
+		if evidence, ok := deps.Harness.(candidateEvidenceHarness); ok {
+			record.Candidates = evidence.CandidateBundle()
+		}
 		if runErr == nil {
 			verdict = AssertCase(c, result, deps.Snapshot)
 			record.Result = &result
 		}
 	}
 	record.DurationMS = time.Since(started).Milliseconds()
+	if deps.ReadUsage != nil {
+		usage := deps.ReadUsage().Since(before)
+		record.Usage = &usage
+	}
 
 	switch {
 	case runErr != nil:

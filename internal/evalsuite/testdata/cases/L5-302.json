@@ -1,0 +1,32 @@
+{
+  "id": "L5-302",
+  "title": "补充缺失字段后不再追问可选游戏名",
+  "stage": "screening",
+  "turns": [
+    {
+      "input": "想配一台安静的游戏主机，预算8000元。",
+      "expect": {
+        "kind": "clarify",
+        "clarify_fields": [
+          "resolution"
+        ],
+        "forbidden_clarify_fields": [
+          "budget_cny",
+          "use_case"
+        ]
+      }
+    },
+    {
+      "input": "显示器是2K，游戏名称暂时不确定。",
+      "expect": {
+        "kind": "spec",
+        "budget_cny": 8000,
+        "resolution": "2K",
+        "spec_fields": {
+          "noise_pref": "silent",
+          "use_case.type": "gaming"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "id": "L5-306",
+  "title": "中文金额和简短补充不丢用途",
+  "stage": "screening",
+  "turns": [
+    {
+      "input": "日常办公的新电脑，预算还没确定。",
+      "expect": {
+        "kind": "clarify",
+        "clarify_fields": [
+          "budget_cny"
+        ],
+        "forbidden_clarify_fields": [
+          "use_case",
+          "resolution"
+        ]
+      }
+    },
+    {
+      "input": "预算八千五百元。",
+      "expect": {
+        "kind": "spec",
+        "budget_cny": 8500,
+        "spec_fields": {
+          "use_case.type": "general"
+        }
+      }
+    }
+  ]
+}

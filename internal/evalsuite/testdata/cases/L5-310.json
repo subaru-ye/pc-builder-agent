@@ -1,0 +1,28 @@
+{
+  "id": "L5-310",
+  "title": "用户撤回预算后应重新询问",
+  "stage": "screening",
+  "turns": [
+    {
+      "input": "配新电脑，预算8000元，主要2K游戏。",
+      "expect": {
+        "kind": "spec",
+        "budget_cny": 8000,
+        "resolution": "2K"
+      }
+    },
+    {
+      "input": "先取消刚才8000元的预算，金额现在还没定，其他条件保留。",
+      "expect": {
+        "kind": "clarify",
+        "clarify_fields": [
+          "budget_cny"
+        ],
+        "forbidden_clarify_fields": [
+          "use_case",
+          "resolution"
+        ]
+      }
+    }
+  ]
+}

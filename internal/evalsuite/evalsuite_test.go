@@ -325,12 +325,12 @@ func TestShippedFixturesDecode(t *testing.T) {
 				t.Errorf("%s: gaming 用例必须带分辨率", c.ID)
 			}
 		case StageScreening:
-			if c.Input == "" {
+			if c.Input == "" && len(c.Turns) == 0 {
 				t.Errorf("%s: screening 用例必须带 input", c.ID)
 			}
 		}
 	}
-	if stages[StageBuild] != 34 || stages[StageScreening] != 11 {
+	if stages[StageBuild] != 34 || stages[StageScreening] != 21 {
 		t.Errorf("build/screening 用例数不符:%+v", stages)
 	}
 }

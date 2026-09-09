@@ -1,0 +1,55 @@
+{
+  "id": "L5-304",
+  "title": "已有件型号和采购口径分轮补充",
+  "stage": "screening",
+  "turns": [
+    {
+      "input": "办公电脑预算6000元，我已经有CPU，其他配件要新买。",
+      "expect": {
+        "kind": "clarify",
+        "clarify_fields": [
+          "owned_parts",
+          "budget_basis"
+        ],
+        "forbidden_clarify_fields": [
+          "budget_cny",
+          "use_case",
+          "resolution"
+        ]
+      }
+    },
+    {
+      "input": "已有CPU是 AMD Ryzen 5 7600，一颗。",
+      "expect": {
+        "kind": "clarify",
+        "clarify_fields": [
+          "budget_basis"
+        ],
+        "forbidden_clarify_fields": [
+          "owned_parts",
+          "budget_cny",
+          "use_case",
+          "resolution"
+        ]
+      }
+    },
+    {
+      "input": "这6000元只算新增购买费用。",
+      "expect": {
+        "kind": "spec",
+        "budget_cny": 6000,
+        "spec_fields": {
+          "owned_parts": [
+            {
+              "category": "cpu",
+              "model": "AMD Ryzen 5 7600",
+              "quantity": 1
+            }
+          ],
+          "budget_basis": "new_purchase",
+          "use_case.type": "general"
+        }
+      }
+    }
+  ]
+}

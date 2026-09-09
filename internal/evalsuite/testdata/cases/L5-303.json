@@ -1,0 +1,31 @@
+{
+  "id": "L5-303",
+  "title": "显卡价格不是整机预算",
+  "stage": "screening",
+  "turns": [
+    {
+      "input": "看中一张售价3000元的显卡，想配2K游戏电脑，整机预算还没定。",
+      "expect": {
+        "kind": "clarify",
+        "clarify_fields": [
+          "budget_cny"
+        ],
+        "forbidden_clarify_fields": [
+          "resolution",
+          "use_case"
+        ]
+      }
+    },
+    {
+      "input": "整机预算确定为8000元，显卡只是之前看到的报价，还没有买。",
+      "expect": {
+        "kind": "spec",
+        "budget_cny": 8000,
+        "resolution": "2K",
+        "spec_fields": {
+          "existing_parts": []
+        }
+      }
+    }
+  ]
+}

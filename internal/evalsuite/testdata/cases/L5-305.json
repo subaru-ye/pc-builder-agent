@@ -1,0 +1,41 @@
+{
+  "id": "L5-305",
+  "title": "明确更正采购预算口径",
+  "stage": "screening",
+  "turns": [
+    {
+      "input": "办公主机，已有一颗 AMD Ryzen 5 7600，新增购买预算6000元。",
+      "expect": {
+        "kind": "spec",
+        "budget_cny": 6000,
+        "spec_fields": {
+          "budget_basis": "new_purchase",
+          "owned_parts": [
+            {
+              "category": "cpu",
+              "model": "AMD Ryzen 5 7600",
+              "quantity": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "input": "更正刚才的口径：6000元是包含已有CPU价值的整机参考总价。",
+      "expect": {
+        "kind": "spec",
+        "budget_cny": 6000,
+        "spec_fields": {
+          "budget_basis": "full_build",
+          "owned_parts": [
+            {
+              "category": "cpu",
+              "model": "AMD Ryzen 5 7600",
+              "quantity": 1
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

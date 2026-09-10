@@ -292,6 +292,15 @@ func TestRequirementStatePersistentWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var initial schemas.RequirementState
+	if err := json.Unmarshal(ws.RequirementState, &initial); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range schemas.RequirementFieldKeys {
+		if field := initial.Fields[key]; field.Status != "unknown" || len(field.Value) != 0 {
+			t.Fatalf("new session field %s must be explicitly unknown: %+v", key, field)
+		}
+	}
 	chat := func(text string) product.SessionDetail {
 		t.Helper()
 		started, err := service.StartMessage(ctx, owner, ws.ID, uuid.NewString(), text)
@@ -441,7 +450,7 @@ func TestRequirementStatePersistentWorkflow(t *testing.T) {
 	}
 	var clean schemas.RequirementState
 	_ = json.Unmarshal(other.RequirementState, &clean)
-	if len(clean.Fields) > 0 || clean.Revision != 0 {
+	if !reflect.DeepEqual(clean, schemas.NewRequirementState()) {
 		t.Fatal("朋友需求进入其他会话")
 	}
 }

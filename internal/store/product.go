@@ -129,14 +129,18 @@ func scanWebSession(row interface{ Scan(...any) error }) (WebSession, error) {
 }
 
 func (s *Store) CreateWebSession(ctx context.Context, id, ownerID, requestID string) (WebSession, error) {
+	state, err := json.Marshal(schemas.NewRequirementState())
+	if err != nil {
+		return WebSession{}, fmt.Errorf("store: 初始化需求状态失败: %w", err)
+	}
 	row := s.pool.QueryRow(ctx, `
 		INSERT INTO web_sessions (id, owner_id, create_request_id, phase, requirement_state)
-		VALUES ($1, $2, $3, 'collecting', '{"schema_version":1,"revision":0,"fields":{},"changes":[],"history":[],"alternatives":[]}')
+		VALUES ($1, $2, $3, 'collecting', $4)
 		ON CONFLICT (owner_id, create_request_id)
 		DO UPDATE SET create_request_id = EXCLUDED.create_request_id
 		RETURNING id, owner_id, create_request_id::text, title, phase, recovery_phase,
 		          pending_requirement, last_error, created_at, updated_at, 0,
-		          requirement_state, confirmed_requirement_state, confirmed_requirement, confirmed_at, archived`, id, ownerID, requestID)
+		          requirement_state, confirmed_requirement_state, confirmed_requirement, confirmed_at, archived`, id, ownerID, requestID, state)
 	ws, err := scanWebSession(row)
 	if err != nil {
 		return WebSession{}, fmt.Errorf("store: 创建产品会话失败: %w", err)

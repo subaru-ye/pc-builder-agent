@@ -12,6 +12,7 @@ type sessionSummaryDTO struct {
 	SchemaVersion int                `json:"schema_version"`
 	ID            string             `json:"id"`
 	Title         string             `json:"title"`
+	Archived      bool               `json:"archived"`
 	Phase         store.SessionPhase `json:"phase"`
 	CreatedAt     time.Time          `json:"created_at"`
 	UpdatedAt     time.Time          `json:"updated_at"`
@@ -19,12 +20,13 @@ type sessionSummaryDTO struct {
 }
 
 type messageDTO struct {
-	SchemaVersion int       `json:"schema_version"`
-	ID            string    `json:"id"`
-	Role          string    `json:"role"`
-	Content       string    `json:"content"`
-	RunID         *string   `json:"run_id"`
-	CreatedAt     time.Time `json:"created_at"`
+	SchemaVersion  int       `json:"schema_version"`
+	ID             string    `json:"id"`
+	Role           string    `json:"role"`
+	Content        string    `json:"content"`
+	DisplayContent string    `json:"display_content,omitempty"`
+	RunID          *string   `json:"run_id"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type runDTO struct {
@@ -57,7 +59,7 @@ type sessionDTO struct {
 
 func toSessionSummary(s store.WebSession) sessionSummaryDTO {
 	return sessionSummaryDTO{
-		SchemaVersion: 1, ID: s.ID, Title: s.Title, Phase: s.Phase,
+		SchemaVersion: 1, ID: s.ID, Title: s.Title, Phase: s.Phase, Archived: s.Archived,
 		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt, VersionCount: s.VersionCount,
 	}
 }
@@ -79,7 +81,8 @@ func toSession(detail product.SessionDetail) sessionDTO {
 	for _, m := range detail.Messages {
 		messages = append(messages, messageDTO{
 			SchemaVersion: 1, ID: m.ID, Role: m.Role, Content: m.Content,
-			RunID: m.RunID, CreatedAt: m.CreatedAt,
+			DisplayContent: m.DisplayContent,
+			RunID:          m.RunID, CreatedAt: m.CreatedAt,
 		})
 	}
 	var active *runDTO

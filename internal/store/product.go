@@ -55,6 +55,7 @@ type WebSession struct {
 	OwnerID                   string
 	CreateRequestID           string
 	Title                     string
+	Archived                  bool
 	Phase                     SessionPhase
 	RecoveryPhase             *SessionPhase
 	PendingRequirement        json.RawMessage
@@ -74,6 +75,8 @@ type WebMessage struct {
 	ClientMessageID *string
 	Role            string
 	Content         string
+	DisplayContent  string
+	BuildVersion    int
 	RunID           *string
 	CreatedAt       time.Time
 }
@@ -108,7 +111,7 @@ func (s *Store) Ping(ctx context.Context) error {
 const webSessionColumns = `s.id, s.owner_id, s.create_request_id::text, s.title, s.phase,
        s.recovery_phase, s.pending_requirement, s.last_error, s.created_at, s.updated_at,
        (SELECT count(*) FROM builds b WHERE b.session_id = s.id),
-       s.requirement_state, s.confirmed_requirement_state, s.confirmed_requirement, s.confirmed_at`
+       s.requirement_state, s.confirmed_requirement_state, s.confirmed_requirement, s.confirmed_at, s.archived`
 
 func scanWebSession(row interface{ Scan(...any) error }) (WebSession, error) {
 	var (
@@ -117,7 +120,7 @@ func scanWebSession(row interface{ Scan(...any) error }) (WebSession, error) {
 	)
 	err := row.Scan(&s.ID, &s.OwnerID, &s.CreateRequestID, &s.Title, &s.Phase,
 		&recovery, &s.PendingRequirement, &s.LastError, &s.CreatedAt, &s.UpdatedAt, &s.VersionCount,
-		&s.RequirementState, &s.ConfirmedRequirementState, &s.ConfirmedRequirement, &s.ConfirmedAt)
+		&s.RequirementState, &s.ConfirmedRequirementState, &s.ConfirmedRequirement, &s.ConfirmedAt, &s.Archived)
 	if recovery != nil {
 		p := SessionPhase(*recovery)
 		s.RecoveryPhase = &p
@@ -133,7 +136,7 @@ func (s *Store) CreateWebSession(ctx context.Context, id, ownerID, requestID str
 		DO UPDATE SET create_request_id = EXCLUDED.create_request_id
 		RETURNING id, owner_id, create_request_id::text, title, phase, recovery_phase,
 		          pending_requirement, last_error, created_at, updated_at, 0,
-		          requirement_state, confirmed_requirement_state, confirmed_requirement, confirmed_at`, id, ownerID, requestID)
+		          requirement_state, confirmed_requirement_state, confirmed_requirement, confirmed_at, archived`, id, ownerID, requestID)
 	ws, err := scanWebSession(row)
 	if err != nil {
 		return WebSession{}, fmt.Errorf("store: 创建产品会话失败: %w", err)
@@ -244,8 +247,10 @@ func (s *Store) ActiveRun(ctx context.Context, sessionID string) (*AgentRun, err
 
 func (s *Store) WebMessages(ctx context.Context, sessionID string) ([]WebMessage, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id::text, session_id, client_message_id::text, role, content, run_id::text, created_at
-		FROM web_messages WHERE session_id = $1 AND role <> 'system' ORDER BY created_at, id`, sessionID)
+		SELECT m.id::text, m.session_id, m.client_message_id::text, m.role, m.content, m.run_id::text, m.created_at,
+		       COALESCE(m.display_content,''), COALESCE(m.build_version, (e.payload->>'build_version')::int, 0)
+		FROM web_messages m LEFT JOIN run_evidence e ON e.run_id=m.run_id AND e.slot='build_output'
+		WHERE m.session_id = $1 AND m.role <> 'system' ORDER BY m.created_at, m.id`, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("store: 查询产品消息失败: %w", err)
 	}
@@ -254,7 +259,7 @@ func (s *Store) WebMessages(ctx context.Context, sessionID string) ([]WebMessage
 	for rows.Next() {
 		var m WebMessage
 		if err := rows.Scan(&m.ID, &m.SessionID, &m.ClientMessageID, &m.Role,
-			&m.Content, &m.RunID, &m.CreatedAt); err != nil {
+			&m.Content, &m.RunID, &m.CreatedAt, &m.DisplayContent, &m.BuildVersion); err != nil {
 			return nil, fmt.Errorf("store: 读取产品消息失败: %w", err)
 		}
 		out = append(out, m)
@@ -364,7 +369,7 @@ func (s *Store) StartMessageRun(ctx context.Context, p StartMessageRunParams) (A
 	}
 	if _, err := tx.Exec(ctx, `UPDATE web_sessions SET phase = $2, recovery_phase = NULL,
 		last_error = NULL, pending_requirement = `+pendingExpr+`,
-		title = CASE WHEN title = '新会话' THEN $3 ELSE title END, updated_at = now()
+		title = CASE WHEN title = '新会话' AND NOT title_custom THEN $3 ELSE title END, updated_at = now()
 		WHERE id = $1`, p.SessionID, next, p.Title); err != nil {
 		return AgentRun{}, false, fmt.Errorf("store: 更新消息运行阶段失败: %w", err)
 	}
@@ -511,6 +516,8 @@ func (s *Store) ReplacePendingRequirement(ctx context.Context, ownerID, sessionI
 
 type CompleteRunParams struct {
 	RunID, SessionID, AssistantMessageID, AssistantContent string
+	DisplayContent                                         string
+	BuildVersion                                           int
 	Status                                                 RunStatus
 	Phase                                                  SessionPhase
 	RecoveryPhase                                          *SessionPhase
@@ -539,15 +546,16 @@ func (s *Store) CompleteRun(ctx context.Context, p CompleteRunParams) (*WebMessa
 	var message *WebMessage
 	if p.AssistantContent != "" {
 		var m WebMessage
-		err := tx.QueryRow(ctx, `INSERT INTO web_messages (id, session_id, role, content, run_id)
-			VALUES ($1, $2, 'assistant', $3, $4)
+		err := tx.QueryRow(ctx, `INSERT INTO web_messages (id, session_id, role, content, run_id, display_content, build_version)
+			VALUES ($1, $2, 'assistant', $3, $4, NULLIF($5,''), NULLIF($6,0))
 			RETURNING id::text, session_id, client_message_id::text, role, content, run_id::text, created_at`,
-			p.AssistantMessageID, p.SessionID, p.AssistantContent, p.RunID).
+			p.AssistantMessageID, p.SessionID, p.AssistantContent, p.RunID, p.DisplayContent, p.BuildVersion).
 			Scan(&m.ID, &m.SessionID, &m.ClientMessageID, &m.Role, &m.Content, &m.RunID, &m.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("store: 写入 assistant 消息失败: %w", err)
 		}
 		message = &m
+		message.DisplayContent, message.BuildVersion = p.DisplayContent, p.BuildVersion
 	}
 	_, err = tx.Exec(ctx, `UPDATE web_sessions SET phase = $2, recovery_phase = $3,
 		last_error = $4, pending_requirement = CASE WHEN $5 THEN $6 ELSE pending_requirement END,

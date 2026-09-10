@@ -6,19 +6,19 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
-export function Composer({ value, onChange, onSend, disabled, placeholder = "描述预算、用途、分辨率和偏好…" }: {
-  value: string; onChange: (value: string) => void; onSend: () => void; disabled?: boolean; placeholder?: string;
+export function Composer({ value, onChange, onSend, disabled, compact = false, placeholder = "描述预算、用途、分辨率和偏好…" }: {
+  value: string; onChange: (value: string) => void; onSend: () => void; disabled?: boolean; compact?: boolean; placeholder?: string;
 }) {
   const composing = useRef(false);
   return (
-    <div className="border-t bg-[var(--surface-1)] p-3">
+    <div className={`${compact ? "" : "border-t"} bg-[var(--surface-1)] p-3`}>
       <label className="sr-only" htmlFor="message-composer">输入需求或改单内容</label>
       <div className="rounded-xl border bg-[var(--canvas)] p-2 transition-colors focus-within:border-[var(--primary)] focus-within:ring-2 focus-within:ring-[var(--primary)]/30">
-        <Textarea id="message-composer" value={value} disabled={disabled} placeholder={placeholder} rows={4} maxLength={4000}
+        <Textarea id="message-composer" value={value} disabled={disabled} placeholder={placeholder} rows={compact ? 2 : 4} maxLength={4000}
           onChange={(e) => onChange(e.target.value)}
           onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !composing.current) { e.preventDefault(); if (!disabled && value.trim()) onSend(); } }}
-          className="max-h-48 min-h-24 resize-none rounded-none border-0 bg-transparent px-2 py-2 shadow-none focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent" />
+          className={`max-h-48 ${compact ? "min-h-14" : "min-h-24"} resize-none rounded-none border-0 bg-transparent px-2 py-2 shadow-none focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent`} />
         <div role="group" aria-label="输入操作" className="mt-2 flex min-h-11 items-center justify-between gap-3 px-1">
           <div className="flex min-w-0 items-center gap-2 text-xs text-[var(--ink-subtle)]">
             <span className="hidden sm:inline">Enter 发送 · Shift+Enter 换行</span>

@@ -171,10 +171,12 @@ export interface paths {
         get: operations["getSession"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** 永久删除自己的对话及消息、配置版本、分享；运行中返回 409 */
+        delete: operations["deleteSession"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** 重命名或归档/恢复自己的对话，不触发模型运行 */
+        patch: operations["updateSession"];
         trace?: never;
     };
     "/api/v1/sessions/{session_id}/messages": {
@@ -594,6 +596,8 @@ export interface components {
             schema_version: 1;
             id: string;
             title: string;
+            /** @description 是否已归档；旧客户端未提供时视为 false */
+            archived?: boolean;
             phase: components["schemas"]["SessionPhase"];
             /** Format: date-time */
             created_at: string;
@@ -628,6 +632,8 @@ export interface components {
             /** @enum {string} */
             role: "user" | "assistant";
             content: string;
+            /** @description 服务端生成的用户可读摘要；展示与复制优先使用非空摘要，原始 content 保留供追溯。 */
+            display_content?: string;
             run_id?: string | null;
             /** Format: date-time */
             created_at: string;
@@ -1222,7 +1228,10 @@ export interface operations {
     };
     listSessions: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description true 仅列出已归档会话，默认仅列出未归档会话。 */
+                archived?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1281,6 +1290,57 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description 会话详情、消息、待确认需求和活动 run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    deleteSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["SessionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已删除 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    updateSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["SessionID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title?: string;
+                    archived?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description 更新后的会话 */
             200: {
                 headers: {
                     [name: string]: unknown;

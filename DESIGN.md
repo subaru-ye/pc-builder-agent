@@ -101,6 +101,8 @@ Never create depth by stacking multiple bordered cards inside bordered cards. Pr
 
 Messages are grouped by spacing and subtle surface changes. No colorful avatars, giant speech bubbles, or per-message drop shadows. Agent progress occupies one stable row.
 
+User messages align to the right of the conversation column with a quiet surface-2 background; assistant replies stay left aligned. Feedback and copy use icon-only actions with accessible labels and tooltips. Copy uses the server-provided readable summary when present, otherwise the complete original message, preserving Markdown. Touch layouts retain 44px action targets. Build replies summarize core parts, prices, changes and actionable warnings; full parts and validation stay in the configuration pane.
+
 ### Requirement confirmation
 
 The requirement object is a real interaction surface and may use a 12px bordered panel. Group fields by core/use case/preference/constraint, keep Save and Confirm distinct, and surface schema errors inline.
@@ -127,10 +129,11 @@ Version tokens may use compact rounded tags. Changed rows get a one-time tint an
 
 ## Responsive model
 
-- ≥1280px:42/58 chat-inspector workspace.
-- 1024–1279px:two panes,session navigation in drawer.
-- 768–1023px:single visible pane selected by Chat/Build tabs.
-- <768px:mobile single column,bottom composer,build subtabs.
+- ≥1024px:three persistent columns—240px session navigation, the conversation with a compact requirement summary, and a 360–480px build inspector on the right. The chat remains wider than the inspector.
+- Requirement editing opens separately in a drawer up to 672px wide. The desktop build inspector contains only build, validation, and versions; collecting or editing requirements does not replace the displayed build.
+- <1024px:session navigation opens from the header; the conversation remains the default view.
+- <768px:mobile single column, bottom composer, full-width detail drawer with an explicit return-to-chat action.
+- Account settings have one workspace entry at the bottom of session navigation, including inside the mobile navigation drawer. Do not duplicate it in the workspace header.
 - Touch targets are at least 44×44px on touch layouts.
 
 ## Do

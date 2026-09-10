@@ -61,6 +61,7 @@ const SessionSummary = z.object({
   schema_version: z.number().int(),
   id: z.string(),
   title: z.string(),
+  archived: z.boolean().optional(),
   phase: SessionPhase,
   created_at: z.string().datetime({ offset: true }),
   updated_at: z.string().datetime({ offset: true }),
@@ -71,6 +72,7 @@ const Message = z.object({
   id: z.string().uuid(),
   role: z.enum(["user", "assistant"]),
   content: z.string(),
+  display_content: z.string().optional(),
   run_id: z.union([z.string(), z.null()]).optional(),
   created_at: z.string().datetime({ offset: true }),
 });
@@ -222,6 +224,9 @@ const Session = SessionSummary.and(
     })
     .passthrough()
 );
+const updateSession_Body = z
+  .object({ title: z.string().min(1).max(80), archived: z.boolean() })
+  .partial();
 const createMessageRun_Body = z.object({
   schema_version: z.number().int(),
   text: z.string().min(1).max(4000),
@@ -437,6 +442,7 @@ export const schemas = {
   Problem,
   Run,
   Session,
+  updateSession_Body,
   createMessageRun_Body,
   RequirementOperation,
   updateRequirementState_Body,

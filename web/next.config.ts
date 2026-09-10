@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  // 离线浏览器验证可独立运行，避免占用用户正在使用的开发服务缓存。
+  distDir: process.env.NEXT_DIST_DIR ?? ".next",
   outputFileTracingIncludes: {
     "/share/[token]/image": ["./node_modules/@pdfmergy-embedpdf/fonts-sc/fonts/NotoSansHans-Regular.otf"],
   },

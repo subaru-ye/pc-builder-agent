@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 type MobilePane = "chat" | "build";
-type InspectorTab = "requirement" | "build" | "validation" | "versions";
+type InspectorTab = "build" | "validation" | "versions";
 
 interface UIState {
   mobilePane: MobilePane;

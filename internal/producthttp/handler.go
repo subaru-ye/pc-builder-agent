@@ -132,6 +132,8 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/sessions", a.createSession)
 	mux.HandleFunc("GET /api/v1/sessions", a.listSessions)
 	mux.HandleFunc("GET /api/v1/sessions/{session_id}", a.getSession)
+	mux.HandleFunc("PATCH /api/v1/sessions/{session_id}", a.manageSession)
+	mux.HandleFunc("DELETE /api/v1/sessions/{session_id}", a.manageSession)
 	mux.HandleFunc("POST /api/v1/sessions/{session_id}/messages", a.createMessageRun)
 	mux.HandleFunc("PATCH /api/v1/sessions/{session_id}/requirement", a.replaceRequirement)
 	mux.HandleFunc("PATCH /api/v1/sessions/{session_id}/requirement-state", a.editRequirementState)
@@ -373,6 +375,9 @@ func (a *API) listSessions(w http.ResponseWriter, r *http.Request) {
 	sort.SliceStable(items, func(i, j int) bool { return items[i].UpdatedAt.After(items[j].UpdatedAt) })
 	out := make([]sessionSummaryDTO, 0, len(items))
 	for _, item := range items {
+		if item.Archived != (r.URL.Query().Get("archived") == "true") {
+			continue
+		}
 		out = append(out, toSessionSummary(item))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"schema_version": 1, "sessions": out})

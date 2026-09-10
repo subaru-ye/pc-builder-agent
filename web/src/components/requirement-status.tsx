@@ -59,7 +59,8 @@ export function RequirementSummary({ session, onOpen }: { session: Session; onOp
   const state = session.requirement_state;
   if (!state) return null;
   const summary = ["budget_cny", "use_case.type", "use_case.resolution"].map((key) => state.fields[key]?.status === "active" ? requirementValue(key, state.fields[key].value) : `${labels[key]}未知`).join(" · ");
-  return <div className="border-b px-4 py-3 sm:px-6 [&_button]:min-h-11 lg:[&_button]:min-h-8"><div className="flex items-center justify-between gap-3"><div className="min-w-0"><p className="text-xs text-[var(--ink-muted)]">当前需求 · {stateLabel(session)}</p><p className="mt-1 truncate text-sm">{summary}</p></div><Button variant="ghost" size="sm" onClick={onOpen}>查看 / 修改<ArrowUpRight size={14} /></Button></div>{state.changes.length > 0 && <p className="mt-2 text-xs text-[var(--ink-muted)]">本轮更新：{[...new Set(state.changes.map((change) => labels[change.field] ?? change.field))].join("、")}</p>}</div>;
+  const changedFields = [...new Set(state.changes.map((change) => labels[change.field] ?? change.field))];
+  return <div aria-label="需求摘要" className="px-4 py-2 sm:px-6"><div className="flex items-center justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-baseline gap-x-3 gap-y-1"><p className="text-xs text-[var(--ink-muted)]">当前需求 · {stateLabel(session)}</p><p className="text-sm">{summary}</p></div>{changedFields.length > 0 && <p className="mt-1 truncate text-xs text-[var(--ink-muted)]" title={changedFields.join("、")}>本轮更新：{changedFields.slice(0, 3).join("、")}{changedFields.length > 3 ? ` 等 ${changedFields.length} 项` : ""}</p>}</div><Button variant="ghost" size="sm" className="min-h-11 shrink-0" aria-label="查看 / 修改" onClick={onOpen}><span className="sm:hidden">查看</span><span className="hidden sm:inline">查看 / 修改</span><ArrowUpRight size={14} /></Button></div></div>;
 }
 
 export function RequirementStatus({ session, busy, onUpdate, onConfirm, onSource }: {

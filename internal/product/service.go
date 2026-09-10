@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
@@ -99,6 +100,7 @@ func (s *Service) GetSession(ctx context.Context, ownerID, sessionID string) (Se
 		return SessionDetail{}, err
 	}
 	status, missing := requirementLifecycle(ws)
+	s.presentMessages(ctx, sessionID, messages)
 	return SessionDetail{Session: ws, Messages: messages, ActiveRun: active, Degraded: s.events.Degraded(), RequirementStatus: status, MissingFields: missing}, nil
 }
 
@@ -526,9 +528,14 @@ func recoveryFor(kind store.RunKind) store.SessionPhase {
 
 func (s *Service) succeed(ctx context.Context, r store.AgentRun, phase store.SessionPhase,
 	pending json.RawMessage, setPending bool, assistant string, buildVersion int) *store.WebMessage {
+	display := ""
+	if buildVersion > 0 {
+		display = s.buildMessage(ctx, r.SessionID, buildVersion)
+	}
 	msg, err := s.store.CompleteRun(context.WithoutCancel(ctx), store.CompleteRunParams{
 		RunID: r.ID, SessionID: r.SessionID, AssistantMessageID: uuid.NewString(),
 		AssistantContent: assistant, Status: store.RunSucceeded, Phase: phase,
+		DisplayContent: display, BuildVersion: buildVersion,
 		PendingRequirement: pending, SetPending: setPending,
 	})
 	if err != nil {
@@ -558,6 +565,11 @@ func (s *Service) failFromError(ctx context.Context, r store.AgentRun, err error
 		return
 	}
 	var upstreamErr *upstream.Error
+	if errors.Is(err, pipeline.ErrRequirementUpdate) {
+		s.fail(ctx, r, NewProblem("generation_failed", "需求暂未整理完成", 422,
+			"没能可靠整理这条需求，原有需求和配置保持不变。可以重试，或分开描述预算、用途和偏好。", r.ID), recovery, assistant)
+		return
+	}
 	if errors.As(err, &upstreamErr) && (r.Kind == store.RunScreening || r.Kind == store.RunChange) {
 		switch upstreamErr.Kind {
 		case upstream.KindQuota:
@@ -592,7 +604,8 @@ func (s *Service) fail(ctx context.Context, r store.AgentRun, problem Problem,
 	msg, err := s.store.CompleteRun(context.WithoutCancel(ctx), store.CompleteRunParams{
 		RunID: r.ID, SessionID: r.SessionID, AssistantMessageID: uuid.NewString(),
 		AssistantContent: assistant, Status: store.RunFailed, Phase: store.PhaseError,
-		RecoveryPhase: &recovery, Error: problem.JSON(),
+		DisplayContent: "本次未能完成方案。" + problem.Title + "。请查看下方提示后重试，已有配置版本仍保留。",
+		RecoveryPhase:  &recovery, Error: problem.JSON(),
 	})
 	if err != nil {
 		log.Printf("[api] run %s 失败状态落库失败:%v", r.ID, err)
@@ -620,7 +633,8 @@ func (s *Service) publish(ctx context.Context, runID, event string, payload any)
 func messagePayload(m store.WebMessage) map[string]any {
 	return map[string]any{
 		"schema_version": 1, "id": m.ID, "role": m.Role, "content": m.Content,
-		"run_id": m.RunID, "created_at": m.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"display_content": m.DisplayContent,
+		"run_id":          m.RunID, "created_at": m.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
 

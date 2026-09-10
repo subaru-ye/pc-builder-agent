@@ -87,6 +87,16 @@ export const api = {
     const result = await client.GET("/api/v1/sessions");
     return unwrap(result).sessions;
   },
+  async listArchivedSessions(): Promise<SessionSummary[]> {
+    return unwrap(await client.GET("/api/v1/sessions", { params: { query: { archived: true } } })).sessions;
+  },
+  async updateSession(id: string, changes: { title?: string; archived?: boolean }): Promise<Session> {
+    return unwrap(await client.PATCH("/api/v1/sessions/{session_id}", { params: { path: { session_id: id } }, body: changes }));
+  },
+  async deleteSession(id: string): Promise<void> {
+    const result = await client.DELETE("/api/v1/sessions/{session_id}", { params: { path: { session_id: id } } });
+    if (!result.response.ok) unwrap(result as never);
+  },
   async createSession(key: string): Promise<Session> {
     return unwrap(await client.POST("/api/v1/sessions", {
       params: { header: { "Idempotency-Key": key } },

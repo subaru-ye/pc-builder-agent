@@ -175,7 +175,11 @@ func requirementIntegrationAPI(t *testing.T) (*API, *product.Service, *store.Sto
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = service.Shutdown(context.Background()) })
-	api, err := New(service, presenter.New(st), &fakeShareService{}, events, st, fakeRedis{}, Config{PublicWebBaseURL: "http://127.0.0.1:3100"})
+	webURL := os.Getenv("REQUIREMENT_BROWSER_WEB_URL")
+	if webURL == "" {
+		webURL = "http://127.0.0.1:3100"
+	}
+	api, err := New(service, presenter.New(st), &fakeShareService{}, events, st, fakeRedis{}, Config{PublicWebBaseURL: webURL})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,6 +292,14 @@ func TestRequirementStatePersistentWorkflow(t *testing.T) {
 	original, err := st.RequirementSpecByID(ctx, old.RequirementID)
 	if err != nil {
 		t.Fatal(err)
+	}
+	storedMessages, err := st.WebMessages(ctx, ws.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := storedMessages[len(storedMessages)-1]
+	if last.BuildVersion != 1 || last.DisplayContent == "" || last.DisplayContent == last.Content {
+		t.Fatalf("配置摘要未与原始回复及版本一起持久化: %+v", last)
 	}
 	detail = chat("预算改成6000")
 	if detail.RequirementStatus != "modified" || detail.Session.VersionCount != 1 {

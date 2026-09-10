@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"iter"
 	"math"
@@ -17,6 +18,9 @@ import (
 )
 
 type screeningRequirementStateKey struct{}
+
+var ErrRequirementUpdate = errors.New("初筛需求更新无效，原需求保持不变")
+
 type screeningRequirementStateInput struct {
 	state  schemas.RequirementState
 	source schemas.RequirementSource
@@ -29,6 +33,7 @@ func WithRequirementState(ctx context.Context, state schemas.RequirementState, s
 }
 
 const requirementStateInstruction = `你是装机需求增量提取助手。程序提供当前会话权威状态和本轮用户原文。只提取本轮原文明确表达的变动；未改的字段由程序保留。无论是否有配置版本，本轮都只更新需求草稿，不自行生成配置或 ChangeRequest。
+“剪4K视频/剪片子”属于productivity；素材分辨率不是显示器或游戏分辨率。此时将“剪4K视频”等工作负载原文保留在notes，不填use_case.resolution，除非用户另行明确显示器/游戏分辨率。
 
 仅输出一个 JSON 对象：{"operations":[{"op":"set","field":"budget_cny","value":8000,"strength":"must","scope":"session","quote":"预算8000"}]}。不要 Markdown、解释、问题、完整需求单。没有需求变更时输出 {"operations":[]}。每项 quote 必须逐字摘录本轮原文，可取整句；不能从旧消息、助手问题或状态中的来源摘录本轮证据。
 
@@ -73,12 +78,15 @@ func (g screeningGuard) generateRequirementState(ctx context.Context, req *model
 				observe(raw, nil)
 			}
 			if malformedOuterDraft(raw) {
-				yield(nil, fmt.Errorf("初筛需求更新 JSON 不完整，原需求保持不变"))
+				yield(nil, fmt.Errorf("%w: JSON 不完整", ErrRequirementUpdate))
 				return
 			}
 			payload := extractJSONObject(raw)
 			update, err := schemas.DecodeRequirementUpdate(payload)
 			if err == nil && bindExplicitRemovalSources(&update, input.source.Quote) {
+				payload, err = json.Marshal(update)
+			}
+			if err == nil && normalizeVideoWorkload(&update, input.state, input.source.Quote) {
 				payload, err = json.Marshal(update)
 			}
 			if err == nil {
@@ -88,7 +96,7 @@ func (g screeningGuard) generateRequirementState(ctx context.Context, req *model
 				err = guardRequirementUpdateEvidence(input.state, update, input.source.Quote)
 			}
 			if err != nil {
-				yield(nil, fmt.Errorf("初筛需求更新无效，原需求保持不变: %w", err))
+				yield(nil, fmt.Errorf("%w: %v", ErrRequirementUpdate, err))
 				return
 			}
 			copyResponse := *response
@@ -244,6 +252,58 @@ func groundedBudgetFlex(flex float64, quote string) bool {
 }
 
 var preferenceClauses = regexp.MustCompile(`[，,。！？!?；;\n]`)
+var videoEditingClaim = regexp.MustCompile(`(?:剪(?:辑)?|编辑|制作)(?:1080p|2k|4k|8k|高清|超清)?(?:视频|片子|短片|素材)`)
+
+// Model output may confuse source-media resolution with the user's display.
+// Preserve the exact current-message evidence as a workload note, never a screen preference.
+func normalizeVideoWorkload(update *schemas.RequirementUpdate, state schemas.RequirementState, userText string) bool {
+	changed := false
+	for i := range update.Operations {
+		op := &update.Operations[i]
+		if op.Op != "set" || op.Field != "use_case.resolution" || op.Quote == "" || !strings.Contains(userText, op.Quote) {
+			continue
+		}
+		compact := strings.ToLower(strings.Join(strings.Fields(op.Quote), ""))
+		var resolution string
+		_ = json.Unmarshal(op.Value, &resolution)
+		if !videoEditingClaim.MatchString(compact) || groundedResolution(resolution, []string{op.Quote}) {
+			continue
+		}
+		note := op.Quote
+		var prior string
+		if field := state.Fields["notes"]; field.Status == "active" {
+			_ = json.Unmarshal(field.Value, &prior)
+		}
+		if prior != "" {
+			if strings.Contains(prior, note) {
+				note = prior
+			} else {
+				note = prior + "；" + note
+			}
+		}
+		// Merge into an existing notes operation to keep one operation per field.
+		for j := range update.Operations {
+			other := &update.Operations[j]
+			if other.Op == "set" && other.Field == "notes" {
+				var value string
+				if json.Unmarshal(other.Value, &value) != nil {
+					continue
+				}
+				if !strings.Contains(value, op.Quote) {
+					value += "；" + op.Quote
+				}
+				other.Value, _ = json.Marshal(value)
+				other.Quote = userText
+				update.Operations = append(update.Operations[:i], update.Operations[i+1:]...)
+				return true
+			}
+		}
+		op.Field = "notes"
+		op.Value, _ = json.Marshal(note)
+		changed = true
+	}
+	return changed
+}
 
 func groundedStatePreference(field, value, quote string) bool {
 	for _, clause := range preferenceClauses.Split(strings.ToLower(quote), -1) {
@@ -335,6 +395,9 @@ func groundedStatePreference(field, value, quote string) bool {
 					return true
 				}
 			case "productivity":
+				if videoEditingClaim.MatchString(clause) && !containsAny(clause, "不剪", "不用剪", "不需要剪", "不做视频", "不制作视频") {
+					return true
+				}
 				if containsAny(clause, "剪辑", "渲染", "建模", "编译", "开发", "训练", "生产力", "深度学习", "视频制作", "pr", "blender", "cad", "达芬奇") {
 					return true
 				}

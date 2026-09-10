@@ -97,7 +97,7 @@ describe("RequirementStatus", () => {
     expect(screen.getByText(/已确认需求和已有配置保持原样/)).toBeVisible();
   });
 
-  it("keeps a compact requirement entry available beside the build", async () => {
+  it("keeps a compact requirement entry available in the conversation", async () => {
     const open = vi.fn();
     render(<RequirementSummary session={session} onOpen={open} />);
     expect(screen.getByText(/¥8,000 · 主要用途未知 · 分辨率未知/)).toBeVisible();

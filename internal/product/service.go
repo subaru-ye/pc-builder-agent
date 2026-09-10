@@ -507,9 +507,8 @@ func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID s
 		return
 	}
 	if !found || after != before+1 {
-		s.captureEvidence(ctx, r.ID, "build_output", map[string]any{"text": result.Text, "build_version": nil})
-		s.fail(ctx, r, NewProblem("generation_failed", "没有生成可保存的配置", 422,
-			"远程流程已经结束，但数据库没有新增预期版本。", r.ID), recoveryFor(r.Kind), result.Text)
+		s.captureEvidence(ctx, r.ID, "build_output", map[string]any{"text": result.Text, "decision": result.Decision, "build_version": nil})
+		s.fail(ctx, r, buildFailureProblem(result.Decision, r.ID), recoveryFor(r.Kind), result.Text)
 		return
 	}
 	s.captureEvidence(ctx, r.ID, "build_output", map[string]any{"text": result.Text, "build_version": after})
@@ -601,10 +600,19 @@ func (s *Service) failInternal(ctx context.Context, r store.AgentRun, recovery s
 
 func (s *Service) fail(ctx context.Context, r store.AgentRun, problem Problem,
 	recovery store.SessionPhase, assistant string) {
+	display := problem.Title + "。"
+	if problem.Detail != "" {
+		display += "\n\n" + problem.Detail
+	}
+	// Persist a safe explanation even if the remote service returned no text.
+	// Original remote content remains available as evidence when present.
+	if assistant == "" {
+		assistant = display
+	}
 	msg, err := s.store.CompleteRun(context.WithoutCancel(ctx), store.CompleteRunParams{
 		RunID: r.ID, SessionID: r.SessionID, AssistantMessageID: uuid.NewString(),
 		AssistantContent: assistant, Status: store.RunFailed, Phase: store.PhaseError,
-		DisplayContent: "本次未能完成方案。" + problem.Title + "。请查看下方提示后重试，已有配置版本仍保留。",
+		DisplayContent: display,
 		RecoveryPhase:  &recovery, Error: problem.JSON(),
 	})
 	if err != nil {

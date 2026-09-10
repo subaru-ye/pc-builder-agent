@@ -7,11 +7,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"iter"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,9 +21,16 @@ import (
 	"github.com/jackc/pgx/v5"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+	"google.golang.org/adk/v2/agent"
+	"google.golang.org/adk/v2/model"
+	"google.golang.org/adk/v2/runner"
+	"google.golang.org/adk/v2/session"
+	"google.golang.org/genai"
 
 	migrations "github.com/subaru-ye/pc-builder-agent/db"
+	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/validate"
+	"github.com/subaru-ye/pc-builder-agent/internal/buildharness"
 	"github.com/subaru-ye/pc-builder-agent/internal/presenter"
 	"github.com/subaru-ye/pc-builder-agent/internal/product"
 	"github.com/subaru-ye/pc-builder-agent/internal/runevents"
@@ -46,16 +55,72 @@ type requirementReplayGateway struct {
 	fixture requirementReplay
 }
 
+// The only model implementation in this harness is an in-process recording.
+// No provider, credentials, HTTP client, or retry transport is constructed.
+type requirementRecordedModel struct {
+	output string
+	calls  int
+}
+
+func (m *requirementRecordedModel) Name() string { return "offline-recording-no-provider" }
+func (m *requirementRecordedModel) GenerateContent(_ context.Context, _ *model.LLMRequest, _ bool) iter.Seq2[*model.LLMResponse, error] {
+	return func(yield func(*model.LLMResponse, error) bool) {
+		m.calls++
+		yield(&model.LLMResponse{Content: genai.NewContentFromText(m.output, genai.RoleModel)}, nil)
+	}
+}
+
+func replayScreening(ctx context.Context, input product.ScreenInput, output string) (product.ScreenResult, error) {
+	m := &requirementRecordedModel{output: output}
+	screening, err := pipeline.NewProductScreening(m)
+	if err != nil {
+		return product.ScreenResult{}, err
+	}
+	r, err := runner.New(runner.Config{AppName: "offline-requirements", Agent: screening, SessionService: session.InMemoryService(), AutoCreateSession: true})
+	if err != nil {
+		return product.ScreenResult{}, err
+	}
+	ctx = pipeline.WithRequirementState(ctx, *input.RequirementState, input.RequirementSource)
+	var text string
+	for event, err := range r.Run(ctx, "offline", uuid.NewString(), genai.NewContentFromText(input.Context, genai.RoleUser), agent.RunConfig{}) {
+		if err != nil {
+			return product.ScreenResult{}, err
+		}
+		if event != nil && !event.Partial && event.Content != nil {
+			for _, part := range event.Content.Parts {
+				if part != nil && !part.Thought {
+					text += part.Text
+				}
+			}
+		}
+	}
+	if m.calls != 1 {
+		return product.ScreenResult{}, fmt.Errorf("offline screening calls=%d, expected one", m.calls)
+	}
+	update, err := schemas.DecodeRequirementUpdate(pipeline.ExtractPayload(text))
+	return product.ScreenResult{Kind: product.ScreenRequirement, Text: text, RequirementUpdate: &update}, err
+}
+
 func (g *requirementReplayGateway) ContextAvailable(context.Context, string, string) (bool, error) {
 	return true, nil
 }
-func (g *requirementReplayGateway) Screen(_ context.Context, _, _ string, input product.ScreenInput) (product.ScreenResult, error) {
+func (g *requirementReplayGateway) Screen(ctx context.Context, _, _ string, input product.ScreenInput) (product.ScreenResult, error) {
 	op := func(field string, value any, strength string) schemas.RequirementOperation {
 		raw, _ := json.Marshal(value)
 		return schemas.RequirementOperation{Op: "set", Field: field, Value: raw, Strength: strength, Quote: input.Text}
 	}
 	var ops []schemas.RequirementOperation
 	switch input.Text {
+	case "预算 6000，主要剪 4K 视频，尽量安静":
+		raw, err := os.ReadFile("../agents/pipeline/testdata/requirement_video_editing.json")
+		if err != nil {
+			return product.ScreenResult{}, err
+		}
+		var output string
+		if err := json.Unmarshal(raw, &output); err != nil {
+			return product.ScreenResult{}, err
+		}
+		return replayScreening(ctx, input, output)
 	case "预算8000，玩游戏，要安静一点，尽量用N卡，帮朋友装机":
 		ops = []schemas.RequirementOperation{op("budget_cny", 8000, "must"), op("use_case.type", "gaming", "must"), op("noise_pref", "silent", "prefer"), op("brand_pref.gpu", "nvidia", "prefer"), op("recipient", "朋友", "must")}
 	case "预算改成6000":
@@ -74,31 +139,53 @@ func (g *requirementReplayGateway) Screen(_ context.Context, _, _ string, input 
 		ops = []schemas.RequirementOperation{o}
 	case "恢复之前的显卡要求":
 		ops = []schemas.RequirementOperation{{Op: "restore", Field: "brand_pref.gpu", Quote: input.Text}}
+	case "静音还是尽量满足就好":
+		o := op("noise_pref", "silent", "prefer")
+		o.Kind, o.Evidence = "constraint", "stated"
+		ops = []schemas.RequirementOperation{o}
 	default:
 		return product.ScreenResult{}, fmt.Errorf("离线验证仅支持已登记的对话；自由修改请使用需求面板")
 	}
-	return product.ScreenResult{Kind: product.ScreenRequirement, RequirementUpdate: &schemas.RequirementUpdate{Operations: ops}}, nil
+	output, err := json.Marshal(schemas.RequirementUpdate{Operations: ops})
+	if err != nil {
+		return product.ScreenResult{}, err
+	}
+	return replayScreening(ctx, input, string(output))
 }
 func (g *requirementReplayGateway) Remote(ctx context.Context, _, sessionID string, payload json.RawMessage) (product.RemoteResult, error) {
-	if _, err := schemas.DecodeRequirementSpec(payload); err != nil {
-		return product.RemoteResult{}, err
-	}
-	draft, err := schemas.DecodeBuildDraft(g.fixture.Draft)
+	spec, err := schemas.DecodeRequirementSpec(payload)
 	if err != nil {
 		return product.RemoteResult{}, err
 	}
-	result, err := validate.New(g.store).Evaluate(ctx, draft.Selection)
+	draftJSON := g.fixture.Draft
+	if spec.UseCase.Type == schemas.UseCaseProductivity {
+		// Synthetic lower-priced GPU oracle for the reported budget. The saved
+		// historical build and its price snapshot remain byte-for-byte unchanged.
+		draftJSON = json.RawMessage(strings.ReplaceAll(string(draftJSON), "gpu-gb-5070-windforce-sff", "offline-gpu-4060"))
+	}
+	planner, err := buildharness.NewCandidatePlannerWithOptions(g.store, nil, buildharness.PlannerOptions{DisableSemantic: true})
 	if err != nil {
 		return product.RemoteResult{}, err
 	}
-	report, _ := json.Marshal(result.Report)
-	quote, _ := json.Marshal(result.Quote)
+	harness, err := buildharness.New(buildharness.Config{Model: &requirementRecordedModel{output: string(draftJSON)}, Planner: planner, Repairer: buildharness.NewRepairPlanner(), Eval: validate.New(g.store)})
+	if err != nil {
+		return product.RemoteResult{}, err
+	}
+	result, err := harness.Run(ctx, buildharness.BuildInput{Requirement: spec})
+	if err != nil {
+		return product.RemoteResult{}, err
+	}
+	if !result.Succeeded {
+		return product.RemoteResult{Text: result.Message, Decision: result.Decision}, nil
+	}
+	report, _ := json.Marshal(result.Result.Report)
+	quote, _ := json.Marshal(result.Result.Quote)
 	var parent *int64
 	if versions, err := g.store.BuildsBySession(ctx, sessionID); err == nil && len(versions) > 0 {
 		parent = &versions[len(versions)-1].ID
 	}
-	_, err = g.store.SaveBuildVersion(ctx, store.SaveBuildVersionParams{SessionID: sessionID, ParentID: parent, RequirementSpec: payload, Draft: g.fixture.Draft, Validation: report, Quote: quote})
-	return product.RemoteResult{Text: "离线验证：已回放保存的真实配置产物，并重新执行规则与报价核算。此产物只用于验证需求确认和历史版本链路。"}, err
+	_, err = g.store.SaveBuildVersion(ctx, store.SaveBuildVersionParams{SessionID: sessionID, ParentID: parent, RequirementSpec: payload, Draft: draftJSON, Validation: report, Quote: quote})
+	return product.RemoteResult{Text: "离线验证：录制初筛与选件输出经过真实需求合并、候选准备、Harness、规则、报价和版本保存；选件为测试 oracle，不代表真实模型选配效果。"}, err
 }
 
 func requirementIntegrationAPI(t *testing.T) (*API, *product.Service, *store.Store) {
@@ -162,6 +249,15 @@ func requirementIntegrationAPI(t *testing.T) (*API, *product.Service, *store.Sto
 			t.Fatal(err)
 		}
 	}
+	// Explicit synthetic candidate, isolated to the disposable test database.
+	if _, err = seed.Exec(ctx, `INSERT INTO parts(sku,category,brand,model,specs)
+		SELECT 'offline-gpu-4060',category,'Offline fixture','GeForce RTX 4060 (synthetic fixture)',specs || '{"tdp_w":115}'::jsonb
+		FROM parts WHERE sku='gpu-gb-5070-windforce-sff'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = seed.Exec(ctx, "INSERT INTO prices(snapshot_id,sku,price_cny,source) VALUES($1,'offline-gpu-4060',2299,'synthetic-offline-fixture')", snapshot); err != nil {
+		t.Fatal(err)
+	}
 	_ = seed.Close(ctx)
 	st, err := store.New(ctx, u.String())
 	if err != nil {
@@ -177,7 +273,7 @@ func requirementIntegrationAPI(t *testing.T) (*API, *product.Service, *store.Sto
 	t.Cleanup(func() { _ = service.Shutdown(context.Background()) })
 	webURL := os.Getenv("REQUIREMENT_BROWSER_WEB_URL")
 	if webURL == "" {
-		webURL = "http://127.0.0.1:3100"
+		webURL = "http://127.0.0.1:3102"
 	}
 	api, err := New(service, presenter.New(st), &fakeShareService{}, events, st, fakeRedis{}, Config{PublicWebBaseURL: webURL})
 	if err != nil {
@@ -350,6 +446,142 @@ func TestRequirementStatePersistentWorkflow(t *testing.T) {
 	}
 }
 
+// Reproduce the reported path through recorded Screening, UI strength edit,
+// confirmation, real Harness/validator, PostgreSQL and the persisted read model.
+func TestVideoRequirementConfirmationReplay(t *testing.T) {
+	_, service, st := requirementIntegrationAPI(t)
+	ctx := context.Background()
+	owner := "offline-video-owner"
+	ws, err := service.CreateSession(ctx, owner, uuid.NewString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	wait := func(runID string, status store.RunStatus) product.SessionDetail {
+		t.Helper()
+		for i := 0; i < 300; i++ {
+			run, err := service.GetRun(ctx, owner, runID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if run.Status != store.RunRunning {
+				if run.Status != status {
+					t.Fatalf("run status=%s, expected=%s: %s", run.Status, status, run.Error)
+				}
+				detail, err := service.GetSession(ctx, owner, ws.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return detail
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Fatal("offline run timeout")
+		return product.SessionDetail{}
+	}
+	stateOf := func(detail product.SessionDetail) schemas.RequirementState {
+		t.Helper()
+		var state schemas.RequirementState
+		if err := json.Unmarshal(detail.Session.RequirementState, &state); err != nil {
+			t.Fatal(err)
+		}
+		return state
+	}
+	started, err := service.StartMessage(ctx, owner, ws.ID, uuid.NewString(), "预算 6000，主要剪 4K 视频，尽量安静")
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail := wait(started.Run.ID, store.RunSucceeded)
+	state := stateOf(detail)
+	if len(detail.MissingFields) != 0 || state.Fields["budget_flex"].Status != "unknown" || state.Fields["use_case.resolution"].Status == "active" {
+		t.Fatalf("invented preference or unnecessary question: %+v", detail)
+	}
+	detail, err = service.EditRequirement(ctx, owner, ws.ID, uuid.NewString(), product.RequirementEdit{ExpectedRevision: state.Revision,
+		Operations: []schemas.RequirementOperation{{Op: "set", Field: "budget_cny", Value: json.RawMessage(`6000`), Strength: "prefer"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state = stateOf(detail)
+	if state.Fields["noise_pref"].Strength != "prefer" || string(state.Fields["use_case.type"].Value) != `"productivity"` || state.Fields["budget_flex"].Status != "unknown" {
+		t.Fatal("budget strength edit changed other facts or user-unknown flex")
+	}
+	confirmed, err := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail = wait(confirmed.Run.ID, store.RunSucceeded)
+	if detail.Session.VersionCount != 1 {
+		t.Fatal("confirmed video requirement did not save a configuration")
+	}
+	v1, err := st.BuildByVersion(ctx, ws.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	savedSpec, err := st.RequirementSpecByID(ctx, v1.RequirementID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(savedSpec), "4K") || !strings.Contains(string(savedSpec), "silent") {
+		t.Fatal("workload evidence or quiet preference never reached saved build requirement")
+	}
+	frozen := append(json.RawMessage(nil), detail.Session.ConfirmedRequirementState...)
+	fresh, err := service.GetSession(ctx, owner, ws.ID)
+	if err != nil || !reflect.DeepEqual(fresh.Session.RequirementState, detail.Session.RequirementState) {
+		t.Fatal("refresh lost authoritative state")
+	}
+	state = stateOf(fresh)
+	detail, err = service.EditRequirement(ctx, owner, ws.ID, uuid.NewString(), product.RequirementEdit{ExpectedRevision: state.Revision,
+		Operations: []schemas.RequirementOperation{{Op: "set", Field: "noise_pref", Value: json.RawMessage(`"silent"`), Strength: "must", Kind: "constraint"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(frozen, detail.Session.ConfirmedRequirementState) {
+		t.Fatal("draft edit overwrote confirmed snapshot")
+	}
+	failed, err := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail = wait(failed.Run.ID, store.RunFailed)
+	if detail.Session.VersionCount != 1 || stateOf(detail).Fields["noise_pref"].Strength != "must" {
+		t.Fatal("hard condition was silently relaxed or saved as success")
+	}
+	messages, err := st.WebMessages(ctx, ws.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := messages[len(messages)-1]
+	if !strings.Contains(last.DisplayContent, "静音") || !strings.Contains(last.DisplayContent, "已保存") {
+		t.Fatalf("specific failure or saved-state information swallowed: %s", last.DisplayContent)
+	}
+	after, err := st.RequirementSpecByID(ctx, v1.RequirementID)
+	if err != nil || !reflect.DeepEqual(savedSpec, after) {
+		t.Fatal("failed new build overwrote v1 requirement history")
+	}
+	// A user can continue the same conversation after a failed confirmation.
+	// This explicit change is the user's choice; the failure never relaxes it.
+	continued, err := service.StartMessage(ctx, owner, ws.ID, uuid.NewString(), "静音还是尽量满足就好")
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail = wait(continued.Run.ID, store.RunSucceeded)
+	if stateOf(detail).Fields["noise_pref"].Strength != "prefer" {
+		t.Fatal("chat did not apply explicit correction after failed confirmation")
+	}
+	confirmed, err = service.StartConfirm(ctx, owner, ws.ID, uuid.NewString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail = wait(confirmed.Run.ID, store.RunSucceeded)
+	v2, err := st.BuildByVersion(ctx, ws.ID, 2)
+	if err != nil || detail.Session.VersionCount != 2 || v2.ParentID == nil || *v2.ParentID != v1.ID {
+		t.Fatal("new confirmation did not append a child version")
+	}
+	after, err = st.RequirementSpecByID(ctx, v1.RequirementID)
+	if err != nil || !reflect.DeepEqual(savedSpec, after) {
+		t.Fatal("v2 generation rewrote v1 requirement")
+	}
+}
+
 // 显式离线浏览器入口，只存在于测试二进制，运行结束清理独立临时数据库。
 func TestRequirementStateBrowserServer(t *testing.T) {
 	addr := os.Getenv("REQUIREMENT_BROWSER_ADDR")
@@ -357,7 +589,15 @@ func TestRequirementStateBrowserServer(t *testing.T) {
 		t.Skip("未启用浏览器离线验证服务器")
 	}
 	api, _, _ := requirementIntegrationAPI(t)
-	server := &http.Server{Addr: addr, Handler: api.Handler(), ReadHeaderTimeout: 5 * time.Second}
+	server := &http.Server{Addr: addr, ReadHeaderTimeout: 5 * time.Second}
+	mux := http.NewServeMux()
+	mux.Handle("/", api.Handler())
+	// Test-binary-only shutdown allows Cleanup to remove the disposable database.
+	mux.HandleFunc("POST /__offline/shutdown", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		go func() { _ = server.Shutdown(context.Background()) }()
+	})
+	server.Handler = mux
 	t.Cleanup(func() { _ = server.Close() })
 	t.Logf("离线真实业务API %s；0模型调用，录制产物仅验证链路", addr)
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {

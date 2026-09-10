@@ -148,7 +148,7 @@ func (f *fakeProductStore) CompleteRun(_ context.Context, p store.CompleteRunPar
 		return nil, nil
 	}
 	m := store.WebMessage{ID: p.AssistantMessageID, SessionID: p.SessionID, Role: "assistant",
-		Content: p.AssistantContent, RunID: &p.RunID, CreatedAt: time.Now()}
+		Content: p.AssistantContent, DisplayContent: p.DisplayContent, RunID: &p.RunID, CreatedAt: time.Now()}
 	f.messages = append(f.messages, m)
 	return &m, nil
 }

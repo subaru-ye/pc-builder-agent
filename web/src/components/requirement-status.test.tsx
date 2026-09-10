@@ -26,6 +26,45 @@ const session = {
 } satisfies Session;
 
 describe("RequirementStatus", () => {
+  it("does not classify legacy facts or repeat the context field label", () => {
+    render(<RequirementStatus session={{ ...session, requirement_state: { ...state, fields: { "use_case.type": { status: "active", value: "productivity", strength: "must", source }, notes: { status: "active", value: "剪4K视频", kind: "context", strength: "must", source } } } }} busy={false} onUpdate={vi.fn()} onConfirm={vi.fn()} onSource={vi.fn()} />);
+    expect(screen.getByText("生产力")).toBeVisible();
+    expect(screen.getAllByText("补充说明", { exact: true })).toHaveLength(1);
+    expect(screen.queryByText("必须满足")).not.toBeInTheDocument();
+    expect(screen.queryByText("用途事实")).not.toBeInTheDocument();
+  });
+
+  it("preserves context strength without presenting it as a mandatory configuration condition", async () => {
+    const update = vi.fn().mockResolvedValue(undefined);
+    render(<RequirementStatus session={{ ...session, requirement_state: { ...state, fields: { notes: { status: "active", value: "剪4K视频", kind: "context", strength: "must", source } } } }} busy={false} onUpdate={update} onConfirm={vi.fn()} onSource={vi.fn()} />);
+    expect(screen.getByText("剪4K视频")).toBeVisible();
+    expect(screen.queryByText("必须满足")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "修改补充说明" }));
+    expect(screen.getByLabelText("补充说明信息用途")).toHaveValue("context");
+    expect(screen.queryByLabelText("补充说明要求强度")).not.toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("补充说明信息用途"), "constraint");
+    expect(screen.getByLabelText("补充说明要求强度")).toHaveValue("must");
+    await userEvent.click(screen.getByRole("button", { name: "保存需求" }));
+    expect(update).toHaveBeenCalledWith([{ op: "set", field: "notes", value: "剪4K视频", kind: "constraint", strength: "must", scope: "session" }]);
+  });
+
+  it("requires an explicit meaning for legacy free text and retains unresolved source text", async () => {
+    const update = vi.fn().mockResolvedValue(undefined);
+    const onSource = vi.fn();
+    render(<RequirementStatus session={{ ...session, requirement_state: { ...state, fields: { notes: { status: "active", value: "剪4K视频", strength: "must", source } }, observations: [{ field: "notes", text: "还想偶尔折腾点别的", reason: "用途待补充", source }] } }} busy={false} onUpdate={update} onConfirm={vi.fn()} onSource={onSource} />);
+    await userEvent.click(screen.getByRole("button", { name: "修改补充说明" }));
+    await userEvent.click(screen.getByRole("button", { name: "保存需求" }));
+    expect(update).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent("请选择这段说明的信息用途");
+    await userEvent.click(screen.getByRole("button", { name: "取消" }));
+    await userEvent.click(screen.getByText(/保留的原话/));
+    expect(screen.getByText("还想偶尔折腾点别的")).toBeVisible();
+    await userEvent.click(within(screen.getByText("还想偶尔折腾点别的").closest("li")!).getByRole("button", { name: "查看来源消息" }));
+    expect(onSource).toHaveBeenCalledWith("message-1");
+    await userEvent.click(screen.getByRole("button", { name: "撤销原话及补充说明记录" }));
+    expect(update).toHaveBeenCalledWith([{ op: "remove", field: "notes" }]);
+  });
+
   it("shows unknown and revoked facts honestly while keeping alternatives separate", async () => {
     render(<RequirementStatus session={session} busy={false} onUpdate={vi.fn()} onConfirm={vi.fn()} onSource={vi.fn()} />);
     expect(screen.getByText("¥8,000")).toBeVisible();

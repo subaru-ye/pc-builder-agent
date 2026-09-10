@@ -3,6 +3,7 @@ package schemas
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // RequirementSpecSchemaVersion 当前唯一支持的 RequirementSpec schema 版本。
@@ -164,38 +165,42 @@ type BrandPref struct {
 // RequirementSpec 初筛 Agent → 生成 Agent 的结构化需求单(设计方案 §四.2)。
 // 唯一权威出处为设计方案 §四.2,字段变更先改文档再改本包(CLAUDE.md 工程纪律)。
 type RequirementSpec struct {
-	SchemaVersion       int
-	BudgetCNY           int
-	BudgetFlex          float64 // 缺省 0.1
-	UseCase             UseCase
-	SizePref            SizePref  // 缺省 any
-	NoisePref           NoisePref // 缺省 any
-	BrandPref           BrandPref // 缺省 {any, any}
-	ExistingParts       []Category
-	OwnedParts          []OwnedPart
-	BudgetBasis         string
-	Priority            []Category
-	Notes               string
-	ConstraintStrengths map[string]string          // 当前会话明确的 must/prefer；缺失沿用旧需求单语义。
-	RequirementDetails  map[string]json.RawMessage // 外观、装机对象等有效补充信息，不含历史/备选。
+	SchemaVersion           int
+	BudgetCNY               int
+	BudgetFlex              float64 // 缺省 0.1
+	UseCase                 UseCase
+	SizePref                SizePref  // 缺省 any
+	NoisePref               NoisePref // 缺省 any
+	BrandPref               BrandPref // 缺省 {any, any}
+	ExistingParts           []Category
+	OwnedParts              []OwnedPart
+	BudgetBasis             string
+	Priority                []Category
+	Notes                   string
+	ConstraintStrengths     map[string]string          // 当前会话明确的 must/prefer；缺失沿用旧需求单语义。
+	RequirementDetails      map[string]json.RawMessage // 外观、装机对象等有效补充信息，不含历史/备选。
+	RequirementSemantics    map[string]string          // fact/context/constraint 独立于 must/prefer。
+	RequirementObservations []RequirementObservation   // 尚未结构化的用户原文，仅作未确认上下文。
 }
 
 // requirementSpecWire 线上格式:指针区分「键缺失」与「显式给值」,支持缺省填充。
 type requirementSpecWire struct {
-	SchemaVersion       *int                       `json:"schema_version"`
-	BudgetCNY           *int                       `json:"budget_cny"`
-	BudgetFlex          *float64                   `json:"budget_flex"`
-	UseCase             *useCaseWire               `json:"use_case"`
-	SizePref            *SizePref                  `json:"size_pref"`
-	NoisePref           *NoisePref                 `json:"noise_pref"`
-	BrandPref           *brandPrefWire             `json:"brand_pref"`
-	ExistingParts       []Category                 `json:"existing_parts"`
-	OwnedParts          []OwnedPart                `json:"owned_parts,omitempty"`
-	BudgetBasis         string                     `json:"budget_basis,omitempty"`
-	Priority            []Category                 `json:"priority"`
-	Notes               *string                    `json:"notes"`
-	ConstraintStrengths map[string]string          `json:"constraint_strengths,omitempty"`
-	RequirementDetails  map[string]json.RawMessage `json:"requirement_details,omitempty"`
+	SchemaVersion           *int                       `json:"schema_version"`
+	BudgetCNY               *int                       `json:"budget_cny"`
+	BudgetFlex              *float64                   `json:"budget_flex"`
+	UseCase                 *useCaseWire               `json:"use_case"`
+	SizePref                *SizePref                  `json:"size_pref"`
+	NoisePref               *NoisePref                 `json:"noise_pref"`
+	BrandPref               *brandPrefWire             `json:"brand_pref"`
+	ExistingParts           []Category                 `json:"existing_parts"`
+	OwnedParts              []OwnedPart                `json:"owned_parts,omitempty"`
+	BudgetBasis             string                     `json:"budget_basis,omitempty"`
+	Priority                []Category                 `json:"priority"`
+	Notes                   *string                    `json:"notes"`
+	ConstraintStrengths     map[string]string          `json:"constraint_strengths,omitempty"`
+	RequirementDetails      map[string]json.RawMessage `json:"requirement_details,omitempty"`
+	RequirementSemantics    map[string]string          `json:"requirement_semantics,omitempty"`
+	RequirementObservations []RequirementObservation   `json:"requirement_observations,omitempty"`
 }
 
 type useCaseWire struct {
@@ -238,20 +243,22 @@ func EncodeRequirementSpec(spec RequirementSpec) (json.RawMessage, error) {
 		GPU GPUBrand `json:"gpu"`
 	}
 	type canonicalRequirement struct {
-		SchemaVersion       int                        `json:"schema_version"`
-		BudgetCNY           int                        `json:"budget_cny"`
-		BudgetFlex          float64                    `json:"budget_flex"`
-		UseCase             canonicalUseCase           `json:"use_case"`
-		SizePref            SizePref                   `json:"size_pref"`
-		NoisePref           NoisePref                  `json:"noise_pref"`
-		BrandPref           canonicalBrandPref         `json:"brand_pref"`
-		ExistingParts       []Category                 `json:"existing_parts"`
-		OwnedParts          []OwnedPart                `json:"owned_parts,omitempty"`
-		BudgetBasis         string                     `json:"budget_basis,omitempty"`
-		Priority            []Category                 `json:"priority"`
-		Notes               string                     `json:"notes"`
-		ConstraintStrengths map[string]string          `json:"constraint_strengths,omitempty"`
-		RequirementDetails  map[string]json.RawMessage `json:"requirement_details,omitempty"`
+		SchemaVersion           int                        `json:"schema_version"`
+		BudgetCNY               int                        `json:"budget_cny"`
+		BudgetFlex              float64                    `json:"budget_flex"`
+		UseCase                 canonicalUseCase           `json:"use_case"`
+		SizePref                SizePref                   `json:"size_pref"`
+		NoisePref               NoisePref                  `json:"noise_pref"`
+		BrandPref               canonicalBrandPref         `json:"brand_pref"`
+		ExistingParts           []Category                 `json:"existing_parts"`
+		OwnedParts              []OwnedPart                `json:"owned_parts,omitempty"`
+		BudgetBasis             string                     `json:"budget_basis,omitempty"`
+		Priority                []Category                 `json:"priority"`
+		Notes                   string                     `json:"notes"`
+		ConstraintStrengths     map[string]string          `json:"constraint_strengths,omitempty"`
+		RequirementDetails      map[string]json.RawMessage `json:"requirement_details,omitempty"`
+		RequirementSemantics    map[string]string          `json:"requirement_semantics,omitempty"`
+		RequirementObservations []RequirementObservation   `json:"requirement_observations,omitempty"`
 	}
 
 	encoded, err := json.Marshal(canonicalRequirement{
@@ -266,6 +273,7 @@ func EncodeRequirementSpec(spec RequirementSpec) (json.RawMessage, error) {
 		BrandPref:     canonicalBrandPref{CPU: spec.BrandPref.CPU, GPU: spec.BrandPref.GPU},
 		ExistingParts: existing, OwnedParts: spec.OwnedParts, BudgetBasis: spec.BudgetBasis, Priority: priority, Notes: spec.Notes,
 		ConstraintStrengths: spec.ConstraintStrengths, RequirementDetails: spec.RequirementDetails,
+		RequirementSemantics: spec.RequirementSemantics, RequirementObservations: spec.RequirementObservations,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("requirement spec: 编码失败: %w", err)
@@ -361,6 +369,17 @@ func DecodeRequirementSpec(data []byte) (RequirementSpec, error) {
 		}
 	}
 	out.ConstraintStrengths, out.RequirementDetails = w.ConstraintStrengths, w.RequirementDetails
+	for key, kind := range w.RequirementSemantics {
+		if !knownRequirementField(key) || !ValidRequirementKind(kind) {
+			return RequirementSpec{}, fmt.Errorf("requirement spec: 非法语义分类 %s=%s", key, kind)
+		}
+	}
+	for _, observation := range w.RequirementObservations {
+		if observation.Resolved || strings.TrimSpace(observation.Text) == "" || observation.Text != observation.Source.Quote || (observation.Field != "" && !knownRequirementField(observation.Field)) {
+			return RequirementSpec{}, fmt.Errorf("requirement spec: 非法原文观察")
+		}
+	}
+	out.RequirementSemantics, out.RequirementObservations = w.RequirementSemantics, w.RequirementObservations
 
 	return out, nil
 }

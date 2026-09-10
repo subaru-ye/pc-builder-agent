@@ -14,6 +14,7 @@ import (
 	"google.golang.org/genai"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
+	"github.com/subaru-ye/pc-builder-agent/internal/buildharness"
 	"github.com/subaru-ye/pc-builder-agent/internal/hostruntime"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
@@ -38,7 +39,8 @@ type ScreenResult struct {
 }
 
 type RemoteResult struct {
-	Text string
+	Text     string
+	Decision *buildharness.Decision
 }
 
 // ScreenInput 区分本轮原始文本与发给模型的有界上下文。品牌/预算纠偏只依据
@@ -186,12 +188,12 @@ func hasExplicitBudgetFlex(text string) bool {
 }
 
 func (g *ADKAgentGateway) Remote(ctx context.Context, userID, sessionID string, payload json.RawMessage) (RemoteResult, error) {
-	lastText, err := collectAgentText(g.remoteRunner.Run(ctx, userID, sessionID,
+	result, err := collectRemoteResult(g.remoteRunner.Run(ctx, userID, sessionID,
 		genai.NewContentFromText(string(payload), genai.RoleUser), agent.RunConfig{}), g.remoteName)
 	if err != nil {
 		return RemoteResult{}, err
 	}
-	return RemoteResult{Text: strings.TrimSpace(lastText)}, nil
+	return result, nil
 }
 
 // ContextAvailable 校验 host 侧 remote event；Redis 可用时继续核对 buildsvc 的 context session。
@@ -227,7 +229,13 @@ func (g *ADKAgentGateway) ContextAvailable(ctx context.Context, userID, sessionI
 }
 
 func collectAgentText(seq func(func(*session.Event, error) bool), author string) (string, error) {
+	result, err := collectRemoteResult(seq, author)
+	return result.Text, err
+}
+
+func collectRemoteResult(seq func(func(*session.Event, error) bool), author string) (RemoteResult, error) {
 	last := ""
+	var decision *buildharness.Decision
 	var runErr error
 	seq(func(ev *session.Event, err error) bool {
 		if err != nil {
@@ -246,6 +254,9 @@ func collectAgentText(seq func(func(*session.Event, error) bool), author string)
 		}
 		var b strings.Builder
 		for _, part := range ev.Content.Parts {
+			if parsed := pipeline.ReadBuildDecisionPart(part); parsed != nil {
+				decision = parsed
+			}
 			if part != nil && !part.Thought && part.Text != "" {
 				b.WriteString(part.Text)
 			}
@@ -256,10 +267,10 @@ func collectAgentText(seq func(func(*session.Event, error) bool), author string)
 		return true
 	})
 	if runErr != nil {
-		return "", runErr
+		return RemoteResult{}, runErr
 	}
-	if last == "" {
-		return "", fmt.Errorf("agent 未返回面向用户的文本")
+	if last == "" && decision == nil {
+		return RemoteResult{}, fmt.Errorf("agent 未返回面向用户的文本")
 	}
-	return last, nil
+	return RemoteResult{Text: last, Decision: decision}, nil
 }

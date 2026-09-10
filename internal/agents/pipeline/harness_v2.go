@@ -142,6 +142,14 @@ func newHarnessV2Agent(harness buildharness.Harness, saver BuildSaver) (agent.Ag
 					Actions: session.EventActions{StateDelta: delta},
 				}
 				event.Content = genai.NewContentFromText(message, genai.RoleModel)
+				if !result.Succeeded && result.Decision != nil {
+					part, err := BuildDecisionPart(result.Decision)
+					if err != nil {
+						yield(nil, err)
+						return
+					}
+					event.Content.Parts = append(event.Content.Parts, part)
+				}
 				yield(event, nil)
 			}
 		},

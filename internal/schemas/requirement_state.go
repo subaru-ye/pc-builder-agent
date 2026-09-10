@@ -28,6 +28,8 @@ type RequirementSource struct {
 type RequirementField struct {
 	Value    json.RawMessage    `json:"value,omitempty"`
 	Status   string             `json:"status"`
+	Kind     string             `json:"kind,omitempty"`
+	Evidence string             `json:"evidence,omitempty"`
 	Strength string             `json:"strength,omitempty"`
 	Scope    string             `json:"scope,omitempty"`
 	Source   *RequirementSource `json:"source,omitempty"`
@@ -40,6 +42,23 @@ type RequirementAlternative struct {
 	Strength string            `json:"strength"`
 	Scope    string            `json:"scope"`
 	Source   RequirementSource `json:"source"`
+	Kind     string            `json:"kind,omitempty"`
+}
+
+// 未能可靠归入字段的信息保留原文与来源。Resolved 只由 reducer 随后续字段更新设置。
+type RequirementObservation struct {
+	Field    string            `json:"field,omitempty"`
+	Text     string            `json:"text"`
+	Reason   string            `json:"reason"`
+	Source   RequirementSource `json:"source"`
+	Resolved bool              `json:"resolved,omitempty"`
+}
+
+// 模型不能指定消息 ID 或来源类型；Quote 必须出自本轮用户消息。
+type RequirementObservationInput struct {
+	Field  string `json:"field,omitempty"`
+	Quote  string `json:"quote"`
+	Reason string `json:"reason"`
 }
 
 type RequirementChange struct {
@@ -58,6 +77,7 @@ type RequirementState struct {
 	Alternatives  []RequirementAlternative    `json:"alternatives"`
 	Changes       []RequirementChange         `json:"changes"`
 	History       []RequirementChange         `json:"history"`
+	Observations  []RequirementObservation    `json:"observations,omitempty"`
 }
 
 // RequirementOperation 的证据只允许来自本轮用户原文；消息 ID 不由模型提供。
@@ -68,10 +88,13 @@ type RequirementOperation struct {
 	Strength string          `json:"strength,omitempty"`
 	Scope    string          `json:"scope,omitempty"`
 	Quote    string          `json:"quote,omitempty"`
+	Kind     string          `json:"kind,omitempty"`
+	Evidence string          `json:"evidence,omitempty"`
 }
 
 type RequirementUpdate struct {
-	Operations []RequirementOperation `json:"operations"`
+	Operations   []RequirementOperation        `json:"operations"`
+	Observations []RequirementObservationInput `json:"observations,omitempty"`
 }
 
 func NewRequirementState() RequirementState {
@@ -89,7 +112,7 @@ func DecodeRequirementUpdate(raw []byte) (RequirementUpdate, error) {
 	if err := decodeStrict(raw, &update); err != nil {
 		return update, fmt.Errorf("requirement update: %w", err)
 	}
-	if update.Operations == nil || len(update.Operations) > 32 {
+	if update.Operations == nil || len(update.Operations) > 32 || len(update.Observations) > 32 {
 		return update, fmt.Errorf("requirement update: operations 必须为数组且最多 32 项")
 	}
 	return update, nil
@@ -137,6 +160,21 @@ func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, so
 		if !ok || !knownRequirementField(op.Field) {
 			return state, fmt.Errorf("requirement update: 未知字段 %q", op.Field)
 		}
+		if op.Evidence != "" && op.Evidence != "stated" && op.Evidence != "uncertain" && op.Evidence != "inferred" {
+			return state, fmt.Errorf("requirement update: 非法 evidence")
+		}
+		if op.Evidence == "inferred" || (op.Evidence == "uncertain" && op.Op != "conflict") {
+			return state, fmt.Errorf("requirement update: 推断或不确定信息不能作为已表达要求")
+		}
+		kind := op.Kind
+		// 强度编辑沿用同一值的语义；换成新文本却缺少分类时不得把旧 fact/context
+		// 偷带到可能的新硬条件上。旧协议的未分类状态由下游明确处理。
+		if kind == "" && (op.Op != "set" || bytes.Equal(bytes.TrimSpace(before.Value), bytes.TrimSpace(op.Value))) {
+			kind = before.Kind
+		}
+		if kind != "" && !ValidRequirementKind(kind) {
+			return state, fmt.Errorf("requirement update: kind 仅允许 fact、context 或 constraint")
+		}
 		evidence := source
 		if source.Kind == "chat" {
 			if strings.TrimSpace(op.Quote) == "" || !strings.Contains(source.Quote, op.Quote) {
@@ -166,12 +204,12 @@ func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, so
 		if scope != "session" && scope != "temporary" {
 			return state, fmt.Errorf("requirement update: scope 仅允许 session 或 temporary")
 		}
-		if op.Op == "set" || op.Op == "alternative" || op.Op == "conflict" {
+		if op.Op == "set" || op.Op == "alternative" || (op.Op == "conflict" && len(op.Value) > 0) {
 			if err := validateRequirementValue(op.Field, op.Value); err != nil {
 				return state, err
 			}
 		}
-		after := RequirementField{Value: append(json.RawMessage(nil), op.Value...), Status: "active", Strength: strength, Scope: scope, Source: &evidence}
+		after := RequirementField{Value: append(json.RawMessage(nil), op.Value...), Status: "active", Strength: strength, Scope: scope, Source: &evidence, Kind: kind, Evidence: op.Evidence}
 		switch op.Op {
 		case "set":
 			if scope == "temporary" {
@@ -190,7 +228,7 @@ func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, so
 			after = *before.Previous
 			after.Source = &evidence
 		case "alternative":
-			next.Alternatives = append(next.Alternatives, RequirementAlternative{Field: op.Field, Value: after.Value, Strength: strength, Scope: scope, Source: evidence})
+			next.Alternatives = append(next.Alternatives, RequirementAlternative{Field: op.Field, Value: after.Value, Strength: strength, Scope: scope, Source: evidence, Kind: kind})
 			after = before // 备选不参与当前字段投影。
 		case "conflict":
 			after.Status = "conflict"
@@ -199,20 +237,64 @@ func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, so
 			return state, fmt.Errorf("requirement update: 未知操作 %q", op.Op)
 		}
 		next.Fields[op.Field] = after
+		if op.Op != "alternative" && op.Op != "conflict" {
+			for i := range next.Observations {
+				if next.Observations[i].Field == op.Field {
+					next.Observations[i].Resolved = true
+				}
+			}
+		}
 		change := RequirementChange{Revision: next.Revision, Op: op.Op, Field: op.Field, Before: &before, After: &after, Source: evidence}
 		next.Changes = append(next.Changes, change)
 		next.History = append(next.History, change)
 		// 撤销整个已有件事实时，型号也不再有效；仅撤回型号时仍保留已知品类。
-		if op.Op == "remove" && op.Field == "existing_parts" && next.Fields["owned_parts"].Status == "active" {
+		if op.Op == "remove" && op.Field == "existing_parts" {
 			ownedBefore := next.Fields["owned_parts"]
 			ownedAfter := RequirementField{Status: "removed", Source: &evidence}
 			next.Fields["owned_parts"] = ownedAfter
+			for i := range next.Observations {
+				if next.Observations[i].Field == "owned_parts" {
+					next.Observations[i].Resolved = true
+				}
+			}
 			ownedChange := RequirementChange{Revision: next.Revision, Op: "remove", Field: "owned_parts", Before: &ownedBefore, After: &ownedAfter, Source: evidence}
 			next.Changes = append(next.Changes, ownedChange)
 			next.History = append(next.History, ownedChange)
 		}
 	}
+	if len(update.Observations) > 32 {
+		return state, fmt.Errorf("requirement update: observations 最多 32 项")
+	}
+	for _, observation := range update.Observations {
+		if observation.Field == "" {
+			observation.Field = "notes"
+		}
+		if strings.TrimSpace(observation.Quote) == "" || !strings.Contains(source.Quote, observation.Quote) || len([]rune(observation.Quote)) > 4000 {
+			return state, fmt.Errorf("requirement update: observation 缺少本轮原文证据")
+		}
+		if observation.Field != "" && !knownRequirementField(observation.Field) {
+			return state, fmt.Errorf("requirement update: observation 未知字段")
+		}
+		if len([]rune(observation.Reason)) > 500 {
+			return state, fmt.Errorf("requirement update: observation 原因过长")
+		}
+		evidence := source
+		evidence.Quote = observation.Quote
+		removedThisTurn := false
+		if next.Fields[observation.Field].Status == "removed" {
+			for _, change := range next.Changes {
+				if change.Field == observation.Field && change.Op == "remove" {
+					removedThisTurn = true
+				}
+			}
+		}
+		next.Observations = append(next.Observations, RequirementObservation{Field: observation.Field, Text: observation.Quote, Reason: observation.Reason, Source: evidence, Resolved: removedThisTurn})
+	}
 	return next, nil
+}
+
+func ValidRequirementKind(kind string) bool {
+	return kind == "fact" || kind == "context" || kind == "constraint"
 }
 
 func knownRequirementField(key string) bool {
@@ -308,12 +390,15 @@ func validateRequirementValue(key string, raw json.RawMessage) error {
 func RequirementStateSpec(state RequirementState) (json.RawMessage, []string, error) {
 	values := map[string]any{"schema_version": RequirementSpecSchemaVersion}
 	strengths := map[string]string{}
+	semantics := map[string]string{}
 	details := map[string]json.RawMessage{}
 	var missing []string
 	for _, key := range RequirementFieldKeys {
 		field := state.Fields[key]
 		if field.Status == "conflict" {
-			missing = append(missing, key)
+			if requirementConflictNeedsConfirmation(state, key, field) {
+				missing = append(missing, key)
+			}
 			continue
 		}
 		if field.Status != "active" {
@@ -323,6 +408,9 @@ func RequirementStateSpec(state RequirementState) (json.RawMessage, []string, er
 			return nil, nil, err
 		}
 		strengths[key] = field.Strength
+		if field.Kind != "" {
+			semantics[key] = field.Kind
+		}
 		if key == "appearance" || key == "recipient" {
 			details[key] = field.Value
 			continue
@@ -368,21 +456,36 @@ func RequirementStateSpec(state RequirementState) (json.RawMessage, []string, er
 		return nil, missing, nil
 	}
 	values["constraint_strengths"] = strengths
+	if len(semantics) > 0 {
+		values["requirement_semantics"] = semantics
+	}
+	var observations []RequirementObservation
+	for _, observation := range state.Observations {
+		if !observation.Resolved {
+			observations = append(observations, observation)
+		}
+	}
+	// 可选软字段的歧义保留给后续理解，不把旧值继续作为 active，也不阻塞
+	// 已充分的预算/用途；真实硬条件与生成依赖字段仍需确认后才能投影。
+	for _, key := range RequirementFieldKeys {
+		field := state.Fields[key]
+		if field.Status == "conflict" && !requirementConflictNeedsConfirmation(state, key, field) && field.Source != nil && field.Source.Quote != "" {
+			alreadyRecorded := false
+			for _, observation := range observations {
+				if observation.Field == key && observation.Text == field.Source.Quote && observation.Source.MessageID == field.Source.MessageID {
+					alreadyRecorded = true
+				}
+			}
+			if !alreadyRecorded {
+				observations = append(observations, RequirementObservation{Field: key, Text: field.Source.Quote, Reason: "可选信息尚未明确，未作为当前偏好采用", Source: *field.Source})
+			}
+		}
+	}
+	if len(observations) > 0 {
+		values["requirement_observations"] = observations
+	}
 	if len(details) > 0 {
 		values["requirement_details"] = details
-	}
-	// 额外外观诉求进入已有语义检索入口，明确强度，不把备选/撤销重新带入。
-	if appearance := state.Fields["appearance"]; appearance.Status == "active" {
-		var text, notes string
-		_ = json.Unmarshal(appearance.Value, &text)
-		if field := state.Fields["notes"]; field.Status == "active" {
-			_ = json.Unmarshal(field.Value, &notes)
-		}
-		label := "尽量满足"
-		if appearance.Strength == "must" {
-			label = "必须满足"
-		}
-		values["notes"] = strings.TrimSpace(notes + "\n外观（" + label + "）：" + text)
 	}
 	raw, err := json.Marshal(values)
 	if err != nil {
@@ -394,6 +497,22 @@ func RequirementStateSpec(state RequirementState) (json.RawMessage, []string, er
 	}
 	raw, err = EncodeRequirementSpec(spec)
 	return raw, nil, err
+}
+
+func requirementConflictNeedsConfirmation(state RequirementState, key string, field RequirementField) bool {
+	switch key {
+	case "budget_cny", "budget_flex", "budget_basis", "use_case.type", "existing_parts", "owned_parts":
+		return true
+	case "use_case.resolution":
+		if string(state.Fields["use_case.type"].Value) == `"gaming"` {
+			return true
+		}
+	case "notes":
+		if field.Kind == "fact" || field.Kind == "context" {
+			return false
+		}
+	}
+	return field.Strength == "must"
 }
 
 func containsString(items []string, value string) bool {
@@ -451,8 +570,18 @@ func RequirementStatePromptView(state RequirementState) json.RawMessage {
 	fields := map[string]any{}
 	for _, key := range keys {
 		field := state.Fields[key]
-		fields[key] = map[string]any{"status": field.Status, "value": field.Value, "strength": field.Strength, "scope": field.Scope, "previous": field.Previous}
+		var previous any
+		if field.Previous != nil {
+			previous = map[string]any{"status": field.Previous.Status, "value": field.Previous.Value, "strength": field.Previous.Strength, "scope": field.Previous.Scope, "kind": field.Previous.Kind}
+		}
+		fields[key] = map[string]any{"status": field.Status, "value": field.Value, "strength": field.Strength, "scope": field.Scope, "kind": field.Kind, "evidence": field.Evidence, "previous": previous}
 	}
-	raw, _ := json.Marshal(map[string]any{"revision": state.Revision, "fields": fields, "alternatives": state.Alternatives})
+	var observations []map[string]string
+	for _, observation := range state.Observations {
+		if !observation.Resolved {
+			observations = append(observations, map[string]string{"field": observation.Field, "text": observation.Text, "reason": observation.Reason})
+		}
+	}
+	raw, _ := json.Marshal(map[string]any{"revision": state.Revision, "fields": fields, "alternatives": state.Alternatives, "observations": observations})
 	return raw
 }

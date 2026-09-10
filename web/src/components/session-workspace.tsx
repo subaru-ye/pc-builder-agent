@@ -172,8 +172,10 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
   if (session.isError || !session.data) return shell(<div className="flex flex-1 items-center justify-center p-6 text-center"><div><AlertTriangle className="mx-auto status-fail" /><h1 className="mt-4 text-lg font-semibold">无法打开会话</h1><p className="mt-2 text-[var(--ink-muted)]">{userMessage(session.error)}</p><Button className="mt-5" onClick={() => void session.refetch()}><RefreshCw size={15} />重试</Button></div></div>);
 
   const data = session.data;
+  const lastMessage = data.messages.at(-1);
+  const errorExplainedInChat = !!data.last_error?.detail && lastMessage?.role === "assistant" && !!lastMessage.display_content?.includes(data.last_error.detail);
   const busy = data.phase === "building" || data.phase === "changing" || !!currentRun;
-  const canSend = data.phase === "collecting" || data.phase === "ready" || data.phase === "requirement_ready" || (data.phase === "error" && data.recovery_phase !== "requirement_ready");
+  const canSend = data.phase === "collecting" || data.phase === "ready" || data.phase === "requirement_ready" || data.phase === "error";
   const inspector = <BuildInspector sessionID={sessionID} builds={builds.data ?? []} build={build.data} latestVersion={latestVersion} canChange={data.phase === "ready"} onReplace={replace} />;
   const requirements = data.requirement_state
     ? <div className="h-full overflow-y-auto"><RequirementStatus session={data} busy={busy || confirm.isPending || send.isPending} onUpdate={updateRequirement} onSource={showSource} onConfirm={() => data.pending_requirement ? confirm.mutateAsync({ value: data.pending_requirement, dirty: false }).then(() => undefined) : Promise.resolve()} /></div>
@@ -198,7 +200,7 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
           <div className="space-y-5">{data.messages.map((message) => <ChatMessage key={message.id} message={message} activeRunID={currentRun?.id} />)}</div>
           {busy && <RunProgress stage={stage} connection={connection} />}
           {data.phase === "requirement_ready" && <div className="mt-6 rounded-md border border-[var(--primary)]/45 bg-[var(--primary)]/5 p-4 text-sm"><p className="font-medium">需求已经整理好</p><p className="mt-1 text-[var(--ink-muted)]">请核对当前需求并确认，确认前不会生成配置。</p><Button variant="outline" className="mt-3" onClick={() => openDetails("requirement")}>核对当前需求</Button></div>}
-          {data.phase === "error" && <div role="alert" className="mt-6 border-l-2 border-l-[var(--error)] bg-[var(--surface-1)] p-4"><p className="font-medium status-fail">{data.last_error?.title ?? "本次运行失败"}</p><p className="mt-1 text-sm text-[var(--ink-muted)]">{data.last_error ? userMessage(new ApiError(data.last_error)) : "已保存此前数据，你可以显式重试。"}</p><Button variant="outline" className="mt-3" disabled={send.isPending || confirm.isPending} onClick={retry}><RefreshCw size={15} />重试上一步</Button></div>}
+          {data.phase === "error" && <div role="alert" className="mt-6 border-l-2 border-l-[var(--error)] bg-[var(--surface-1)] p-4"><p className="font-medium status-fail">{data.last_error?.title ?? "本次运行失败"}</p>{!errorExplainedInChat && <p className="mt-1 text-sm text-[var(--ink-muted)]">{data.last_error ? userMessage(new ApiError(data.last_error)) : "已保存此前数据，你可以显式重试。"}</p>}<div className="mt-3 flex flex-wrap gap-2">{data.requirement_state && <Button variant="outline" disabled={busy} onClick={() => openDetails("requirement")}>查看或补充需求</Button>}<Button variant="outline" disabled={send.isPending || confirm.isPending} onClick={retry}><RefreshCw size={15} />重试上一步</Button></div></div>}
           {(send.isError || confirm.isError) && <p role="alert" className="mt-4 status-fail">{userMessage(send.error ?? confirm.error)}</p>}
           </div>
         </div>

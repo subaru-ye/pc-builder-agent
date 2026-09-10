@@ -169,18 +169,24 @@ func (h *runner) Run(ctx context.Context, input BuildInput) (out BuildResult, ru
 			continue
 		}
 		if constraintErr := validateChangeConstraints(input, draft.Selection); constraintErr != nil {
+			var decision *Decision
+			errors.As(constraintErr, &decision)
 			if attempt == h.attemptLimit {
 				h.finish(input, started, attempt, false)
-				return BuildResult{Attempts: attempt, Draft: draft, Message: constraintErr.Error()}, nil
+				return BuildResult{Attempts: attempt, Draft: draft, Decision: decision, Message: constraintErr.Error()}, nil
 			}
 			mutable := unlockedCategories(input.Locked)
-			if input.Change != nil && input.Change.Intent == schemas.IntentAdjustBudget {
+			reason := "change_constraints"
+			if decision != nil && decision.Reason == "mandatory_selection_missing" {
+				mutable = withoutLocked([]schemas.Category{schemas.CategoryGPU}, input.Locked)
+				reason = decision.Reason
+			} else if input.Change != nil && input.Change.Intent == schemas.IntentAdjustBudget {
 				mutable = changedCategories(input.BaseSelection, draft.Selection)
 				if len(mutable) > 2 {
 					mutable = mutable[:2]
 				}
 			}
-			plan = &RepairPlan{Mutable: mutable, Reason: "change_constraints"}
+			plan = &RepairPlan{Mutable: mutable, Reason: reason}
 			previous, lastSelection = &draft, selectionKey
 			h.recordRepair(input, attempt, *plan)
 			continue
@@ -299,9 +305,13 @@ func enrichCandidateRationale(draft *schemas.BuildDraft, bundle CandidateBundle,
 	}
 	// 系列检索文本不能覆盖所选 SKU 的明确颜色；未核验的外观、噪声不写成已满足。
 	notes := strings.ToLower(requirement.Notes)
-	wantsWhite := strings.Contains(notes, "白色") || strings.Contains(notes, "white")
+	style := strings.ToLower(appearanceRequirementText(requirement))
+	if style == "" {
+		style = notes // 旧版本仍从 notes 读取外观说明。
+	}
+	wantsWhite := strings.Contains(style, "白色") || strings.Contains(style, "white")
 	for _, negative := range []string{"不要白色", "不需要白色", "不想要白色", "不要求白色", "不强求白色", "not white", "no white", "non-white"} {
-		if strings.Contains(notes, negative) {
+		if strings.Contains(style, negative) {
 			wantsWhite = false
 		}
 	}
@@ -331,7 +341,7 @@ func enrichCandidateRationale(draft *schemas.BuildDraft, bundle CandidateBundle,
 			}
 			draft.Rationale[string(schemas.CategoryCase)] = warning
 		}
-	} else if draft.Rationale[string(schemas.CategoryCase)] == "" && strings.Contains(notes, "海景房") {
+	} else if draft.Rationale[string(schemas.CategoryCase)] == "" && strings.Contains(style, "海景房") {
 		draft.Rationale[string(schemas.CategoryCase)] = "候选缺少可核验的外观款式字段，海景房风格需购买前核对。"
 	}
 	if draft.Rationale[string(schemas.CategoryGPU)] == "" &&
@@ -550,6 +560,10 @@ func validateMembershipCategories(bundle CandidateBundle, selection schemas.Buil
 }
 
 func validateChangeConstraints(input BuildInput, current schemas.BuildSelection) error {
+	if mandatoryGPU(input.Requirement) && current.GPU == nil {
+		return &Decision{Kind: "invalid_output", Reason: "mandatory_selection_missing", Fields: []string{"brand_pref.gpu"}, Scope: "current_run",
+			Message: "本轮选配遗漏了必须满足显卡品牌条件的独显，不能通过不装显卡绕过该要求，本轮未保存配置。该条件已保留，可重新生成。"}
+	}
 	if input.BaseSelection == nil {
 		return nil
 	}

@@ -75,7 +75,7 @@ func (h *runner) budgetRepair(ctx context.Context, input BuildInput, current sch
 				choices = append(choices, option{group.Category, candidate.SKU, quantity, price * int64(quantity)})
 			}
 		}
-		if group.Category == schemas.CategoryGPU && input.Requirement.UseCase.Type != schemas.UseCaseGaming && current.GPU != nil {
+		if group.Category == schemas.CategoryGPU && input.Requirement.UseCase.Type != schemas.UseCaseGaming && !mandatoryGPU(input.Requirement) && current.GPU != nil {
 			choices = append(choices, option{category: group.Category})
 		}
 		if len(choices) > 0 {

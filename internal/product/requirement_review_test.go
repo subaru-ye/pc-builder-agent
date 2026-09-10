@@ -79,6 +79,15 @@ func TestRequirementEditSourceDoesNotCallInheritedMustAPreference(t *testing.T) 
 	}
 }
 
+func TestRequirementEditSourceDistinguishesFactsFromConditions(t *testing.T) {
+	for _, kind := range []string{"fact", "context", "constraint"} {
+		text := requirementEditText([]schemas.RequirementOperation{{Op: "set", Field: "notes", Value: json.RawMessage(`"旅行素材"`), Kind: kind, Strength: "must"}})
+		if strings.Contains(text, "必须满足") != (kind == "constraint") {
+			t.Fatalf("source misrepresents information kind %s: %s", kind, text)
+		}
+	}
+}
+
 func TestRequirementEditIdempotencyDistinguishesAlternativeFromAdoption(t *testing.T) {
 	svc, _, state := newRequirementReviewService(t)
 	edit := RequirementEdit{ExpectedRevision: state.Revision, Operations: []schemas.RequirementOperation{{Op: "alternative", Field: "brand_pref.gpu", Value: json.RawMessage(`"amd"`), Strength: "prefer"}}}

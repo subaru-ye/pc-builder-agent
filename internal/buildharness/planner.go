@@ -84,6 +84,10 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 		if input.BaseSelection == nil {
 			return CandidateBundle{}, fmt.Errorf("buildharness: 品类 %s 已锁定但缺少基版本 selection", category)
 		}
+		if category == schemas.CategoryGPU && input.BaseSelection.GPU == nil && mandatoryGPU(input.Requirement) {
+			return CandidateBundle{}, &Decision{Kind: "clarify", Reason: "mandatory_locked_conflict", Fields: []string{"brand_pref.gpu"}, Scope: "requirement",
+				Message: "必须满足的显卡品牌条件与已锁定的不装独显方案冲突。请确认显卡要求或锁定范围；本轮不会擅自撤销条件或新增独显。"}
+		}
 		for _, sku := range selectionSKUs(*input.BaseSelection, category) {
 			candidate, ok := bySKU[sku]
 			if !ok || candidate.Category != category {
@@ -121,7 +125,7 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 	}
 	retainBase(schemas.CategoryCPU)
 	if len(selected[schemas.CategoryCPU]) == 0 {
-		return CandidateBundle{}, fmt.Errorf("buildharness: CPU 硬约束下没有候选")
+		return CandidateBundle{}, requiredCandidatesMissing(input.Requirement, schemas.CategoryCPU)
 	}
 
 	if !locked[schemas.CategoryGPU] {
@@ -137,8 +141,8 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 		selected[schemas.CategoryGPU] = selectByLane(gpus, gpuFamily, 3)
 	}
 	retainBase(schemas.CategoryGPU)
-	if input.Requirement.UseCase.Type == schemas.UseCaseGaming && len(selected[schemas.CategoryGPU]) == 0 {
-		return CandidateBundle{}, fmt.Errorf("buildharness: 游戏需求的 GPU 硬约束下没有候选")
+	if (input.Requirement.UseCase.Type == schemas.UseCaseGaming || mandatoryGPU(input.Requirement)) && len(selected[schemas.CategoryGPU]) == 0 {
+		return CandidateBundle{}, requiredCandidatesMissing(input.Requirement, schemas.CategoryGPU)
 	}
 
 	if !locked[schemas.CategoryMotherboard] {
@@ -148,7 +152,7 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 	}
 	retainBase(schemas.CategoryMotherboard)
 	if len(selected[schemas.CategoryMotherboard]) == 0 {
-		return CandidateBundle{}, fmt.Errorf("buildharness: 主板平台约束下没有候选")
+		return CandidateBundle{}, requiredCandidatesMissing(input.Requirement, schemas.CategoryMotherboard)
 	}
 
 	if !locked[schemas.CategoryMemory] {
@@ -194,7 +198,7 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 			continue
 		}
 		if len(selected[category]) == 0 {
-			return CandidateBundle{}, fmt.Errorf("buildharness: 品类 %s 没有可用候选", category)
+			return CandidateBundle{}, requiredCandidatesMissing(input.Requirement, category)
 		}
 	}
 
@@ -680,9 +684,14 @@ func stringSlice(value any) []string {
 }
 
 func softPreferenceQuery(spec schemas.RequirementSpec) string {
-	parts := make([]string, 0, 2)
+	parts := make([]string, 0, 3)
 	if spec.NoisePref == schemas.NoisePrefSilent {
 		parts = append(parts, "安静 低噪")
+	}
+	// 外观已经由 Screening 分类，直接使用其原文，不要求再命中风格词表。
+	// 与噪声及旧 notes 合并为同一次检索，不把外观拼入用途事实。
+	if appearance := appearanceRequirementText(spec); appearance != "" && spec.ConstraintStrengths["appearance"] != "must" {
+		parts = append(parts, appearance)
 	}
 	notes := strings.TrimSpace(spec.Notes)
 	upper := strings.ToUpper(notes)
@@ -693,6 +702,14 @@ func softPreferenceQuery(spec schemas.RequirementSpec) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+func appearanceRequirementText(spec schemas.RequirementSpec) string {
+	var text string
+	if json.Unmarshal(spec.RequirementDetails["appearance"], &text) != nil {
+		return ""
+	}
+	return strings.TrimSpace(text)
 }
 
 func parsePriceFen(value *string) (int64, bool) {

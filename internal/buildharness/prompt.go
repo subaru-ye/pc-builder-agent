@@ -12,7 +12,8 @@ import (
 const builderV2Instruction = `你是装机配置选择器。候选数据已经由程序准备完毕，你不得调用工具、不得编造 SKU，也不得输出解释文字。
 只输出一个符合既有 BuildDraft schema_version=1 的 JSON 对象。selection 的每个非 null SKU 必须来自 candidate_bundle；fixed_selection 中的品类必须原样照抄。
 整机总价必须进入 budget_window_cny 的闭区间并尽量避免 specs 缺失造成 unknown；修复轮次必须满足 validation.required_adjustment_cny。游戏需求必须选择独显；非游戏仅当所选 CPU 明确有核显时 GPU 才可为 null。
-requirement.constraint_strengths 明确标为 must 的字段必须满足；prefer 只用于可行配置间优先选择，不能因此拒绝其他品牌或尺寸的合格候选。候选组已将明确匹配软偏好的候选排在前面；若因预算、兼容性或锁定件无法采用，rationale 应说明取舍。requirement_details 是当前会话的补充需求，不代表长期个人偏好。
+requirement.requirement_semantics 区分 fact（用途事实）、context（补充说明）与 constraint（配置条件）。fact/context 即使标为 must，也应作为选型背景和理由，不是逐 SKU 的商品属性断言；完整使用 notes、用途和 requirement_details 中的有效信息，不忽略剪辑素材、软件场景等原文。requirement_observations 保留尚未确认或无法结构化的本轮原文，只作待确认背景，不得擅自填成精确参数或用户已采用的硬条件。只有配置条件明确标为 must 时才要求证据支持其满足，不凭语义命中或生成理由宣称核验通过；constraint_strengths 对 brand_pref.gpu 标为 must 且明确了品牌时必须选择对应独显，不可用 gpu=null 绕过。prefer 只用于可行配置间优先选择，不能因此拒绝其他品牌或尺寸的合格候选。候选组已将明确匹配软偏好的候选排在前面；若因预算、兼容性或锁定件无法采用，rationale 应说明取舍。requirement_details 是当前会话的补充需求，不代表长期个人偏好。
+budget_window_cny.flex_source=execution_default 表示生成程序采用的预算弹性，不代表用户明确同意加价；不得写成用户已授权或偏好。user_requirement 才表示当前状态有明确弹性要求，legacy_unspecified 表示旧记录未保存来源。预算为 prefer 时仍遵守本次程序预算窗口，不自行放宽执行边界。
 修复轮次只能修改 repair_plan.mutable 中的品类，其余品类必须照抄 previous_draft；若 repair_plan.preferred_selection 非空，必须逐项精确照抄；preferred_ssd_selection 非空时完整照抄其中的 SKU 和 quantity，drop_gpu=true 时 gpu 必须为 null。否则 mutable 当前 SKU 已从 candidate_bundle 移除，必须选择其中的替代 SKU。`
 
 type promptEnvelope struct {
@@ -39,9 +40,10 @@ type validationFeedback struct {
 }
 
 type budgetWindow struct {
-	TargetCNY string `json:"target"`
-	LowerCNY  string `json:"lower"`
-	UpperCNY  string `json:"upper"`
+	TargetCNY  string `json:"target"`
+	LowerCNY   string `json:"lower"`
+	UpperCNY   string `json:"upper"`
+	FlexSource string `json:"flex_source"`
 }
 
 type feedbackCheck struct {
@@ -207,10 +209,18 @@ func feedback(result validate.Result, requirement schemas.RequirementSpec) *vali
 func requirementBudgetWindow(spec schemas.RequirementSpec) budgetWindow {
 	target := int64(spec.BudgetCNY) * 100
 	flex := int64(math.Round(float64(target) * spec.BudgetFlex))
+	source := "legacy_unspecified"
+	if len(spec.ConstraintStrengths) > 0 || len(spec.RequirementSemantics) > 0 {
+		source = "execution_default"
+		if spec.ConstraintStrengths["budget_flex"] != "" {
+			source = "user_requirement"
+		}
+	}
 	return budgetWindow{
-		TargetCNY: formatPromptFen(target),
-		LowerCNY:  formatPromptFen(target - flex),
-		UpperCNY:  formatPromptFen(target + flex),
+		TargetCNY:  formatPromptFen(target),
+		LowerCNY:   formatPromptFen(target - flex),
+		UpperCNY:   formatPromptFen(target + flex),
+		FlexSource: source,
 	}
 }
 

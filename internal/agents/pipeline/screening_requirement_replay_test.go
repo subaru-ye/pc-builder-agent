@@ -61,15 +61,21 @@ func TestRequirementStateReplaysSavedDialogueInputs(t *testing.T) {
 				m := &stateProtocolModel{output: string(out)}
 				source := schemas.RequirementSource{Kind: "chat", MessageID: c.ID, Quote: turn.Input}
 				ctx := WithRequirementState(context.Background(), state, source)
-				for _, err := range (screeningGuard{LLM: m}).GenerateContent(ctx, &model.LLMRequest{}, false) {
+				var delivered string
+				for response, err := range (screeningGuard{LLM: m}).GenerateContent(ctx, &model.LLMRequest{}, false) {
 					if err != nil {
 						t.Fatalf("turn %d: %v", i+1, err)
 					}
+					delivered = screeningText(response.Content)
 				}
 				if m.calls != 1 {
 					t.Fatalf("turn %d: extra model invocation", i+1)
 				}
-				next, err := schemas.ApplyRequirementUpdate(state, turn.Update, source)
+				actualUpdate, err := schemas.DecodeRequirementUpdate([]byte(delivered))
+				if err != nil {
+					t.Fatal(err)
+				}
+				next, err := schemas.ApplyRequirementUpdate(state, actualUpdate, source)
 				if err != nil {
 					t.Fatal(err)
 				}

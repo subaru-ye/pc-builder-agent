@@ -928,6 +928,8 @@ components:
       properties:
         value: {}
         status: {type: string, enum: [unknown, active, removed, conflict]}
+        kind: {type: string, enum: [fact, context, constraint]}
+        evidence: {type: string, enum: [stated, uncertain]}
         strength: {type: string, enum: [must, prefer]}
         scope: {type: string, enum: [session, temporary]}
         source: {$ref: "#/components/schemas/RequirementSource"}
@@ -943,6 +945,8 @@ components:
         strength: {type: string, enum: [must, prefer]}
         scope: {type: string, enum: [session, temporary]}
         quote: {type: string}
+        kind: {type: string, enum: [fact, context, constraint]}
+        evidence: {type: string, enum: [stated, uncertain, inferred]}
     RequirementAlternative:
       type: object
       additionalProperties: false
@@ -953,6 +957,18 @@ components:
         strength: {type: string, enum: [must, prefer]}
         scope: {type: string, enum: [session, temporary]}
         source: {$ref: "#/components/schemas/RequirementSource"}
+        kind: {type: string, enum: [fact, context, constraint]}
+    RequirementObservation:
+      type: object
+      additionalProperties: false
+      required: [text, reason, source]
+      description: 未能可靠结构化的本轮原文；不代表用户明确约束，解决后不进入生成或下一轮理解。
+      properties:
+        field: {type: string}
+        text: {type: string, minLength: 1}
+        reason: {type: string}
+        source: {$ref: "#/components/schemas/RequirementSource"}
+        resolved: {type: boolean}
     RequirementChange:
       type: object
       additionalProperties: false
@@ -984,6 +1000,9 @@ components:
         history:
           type: array
           items: {$ref: "#/components/schemas/RequirementChange"}
+        observations:
+          type: array
+          items: {$ref: "#/components/schemas/RequirementObservation"}
     RequirementSpec:
       type: object
       additionalProperties: false
@@ -1046,6 +1065,14 @@ components:
           type: object
           additionalProperties: {type: string, enum: [must, prefer]}
           description: 当前有效字段的明确强度，键采用 brand_pref.cpu、size_pref 等需求字段路径；缺失时兼容旧需求语义，不据此认定为用户已表达。
+        requirement_semantics:
+          type: object
+          additionalProperties: {type: string, enum: [fact, context, constraint]}
+          description: 用途事实、补充说明或配置条件。must 强度不把事实和说明变成需要目录证明的商品硬条件；旧记录缺少分类时保持未知。
+        requirement_observations:
+          type: array
+          items: {$ref: "#/components/schemas/RequirementObservation"}
+          description: 尚未解决的原文及来源，用于理解用途和后续必要确认，不能冒充已核验硬条件。
         requirement_details:
           type: object
           additionalProperties: false

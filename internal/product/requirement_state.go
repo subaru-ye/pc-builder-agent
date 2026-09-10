@@ -101,10 +101,18 @@ func requirementEditText(operations []schemas.RequirementOperation) string {
 			lines = append(lines, "恢复"+label+"的原要求")
 		default:
 			var qualifiers []string
-			if op.Strength == "must" {
+			switch op.Kind {
+			case "fact":
+				qualifiers = append(qualifiers, "用途或已有事实")
+			case "context":
+				qualifiers = append(qualifiers, "补充说明")
+			case "constraint":
+				qualifiers = append(qualifiers, "配置条件")
+			}
+			if op.Strength == "must" && op.Kind != "fact" && op.Kind != "context" {
 				qualifiers = append(qualifiers, "必须满足")
 			}
-			if op.Strength == "prefer" {
+			if op.Strength == "prefer" && op.Kind != "fact" && op.Kind != "context" {
 				qualifiers = append(qualifiers, "尽量满足")
 			}
 			if op.Scope == "temporary" {
@@ -138,6 +146,9 @@ func (s *Service) completeRequirementState(ctx context.Context, ownerID string, 
 		phase = store.PhaseCollecting
 		pending = nil
 		assistant = schemas.RequirementStateQuestions(state)
+		if len(state.Changes) > 0 || len(state.Observations) > 0 {
+			assistant = "本轮可确认的信息和原文已保存。" + assistant
+		}
 	}
 	ws, err := s.store.WebSessionByOwner(ctx, ownerID, r.SessionID)
 	if err != nil {

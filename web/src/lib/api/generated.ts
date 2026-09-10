@@ -693,6 +693,10 @@ export interface components {
             /** @enum {string} */
             status: "unknown" | "active" | "removed" | "conflict";
             /** @enum {string} */
+            kind?: "fact" | "context" | "constraint";
+            /** @enum {string} */
+            evidence?: "stated" | "uncertain";
+            /** @enum {string} */
             strength?: "must" | "prefer";
             /** @enum {string} */
             scope?: "session" | "temporary";
@@ -709,6 +713,10 @@ export interface components {
             /** @enum {string} */
             scope?: "session" | "temporary";
             quote?: string;
+            /** @enum {string} */
+            kind?: "fact" | "context" | "constraint";
+            /** @enum {string} */
+            evidence?: "stated" | "uncertain" | "inferred";
         };
         RequirementAlternative: {
             field: string;
@@ -718,6 +726,16 @@ export interface components {
             /** @enum {string} */
             scope: "session" | "temporary";
             source: components["schemas"]["RequirementSource"];
+            /** @enum {string} */
+            kind?: "fact" | "context" | "constraint";
+        };
+        /** @description 未能可靠结构化的本轮原文；不代表用户明确约束，解决后不进入生成或下一轮理解。 */
+        RequirementObservation: {
+            field?: string;
+            text: string;
+            reason: string;
+            source: components["schemas"]["RequirementSource"];
+            resolved?: boolean;
         };
         RequirementChange: {
             revision: number;
@@ -739,6 +757,7 @@ export interface components {
             alternatives: components["schemas"]["RequirementAlternative"][];
             changes: components["schemas"]["RequirementChange"][];
             history: components["schemas"]["RequirementChange"][];
+            observations?: components["schemas"]["RequirementObservation"][];
         };
         RequirementSpec: {
             /** @constant */
@@ -799,6 +818,12 @@ export interface components {
             constraint_strengths?: {
                 [key: string]: "must" | "prefer";
             };
+            /** @description 用途事实、补充说明或配置条件。must 强度不把事实和说明变成需要目录证明的商品硬条件；旧记录缺少分类时保持未知。 */
+            requirement_semantics?: {
+                [key: string]: "fact" | "context" | "constraint";
+            };
+            /** @description 尚未解决的原文及来源，用于理解用途和后续必要确认，不能冒充已核验硬条件。 */
+            requirement_observations?: components["schemas"]["RequirementObservation"][];
             /** @description 当前会话的有效外观与装机对象说明；不含已撤销信息、备选方案或长期画像。 */
             requirement_details?: {
                 appearance?: string;

@@ -65,8 +65,9 @@ func softConstraintMatch(spec schemas.RequirementSpec, category schemas.Category
 	return false
 }
 
-// 当前目录没有统一噪声/外观证明契约。语义命中与型号文字不能证明
-// 必须条件已经满足，先返回明确的待核验结果，不耗费一次选配调用。
+// 事实与背景不是商品属性断言，强度 must 也不能把剪辑素材等说明变成
+// 目录证明义务。只有明确的配置条件才需核验；旧记录语义不明时单独确认。
+// 语义判断来自本轮 Screening 与服务端状态，不在这里重建自然语言词表。
 func unverifiedMandatoryRequirements(spec schemas.RequirementSpec) *Decision {
 	var fields, labels []string
 	if spec.ConstraintStrengths["noise_pref"] == "must" && spec.NoisePref != "" && spec.NoisePref != schemas.NoisePrefAny {
@@ -78,12 +79,65 @@ func unverifiedMandatoryRequirements(spec schemas.RequirementSpec) *Decision {
 		labels = append(labels, "外观")
 	}
 	if spec.ConstraintStrengths["notes"] == "must" && strings.TrimSpace(spec.Notes) != "" {
-		fields = append(fields, "notes")
-		labels = append(labels, "补充要求")
+		switch notesRequirementKind(spec) {
+		case "fact", "context":
+			// 用途事实与说明完整保留在 Builder 输入中。
+		case "constraint":
+			fields = append(fields, "notes")
+			labels = append(labels, "补充条件「"+trimRunes(strings.TrimSpace(spec.Notes), 240)+"」")
+		default:
+			return &Decision{Kind: "clarify", Reason: "requirement_semantics_missing", Fields: []string{"notes"}, Scope: "requirement",
+				Message: "已保留补充内容「" + trimRunes(strings.TrimSpace(spec.Notes), 240) + "」及必须满足标记，但旧记录尚未区分用途说明和配置条件。请确认它是用途或背景说明，还是必须满足的具体配置条件；其他已知需求保持不变。"}
+		}
 	}
 	if len(fields) == 0 {
 		return nil
 	}
 	return &Decision{Kind: "data_unavailable", Reason: "requirement_evidence_missing", Fields: fields, Scope: "current_catalog",
-		Message: "已保留必须满足的" + strings.Join(labels, "、") + "要求，但当前目录缺少统一可核验的证据，尚待核验，本轮未生成配置。可补充准确商品资料后继续；若允许取舍，可将对应要求改为尽量满足。"}
+		Message: "已保留必须满足的" + strings.Join(labels, "、") + "，但当前目录缺少对应的可核验规格，尚待核验，本轮未生成配置。请补充这些条件的准确商品规格或可核验资料后继续。"}
+}
+
+// 兼容旧记录时，只认可当前结构化用途中已存在的同一事实；不凭关键词
+// 猜测任意自由文本的含义，也不修改旧状态、强度或确认快照。
+func notesRequirementKind(spec schemas.RequirementSpec) string {
+	if kind := spec.RequirementSemantics["notes"]; kind != "" {
+		return kind
+	}
+	notes := strings.TrimSpace(spec.Notes)
+	for _, title := range spec.UseCase.Titles {
+		if notes != "" && notes == strings.TrimSpace(title) {
+			return "fact"
+		}
+	}
+	return ""
+}
+
+func mandatoryGPU(spec schemas.RequirementSpec) bool {
+	return spec.ConstraintStrengths["brand_pref.gpu"] == "must" && spec.BrandPref.GPU != "" && spec.BrandPref.GPU != schemas.GPUBrandAny
+}
+
+// 候选筛空也属于可解释的业务结果；未知规格不能被夸大为市场无解。
+func requiredCandidatesMissing(spec schemas.RequirementSpec, category schemas.Category) *Decision {
+	field := string(category)
+	labels := map[schemas.Category]string{
+		schemas.CategoryCPU: "CPU 品牌", schemas.CategoryGPU: "显卡品牌", schemas.CategoryMotherboard: "主板平台或尺寸",
+		schemas.CategoryMemory: "内存代际", schemas.CategorySSD: "SSD", schemas.CategoryPSU: "电源",
+		schemas.CategoryCase: "机箱尺寸", schemas.CategoryCooler: "散热器",
+	}
+	switch category {
+	case schemas.CategoryCPU:
+		if spec.ConstraintStrengths["brand_pref.cpu"] == "must" {
+			field = "brand_pref.cpu"
+		}
+	case schemas.CategoryGPU:
+		if mandatoryGPU(spec) {
+			field = "brand_pref.gpu"
+		}
+	case schemas.CategoryMotherboard, schemas.CategoryCase:
+		if spec.ConstraintStrengths["size_pref"] == "must" && sizeFormFactor(spec.SizePref) != "" {
+			field = "size_pref"
+		}
+	}
+	return &Decision{Kind: "data_unavailable", Reason: "required_candidates_missing", Fields: []string{field}, Scope: "current_catalog",
+		Message: "当前目录没有可核验且满足" + labels[category] + "条件的候选，本轮未生成配置。已保留当前要求，请补充准确规格或候选商品资料后继续；这不代表市场上没有可行方案。"}
 }

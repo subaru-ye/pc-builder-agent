@@ -86,6 +86,18 @@ const PartCategory = z.enum([
   "case",
   "cooler",
 ]);
+const RequirementSource = z.object({
+  kind: z.enum(["chat", "edit"]),
+  message_id: z.string(),
+  quote: z.string(),
+});
+const RequirementObservation = z.object({
+  field: z.string().optional(),
+  text: z.string().min(1),
+  reason: z.string(),
+  source: RequirementSource,
+  resolved: z.boolean().optional(),
+});
 const RequirementSpec = z.object({
   schema_version: z.number().int(),
   budget_cny: z.number().int().gte(1),
@@ -114,20 +126,21 @@ const RequirementSpec = z.object({
   priority: z.array(PartCategory).optional().default([]),
   notes: z.string().optional().default(""),
   constraint_strengths: z.record(z.string(), z.enum(["must", "prefer"])).optional(),
+  requirement_semantics: z
+    .record(z.string(), z.enum(["fact", "context", "constraint"]))
+    .optional(),
+  requirement_observations: z.array(RequirementObservation).optional(),
   requirement_details: z
     .object({ appearance: z.string(), recipient: z.string() })
     .partial()
     .optional(),
 });
-const RequirementSource = z.object({
-  kind: z.enum(["chat", "edit"]),
-  message_id: z.string(),
-  quote: z.string(),
-});
 const RequirementField: z.ZodType<components["schemas"]["RequirementField"]> = z.lazy(() =>
   z.object({
     value: z.unknown().optional(),
     status: z.enum(["unknown", "active", "removed", "conflict"]),
+    kind: z.enum(["fact", "context", "constraint"]).optional(),
+    evidence: z.enum(["stated", "uncertain"]).optional(),
     strength: z.enum(["must", "prefer"]).optional(),
     scope: z.enum(["session", "temporary"]).optional(),
     source: RequirementSource.optional(),
@@ -140,6 +153,7 @@ const RequirementAlternative = z.object({
   strength: z.enum(["must", "prefer"]),
   scope: z.enum(["session", "temporary"]),
   source: RequirementSource,
+  kind: z.enum(["fact", "context", "constraint"]).optional(),
 });
 const RequirementChange = z.object({
   revision: z.number().int().gte(1),
@@ -156,6 +170,7 @@ const RequirementState = z.object({
   alternatives: z.array(RequirementAlternative),
   changes: z.array(RequirementChange),
   history: z.array(RequirementChange),
+  observations: z.array(RequirementObservation).optional(),
 });
 const Problem = z
   .object({
@@ -238,6 +253,8 @@ const RequirementOperation = z.object({
   strength: z.enum(["must", "prefer"]).optional(),
   scope: z.enum(["session", "temporary"]).optional(),
   quote: z.string().optional(),
+  kind: z.enum(["fact", "context", "constraint"]).optional(),
+  evidence: z.enum(["stated", "uncertain", "inferred"]).optional(),
 });
 const updateRequirementState_Body = z.object({
   expected_revision: z.number().int().gte(0),
@@ -433,8 +450,9 @@ export const schemas = {
   SessionSummary,
   Message,
   PartCategory,
-  RequirementSpec,
   RequirementSource,
+  RequirementObservation,
+  RequirementSpec,
   RequirementField,
   RequirementAlternative,
   RequirementChange,

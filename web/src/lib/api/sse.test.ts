@@ -17,4 +17,9 @@ describe("SSEParser", () => {
     expect(decodeRunEvent({ event: "run.completed", data: "{}" })).toBeNull();
     expect(decodeRunEvent({ id: "2", event: "run.completed", data: "not-json" })).toBeNull();
   });
+
+  it("accepts the server requirement update event for session invalidation", () => {
+    const payload = { schema_version: 1, run_id: "run-2", timestamp: "2026-09-09T10:00:00Z", payload: { revision: 2 } };
+    expect(decodeRunEvent({ id: "3-0", event: "requirement.updated", data: JSON.stringify(payload) })).toMatchObject({ event: "requirement.updated", data: payload });
+  });
 });

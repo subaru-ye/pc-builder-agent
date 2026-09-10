@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, CircleHelp, GitCompareArrows, XCircle } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import type { ReactNode } from "react";
 import { api } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/query-keys";
 import type { BuildSummary, BuildView, PartCategory } from "@/lib/api/types";
@@ -13,16 +14,18 @@ import { freshnessLabel, PriceFreshnessNotice } from "./price-freshness";
 import { PriceAvailabilityNotice } from "./price-availability";
 
 const tabs = [
-  ["build", "配置"], ["validation", "校验"], ["versions", "版本"], ["requirement", "需求"],
+  ["requirement", "当前需求"], ["build", "配置"], ["validation", "校验"], ["versions", "版本"],
 ] as const;
 
-export function BuildInspector({ sessionID, builds, build, latestVersion, canChange, onReplace }: {
+export function BuildInspector({ sessionID, builds, build, latestVersion, canChange, onReplace, requirementPanel, requirementSummary }: {
   sessionID: string;
   builds: BuildSummary[];
   build?: BuildView;
   latestVersion: number | null;
   canChange: boolean;
   onReplace: (category: PartCategory) => void;
+  requirementPanel?: ReactNode;
+  requirementSummary?: ReactNode;
 }) {
   const router = useRouter();
   const search = useSearchParams();
@@ -44,25 +47,27 @@ export function BuildInspector({ sessionID, builds, build, latestVersion, canCha
     router.replace(`?${params.toString()}`, { scroll: false });
   };
 
-  if (!build) return <EmptyInspector />;
-  const historical = latestVersion !== null && build.summary.version !== latestVersion;
+  if (!build && !requirementPanel) return <EmptyInspector />;
+  const activeTab = !build ? "requirement" : tab;
+  const historical = build && latestVersion !== null && build.summary.version !== latestVersion;
   return <section className="flex h-full min-h-0 flex-col bg-[var(--surface-1)]" aria-label="配置检查器">
-    <div className="border-b px-4 py-4 sm:px-6">
+    {activeTab !== "requirement" && requirementSummary}
+    {build && activeTab !== "requirement" && <div className="border-b px-4 py-4 sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><div className="text-xs text-[var(--ink-subtle)]">当前查看</div><div className="mt-1 flex items-center gap-2"><span className="text-lg font-semibold">v{build.summary.version}</span>{historical && <span className="rounded border px-2 py-0.5 text-xs text-[var(--ink-muted)]">历史只读</span>}<StatusMark value={build.summary.overall_status} /></div></div>
         <div className="text-right"><div className="tabular text-xl font-semibold">¥{build.quote.budget_basis === "new_purchase" ? build.quote.purchase_total_cny ?? build.quote.total_cny : build.quote.total_cny}</div>{build.quote.purchase_total_cny != null && <div className="text-xs text-[var(--ink-muted)]">新增购买 ¥{build.quote.purchase_total_cny} · 整机参考 ¥{build.quote.total_cny}</div>}<div className="text-xs text-[var(--ink-muted)]">预算差 ¥{build.quote.budget_delta_cny}</div></div>
       </div>
       <dl className="mt-4 grid grid-cols-3 gap-3 text-xs"><Meta label="父版本" value={build.summary.parent_version ? `v${build.summary.parent_version}` : "—"} /><Meta label="价格快照" value={build.quote.snapshot_date} /><Meta label="缺价项" value={String(build.quote.missing_count)} /></dl>
       <div className="mt-4"><PriceFreshnessNotice value={build.quote.price_freshness} compact /></div>
-    </div>
+    </div>}
     <div className="flex min-h-11 overflow-x-auto border-b px-2" role="tablist" aria-label="检查器页面">
-      {tabs.map(([key, label]) => <button key={key} role="tab" aria-selected={tab === key} className={`min-h-11 border-b-2 px-4 text-sm ${tab === key ? "border-b-[var(--primary)] text-[var(--ink)]" : "border-b-transparent text-[var(--ink-muted)]"}`} onClick={() => setTab(key)}>{label}</button>)}
+      {tabs.map(([key, label]) => <button key={key} role="tab" aria-selected={activeTab === key} disabled={!build && key !== "requirement"} className={`min-h-11 shrink-0 border-b-2 px-4 text-sm disabled:opacity-40 ${activeTab === key ? "border-b-[var(--primary)] text-[var(--ink)]" : "border-b-transparent text-[var(--ink-muted)]"}`} onClick={() => setTab(key)}>{label}</button>)}
     </div>
     <div className="min-h-0 flex-1 overflow-y-auto" tabIndex={0} aria-label="检查器内容">
-      {tab === "build" && <Parts build={build} allowReplace={canChange && !historical} onReplace={onReplace} />}
-      {tab === "validation" && <Validation build={build} />}
-      {tab === "requirement" && <RequirementReadOnly build={build} />}
-      {tab === "versions" && <Versions builds={builds} selected={build.summary.version} onSelect={chooseVersion} from={from} to={to} onDiff={setDiff} diff={diff.data} disclaimers={build.disclaimers} />}
+      {activeTab === "build" && build && <Parts build={build} allowReplace={canChange && !historical} onReplace={onReplace} />}
+      {activeTab === "validation" && build && <Validation build={build} />}
+      {activeTab === "requirement" && (requirementPanel ?? (build && <RequirementReadOnly build={build} />))}
+      {activeTab === "versions" && build && <><Versions builds={builds} selected={build.summary.version} onSelect={chooseVersion} from={from} to={to} onDiff={setDiff} diff={diff.data} disclaimers={build.disclaimers} /><details className="border-t"><summary className="cursor-pointer px-4 py-4 text-sm sm:px-6">查看 v{build.summary.version} 的已确认需求（只读）</summary><RequirementReadOnly build={build} /></details></>}
     </div>
   </section>;
 }

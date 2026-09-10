@@ -66,6 +66,9 @@ func (h *runner) Run(ctx context.Context, input BuildInput) (out BuildResult, ru
 	if d := clarification(input.Requirement); d != nil {
 		return BuildResult{Decision: d, Message: d.Message}, nil
 	}
+	if d := unverifiedMandatoryRequirements(input.Requirement); d != nil {
+		return BuildResult{Decision: d, Message: d.Message}, nil
+	}
 
 	started := time.Now()
 	locked := make([]string, len(input.Locked))

@@ -8,6 +8,8 @@ export type Run = components["schemas"]["Run"];
 export type Feedback = components["schemas"]["Feedback"];
 export type FeedbackReason = components["schemas"]["FeedbackReason"];
 export type RequirementSpec = components["schemas"]["RequirementSpec"];
+export type RequirementState = components["schemas"]["RequirementState"];
+export type RequirementOperation = components["schemas"]["RequirementOperation"];
 export type BuildSummary = components["schemas"]["BuildSummary"];
 export type BuildView = components["schemas"]["BuildView"];
 export type BuildDiff = components["schemas"]["BuildDiff"];
@@ -50,6 +52,7 @@ export type RunEventName =
   | "run.started"
   | "run.progress"
   | "requirement.ready"
+  | "requirement.updated"
   | "assistant.delta"
   | "assistant.completed"
   | "build.saved"

@@ -60,6 +60,13 @@ type verdict struct {
 //   - review 中含可消除的 unknown 且尚有轮次 → 回馈缺失字段,要求定向换用数据完整候选;
 //   - 纯 warning review 或最后一轮 review → 如实交付并列出注意项。
 func decide(ctx context.Context, eval tools.BuildEvaluator, draftText, lastSelection string, round int, chg *changeCtx) verdict {
+	// legacy 的检索工具没有 must/prefer 合约，不能静默将当前会话硬条件软化。
+	// 在任何交付或规则核验之前明确停止，旧的无强度需求维持原行为。
+	if chg != nil && len(chg.ActiveSpec) > 0 {
+		if spec, err := schemas.DecodeRequirementSpec(chg.ActiveSpec); err == nil && len(spec.ConstraintStrengths) > 0 {
+			return verdict{message: "当前需求包含必须满足与尽量满足的约束，请使用默认 Harness v2 继续。legacy 尚不支持该约束合约，本轮不交付配置。", escalate: true}
+		}
+	}
 	finalRound := round >= maxLoopRounds
 
 	draft, err := extractBuildDraft(draftText)

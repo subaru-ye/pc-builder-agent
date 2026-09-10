@@ -1,0 +1,479 @@
+{
+  "source_archive": "artifacts/eval/20260909-134447-3770035618/cases.json",
+  "source_archive_sha256": "a33135d22a16c77a747e0d36e63cff49f7b228cccd9790d307dab7a738ded60b",
+  "evidence_kind": "保存的真实运行用户输入与期望；update 为人工审阅 oracle，非真实模型增量输出；离线重放新增调用量为 0。",
+  "cases": [
+    {
+      "id": "L5-301",
+      "title": "补分辨率前修改预算，以新金额为准",
+      "stage": "screening",
+      "turns": [
+        {
+          "input": "预算8000元的新主机，主要玩游戏。",
+          "expect": {
+            "kind": "clarify",
+            "clarify_fields": [
+              "resolution"
+            ],
+            "forbidden_clarify_fields": [
+              "budget_cny",
+              "use_case"
+            ]
+          },
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 8000,
+                "quote": "预算8000元的新主机，主要玩游戏。"
+              },
+              {
+                "op": "set",
+                "field": "use_case.type",
+                "value": "gaming",
+                "quote": "预算8000元的新主机，主要玩游戏。"
+              }
+            ]
+          }
+        },
+        {
+          "input": "预算改为6000元，分辨率等下补充。",
+          "expect": {
+            "kind": "clarify",
+            "clarify_fields": [
+              "resolution"
+            ],
+            "forbidden_clarify_fields": [
+              "budget_cny",
+              "use_case"
+            ]
+          },
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 6000,
+                "quote": "预算改为6000元，分辨率等下补充。"
+              }
+            ]
+          }
+        },
+        {
+          "input": "用2K分辨率。",
+          "expect": {
+            "kind": "spec",
+            "budget_cny": 6000,
+            "resolution": "2K",
+            "spec_fields": {
+              "use_case.type": "gaming"
+            }
+          },
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "use_case.resolution",
+                "value": "2K",
+                "quote": "用2K分辨率。"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "L5-302",
+      "title": "补充缺失字段后不再追问可选游戏名",
+      "stage": "screening",
+      "turns": [
+        {
+          "input": "想配一台安静的游戏主机，预算8000元。",
+          "expect": {
+            "kind": "clarify",
+            "clarify_fields": [
+              "resolution"
+            ],
+            "forbidden_clarify_fields": [
+              "budget_cny",
+              "use_case"
+            ]
+          },
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 8000,
+                "quote": "想配一台安静的游戏主机，预算8000元。"
+              },
+              {
+                "op": "set",
+                "field": "use_case.type",
+                "value": "gaming",
+                "quote": "想配一台安静的游戏主机，预算8000元。"
+              },
+              {
+                "op": "set",
+                "field": "noise_pref",
+                "value": "silent",
+                "quote": "想配一台安静的游戏主机，预算8000元。"
+              }
+            ]
+          }
+        },
+        {
+          "input": "显示器是2K，游戏名称暂时不确定。",
+          "expect": {
+            "kind": "spec",
+            "budget_cny": 8000,
+            "resolution": "2K",
+            "spec_fields": {
+              "noise_pref": "silent",
+              "use_case.type": "gaming"
+            }
+          },
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "use_case.resolution",
+                "value": "2K",
+                "quote": "显示器是2K，游戏名称暂时不确定。"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "L5-304",
+      "title": "已有件型号和采购口径分轮补充",
+      "stage": "screening",
+      "turns": [
+        {
+          "input": "办公电脑预算6000元，我已经有CPU，其他配件要新买。",
+          "expect": {
+            "kind": "clarify",
+            "clarify_fields": [
+              "owned_parts",
+              "budget_basis"
+            ],
+            "forbidden_clarify_fields": [
+              "budget_cny",
+              "use_case",
+              "resolution"
+            ]
+          },
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 6000,
+                "quote": "办公电脑预算6000元，我已经有CPU，其他配件要新买。"
+              },
+              {
+                "op": "set",
+                "field": "use_case.type",
+                "value": "general",
+                "quote": "办公电脑预算6000元，我已经有CPU，其他配件要新买。"
+              },
+              {
+                "op": "set",
+                "field": "existing_parts",
+                "value": [
+                  "cpu"
+                ],
+                "quote": "办公电脑预算6000元，我已经有CPU，其他配件要新买。"
+              }
+            ]
+          }
+        },
+        {
+          "input": "已有CPU是 AMD Ryzen 5 7600，一颗。",
+          "expect": {
+            "kind": "clarify",
+            "clarify_fields": [
+              "budget_basis"
+            ],
+            "forbidden_clarify_fields": [
+              "owned_parts",
+              "budget_cny",
+              "use_case",
+              "resolution"
+            ]
+          },
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "owned_parts",
+                "value": [
+                  {
+                    "category": "cpu",
+                    "model": "AMD Ryzen 5 7600",
+                    "quantity": 1
+                  }
+                ],
+                "quote": "已有CPU是 AMD Ryzen 5 7600，一颗。"
+              }
+            ]
+          }
+        },
+        {
+          "input": "这6000元只算新增购买费用。",
+          "expect": {
+            "kind": "spec",
+            "budget_cny": 6000,
+            "spec_fields": {
+              "owned_parts": [
+                {
+                  "category": "cpu",
+                  "model": "AMD Ryzen 5 7600",
+                  "quantity": 1
+                }
+              ],
+              "budget_basis": "new_purchase",
+              "use_case.type": "general"
+            }
+          },
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_basis",
+                "value": "new_purchase",
+                "quote": "这6000元只算新增购买费用。"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "L5-305",
+      "title": "明确更正采购预算口径",
+      "stage": "screening",
+      "turns": [
+        {
+          "input": "办公主机，已有一颗 AMD Ryzen 5 7600，新增购买预算6000元。",
+          "expect": {
+            "kind": "spec",
+            "budget_cny": 6000,
+            "spec_fields": {
+              "budget_basis": "new_purchase",
+              "owned_parts": [
+                {
+                  "category": "cpu",
+                  "model": "AMD Ryzen 5 7600",
+                  "quantity": 1
+                }
+              ]
+            }
+          },
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 6000,
+                "quote": "办公主机，已有一颗 AMD Ryzen 5 7600，新增购买预算6000元。"
+              },
+              {
+                "op": "set",
+                "field": "use_case.type",
+                "value": "general",
+                "quote": "办公主机，已有一颗 AMD Ryzen 5 7600，新增购买预算6000元。"
+              },
+              {
+                "op": "set",
+                "field": "existing_parts",
+                "value": [
+                  "cpu"
+                ],
+                "quote": "办公主机，已有一颗 AMD Ryzen 5 7600，新增购买预算6000元。"
+              },
+              {
+                "op": "set",
+                "field": "owned_parts",
+                "value": [
+                  {
+                    "category": "cpu",
+                    "model": "AMD Ryzen 5 7600",
+                    "quantity": 1
+                  }
+                ],
+                "quote": "办公主机，已有一颗 AMD Ryzen 5 7600，新增购买预算6000元。"
+              },
+              {
+                "op": "set",
+                "field": "budget_basis",
+                "value": "new_purchase",
+                "quote": "办公主机，已有一颗 AMD Ryzen 5 7600，新增购买预算6000元。"
+              }
+            ]
+          }
+        },
+        {
+          "input": "更正刚才的口径：6000元是包含已有CPU价值的整机参考总价。",
+          "expect": {
+            "kind": "spec",
+            "budget_cny": 6000,
+            "spec_fields": {
+              "budget_basis": "full_build",
+              "owned_parts": [
+                {
+                  "category": "cpu",
+                  "model": "AMD Ryzen 5 7600",
+                  "quantity": 1
+                }
+              ]
+            }
+          },
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_basis",
+                "value": "full_build",
+                "quote": "更正刚才的口径：6000元是包含已有CPU价值的整机参考总价。"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "L5-307",
+      "title": "品牌偏好改变后其他条件保持",
+      "stage": "screening",
+      "turns": [
+        {
+          "input": "新主机预算10000元，2K游戏，CPU选AMD，显卡不限品牌。",
+          "expect": {
+            "kind": "spec",
+            "budget_cny": 10000,
+            "resolution": "2K",
+            "cpu_brand": "amd",
+            "gpu_brand": "any"
+          },
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 10000,
+                "quote": "新主机预算10000元，2K游戏，CPU选AMD，显卡不限品牌。"
+              },
+              {
+                "op": "set",
+                "field": "use_case.type",
+                "value": "gaming",
+                "quote": "新主机预算10000元，2K游戏，CPU选AMD，显卡不限品牌。"
+              },
+              {
+                "op": "set",
+                "field": "use_case.resolution",
+                "value": "2K",
+                "quote": "新主机预算10000元，2K游戏，CPU选AMD，显卡不限品牌。"
+              },
+              {
+                "op": "set",
+                "field": "brand_pref.cpu",
+                "value": "amd",
+                "quote": "新主机预算10000元，2K游戏，CPU选AMD，显卡不限品牌。"
+              },
+              {
+                "op": "set",
+                "field": "brand_pref.gpu",
+                "value": "any",
+                "quote": "新主机预算10000元，2K游戏，CPU选AMD，显卡不限品牌。"
+              }
+            ]
+          }
+        },
+        {
+          "input": "CPU改成Intel，其他条件不变。",
+          "expect": {
+            "kind": "spec",
+            "budget_cny": 10000,
+            "resolution": "2K",
+            "cpu_brand": "intel",
+            "gpu_brand": "any"
+          },
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "brand_pref.cpu",
+                "value": "intel",
+                "quote": "CPU改成Intel，其他条件不变。"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "L5-310",
+      "title": "用户撤回预算后应重新询问",
+      "stage": "screening",
+      "turns": [
+        {
+          "input": "配新电脑，预算8000元，主要2K游戏。",
+          "expect": {
+            "kind": "spec",
+            "budget_cny": 8000,
+            "resolution": "2K"
+          },
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 8000,
+                "quote": "配新电脑，预算8000元，主要2K游戏。"
+              },
+              {
+                "op": "set",
+                "field": "use_case.type",
+                "value": "gaming",
+                "quote": "配新电脑，预算8000元，主要2K游戏。"
+              },
+              {
+                "op": "set",
+                "field": "use_case.resolution",
+                "value": "2K",
+                "quote": "配新电脑，预算8000元，主要2K游戏。"
+              }
+            ]
+          }
+        },
+        {
+          "input": "先取消刚才8000元的预算，金额现在还没定，其他条件保留。",
+          "expect": {
+            "kind": "clarify",
+            "clarify_fields": [
+              "budget_cny"
+            ],
+            "forbidden_clarify_fields": [
+              "use_case",
+              "resolution"
+            ]
+          },
+          "update": {
+            "operations": [
+              {
+                "op": "remove",
+                "field": "budget_cny",
+                "quote": "先取消刚才8000元的预算，金额现在还没定，其他条件保留。"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

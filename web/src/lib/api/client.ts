@@ -7,6 +7,7 @@ import type {
   Problem,
   Readiness,
   RequirementSpec,
+  RequirementOperation,
   Run,
   Session,
   SessionSummary,
@@ -104,6 +105,12 @@ export const api = {
     return unwrap(await client.PATCH("/api/v1/sessions/{session_id}/requirement", {
       params: { path: { session_id: id }, header: { "Idempotency-Key": key } },
       body: value,
+    }));
+  },
+  async updateRequirementState(id: string, revision: number, operations: RequirementOperation[], key: string): Promise<Session> {
+    return unwrap(await client.PATCH("/api/v1/sessions/{session_id}/requirement-state", {
+      params: { path: { session_id: id }, header: { "Idempotency-Key": key } },
+      body: { expected_revision: revision, operations },
     }));
   },
   async confirmRequirement(id: string, key: string): Promise<Run> {

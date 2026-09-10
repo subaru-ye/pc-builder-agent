@@ -196,6 +196,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{session_id}/requirement-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["SessionID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 增量编辑当前会话需求
+         * @description 与聊天修改共用服务端需求归并流程。按 expected_revision 防止覆盖并发修改；只更新当前草稿，已确认快照与配置历史不变。不调用模型。
+         */
+        patch: operations["updateRequirementState"];
+        trace?: never;
+    };
     "/api/v1/sessions/{session_id}/requirement": {
         parameters: {
             query?: never;
@@ -582,6 +604,17 @@ export interface components {
         Session: components["schemas"]["SessionSummary"] & {
             messages: components["schemas"]["Message"][];
             pending_requirement: components["schemas"]["RequirementSpec"] | null;
+            requirement_state: components["schemas"]["RequirementState"] | null;
+            /**
+             * @description 根据当前有效需求与已确认快照计算；仅讨论备选或无有效修改不会被标为 modified。
+             * @enum {string}
+             */
+            requirement_status: "collecting" | "ready_to_confirm" | "confirmed" | "modified";
+            confirmed_requirement_state: components["schemas"]["RequirementState"] | null;
+            confirmed_requirement: components["schemas"]["RequirementSpec"] | null;
+            confirmed_at: string | null;
+            /** @description 当前需求生成前仍需补充或消解冲突的必要字段。 */
+            missing_fields: string[];
             active_run: components["schemas"]["Run"] | null;
             last_error: components["schemas"]["Problem"] | null;
             recovery_phase: ("collecting" | "requirement_ready" | "ready") | null;
@@ -643,6 +676,64 @@ export interface components {
             /** Format: uri-reference */
             events_url: string;
         };
+        RequirementSource: {
+            /** @enum {string} */
+            kind: "chat" | "edit";
+            message_id: string;
+            quote: string;
+        };
+        RequirementField: {
+            value?: unknown;
+            /** @enum {string} */
+            status: "unknown" | "active" | "removed" | "conflict";
+            /** @enum {string} */
+            strength?: "must" | "prefer";
+            /** @enum {string} */
+            scope?: "session" | "temporary";
+            source?: components["schemas"]["RequirementSource"];
+            previous?: components["schemas"]["RequirementField"];
+        };
+        RequirementOperation: {
+            /** @enum {string} */
+            op: "set" | "remove" | "restore" | "alternative" | "conflict";
+            field: string;
+            value?: unknown;
+            /** @enum {string} */
+            strength?: "must" | "prefer";
+            /** @enum {string} */
+            scope?: "session" | "temporary";
+            quote?: string;
+        };
+        RequirementAlternative: {
+            field: string;
+            value: unknown;
+            /** @enum {string} */
+            strength: "must" | "prefer";
+            /** @enum {string} */
+            scope: "session" | "temporary";
+            source: components["schemas"]["RequirementSource"];
+        };
+        RequirementChange: {
+            revision: number;
+            /** @enum {string} */
+            op: "set" | "remove" | "restore" | "alternative" | "conflict";
+            field: string;
+            before?: components["schemas"]["RequirementField"];
+            after?: components["schemas"]["RequirementField"];
+            source: components["schemas"]["RequirementSource"];
+        };
+        /** @description 仅当前装机会话的需求真值；未知、撤销、冲突字段不被程序默认值覆盖；临时例外可恢复之前的字段。备选讨论不改变当前有效需求。 */
+        RequirementState: {
+            /** @constant */
+            schema_version: 1;
+            revision: number;
+            fields: {
+                [key: string]: components["schemas"]["RequirementField"];
+            };
+            alternatives: components["schemas"]["RequirementAlternative"][];
+            changes: components["schemas"]["RequirementChange"][];
+            history: components["schemas"]["RequirementChange"][];
+        };
         RequirementSpec: {
             /** @constant */
             schema_version: 1;
@@ -698,6 +789,15 @@ export interface components {
             priority: components["schemas"]["PartCategory"][];
             /** @default  */
             notes: string;
+            /** @description 当前有效字段的明确强度，键采用 brand_pref.cpu、size_pref 等需求字段路径；缺失时兼容旧需求语义，不据此认定为用户已表达。 */
+            constraint_strengths?: {
+                [key: string]: "must" | "prefer";
+            };
+            /** @description 当前会话的有效外观与装机对象说明；不含已撤销信息、备选方案或长期画像。 */
+            requirement_details?: {
+                appearance?: string;
+                recipient?: string;
+            };
         };
         /** @enum {string} */
         PartCategory: "cpu" | "gpu" | "motherboard" | "memory" | "ssd" | "psu" | "case" | "cooler";
@@ -1229,6 +1329,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"];
+                };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    updateRequirementState: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                session_id: components["parameters"]["SessionID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expected_revision: number;
+                    operations: components["schemas"]["RequirementOperation"][];
+                };
+            };
+        };
+        responses: {
+            /** @description 保存后的完整会话真值 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description 需求版本已变化或会话正在执行任务，需重新读取会话 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
             "4XX": components["responses"]["Problem"];

@@ -1,3 +1,4 @@
+import type { components } from "./generated";
 import { z } from "zod";
 
 const Health = z.object({
@@ -110,6 +111,49 @@ const RequirementSpec = z.object({
     .optional(),
   priority: z.array(PartCategory).optional().default([]),
   notes: z.string().optional().default(""),
+  constraint_strengths: z.record(z.string(), z.enum(["must", "prefer"])).optional(),
+  requirement_details: z
+    .object({ appearance: z.string(), recipient: z.string() })
+    .partial()
+    .optional(),
+});
+const RequirementSource = z.object({
+  kind: z.enum(["chat", "edit"]),
+  message_id: z.string(),
+  quote: z.string(),
+});
+const RequirementField: z.ZodType<components["schemas"]["RequirementField"]> = z.lazy(() =>
+  z.object({
+    value: z.unknown().optional(),
+    status: z.enum(["unknown", "active", "removed", "conflict"]),
+    strength: z.enum(["must", "prefer"]).optional(),
+    scope: z.enum(["session", "temporary"]).optional(),
+    source: RequirementSource.optional(),
+    previous: RequirementField.optional(),
+  })
+);
+const RequirementAlternative = z.object({
+  field: z.string(),
+  value: z.unknown(),
+  strength: z.enum(["must", "prefer"]),
+  scope: z.enum(["session", "temporary"]),
+  source: RequirementSource,
+});
+const RequirementChange = z.object({
+  revision: z.number().int().gte(1),
+  op: z.enum(["set", "remove", "restore", "alternative", "conflict"]),
+  field: z.string(),
+  before: RequirementField.optional(),
+  after: RequirementField.optional(),
+  source: RequirementSource,
+});
+const RequirementState = z.object({
+  schema_version: z.number().int(),
+  revision: z.number().int().gte(0),
+  fields: z.record(z.string(), RequirementField),
+  alternatives: z.array(RequirementAlternative),
+  changes: z.array(RequirementChange),
+  history: z.array(RequirementChange),
 });
 const Problem = z
   .object({
@@ -157,6 +201,17 @@ const Session = SessionSummary.and(
     .object({
       messages: z.array(Message),
       pending_requirement: z.union([RequirementSpec, z.null()]),
+      requirement_state: z.union([RequirementState, z.null()]),
+      requirement_status: z.enum([
+        "collecting",
+        "ready_to_confirm",
+        "confirmed",
+        "modified",
+      ]),
+      confirmed_requirement_state: z.union([RequirementState, z.null()]),
+      confirmed_requirement: z.union([RequirementSpec, z.null()]),
+      confirmed_at: z.union([z.string(), z.null()]),
+      missing_fields: z.array(z.string()),
       active_run: z.union([Run, z.null()]),
       last_error: z.union([Problem, z.null()]),
       recovery_phase: z.union([
@@ -170,6 +225,18 @@ const Session = SessionSummary.and(
 const createMessageRun_Body = z.object({
   schema_version: z.number().int(),
   text: z.string().min(1).max(4000),
+});
+const RequirementOperation = z.object({
+  op: z.enum(["set", "remove", "restore", "alternative", "conflict"]),
+  field: z.string(),
+  value: z.unknown().optional(),
+  strength: z.enum(["must", "prefer"]).optional(),
+  scope: z.enum(["session", "temporary"]).optional(),
+  quote: z.string().optional(),
+});
+const updateRequirementState_Body = z.object({
+  expected_revision: z.number().int().gte(0),
+  operations: z.array(RequirementOperation).min(1).max(32),
 });
 const FeedbackReason = z.enum([
   "unnecessary_question",
@@ -362,10 +429,17 @@ export const schemas = {
   Message,
   PartCategory,
   RequirementSpec,
+  RequirementSource,
+  RequirementField,
+  RequirementAlternative,
+  RequirementChange,
+  RequirementState,
   Problem,
   Run,
   Session,
   createMessageRun_Body,
+  RequirementOperation,
+  updateRequirementState_Body,
   FeedbackReason,
   Feedback,
   FeedbackResponse,

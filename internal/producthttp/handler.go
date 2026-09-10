@@ -134,6 +134,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/sessions/{session_id}", a.getSession)
 	mux.HandleFunc("POST /api/v1/sessions/{session_id}/messages", a.createMessageRun)
 	mux.HandleFunc("PATCH /api/v1/sessions/{session_id}/requirement", a.replaceRequirement)
+	mux.HandleFunc("PATCH /api/v1/sessions/{session_id}/requirement-state", a.editRequirementState)
 	mux.HandleFunc("POST /api/v1/sessions/{session_id}/requirement/confirm", a.confirmRequirement)
 	mux.HandleFunc("GET /api/v1/runs/{run_id}", a.getRun)
 	mux.HandleFunc("GET /api/v1/runs/{run_id}/feedback", a.runFeedback)
@@ -440,6 +441,15 @@ func (a *API) replaceRequirement(w http.ResponseWriter, r *http.Request) {
 	if err := a.service.ReplaceRequirement(r.Context(), owner, r.PathValue("session_id"), raw); err != nil {
 		a.writeError(w, r, err)
 		return
+	}
+	// 兼容表单也返回实际保存的投影，避免回显请求里未采用的默认值或元数据。
+	detail, err := a.service.GetSession(r.Context(), owner, r.PathValue("session_id"))
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	if len(detail.Session.RequirementState) > 0 {
+		raw = detail.Session.PendingRequirement
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -767,6 +777,9 @@ func (a *API) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, store.ErrSessionBusy):
 		a.writeProblem(w, r, product.NewProblem("session_busy", "会话正在处理中", 409,
 			"同一会话一次只允许一个活动运行。", requestID(r)))
+	case errors.Is(err, store.ErrRequirementRevision):
+		a.writeProblem(w, r, product.NewProblem("requirement_revision_conflict", "需求已发生变化", 409,
+			"此次修改未保存。请刷新当前需求后重试。", requestID(r)))
 	case errors.Is(err, store.ErrInvalidSessionPhase):
 		detail := err.Error()
 		a.writeProblem(w, r, product.NewProblem("invalid_session_phase", "当前会话阶段不允许该操作", 409,

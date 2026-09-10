@@ -19,6 +19,7 @@
 | 工程与选型 | [开发约定](tech/开发约定.md)、[技术选型](tech/技术选型.md) |
 | 默认选配 | [Harness v2](tech/Agent-Harness-2.0.md)、[语义选件](tech/语义选件.md) |
 | 已有配件、预算口径与未交付原因 | [已有配件与非交付结果](tech/已有配件与非交付结果.md) |
+| 当前需求、纠正与会话记忆 | [动态需求状态栏](tech/动态需求状态栏.md) |
 | 服务与状态 | [A2A 服务边界](tech/A2A服务边界.md)、[Redis 会话与缓存](tech/Redis会话与缓存.md)、[版本快照与改单](tech/版本快照与增量改单.md) |
 | 产品接口 | [API 与状态机](tech/产品API与会话状态机.md)、[OpenAPI](api/openapi.yaml)、[SSE 协议](api/SSE事件协议.md) |
 | 客户端与分享 | [Web 客户端](tech/Web客户端.md)、[分享与导出](tech/分享与导出.md) |

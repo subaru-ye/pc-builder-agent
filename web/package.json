@@ -12,12 +12,13 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "api:types": "openapi-typescript ../docs/api/openapi.yaml -o src/lib/api/generated.ts",
-    "api:schemas": "openapi-zod-client ../docs/api/openapi.yaml -o src/lib/api/generated-schemas.ts -t node_modules/openapi-zod-client/src/templates/schemas-only.hbs --export-schemas",
+    "api:schemas": "openapi-zod-client ../docs/api/openapi.yaml -o src/lib/api/generated-schemas.ts -t node_modules/openapi-zod-client/src/templates/schemas-only.hbs --export-schemas && node scripts/finalize-api-schemas.mjs",
     "api:generate": "pnpm api:types && pnpm api:schemas",
     "api:check": "pnpm api:generate && git diff --exit-code -- src/lib/api/generated.ts src/lib/api/generated-schemas.ts",
     "test": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:live": "playwright test --config=playwright.live.config.ts",
+    "test:e2e:requirements": "playwright test --config=playwright.requirements.config.ts",
     "test:orchestrator": "node --test e2e-live/*.test.mjs"
   },
   "dependencies": {

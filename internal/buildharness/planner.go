@@ -89,6 +89,9 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 			if !ok || candidate.Category != category {
 				return CandidateBundle{}, fmt.Errorf("buildharness: 锁定 SKU %q 不属于当前 active_core 候选", sku)
 			}
+			if d := mandatoryLockedConflict(input.Requirement, category, candidate); d != nil {
+				return CandidateBundle{}, d
+			}
 			selected[category] = append(selected[category], candidate)
 			eligible[category] = append(eligible[category], candidate)
 		}
@@ -96,6 +99,9 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 
 	if !locked[schemas.CategoryCPU] {
 		cpuPreference := input.Requirement.BrandPref.CPU
+		if input.Requirement.ConstraintStrengths["brand_pref.cpu"] == "prefer" {
+			cpuPreference = schemas.CPUBrandAny
+		}
 		if hinted := swapCPUPreference(input.Change); hinted != schemas.CPUBrandAny {
 			cpuPreference = hinted
 		}
@@ -120,6 +126,9 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 
 	if !locked[schemas.CategoryGPU] {
 		gpuPreference := input.Requirement.BrandPref.GPU
+		if input.Requirement.ConstraintStrengths["brand_pref.gpu"] == "prefer" {
+			gpuPreference = schemas.GPUBrandAny
+		}
 		if hinted := swapGPUPreference(input.Change); hinted != schemas.GPUBrandAny {
 			gpuPreference = hinted
 		}
@@ -133,7 +142,7 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 	}
 
 	if !locked[schemas.CategoryMotherboard] {
-		boards := filterMotherboards(byCategory[schemas.CategoryMotherboard], selected[schemas.CategoryCPU], input.Requirement.SizePref)
+		boards := filterMotherboards(byCategory[schemas.CategoryMotherboard], selected[schemas.CategoryCPU], hardSizePreference(input.Requirement))
 		eligible[schemas.CategoryMotherboard] = boards
 		selected[schemas.CategoryMotherboard] = selectByLane(boards, candidateSocket, 2)
 	}
@@ -163,7 +172,7 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 		}
 		items := byCategory[category]
 		if category == schemas.CategoryCase {
-			items = filterCases(items, input.Requirement.SizePref)
+			items = filterCases(items, hardSizePreference(input.Requirement))
 		}
 		eligible[category] = items
 		selected[category] = selectQuantiles(items, 5)
@@ -191,6 +200,22 @@ func (p *Planner) Prepare(ctx context.Context, input BuildInput) (CandidateBundl
 
 	bundle := CandidateBundle{OwnedInput: &input, SchemaVersion: 1, SnapshotDate: catalog.Snapshot.SnapshotDate.Format("2006-01-02")}
 	for _, category := range schemas.AllCategories {
+		// 软偏好不删除其他可行候选；量化抽样之外保留一个明确匹配项。
+		for _, candidate := range eligible[category] {
+			view, err := candidateView(candidate, "")
+			if err != nil {
+				return CandidateBundle{}, err
+			}
+			if softConstraintMatch(input.Requirement, category, view) {
+				selected[category] = appendCandidateOnce(selected[category], candidate)
+				break
+			}
+		}
+		sort.SliceStable(selected[category], func(i, j int) bool {
+			left, _ := candidateView(selected[category][i], "")
+			right, _ := candidateView(selected[category][j], "")
+			return softConstraintMatch(input.Requirement, category, left) && !softConstraintMatch(input.Requirement, category, right)
+		})
 		group := CandidateGroup{Category: category}
 		protectedLanes := map[string]bool{}
 		for i, candidate := range selected[category] {

@@ -41,12 +41,18 @@ type runDTO struct {
 
 type sessionDTO struct {
 	sessionSummaryDTO
-	Messages           []messageDTO        `json:"messages"`
-	PendingRequirement json.RawMessage     `json:"pending_requirement"`
-	ActiveRun          *runDTO             `json:"active_run"`
-	LastError          json.RawMessage     `json:"last_error"`
-	RecoveryPhase      *store.SessionPhase `json:"recovery_phase"`
-	Degraded           bool                `json:"degraded"`
+	Messages                  []messageDTO        `json:"messages"`
+	PendingRequirement        json.RawMessage     `json:"pending_requirement"`
+	RequirementState          json.RawMessage     `json:"requirement_state"`
+	ConfirmedRequirementState json.RawMessage     `json:"confirmed_requirement_state"`
+	ConfirmedRequirement      json.RawMessage     `json:"confirmed_requirement"`
+	ConfirmedAt               *time.Time          `json:"confirmed_at"`
+	RequirementStatus         string              `json:"requirement_status"`
+	MissingFields             []string            `json:"missing_fields"`
+	ActiveRun                 *runDTO             `json:"active_run"`
+	LastError                 json.RawMessage     `json:"last_error"`
+	RecoveryPhase             *store.SessionPhase `json:"recovery_phase"`
+	Degraded                  bool                `json:"degraded"`
 }
 
 func toSessionSummary(s store.WebSession) sessionSummaryDTO {
@@ -90,12 +96,18 @@ func toSession(detail product.SessionDetail) sessionDTO {
 		lastError = json.RawMessage("null")
 	}
 	return sessionDTO{
-		sessionSummaryDTO:  toSessionSummary(detail.Session),
-		Messages:           messages,
-		PendingRequirement: pending,
-		ActiveRun:          active,
-		LastError:          lastError,
-		RecoveryPhase:      detail.Session.RecoveryPhase,
-		Degraded:           detail.Degraded,
+		sessionSummaryDTO:         toSessionSummary(detail.Session),
+		Messages:                  messages,
+		PendingRequirement:        pending,
+		RequirementState:          detail.Session.RequirementState,
+		ConfirmedRequirementState: detail.Session.ConfirmedRequirementState,
+		ConfirmedRequirement:      detail.Session.ConfirmedRequirement,
+		ConfirmedAt:               detail.Session.ConfirmedAt,
+		RequirementStatus:         detail.RequirementStatus,
+		MissingFields:             detail.MissingFields,
+		ActiveRun:                 active,
+		LastError:                 lastError,
+		RecoveryPhase:             detail.Session.RecoveryPhase,
+		Degraded:                  detail.Degraded,
 	}
 }

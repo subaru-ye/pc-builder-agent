@@ -40,6 +40,9 @@ func WithScreeningObserver(ctx context.Context, observe func(string, []string)) 
 type screeningGuard struct{ model.LLM }
 
 func (g screeningGuard) GenerateContent(ctx context.Context, req *model.LLMRequest, _ bool) iter.Seq2[*model.LLMResponse, error] {
+	if input, ok := ctx.Value(screeningRequirementStateKey{}).(screeningRequirementStateInput); ok {
+		return g.generateRequirementState(ctx, req, input)
+	}
 	return func(yield func(*model.LLMResponse, error) bool) {
 		hasBuild, known := ctx.Value(screeningBuildStateKey{}).(bool)
 		if known && !hasBuild {

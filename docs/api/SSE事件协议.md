@@ -78,12 +78,21 @@ data: {"schema_version":1,"run_id":"...","timestamp":"...","payload":{"kind":"bu
 
 ### 3.3 requirement.ready
 
-初筛得到合法 RequirementSpec 时发送。payload 是完整 RequirementSpec v1。收到后前端:
+初筛得到可供确认的合法 RequirementSpec 时发送。payload 是完整 RequirementSpec v1。该事件不表示用户已经确认，也不表示配置已生成。收到后前端:
 
 1. 将会话缓存 phase 更新为 requirement_ready。
 2. 展示需求确认卡。
 3. 结束当前输入 loading。
 4. 等待 run.completed 后再刷新会话真值。
+
+### 3.3.1 requirement.updated
+
+当前会话需求完成持久化后发送，payload 是 OpenAPI 中完整 `RequirementState`，包含 `revision`、当前字段、备选方案、本轮变化和按需展开的历史。即使必要字段尚未收齐，也会发送此事件；不能依赖 `requirement.ready` 才刷新需求面板。
+
+- 更新来源包括自然语言和 `PATCH /sessions/{session_id}/requirement-state` 界面编辑；二者共用服务端 reducer 和消息来源。
+- 前端以 `revision` 忽略旧状态，只缓存服务端已保存的字段；不得自己从消息推断或归并需求。
+- `RequirementState` 的变化不修改已确认快照与已有配置版本。`requirement_status` 和必要的 `missing_fields` 以随后读取的 Session 为准；仅讨论备选不等于有效需求发生修改。
+- 界面编辑接口直接返回完整 Session，并保存一个不调用模型的完成 run；页面无需为了获得编辑结果另行发起模型请求。
 
 ### 3.4 assistant.delta
 
@@ -171,6 +180,7 @@ payload 是 application/problem+json 的 JSON 对象投影,至少含 type、titl
 run.started
 run.progress(screening)
 assistant.delta *
+requirement.updated?
 assistant.completed?
 requirement.ready?
 run.completed(succeeded)

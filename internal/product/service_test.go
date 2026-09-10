@@ -17,17 +17,19 @@ import (
 )
 
 type fakeProductStore struct {
-	mu       sync.Mutex
-	session  store.WebSession
-	runs     map[string]store.AgentRun
-	messages []store.WebMessage
-	latest   int
+	mu           sync.Mutex
+	session      store.WebSession
+	runs         map[string]store.AgentRun
+	messages     []store.WebMessage
+	latest       int
+	fingerprints map[string]string
 }
 
 func newFakeProductStore() *fakeProductStore {
 	return &fakeProductStore{
-		session: store.WebSession{ID: "session-1", OwnerID: "owner-1", Phase: store.PhaseCollecting},
-		runs:    make(map[string]store.AgentRun),
+		session:      store.WebSession{ID: "session-1", OwnerID: "owner-1", Phase: store.PhaseCollecting},
+		runs:         make(map[string]store.AgentRun),
+		fingerprints: make(map[string]string),
 	}
 }
 
@@ -69,7 +71,7 @@ func (f *fakeProductStore) RunByOwner(_ context.Context, _ string, id string) (s
 	defer f.mu.Unlock()
 	return f.runs[id], nil
 }
-func (f *fakeProductStore) MessageRunByRequest(_ context.Context, owner, session, request, text string) (store.AgentRun, bool, error) {
+func (f *fakeProductStore) MessageRunByRequest(_ context.Context, owner, session, request, text string, fingerprints ...string) (store.AgentRun, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if owner != f.session.OwnerID || session != f.session.ID {
@@ -79,9 +81,16 @@ func (f *fakeProductStore) MessageRunByRequest(_ context.Context, owner, session
 		if run.ClientRequestID != request {
 			continue
 		}
+		fingerprint := ""
+		if len(fingerprints) > 0 {
+			fingerprint = fingerprints[0]
+		}
+		if f.fingerprints[run.ID] != fingerprint {
+			return store.AgentRun{}, false, store.ErrIdempotencyConflict
+		}
 		for _, message := range f.messages {
 			if message.RunID != nil && *message.RunID == run.ID && message.Role == "user" {
-				if message.Content != text {
+				if fingerprint == "" && message.Content != text {
 					return store.AgentRun{}, false, store.ErrIdempotencyConflict
 				}
 				return run, true, nil
@@ -108,6 +117,7 @@ func (f *fakeProductStore) StartMessageRun(_ context.Context, p store.StartMessa
 	r := store.AgentRun{ID: p.RunID, SessionID: p.SessionID, ClientRequestID: p.RequestID,
 		Kind: kind, Status: store.RunRunning, StartedAt: time.Now()}
 	f.runs[r.ID] = r
+	f.fingerprints[r.ID] = p.RequestFingerprint
 	f.messages = append(f.messages, store.WebMessage{
 		ID: p.MessageID, SessionID: p.SessionID, Role: "user", Content: p.Text, RunID: &r.ID, CreatedAt: time.Now(),
 	})

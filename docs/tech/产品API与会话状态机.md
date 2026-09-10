@@ -66,21 +66,23 @@ stateDiagram-v2
 
 会话 phase 是产品层真值,存 PostgreSQL;ADK session state 是运行时上下文,存 Redis。不得用前端猜测 phase。
 
+当前会话需求另由 `requirement_state` 保存，Session 的 `requirement_status` 区分收集中、待确认、已确认和确认后修改。它根据有效需求与已确认快照计算，不能拿 revision 变化代替有效需求变化。字段来源、增量编辑、未知与撤销的契约见[动态需求状态栏](动态需求状态栏.md)。
+
 ### 3.2 首次需求确认
 
 首次对话与当前 sequential host 的差异是增加显式停顿:
 
-1. API 只运行初筛 Agent。
-2. 若输出仍是追问,保存 assistant 消息,phase 保持 collecting。
-3. 若提取并严格解码出 RequirementSpec,写入 pending_requirement,phase 变为 requirement_ready,通过 SSE 发 requirement.ready。
-4. PATCH requirement 接受完整 RequirementSpec v1,严格解码后整体替换,不做部分字段的隐式合并。
-5. confirm 再次严格解码数据库中的 pending_requirement,随后调用 A2A remote 生成 v1。
+1. API 只运行初筛 Agent。具有需求状态的新会话注入当前有效状态与本轮用户原文，复用 Screening 单次调用输出字段操作。
+2. 服务端核验本轮来源并归并操作，保存 `requirement_state`；缺失必要字段时生成针对性追问，phase 保持 collecting。
+3. 字段充足时确定性投影为 RequirementSpec，写入 pending_requirement，phase 变为 requirement_ready；先发 requirement.updated，再发 requirement.ready。
+4. PATCH requirement-state 接受带 expected_revision 的字段操作，与聊天走同一 reducer，返回完整 Session。旧 PATCH requirement 完整替换入口保留兼容。
+5. confirm 从数据库读取 pending_requirement，并冻结 confirmed_requirement、confirmed_requirement_state 和 confirmed_at，随后调用 A2A remote 生成配置。
 
 UI 编辑不改变 RequirementSpec schema。existing_parts 仍按现有品类枚举处理;不能借前端表单偷偷扩展为 SKU 对象。
 
 ### 3.3 后续改单
 
-ready 状态下的用户消息走现有 ChangeRequest 初筛与 A2A 链路。快捷按钮只预填自然语言,服务端没有 card-change 专用业务入口。
+具有需求状态的会话在 ready 后继续将用户修改归并为新草稿；原确认快照与配置版本保持不变，用户再次确认后生成新版本。仅讨论备选、无有效修改时仍显示原需求已确认。旧会话未迁移推断偏好，保留原 ChangeRequest 初筛与 A2A 链路。快捷按钮仍只预填自然语言，服务端没有 card-change 专用业务入口。
 
 如果 Redis 中 A2A context/build_state 已过期:
 
@@ -103,6 +105,10 @@ ready 状态下的用户消息走现有 ChangeRequest 初筛与 A2A 链路。快
 | title | text | 首条用户消息截取生成,不调用 LLM |
 | phase | text | collecting/requirement_ready/building/ready/changing/error |
 | pending_requirement | jsonb nullable | 严格 RequirementSpec 原文 |
+| requirement_state | jsonb nullable | 当前会话有效字段、未知/撤销/冲突、来源和修订历史；旧会话保持 NULL |
+| confirmed_requirement_state | jsonb nullable | 最近一次明确确认时的需求状态快照 |
+| confirmed_requirement | jsonb nullable | 最近一次明确确认的生成需求，不被后续草稿编辑改写 |
+| confirmed_at | timestamptz nullable | 最近确认时间 |
 | last_error | jsonb nullable | problem 投影,成功后清除 |
 | created_at/updated_at | timestamptz | DB 默认时间 |
 

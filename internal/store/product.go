@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
 
 var (
@@ -17,6 +19,7 @@ var (
 	ErrSessionBusy         = errors.New("会话已有活动运行")
 	ErrInvalidSessionPhase = errors.New("会话阶段不允许当前操作")
 	ErrIdempotencyConflict = errors.New("幂等键已用于不同请求")
+	ErrRequirementRevision = errors.New("需求已更新，请刷新后重试")
 )
 
 type SessionPhase string
@@ -48,17 +51,21 @@ const (
 )
 
 type WebSession struct {
-	ID                 string
-	OwnerID            string
-	CreateRequestID    string
-	Title              string
-	Phase              SessionPhase
-	RecoveryPhase      *SessionPhase
-	PendingRequirement json.RawMessage
-	LastError          json.RawMessage
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	VersionCount       int
+	ID                        string
+	OwnerID                   string
+	CreateRequestID           string
+	Title                     string
+	Phase                     SessionPhase
+	RecoveryPhase             *SessionPhase
+	PendingRequirement        json.RawMessage
+	RequirementState          json.RawMessage
+	ConfirmedRequirementState json.RawMessage
+	ConfirmedRequirement      json.RawMessage
+	ConfirmedAt               *time.Time
+	LastError                 json.RawMessage
+	CreatedAt                 time.Time
+	UpdatedAt                 time.Time
+	VersionCount              int
 }
 
 type WebMessage struct {
@@ -100,7 +107,8 @@ func (s *Store) Ping(ctx context.Context) error {
 
 const webSessionColumns = `s.id, s.owner_id, s.create_request_id::text, s.title, s.phase,
        s.recovery_phase, s.pending_requirement, s.last_error, s.created_at, s.updated_at,
-       (SELECT count(*) FROM builds b WHERE b.session_id = s.id)`
+       (SELECT count(*) FROM builds b WHERE b.session_id = s.id),
+       s.requirement_state, s.confirmed_requirement_state, s.confirmed_requirement, s.confirmed_at`
 
 func scanWebSession(row interface{ Scan(...any) error }) (WebSession, error) {
 	var (
@@ -108,7 +116,8 @@ func scanWebSession(row interface{ Scan(...any) error }) (WebSession, error) {
 		recovery *string
 	)
 	err := row.Scan(&s.ID, &s.OwnerID, &s.CreateRequestID, &s.Title, &s.Phase,
-		&recovery, &s.PendingRequirement, &s.LastError, &s.CreatedAt, &s.UpdatedAt, &s.VersionCount)
+		&recovery, &s.PendingRequirement, &s.LastError, &s.CreatedAt, &s.UpdatedAt, &s.VersionCount,
+		&s.RequirementState, &s.ConfirmedRequirementState, &s.ConfirmedRequirement, &s.ConfirmedAt)
 	if recovery != nil {
 		p := SessionPhase(*recovery)
 		s.RecoveryPhase = &p
@@ -118,12 +127,13 @@ func scanWebSession(row interface{ Scan(...any) error }) (WebSession, error) {
 
 func (s *Store) CreateWebSession(ctx context.Context, id, ownerID, requestID string) (WebSession, error) {
 	row := s.pool.QueryRow(ctx, `
-		INSERT INTO web_sessions (id, owner_id, create_request_id, phase)
-		VALUES ($1, $2, $3, 'collecting')
+		INSERT INTO web_sessions (id, owner_id, create_request_id, phase, requirement_state)
+		VALUES ($1, $2, $3, 'collecting', '{"schema_version":1,"revision":0,"fields":{},"changes":[],"history":[],"alternatives":[]}')
 		ON CONFLICT (owner_id, create_request_id)
 		DO UPDATE SET create_request_id = EXCLUDED.create_request_id
 		RETURNING id, owner_id, create_request_id::text, title, phase, recovery_phase,
-		          pending_requirement, last_error, created_at, updated_at, 0`, id, ownerID, requestID)
+		          pending_requirement, last_error, created_at, updated_at, 0,
+		          requirement_state, confirmed_requirement_state, confirmed_requirement, confirmed_at`, id, ownerID, requestID)
 	ws, err := scanWebSession(row)
 	if err != nil {
 		return WebSession{}, fmt.Errorf("store: 创建产品会话失败: %w", err)
@@ -192,25 +202,29 @@ func (s *Store) RunByOwner(ctx context.Context, ownerID, runID string) (AgentRun
 }
 
 // MessageRunByRequest 在执行上下文预检前识别消息重试；相同 key 不同文本仍返回冲突。
-func (s *Store) MessageRunByRequest(ctx context.Context, ownerID, sessionID, requestID, text string) (AgentRun, bool, error) {
+func (s *Store) MessageRunByRequest(ctx context.Context, ownerID, sessionID, requestID, text string, fingerprints ...string) (AgentRun, bool, error) {
 	var r AgentRun
-	var oldText string
+	var oldText, oldFingerprint string
 	err := s.pool.QueryRow(ctx, `
 		SELECT r.id::text, r.session_id, r.client_request_id::text, r.kind, r.status,
-		       r.error, r.started_at, r.finished_at, m.content
+		       r.error, r.started_at, r.finished_at, m.content, COALESCE(m.request_fingerprint, '')
 		FROM agent_runs r
 		JOIN web_sessions s ON s.id = r.session_id
 		JOIN web_messages m ON m.session_id = r.session_id AND m.client_message_id = r.client_request_id
 		WHERE r.session_id = $1 AND r.client_request_id = $2 AND s.owner_id = $3`,
 		sessionID, requestID, ownerID).Scan(&r.ID, &r.SessionID, &r.ClientRequestID, &r.Kind,
-		&r.Status, &r.Error, &r.StartedAt, &r.FinishedAt, &oldText)
+		&r.Status, &r.Error, &r.StartedAt, &r.FinishedAt, &oldText, &oldFingerprint)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return AgentRun{}, false, nil
 	}
 	if err != nil {
 		return AgentRun{}, false, fmt.Errorf("store: 查询消息幂等运行失败: %w", err)
 	}
-	if oldText != text {
+	fingerprint := ""
+	if len(fingerprints) > 0 {
+		fingerprint = fingerprints[0]
+	}
+	if oldFingerprint != fingerprint || (fingerprint == "" && oldText != text) {
 		return AgentRun{}, false, ErrIdempotencyConflict
 	}
 	return r, true, nil
@@ -286,6 +300,9 @@ func (s *Store) ScreeningMessages(ctx context.Context, sessionID string, kind Ru
 
 type StartMessageRunParams struct {
 	OwnerID, SessionID, RequestID, RunID, MessageID, Text, Title string
+	ForceScreening                                               bool
+	ExpectedRevision                                             *int
+	RequestFingerprint                                           string
 }
 
 // StartMessageRun 在同一事务完成所有权/phase/幂等校验、user message 与 run 创建。
@@ -298,8 +315,9 @@ func (s *Store) StartMessageRun(ctx context.Context, p StartMessageRunParams) (A
 
 	var phase SessionPhase
 	var recovery *string
-	if err := tx.QueryRow(ctx, `SELECT phase, recovery_phase FROM web_sessions
-		WHERE id = $1 AND owner_id = $2 FOR UPDATE`, p.SessionID, p.OwnerID).Scan(&phase, &recovery); err != nil {
+	var revision int
+	if err := tx.QueryRow(ctx, `SELECT phase, recovery_phase, COALESCE((requirement_state->>'revision')::int, 0) FROM web_sessions
+		WHERE id = $1 AND owner_id = $2 FOR UPDATE`, p.SessionID, p.OwnerID).Scan(&phase, &recovery, &revision); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return AgentRun{}, false, ErrWebSessionNotFound
 		}
@@ -309,10 +327,10 @@ func (s *Store) StartMessageRun(ctx context.Context, p StartMessageRunParams) (A
 	if existing, found, err := runByRequestTx(ctx, tx, p.SessionID, p.RequestID); err != nil {
 		return AgentRun{}, false, err
 	} else if found {
-		var oldText string
-		err := tx.QueryRow(ctx, `SELECT content FROM web_messages
-			WHERE session_id = $1 AND client_message_id = $2`, p.SessionID, p.RequestID).Scan(&oldText)
-		if err != nil || oldText != p.Text {
+		var oldText, oldFingerprint string
+		err := tx.QueryRow(ctx, `SELECT content, COALESCE(request_fingerprint, '') FROM web_messages
+			WHERE session_id = $1 AND client_message_id = $2`, p.SessionID, p.RequestID).Scan(&oldText, &oldFingerprint)
+		if err != nil || oldFingerprint != p.RequestFingerprint || (p.RequestFingerprint == "" && oldText != p.Text) {
 			return AgentRun{}, false, ErrIdempotencyConflict
 		}
 		return existing, true, nil
@@ -322,6 +340,12 @@ func (s *Store) StartMessageRun(ctx context.Context, p StartMessageRunParams) (A
 	if err != nil {
 		return AgentRun{}, false, err
 	}
+	if p.ExpectedRevision != nil && *p.ExpectedRevision != revision {
+		return AgentRun{}, false, ErrRequirementRevision
+	}
+	if p.ForceScreening {
+		kind, next, clearPending = RunScreening, PhaseCollecting, false
+	}
 	r, err := insertRunTx(ctx, tx, p.RunID, p.SessionID, p.RequestID, kind)
 	if isRunningConflict(err) {
 		return AgentRun{}, false, ErrSessionBusy
@@ -330,8 +354,8 @@ func (s *Store) StartMessageRun(ctx context.Context, p StartMessageRunParams) (A
 		return AgentRun{}, false, err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO web_messages
-		(id, session_id, client_message_id, role, content, run_id)
-		VALUES ($1, $2, $3, 'user', $4, $5)`, p.MessageID, p.SessionID, p.RequestID, p.Text, p.RunID); err != nil {
+		(id, session_id, client_message_id, role, content, run_id, request_fingerprint)
+		VALUES ($1, $2, $3, 'user', $4, $5, NULLIF($6, ''))`, p.MessageID, p.SessionID, p.RequestID, p.Text, p.RunID, p.RequestFingerprint); err != nil {
 		return AgentRun{}, false, fmt.Errorf("store: 写入用户消息失败: %w", err)
 	}
 	pendingExpr := "pending_requirement"
@@ -400,6 +424,7 @@ func isRunningConflict(err error) bool {
 
 type StartConfirmRunParams struct {
 	OwnerID, SessionID, RequestID, RunID string
+	ExpectedRevision                     *int
 }
 
 func (s *Store) StartConfirmRun(ctx context.Context, p StartConfirmRunParams) (AgentRun, json.RawMessage, bool, error) {
@@ -411,9 +436,11 @@ func (s *Store) StartConfirmRun(ctx context.Context, p StartConfirmRunParams) (A
 	var phase SessionPhase
 	var recovery *string
 	var pending json.RawMessage
-	if err := tx.QueryRow(ctx, `SELECT phase, recovery_phase, pending_requirement FROM web_sessions
+	var requirementState json.RawMessage
+	var revision int
+	if err := tx.QueryRow(ctx, `SELECT phase, recovery_phase, pending_requirement, COALESCE((requirement_state->>'revision')::int, 0), requirement_state FROM web_sessions
 		WHERE id = $1 AND owner_id = $2 FOR UPDATE`, p.SessionID, p.OwnerID).
-		Scan(&phase, &recovery, &pending); err != nil {
+		Scan(&phase, &recovery, &pending, &revision, &requirementState); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return AgentRun{}, nil, false, ErrWebSessionNotFound
 		}
@@ -422,11 +449,29 @@ func (s *Store) StartConfirmRun(ctx context.Context, p StartConfirmRunParams) (A
 	if existing, found, err := runByRequestTx(ctx, tx, p.SessionID, p.RequestID); err != nil {
 		return AgentRun{}, nil, false, err
 	} else if found {
+		if existing.Kind != RunBuild {
+			return AgentRun{}, nil, false, ErrIdempotencyConflict
+		}
 		return existing, pending, true, nil
+	}
+	if p.ExpectedRevision != nil && *p.ExpectedRevision != revision {
+		return AgentRun{}, nil, false, ErrRequirementRevision
 	}
 	allowed := phase == PhaseRequirementReady || (phase == PhaseError && recovery != nil && SessionPhase(*recovery) == PhaseRequirementReady)
 	if !allowed || len(pending) == 0 {
 		return AgentRun{}, nil, false, &InvalidPhaseError{Phase: phase}
+	}
+	// 锁内核验投影，先处理已完成请求重试，再校验本次要确认的新草稿。
+	if len(requirementState) > 0 {
+		var state schemas.RequirementState
+		if err := json.Unmarshal(requirementState, &state); err != nil {
+			return AgentRun{}, nil, false, ErrRequirementRevision
+		}
+		spec, missing, err := schemas.RequirementStateSpec(state)
+		var actual, proposed any
+		if err != nil || len(missing) > 0 || json.Unmarshal(spec, &proposed) != nil || json.Unmarshal(pending, &actual) != nil || !reflect.DeepEqual(actual, proposed) {
+			return AgentRun{}, nil, false, ErrRequirementRevision
+		}
 	}
 	r, err := insertRunTx(ctx, tx, p.RunID, p.SessionID, p.RequestID, RunBuild)
 	if isRunningConflict(err) {
@@ -436,7 +481,8 @@ func (s *Store) StartConfirmRun(ctx context.Context, p StartConfirmRunParams) (A
 		return AgentRun{}, nil, false, err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE web_sessions SET phase = 'building', recovery_phase = NULL,
-		last_error = NULL, updated_at = now() WHERE id = $1`, p.SessionID); err != nil {
+		confirmed_requirement = pending_requirement, confirmed_requirement_state = requirement_state,
+		confirmed_at = now(), last_error = NULL, updated_at = now() WHERE id = $1`, p.SessionID); err != nil {
 		return AgentRun{}, nil, false, fmt.Errorf("store: 更新确认阶段失败: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -470,6 +516,8 @@ type CompleteRunParams struct {
 	RecoveryPhase                                          *SessionPhase
 	PendingRequirement                                     json.RawMessage
 	SetPending                                             bool
+	RequirementState                                       json.RawMessage
+	SetRequirementState                                    bool
 	Error                                                  json.RawMessage
 }
 
@@ -503,8 +551,10 @@ func (s *Store) CompleteRun(ctx context.Context, p CompleteRunParams) (*WebMessa
 	}
 	_, err = tx.Exec(ctx, `UPDATE web_sessions SET phase = $2, recovery_phase = $3,
 		last_error = $4, pending_requirement = CASE WHEN $5 THEN $6 ELSE pending_requirement END,
+		requirement_state = CASE WHEN $7 THEN $8 ELSE requirement_state END,
 		updated_at = now() WHERE id = $1`, p.SessionID, p.Phase, p.RecoveryPhase,
-		nullableJSON(p.Error), p.SetPending, nullableJSON(p.PendingRequirement))
+		nullableJSON(p.Error), p.SetPending, nullableJSON(p.PendingRequirement),
+		p.SetRequirementState, nullableJSON(p.RequirementState))
 	if err != nil {
 		return nil, fmt.Errorf("store: 更新运行最终阶段失败: %w", err)
 	}

@@ -131,7 +131,7 @@ Next.js 不定义业务 Route Handler 或 Server Action。开发环境由 next.c
 - Session GET 返回 active_run 时自动连接 SSE。
 - 页面刷新后先画已有消息/版本,再恢复 run,不清空检查器。
 - 404 显示通用不存在页;不得区分他人会话与真实不存在。
-- degraded=true 时顶栏展示常驻琥珀提示,说明刷新后可能无法恢复,但不阻塞当前操作。
+- degraded=true 时顶栏展示常驻提示：对话与需求仍保存在 PostgreSQL，重连会重新读取状态；实时事件与部分配置修改上下文可能受限，不阻塞当前操作。
 
 ### 5.2 聊天
 

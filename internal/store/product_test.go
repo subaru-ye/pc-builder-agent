@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+
+	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
 
 func TestProductSessionRunLifecycle(t *testing.T) {
@@ -76,11 +78,24 @@ func TestProductSessionRunLifecycle(t *testing.T) {
 		t.Fatalf("同 key 不同文本应冲突,得到 %v", err)
 	}
 
-	spec := json.RawMessage(`{"schema_version":1,"budget_cny":8000,"use_case":{"type":"gaming","resolution":"2K"}}`)
+	state, err := schemas.ApplyRequirementUpdate(schemas.NewRequirementState(), schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{
+		{Op: "set", Field: "budget_cny", Value: json.RawMessage(`8000`)},
+		{Op: "set", Field: "use_case.type", Value: json.RawMessage(`"gaming"`)},
+		{Op: "set", Field: "use_case.resolution", Value: json.RawMessage(`"2K"`)},
+	}}, schemas.RequirementSource{Kind: "edit", MessageID: message1, Quote: "8000 元 2K 玩黑神话"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateJSON, _ := json.Marshal(state)
+	spec, _, err := schemas.RequirementStateSpec(state)
+	if err != nil {
+		t.Fatal(err)
+	}
 	msg, err := s.CompleteRun(ctx, CompleteRunParams{
 		RunID: run1, SessionID: sessionID, AssistantMessageID: assistant1,
 		AssistantContent: "需求已经整理好,请确认。", Status: RunSucceeded,
 		Phase: PhaseRequirementReady, PendingRequirement: spec, SetPending: true,
+		RequirementState: stateJSON, SetRequirementState: true,
 	})
 	if err != nil || msg == nil || msg.Role != "assistant" {
 		t.Fatalf("完成 screening 失败:msg=%+v err=%v", msg, err)

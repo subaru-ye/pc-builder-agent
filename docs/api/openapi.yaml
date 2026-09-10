@@ -236,6 +236,44 @@ paths:
               schema: {$ref: "#/components/schemas/Run"}
         "4XX":
           $ref: "#/components/responses/Problem"
+  /api/v1/sessions/{session_id}/requirement-state:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+    patch:
+      summary: 增量编辑当前会话需求
+      tags: [sessions]
+      operationId: updateRequirementState
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      description: 与聊天修改共用服务端需求归并流程。按 expected_revision 防止覆盖并发修改；只更新当前草稿，已确认快照与配置历史不变。不调用模型。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_revision, operations]
+              properties:
+                expected_revision: {type: integer, minimum: 0}
+                operations:
+                  type: array
+                  minItems: 1
+                  maxItems: 32
+                  items: {$ref: "#/components/schemas/RequirementOperation"}
+      responses:
+        "200":
+          description: 保存后的完整会话真值
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Session"}
+        "409":
+          description: 需求版本已变化或会话正在执行任务，需重新读取会话
+          content:
+            application/problem+json:
+              schema: {$ref: "#/components/schemas/Problem"}
+        "4XX":
+          $ref: "#/components/responses/Problem"
   /api/v1/sessions/{session_id}/requirement:
     parameters:
       - $ref: "#/components/parameters/SessionID"
@@ -720,7 +758,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/SessionSummary"
         - type: object
-          required: [messages, pending_requirement, active_run, last_error, recovery_phase, degraded]
+          required: [messages, pending_requirement, requirement_state, requirement_status, confirmed_requirement_state, confirmed_requirement, confirmed_at, missing_fields, active_run, last_error, recovery_phase, degraded]
           properties:
             messages:
               type: array
@@ -729,6 +767,30 @@ components:
               oneOf:
                 - $ref: "#/components/schemas/RequirementSpec"
                 - type: "null"
+            requirement_state:
+              oneOf:
+                - $ref: "#/components/schemas/RequirementState"
+                - type: "null"
+            requirement_status:
+              type: string
+              enum: [collecting, ready_to_confirm, confirmed, modified]
+              description: 根据当前有效需求与已确认快照计算；仅讨论备选或无有效修改不会被标为 modified。
+            confirmed_requirement_state:
+              oneOf:
+                - $ref: "#/components/schemas/RequirementState"
+                - type: "null"
+            confirmed_requirement:
+              oneOf:
+                - $ref: "#/components/schemas/RequirementSpec"
+                - type: "null"
+            confirmed_at:
+              oneOf:
+                - {type: string, format: date-time}
+                - {type: "null"}
+            missing_fields:
+              type: array
+              items: {type: string}
+              description: 当前需求生成前仍需补充或消解冲突的必要字段。
             active_run:
               oneOf:
                 - $ref: "#/components/schemas/Run"
@@ -810,6 +872,77 @@ components:
             - $ref: "#/components/schemas/Problem"
             - type: "null"
         events_url: {type: string, format: uri-reference}
+    RequirementSource:
+      type: object
+      additionalProperties: false
+      required: [kind, message_id, quote]
+      properties:
+        kind: {type: string, enum: [chat, edit]}
+        message_id: {type: string}
+        quote: {type: string}
+    RequirementField:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        value: {}
+        status: {type: string, enum: [unknown, active, removed, conflict]}
+        strength: {type: string, enum: [must, prefer]}
+        scope: {type: string, enum: [session, temporary]}
+        source: {$ref: "#/components/schemas/RequirementSource"}
+        previous: {$ref: "#/components/schemas/RequirementField"}
+    RequirementOperation:
+      type: object
+      additionalProperties: false
+      required: [op, field]
+      properties:
+        op: {type: string, enum: [set, remove, restore, alternative, conflict]}
+        field: {type: string}
+        value: {}
+        strength: {type: string, enum: [must, prefer]}
+        scope: {type: string, enum: [session, temporary]}
+        quote: {type: string}
+    RequirementAlternative:
+      type: object
+      additionalProperties: false
+      required: [field, value, strength, scope, source]
+      properties:
+        field: {type: string}
+        value: {}
+        strength: {type: string, enum: [must, prefer]}
+        scope: {type: string, enum: [session, temporary]}
+        source: {$ref: "#/components/schemas/RequirementSource"}
+    RequirementChange:
+      type: object
+      additionalProperties: false
+      required: [revision, op, field, source]
+      properties:
+        revision: {type: integer, minimum: 1}
+        op: {type: string, enum: [set, remove, restore, alternative, conflict]}
+        field: {type: string}
+        before: {$ref: "#/components/schemas/RequirementField"}
+        after: {$ref: "#/components/schemas/RequirementField"}
+        source: {$ref: "#/components/schemas/RequirementSource"}
+    RequirementState:
+      type: object
+      additionalProperties: false
+      required: [schema_version, revision, fields, alternatives, changes, history]
+      description: 仅当前装机会话的需求真值；未知、撤销、冲突字段不被程序默认值覆盖；临时例外可恢复之前的字段。备选讨论不改变当前有效需求。
+      properties:
+        schema_version: {type: integer, const: 1}
+        revision: {type: integer, minimum: 0}
+        fields:
+          type: object
+          additionalProperties: {$ref: "#/components/schemas/RequirementField"}
+        alternatives:
+          type: array
+          items: {$ref: "#/components/schemas/RequirementAlternative"}
+        changes:
+          type: array
+          items: {$ref: "#/components/schemas/RequirementChange"}
+        history:
+          type: array
+          items: {$ref: "#/components/schemas/RequirementChange"}
     RequirementSpec:
       type: object
       additionalProperties: false
@@ -868,6 +1001,17 @@ components:
           items: {$ref: "#/components/schemas/PartCategory"}
           default: []
         notes: {type: string, default: ""}
+        constraint_strengths:
+          type: object
+          additionalProperties: {type: string, enum: [must, prefer]}
+          description: 当前有效字段的明确强度，键采用 brand_pref.cpu、size_pref 等需求字段路径；缺失时兼容旧需求语义，不据此认定为用户已表达。
+        requirement_details:
+          type: object
+          additionalProperties: false
+          properties:
+            appearance: {type: string}
+            recipient: {type: string}
+          description: 当前会话的有效外观与装机对象说明；不含已撤销信息、备选方案或长期画像。
     PartCategory:
       type: string
       enum: [cpu, gpu, motherboard, memory, ssd, psu, case, cooler]

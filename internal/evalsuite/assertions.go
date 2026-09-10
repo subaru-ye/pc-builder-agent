@@ -453,13 +453,13 @@ func assertBudgetWindow(spec schemas.RequirementSpec, quote validate.Quote) stri
 
 func assertBrandPref(spec schemas.RequirementSpec, sel schemas.BuildSelection, snap SnapshotView) string {
 	var failures []string
-	if spec.BrandPref.CPU != "" && spec.BrandPref.CPU != schemas.CPUBrandAny {
+	if spec.ConstraintStrengths["brand_pref.cpu"] != "prefer" && spec.BrandPref.CPU != "" && spec.BrandPref.CPU != schemas.CPUBrandAny {
 		vendor := snap.CPUVendorBySKU[sel.CPU]
 		if vendor == "" || vendor != string(spec.BrandPref.CPU) {
 			failures = append(failures, fmt.Sprintf("cpu %q 推断厂商=%q,要求 %s", sel.CPU, vendor, spec.BrandPref.CPU))
 		}
 	}
-	if spec.BrandPref.GPU != "" && spec.BrandPref.GPU != schemas.GPUBrandAny {
+	if spec.ConstraintStrengths["brand_pref.gpu"] != "prefer" && spec.BrandPref.GPU != "" && spec.BrandPref.GPU != schemas.GPUBrandAny {
 		if sel.GPU == nil {
 			failures = append(failures, fmt.Sprintf("gpu 为 null,但要求家族 %s", spec.BrandPref.GPU))
 		} else if family := snap.GPUFamilyBySKU[*sel.GPU]; family == "" || family != string(spec.BrandPref.GPU) {

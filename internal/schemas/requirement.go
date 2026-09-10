@@ -164,34 +164,38 @@ type BrandPref struct {
 // RequirementSpec 初筛 Agent → 生成 Agent 的结构化需求单(设计方案 §四.2)。
 // 唯一权威出处为设计方案 §四.2,字段变更先改文档再改本包(CLAUDE.md 工程纪律)。
 type RequirementSpec struct {
-	SchemaVersion int
-	BudgetCNY     int
-	BudgetFlex    float64 // 缺省 0.1
-	UseCase       UseCase
-	SizePref      SizePref  // 缺省 any
-	NoisePref     NoisePref // 缺省 any
-	BrandPref     BrandPref // 缺省 {any, any}
-	ExistingParts []Category
-	OwnedParts    []OwnedPart
-	BudgetBasis   string
-	Priority      []Category
-	Notes         string
+	SchemaVersion       int
+	BudgetCNY           int
+	BudgetFlex          float64 // 缺省 0.1
+	UseCase             UseCase
+	SizePref            SizePref  // 缺省 any
+	NoisePref           NoisePref // 缺省 any
+	BrandPref           BrandPref // 缺省 {any, any}
+	ExistingParts       []Category
+	OwnedParts          []OwnedPart
+	BudgetBasis         string
+	Priority            []Category
+	Notes               string
+	ConstraintStrengths map[string]string          // 当前会话明确的 must/prefer；缺失沿用旧需求单语义。
+	RequirementDetails  map[string]json.RawMessage // 外观、装机对象等有效补充信息，不含历史/备选。
 }
 
 // requirementSpecWire 线上格式:指针区分「键缺失」与「显式给值」,支持缺省填充。
 type requirementSpecWire struct {
-	SchemaVersion *int           `json:"schema_version"`
-	BudgetCNY     *int           `json:"budget_cny"`
-	BudgetFlex    *float64       `json:"budget_flex"`
-	UseCase       *useCaseWire   `json:"use_case"`
-	SizePref      *SizePref      `json:"size_pref"`
-	NoisePref     *NoisePref     `json:"noise_pref"`
-	BrandPref     *brandPrefWire `json:"brand_pref"`
-	ExistingParts []Category     `json:"existing_parts"`
-	OwnedParts    []OwnedPart    `json:"owned_parts,omitempty"`
-	BudgetBasis   string         `json:"budget_basis,omitempty"`
-	Priority      []Category     `json:"priority"`
-	Notes         *string        `json:"notes"`
+	SchemaVersion       *int                       `json:"schema_version"`
+	BudgetCNY           *int                       `json:"budget_cny"`
+	BudgetFlex          *float64                   `json:"budget_flex"`
+	UseCase             *useCaseWire               `json:"use_case"`
+	SizePref            *SizePref                  `json:"size_pref"`
+	NoisePref           *NoisePref                 `json:"noise_pref"`
+	BrandPref           *brandPrefWire             `json:"brand_pref"`
+	ExistingParts       []Category                 `json:"existing_parts"`
+	OwnedParts          []OwnedPart                `json:"owned_parts,omitempty"`
+	BudgetBasis         string                     `json:"budget_basis,omitempty"`
+	Priority            []Category                 `json:"priority"`
+	Notes               *string                    `json:"notes"`
+	ConstraintStrengths map[string]string          `json:"constraint_strengths,omitempty"`
+	RequirementDetails  map[string]json.RawMessage `json:"requirement_details,omitempty"`
 }
 
 type useCaseWire struct {
@@ -234,18 +238,20 @@ func EncodeRequirementSpec(spec RequirementSpec) (json.RawMessage, error) {
 		GPU GPUBrand `json:"gpu"`
 	}
 	type canonicalRequirement struct {
-		SchemaVersion int                `json:"schema_version"`
-		BudgetCNY     int                `json:"budget_cny"`
-		BudgetFlex    float64            `json:"budget_flex"`
-		UseCase       canonicalUseCase   `json:"use_case"`
-		SizePref      SizePref           `json:"size_pref"`
-		NoisePref     NoisePref          `json:"noise_pref"`
-		BrandPref     canonicalBrandPref `json:"brand_pref"`
-		ExistingParts []Category         `json:"existing_parts"`
-		OwnedParts    []OwnedPart        `json:"owned_parts,omitempty"`
-		BudgetBasis   string             `json:"budget_basis,omitempty"`
-		Priority      []Category         `json:"priority"`
-		Notes         string             `json:"notes"`
+		SchemaVersion       int                        `json:"schema_version"`
+		BudgetCNY           int                        `json:"budget_cny"`
+		BudgetFlex          float64                    `json:"budget_flex"`
+		UseCase             canonicalUseCase           `json:"use_case"`
+		SizePref            SizePref                   `json:"size_pref"`
+		NoisePref           NoisePref                  `json:"noise_pref"`
+		BrandPref           canonicalBrandPref         `json:"brand_pref"`
+		ExistingParts       []Category                 `json:"existing_parts"`
+		OwnedParts          []OwnedPart                `json:"owned_parts,omitempty"`
+		BudgetBasis         string                     `json:"budget_basis,omitempty"`
+		Priority            []Category                 `json:"priority"`
+		Notes               string                     `json:"notes"`
+		ConstraintStrengths map[string]string          `json:"constraint_strengths,omitempty"`
+		RequirementDetails  map[string]json.RawMessage `json:"requirement_details,omitempty"`
 	}
 
 	encoded, err := json.Marshal(canonicalRequirement{
@@ -259,6 +265,7 @@ func EncodeRequirementSpec(spec RequirementSpec) (json.RawMessage, error) {
 		SizePref: spec.SizePref, NoisePref: spec.NoisePref,
 		BrandPref:     canonicalBrandPref{CPU: spec.BrandPref.CPU, GPU: spec.BrandPref.GPU},
 		ExistingParts: existing, OwnedParts: spec.OwnedParts, BudgetBasis: spec.BudgetBasis, Priority: priority, Notes: spec.Notes,
+		ConstraintStrengths: spec.ConstraintStrengths, RequirementDetails: spec.RequirementDetails,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("requirement spec: 编码失败: %w", err)
@@ -340,6 +347,20 @@ func DecodeRequirementSpec(data []byte) (RequirementSpec, error) {
 	if w.Notes != nil {
 		out.Notes = *w.Notes
 	}
+	for key, strength := range w.ConstraintStrengths {
+		if !knownRequirementField(key) || (strength != "must" && strength != "prefer") {
+			return RequirementSpec{}, fmt.Errorf("requirement spec: 非法约束强度 %s=%s", key, strength)
+		}
+	}
+	for key, value := range w.RequirementDetails {
+		if key != "appearance" && key != "recipient" {
+			return RequirementSpec{}, fmt.Errorf("requirement spec: 非法补充字段 %s", key)
+		}
+		if err := validateRequirementValue(key, value); err != nil {
+			return RequirementSpec{}, err
+		}
+	}
+	out.ConstraintStrengths, out.RequirementDetails = w.ConstraintStrengths, w.RequirementDetails
 
 	return out, nil
 }

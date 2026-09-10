@@ -36,7 +36,7 @@ type ProductStore interface {
 	ScreeningMessages(context.Context, string, store.RunKind) ([]store.WebMessage, error)
 	ActiveRun(context.Context, string) (*store.AgentRun, error)
 	RunByOwner(context.Context, string, string) (store.AgentRun, error)
-	MessageRunByRequest(context.Context, string, string, string, string) (store.AgentRun, bool, error)
+	MessageRunByRequest(context.Context, string, string, string, string, ...string) (store.AgentRun, bool, error)
 	ReplacePendingRequirement(context.Context, string, string, json.RawMessage) error
 	StartMessageRun(context.Context, store.StartMessageRunParams) (store.AgentRun, bool, error)
 	StartConfirmRun(context.Context, store.StartConfirmRunParams) (store.AgentRun, json.RawMessage, bool, error)
@@ -46,10 +46,12 @@ type ProductStore interface {
 }
 
 type SessionDetail struct {
-	Session   store.WebSession
-	Messages  []store.WebMessage
-	ActiveRun *store.AgentRun
-	Degraded  bool
+	Session           store.WebSession
+	Messages          []store.WebMessage
+	ActiveRun         *store.AgentRun
+	Degraded          bool
+	RequirementStatus string
+	MissingFields     []string
 }
 
 type StartResult struct {
@@ -96,7 +98,8 @@ func (s *Service) GetSession(ctx context.Context, ownerID, sessionID string) (Se
 	if err != nil {
 		return SessionDetail{}, err
 	}
-	return SessionDetail{Session: ws, Messages: messages, ActiveRun: active, Degraded: s.events.Degraded()}, nil
+	status, missing := requirementLifecycle(ws)
+	return SessionDetail{Session: ws, Messages: messages, ActiveRun: active, Degraded: s.events.Degraded(), RequirementStatus: status, MissingFields: missing}, nil
 }
 
 func (s *Service) GetRun(ctx context.Context, ownerID, runID string) (store.AgentRun, error) {
@@ -110,6 +113,28 @@ func (s *Service) OwnSession(ctx context.Context, ownerID, sessionID string) err
 }
 
 func (s *Service) ReplaceRequirement(ctx context.Context, ownerID, sessionID string, spec json.RawMessage) error {
+	ws, err := s.store.WebSessionByOwner(ctx, ownerID, sessionID)
+	if err != nil {
+		return err
+	}
+	if len(ws.RequirementState) > 0 {
+		if ws.Phase != store.PhaseRequirementReady && !(ws.Phase == store.PhaseError && ws.RecoveryPhase != nil && *ws.RecoveryPhase == store.PhaseRequirementReady) {
+			return store.ErrInvalidSessionPhase
+		}
+		state, err := decodeSessionRequirements(ws.RequirementState)
+		if err != nil {
+			return err
+		}
+		operations, err := requirementReplacementOperations(ws.PendingRequirement, spec)
+		if err != nil {
+			return err
+		}
+		if len(operations) == 0 {
+			return nil
+		}
+		_, err = s.EditRequirement(ctx, ownerID, sessionID, uuid.NewString(), RequirementEdit{ExpectedRevision: state.Revision, Operations: operations})
+		return err
+	}
 	return s.store.ReplacePendingRequirement(ctx, ownerID, sessionID, spec)
 }
 
@@ -124,7 +149,7 @@ func (s *Service) StartMessage(ctx context.Context, ownerID, sessionID, requestI
 		return StartResult{}, err
 	}
 	recoveryReady := ws.Phase == store.PhaseError && ws.RecoveryPhase != nil && *ws.RecoveryPhase == store.PhaseReady
-	if ws.Phase == store.PhaseReady || recoveryReady {
+	if len(ws.RequirementState) == 0 && (ws.Phase == store.PhaseReady || recoveryReady) {
 		ok, err := s.agent.ContextAvailable(ctx, ownerID, sessionID)
 		if err != nil {
 			return StartResult{}, err
@@ -138,6 +163,7 @@ func (s *Service) StartMessage(ctx context.Context, ownerID, sessionID, requestI
 	r, duplicate, err := s.store.StartMessageRun(ctx, store.StartMessageRunParams{
 		OwnerID: ownerID, SessionID: sessionID, RequestID: requestID, RunID: runID,
 		MessageID: uuid.NewString(), Text: text, Title: TitleFromText(text),
+		ForceScreening: len(ws.RequirementState) > 0,
 	})
 	if err != nil {
 		return StartResult{}, err
@@ -193,6 +219,9 @@ func (s *Service) execute(ctx context.Context, r store.AgentRun, ownerID, text s
 func (s *Service) executeScreening(ctx context.Context, r store.AgentRun, ownerID, text string) {
 	s.progress(ctx, r.ID, "screening", "正在整理需求", 1)
 	input, err := s.screenInput(ctx, r, text)
+	if err == nil {
+		err = s.attachRequirementState(ctx, ownerID, r, &input)
+	}
 	if err != nil {
 		s.failInternal(ctx, r, store.PhaseCollecting, "")
 		return
@@ -200,10 +229,24 @@ func (s *Service) executeScreening(ctx context.Context, r store.AgentRun, ownerI
 	s.captureEvidence(ctx, r.ID, "screening_input", screeningEvidence(input))
 	result, err := s.agent.Screen(ctx, ownerID, r.SessionID, input)
 	if err == nil {
-		s.captureEvidence(ctx, r.ID, "screening_output", map[string]any{"kind": result.Kind, "text": result.Text, "payload": result.Payload})
+		s.captureEvidence(ctx, r.ID, "screening_output", map[string]any{"kind": result.Kind, "text": result.Text, "payload": result.Payload, "requirement_update": result.RequirementUpdate})
 	}
 	if err != nil {
 		s.failFromError(ctx, r, err, store.PhaseCollecting, "")
+		return
+	}
+	if input.RequirementState != nil {
+		if result.RequirementUpdate == nil {
+			s.fail(ctx, r, NewProblem("schema_validation_failed", "需求更新未保存", 422, "初筛没有返回有效的本轮需求操作，请重试。", r.ID), store.PhaseCollecting, "")
+			return
+		}
+		state, mergeErr := schemas.ApplyRequirementUpdate(*input.RequirementState, *result.RequirementUpdate, input.RequirementSource)
+		if mergeErr == nil {
+			mergeErr = s.completeRequirementState(ctx, ownerID, r, state)
+		}
+		if mergeErr != nil {
+			s.fail(ctx, r, NewProblem("schema_validation_failed", "需求更新未保存", 422, mergeErr.Error(), r.ID), store.PhaseCollecting, "")
+		}
 		return
 	}
 	switch result.Kind {

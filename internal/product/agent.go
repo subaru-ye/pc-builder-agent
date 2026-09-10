@@ -30,10 +30,11 @@ const (
 )
 
 type ScreenResult struct {
-	Kind    ScreenKind
-	Text    string
-	Payload json.RawMessage
-	Err     error
+	Kind              ScreenKind
+	Text              string
+	Payload           json.RawMessage
+	Err               error
+	RequirementUpdate *schemas.RequirementUpdate
 }
 
 type RemoteResult struct {
@@ -43,10 +44,12 @@ type RemoteResult struct {
 // ScreenInput 区分本轮原始文本与发给模型的有界上下文。品牌/预算纠偏只依据
 // 本轮原文，避免历史表达被误判为用户本轮的明确要求。
 type ScreenInput struct {
-	Text        string
-	Context     string
-	UserSources []string // 与上下文同范围的用户原话，排除助手消息。
-	HasBuild    bool     // 来自产品运行类型，不能从助手的需求确认提示推断。
+	Text              string
+	Context           string
+	UserSources       []string // 与上下文同范围的用户原话，排除助手消息。
+	HasBuild          bool     // 来自产品运行类型，不能从助手的需求确认提示推断。
+	RequirementState  *schemas.RequirementState
+	RequirementSource schemas.RequirementSource
 }
 
 type AgentGateway interface {
@@ -97,10 +100,26 @@ func (g *ADKAgentGateway) Screen(ctx context.Context, userID, sessionID string, 
 	}
 	ctx = pipeline.WithScreeningSources(ctx, sources)
 	ctx = pipeline.WithScreeningBuildState(ctx, input.HasBuild)
+	if input.RequirementState != nil {
+		source := input.RequirementSource
+		if source.Kind == "" {
+			source.Kind = "chat"
+		}
+		source.Quote = input.Text
+		ctx = pipeline.WithRequirementState(ctx, *input.RequirementState, source)
+	}
 	lastText, err := collectAgentText(g.screeningRunner.Run(ctx, userID, sessionID,
 		genai.NewContentFromText(input.Context, genai.RoleUser), agent.RunConfig{}), "")
 	if err != nil {
 		return ScreenResult{}, err
+	}
+	if input.RequirementState != nil {
+		payload := pipeline.ExtractPayload(lastText)
+		update, err := schemas.DecodeRequirementUpdate(payload)
+		if err != nil {
+			return ScreenResult{}, err
+		}
+		return ScreenResult{Kind: ScreenRequirement, Text: lastText, RequirementUpdate: &update}, nil
 	}
 	return ParseScreeningResult(lastText, input.Text)
 }

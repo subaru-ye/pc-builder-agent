@@ -42,7 +42,7 @@ export function HomeWorkspace({ showEvaldesk = false }: { showEvaldesk?: boolean
             <NewSessionButton className="mb-6 self-start lg:hidden" />
             <div className="mb-8 flex h-11 w-11 items-center justify-center rounded-lg border bg-[var(--surface-1)]"><Cpu size={21} /></div>
             <h1 className="max-w-xl text-3xl font-semibold leading-tight tracking-[-0.6px]">把需求整理成可以核对的配置单</h1>
-            <p className="mt-3 max-w-2xl text-[var(--ink-muted)]">先确认预算与用途，再生成带价格快照、12 条规则校验和版本记录的方案。</p>
+            <p className="mt-3 max-w-2xl text-[var(--ink-muted)]">先聊聊用途和想法，再一起确认需求、比较配件。候选、价格与待核实事项会随对话保留。</p>
             <SuggestedPrompts onSelect={setDraft} />
             {start.isError && <p role="alert" className="mt-6 status-fail">{userMessage(start.error)}</p>}
           </div></div>

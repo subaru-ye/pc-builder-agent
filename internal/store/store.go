@@ -84,6 +84,19 @@ func (s *Store) ResolveBuild(ctx context.Context, sel schemas.BuildSelection) (s
 		return schemas.ResolvedBuild{}, fmt.Errorf("store: 遍历 parts 失败: %w", err)
 	}
 
+	return resolveRows(sel, found)
+}
+
+// ResolveCandidateSnapshot validates immutable per-session candidates without publishing them.
+func ResolveCandidateSnapshot(sel schemas.BuildSelection, candidates []Candidate) (schemas.ResolvedBuild, error) {
+	found := map[string]partRow{}
+	for _, c := range candidates {
+		found[c.SKU] = partRow{Category: c.Category, Specs: c.Specs}
+	}
+	return resolveRows(sel, found)
+}
+
+func resolveRows(sel schemas.BuildSelection, found map[string]partRow) (schemas.ResolvedBuild, error) {
 	out := schemas.ResolvedBuild{BuildRef: sel.BuildRef}
 
 	// 七类必选 + 可选 GPU:逐一取行、校验类目、解码 canonical specs。

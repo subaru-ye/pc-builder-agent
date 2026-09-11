@@ -93,6 +93,9 @@ func requirementEditText(operations []schemas.RequirementOperation) string {
 		label := labels[op.Field]
 		if label == "" {
 			label = op.Field
+			if schemas.FreeField(op.Field) {
+				label = "补充要求"
+			}
 		}
 		switch op.Op {
 		case "remove":
@@ -136,12 +139,18 @@ func requirementEditText(operations []schemas.RequirementOperation) string {
 }
 
 func (s *Service) completeRequirementState(ctx context.Context, ownerID string, r store.AgentRun, state schemas.RequirementState) error {
-	pending, missing, err := schemas.RequirementStateSpec(state)
+	pending, missing, err := planningProjection(state)
 	if err != nil {
 		return err
 	}
 	phase := store.PhaseRequirementReady
 	assistant := ScreeningReadyMessage
+	if state.Reply != "" {
+		assistant = state.Reply
+	}
+	if state.NextAction == "collect" {
+		phase = store.PhaseCollecting
+	}
 	if len(missing) > 0 {
 		phase = store.PhaseCollecting
 		pending = nil
@@ -154,10 +163,10 @@ func (s *Service) completeRequirementState(ctx context.Context, ownerID string, 
 	if err != nil {
 		return err
 	}
-	if len(missing) == 0 && ws.VersionCount > 0 && sameRequirementJSON(pending, ws.ConfirmedRequirement) {
+	if state.Reply == "" && len(missing) == 0 && ws.VersionCount > 0 && sameRequirementJSON(pending, ws.ConfirmedRequirement) {
 		phase = store.PhaseReady
 		assistant = "当前有效需求保持不变，可继续查看配置或修改需求。"
-	} else if len(missing) == 0 && len(ws.ConfirmedRequirement) > 0 {
+	} else if state.Reply == "" && len(missing) == 0 && len(ws.ConfirmedRequirement) > 0 {
 		assistant = "需求草稿已更新，原配置保持不变。请确认后生成新的配置版本。"
 	}
 	raw, err := json.Marshal(state)
@@ -234,11 +243,14 @@ func requirementReplacementOperations(before, after json.RawMessage) ([]schemas.
 }
 
 func requirementLifecycle(ws store.WebSession) (string, []string) {
+	if ws.Phase == store.PhaseCollecting && len(ws.PendingRequirement) == 0 {
+		return "collecting", []string{}
+	}
 	state, err := decodeSessionRequirements(ws.RequirementState)
 	if err != nil || len(ws.RequirementState) == 0 {
 		return "collecting", []string{}
 	}
-	pending, missing, err := schemas.RequirementStateSpec(state)
+	pending, missing, err := planningProjection(state)
 	if missing == nil {
 		missing = []string{}
 	}
@@ -251,17 +263,30 @@ func requirementLifecycle(ws store.WebSession) (string, []string) {
 	if err != nil || len(missing) > 0 {
 		return "collecting", missing
 	}
+	if state.NextAction == "collect" {
+		return "collecting", missing
+	}
 	return "ready_to_confirm", missing
 }
 
 func (s *Service) attachRequirementState(ctx context.Context, ownerID string, r store.AgentRun, input *ScreenInput) error {
 	ws, err := s.store.WebSessionByOwner(ctx, ownerID, r.SessionID)
-	if err != nil || len(ws.RequirementState) == 0 {
+	if err != nil {
 		return err
 	}
 	state, err := decodeSessionRequirements(ws.RequirementState)
 	if err != nil {
 		return err
+	}
+	if len(ws.RequirementState) == 0 {
+		raw := ws.PendingRequirement
+		if _, supportsPlanning := s.store.(proposalStore); !supportsPlanning {
+			return nil // Legacy diagnostic stores keep their original protocol.
+		}
+		if len(raw) == 0 {
+			raw = ws.ConfirmedRequirement
+		}
+		state = schemas.LegacyPlanningState(raw)
 	}
 	input.RequirementState = &state
 	messages, err := s.store.WebMessages(ctx, r.SessionID)
@@ -275,4 +300,9 @@ func (s *Service) attachRequirementState(ctx context.Context, ownerID string, r 
 		}
 	}
 	return nil
+}
+
+func planningProjection(state schemas.RequirementState) (json.RawMessage, []string, error) {
+	raw, err := schemas.PlanningRequirement(state)
+	return raw, []string{}, err
 }

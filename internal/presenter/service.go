@@ -84,6 +84,7 @@ type QuoteView struct {
 	SnapshotDate     string                `json:"snapshot_date"`
 	TotalCNY         string                `json:"total_cny"`
 	BudgetCNY        string                `json:"budget_cny"`
+	BudgetKnown      bool                  `json:"budget_known"`
 	BudgetDeltaCNY   string                `json:"budget_delta_cny"`
 	MissingCount     int                   `json:"missing_count"`
 	MissingSKUs      []string              `json:"missing_skus"`
@@ -96,13 +97,14 @@ type ValidationView struct {
 }
 
 type BuildView struct {
-	SchemaVersion int             `json:"schema_version"`
-	Summary       BuildSummary    `json:"summary"`
-	Requirement   json.RawMessage `json:"requirement"`
-	Parts         []PartLine      `json:"parts"`
-	Quote         QuoteView       `json:"quote"`
-	Validation    ValidationView  `json:"validation"`
-	Disclaimers   []string        `json:"disclaimers"`
+	CandidateSnapshot json.RawMessage `json:"candidate_snapshot,omitempty"`
+	SchemaVersion     int             `json:"schema_version"`
+	Summary           BuildSummary    `json:"summary"`
+	Requirement       json.RawMessage `json:"requirement"`
+	Parts             []PartLine      `json:"parts"`
+	Quote             QuoteView       `json:"quote"`
+	Validation        ValidationView  `json:"validation"`
+	Disclaimers       []string        `json:"disclaimers"`
 }
 
 type DiffLine struct {
@@ -166,6 +168,11 @@ func (s *Service) Build(ctx context.Context, sessionID string, version int) (Bui
 	if err != nil {
 		return BuildView{}, err
 	}
+	for _, id := range row.SKUs() {
+		if name := rSnapshotName(row.CandidateSnapshot, id); name != "" {
+			names[id] = name
+		}
+	}
 	freshness, metadata, err := s.priceInfo(ctx, row)
 	if err != nil {
 		return BuildView{}, err
@@ -212,13 +219,24 @@ func (s *Service) Build(ctx context.Context, sessionID string, version int) (Bui
 			budgetTotal = value
 		}
 	}
+	var planningInput schemas.PlanningInput
+	if json.Unmarshal(row.Spec, &planningInput) == nil && planningInput.SchemaVersion == 2 {
+		if f := planningInput.State.Fields["budget_basis"]; f.Status == "active" {
+			_ = json.Unmarshal(f.Value, &basis)
+		}
+		if basis == "new_purchase" && row.Quote.PurchaseTotalCNY != nil {
+			if value, ok := ParseFen(*row.Quote.PurchaseTotalCNY); ok {
+				budgetTotal = value
+			}
+		}
+	}
 	missing := row.Quote.MissingSKUs
 	if missing == nil {
 		missing = []string{}
 	}
 	return BuildView{
-		SchemaVersion: 1, Summary: summary(row, versions), Requirement: row.Spec, Parts: parts,
-		Quote: QuoteView{PurchaseTotalCNY: row.Quote.PurchaseTotalCNY, BudgetBasis: basis, SnapshotDate: row.Quote.SnapshotDate, TotalCNY: FormatFen(totalFen), BudgetCNY: FormatFen(budgetFen),
+		CandidateSnapshot: row.CandidateSnapshot, SchemaVersion: 1, Summary: summary(row, versions), Requirement: row.Spec, Parts: parts,
+		Quote: QuoteView{BudgetKnown: budgetFen > 0, PurchaseTotalCNY: row.Quote.PurchaseTotalCNY, BudgetBasis: basis, SnapshotDate: row.Quote.SnapshotDate, TotalCNY: FormatFen(totalFen), BudgetCNY: FormatFen(budgetFen),
 			BudgetDeltaCNY: FormatFen(budgetFen - budgetTotal), MissingCount: row.Quote.MissingCount, MissingSKUs: missing,
 			PriceFreshness: freshness},
 		Validation:  ValidationView{OverallStatus: row.Report.OverallStatus, Checks: row.Report.Checks},
@@ -273,6 +291,11 @@ func (s *Service) Markdown(ctx context.Context, sessionID string, version int) (
 	if err != nil {
 		return "", err
 	}
+	for _, id := range row.SKUs() {
+		if name := rSnapshotName(row.CandidateSnapshot, id); name != "" {
+			names[id] = name
+		}
+	}
 	freshness, metadata, err := s.priceInfo(ctx, row)
 	if err != nil {
 		return "", err
@@ -288,6 +311,29 @@ func (s *Service) priceInfo(ctx context.Context, row BuildRow) (PriceFreshnessSu
 			return PriceFreshnessSummary{}, nil, err
 		}
 		metadata = loaded
+	}
+	if metadata == nil {
+		metadata = map[string]store.PriceMetadata{}
+	}
+	var snapshot struct {
+		Candidates []struct {
+			ID              string `json:"id"`
+			External        bool   `json:"external"`
+			PriceObservedAt string `json:"price_observed_at"`
+		} `json:"candidates"`
+	}
+	if json.Unmarshal(row.CandidateSnapshot, &snapshot) == nil {
+		for _, c := range snapshot.Candidates {
+			if c.External {
+				date, err := time.Parse(time.RFC3339, c.PriceObservedAt)
+				if err != nil {
+					date, err = time.Parse("2006-01-02", c.PriceObservedAt)
+				}
+				if err == nil {
+					metadata[c.ID] = store.PriceMetadata{SKU: c.ID, ObservedAt: &date, AvailabilityBasis: "unknown"}
+				}
+			}
+		}
 	}
 	summary := PriceFreshnessSummary{Overall: PriceFreshnessFresh}
 	var oldest *time.Time

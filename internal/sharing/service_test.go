@@ -18,6 +18,23 @@ type fakeStore struct {
 	last   store.CreateBuildShareParams
 }
 
+func TestPlanningSharePreservesUnknownAndPublicProvenance(t *testing.T) {
+	state := schemas.NewRequirementState()
+	state.Fields["free.private_note"] = schemas.RequirementField{Status: "active", Kind: "context", Value: json.RawMessage(`"为朋友准备，私人背景"`)}
+	requirement, _ := schemas.PlanningRequirement(state)
+	view, err := toPublic(presenter.BuildView{Requirement: requirement, CandidateSnapshot: json.RawMessage(`{"evidence":[{"url":"https://example.com/spec","title":"商品规格","captured_at":"2026-09-10T00:00:00Z","text":"完整摘录"}]}`)}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Requirement.UseCase.Type != "unknown" || view.Requirement.KnownFields == nil || len(*view.Requirement.KnownFields) != 0 || len(view.Sources) != 1 {
+		t.Fatalf("unknown/provenance lost: %+v", view)
+	}
+	raw, _ := json.Marshal(view)
+	if strings.Contains(string(raw), "私人") || strings.Contains(string(raw), "完整摘录") || strings.Contains(string(raw), "free.private") {
+		t.Fatal("public DTO disclosed private state or full raw evidence")
+	}
+}
+
 func (f *fakeStore) CreateBuildShare(_ context.Context, p store.CreateBuildShareParams) (store.BuildShare, bool, error) {
 	f.last = p
 	f.record.PublicID, f.record.SessionID, f.record.Version = p.PublicID, p.SessionID, p.Version

@@ -19,21 +19,22 @@ import (
 type Mode string
 
 const (
-	ModeLegacy Mode = "legacy"
-	ModeV2     Mode = "v2"
+	ModeLegacy   Mode = "legacy"
+	ModeV2       Mode = "v2"
+	ModePlanning Mode = "planning"
 
 	MaxAttempts       = 3
 	MaxCandidateRunes = 24_000
 )
 
-// ParseMode 严格解析 BUILD_HARNESS_MODE；空值使用已验收的 v2，legacy 可显式回切。
+// ParseMode 严格解析 BUILD_HARNESS_MODE；默认自主规划，旧执行器仅显式诊断。
 func ParseMode(value string) (Mode, error) {
 	mode := Mode(strings.ToLower(strings.TrimSpace(value)))
 	if mode == "" {
-		return ModeV2, nil
+		return ModePlanning, nil
 	}
-	if mode != ModeLegacy && mode != ModeV2 {
-		return "", fmt.Errorf("BUILD_HARNESS_MODE=%q 无效:须为 legacy 或 v2", value)
+	if mode != ModeLegacy && mode != ModeV2 && mode != ModePlanning {
+		return "", fmt.Errorf("BUILD_HARNESS_MODE=%q 无效:须为 legacy、v2 或 planning", value)
 	}
 	return mode, nil
 }

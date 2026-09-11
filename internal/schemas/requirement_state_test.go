@@ -138,7 +138,7 @@ func TestRequirementStateRejectsUngroundedAndInvalidOperationsAtomically(t *test
 		`[{"op":"set","field":"noise_pref","value":"silent","quote":"尽量安静"}]`,
 		`[{"op":"set","field":"budget_cny","value":9000,"quote":"新预算"},{"op":"set","field":"noise_pref","value":"invalid","quote":"新预算"}]`,
 		`[{"op":"set","field":"private_profile","value":"朋友","quote":"新预算"}]`,
-		`[{"op":"set","field":"budget_flex","value":0.8,"quote":"新预算"}]`,
+		`[{"op":"set","field":"budget_flex","value":-0.8,"quote":"新预算"}]`,
 		`[{"op":"restore","field":"budget_cny","quote":"新预算"}]`,
 	} {
 		update, err := DecodeRequirementUpdate([]byte(`{"operations":` + ops + `}`))

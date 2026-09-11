@@ -35,19 +35,20 @@ type WireDraft struct {
 }
 
 type BuildRow struct {
-	ID        int64
-	Version   int
-	ParentID  *int64
-	CreatedAt time.Time
-	Intent    string
-	Draft     WireDraft
-	Report    schemas.ValidationReport
-	Quote     validate.Quote
-	Spec      json.RawMessage
+	CandidateSnapshot json.RawMessage
+	ID                int64
+	Version           int
+	ParentID          *int64
+	CreatedAt         time.Time
+	Intent            string
+	Draft             WireDraft
+	Report            schemas.ValidationReport
+	Quote             validate.Quote
+	Spec              json.RawMessage
 }
 
 func DecodeBuild(b store.BuildVersion, spec json.RawMessage) (BuildRow, error) {
-	row := BuildRow{ID: b.ID, Version: b.Version, ParentID: b.ParentID, CreatedAt: b.CreatedAt, Intent: "整单生成", Spec: spec}
+	row := BuildRow{CandidateSnapshot: b.CandidateSnapshot, ID: b.ID, Version: b.Version, ParentID: b.ParentID, CreatedAt: b.CreatedAt, Intent: "整单生成", Spec: spec}
 	if err := json.Unmarshal(b.Draft, &row.Draft); err != nil {
 		return BuildRow{}, fmt.Errorf("v%d draft 解码失败: %w", b.Version, err)
 	}
@@ -95,6 +96,12 @@ func (r BuildRow) SKUs() []string {
 }
 
 func (r BuildRow) BudgetCNY() int {
+	var input schemas.PlanningInput
+	if json.Unmarshal(r.Spec, &input) == nil && input.SchemaVersion == 2 {
+		var budget int
+		_ = json.Unmarshal(input.State.Fields["budget_cny"].Value, &budget)
+		return budget
+	}
 	if len(r.Spec) == 0 {
 		return 0
 	}
@@ -253,10 +260,22 @@ func RenderExportWithPriceMetadata(row BuildRow, names map[string]string, freshn
 		}
 		b.WriteString("\n")
 	}
+	var input schemas.PlanningInput
+	if json.Unmarshal(row.Spec, &input) == nil && input.SchemaVersion == 2 {
+		fmt.Fprintf(&b, "- 需求修订：%d\n", input.State.Revision)
+		if row.BudgetCNY() > 0 {
+			fmt.Fprintf(&b, "- 预算：¥%d\n", row.BudgetCNY())
+		} else {
+			b.WriteString("- 预算：未说明\n")
+		}
+	}
 	b.WriteString("\n| 品类 | SKU | 品牌型号 | 数量 | 单价(¥) | 小计(¥) |\n")
 	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
 	for _, line := range row.Quote.Lines {
 		name := names[line.SKU]
+		if snapshotName := rSnapshotName(row.CandidateSnapshot, line.SKU); snapshotName != "" {
+			name = snapshotName
+		}
 		if name == "" {
 			name = "-"
 		}
@@ -319,6 +338,23 @@ func RenderExportWithPriceMetadata(row BuildRow, names map[string]string, freshn
 	}
 	if flagged == 0 {
 		fmt.Fprintf(&b, "- 全部 %d 条规则通过。\n", len(row.Report.Checks))
+	}
+	var provenance struct {
+		Evidence []struct {
+			URL        string `json:"url"`
+			Title      string `json:"title"`
+			Text       string `json:"text"`
+			CapturedAt string `json:"captured_at"`
+		} `json:"evidence"`
+	}
+	if json.Unmarshal(row.CandidateSnapshot, &provenance) == nil && len(provenance.Evidence) > 0 {
+		b.WriteString("\n## 资料来源（本版本快照）\n\n")
+		for _, e := range provenance.Evidence {
+			if !strings.HasPrefix(e.URL, "https://") {
+				continue
+			}
+			fmt.Fprintf(&b, "- %s：%s（获取时间：%s）\n  - 摘录：%s\n", e.Title, e.URL, e.CapturedAt, strings.ReplaceAll(e.Text, "\n", " "))
+		}
 	}
 	b.WriteString("\n## 免责边界\n\n")
 	snapshot := row.Quote.SnapshotDate
@@ -387,4 +423,23 @@ func SignedFen(fen int) string {
 		return "+" + FormatFen(fen)
 	}
 	return FormatFen(fen)
+}
+
+// rSnapshotName keeps archived and external product names stable across catalog updates.
+func rSnapshotName(raw json.RawMessage, id string) string {
+	var snapshot struct {
+		Candidates []struct {
+			ID    string `json:"id"`
+			Model string `json:"model"`
+		} `json:"candidates"`
+	}
+	if json.Unmarshal(raw, &snapshot) != nil {
+		return ""
+	}
+	for _, c := range snapshot.Candidates {
+		if c.ID == id {
+			return c.Model
+		}
+	}
+	return ""
 }

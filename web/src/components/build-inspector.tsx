@@ -1,4 +1,5 @@
 "use client";
+import { requirementLabel, requirementValue } from "./requirement-status";
 
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, CircleHelp, GitCompareArrows, XCircle } from "lucide-react";
@@ -51,7 +52,7 @@ export function BuildInspector({ sessionID, builds, build, latestVersion, canCha
     <div className="shrink-0 border-b px-4 py-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><div className="text-xs text-[var(--ink-subtle)]">当前查看</div><div className="mt-1 flex items-center gap-2"><span className="text-lg font-semibold">v{build.summary.version}</span>{historical && <span className="rounded border px-2 py-0.5 text-xs text-[var(--ink-muted)]">历史只读</span>}<StatusMark value={build.summary.overall_status} /></div></div>
-        <div className="text-right"><div className="tabular text-xl font-semibold">¥{build.quote.budget_basis === "new_purchase" ? build.quote.purchase_total_cny ?? build.quote.total_cny : build.quote.total_cny}</div>{build.quote.purchase_total_cny != null && <div className="text-xs text-[var(--ink-muted)]">新增购买 ¥{build.quote.purchase_total_cny} · 整机参考 ¥{build.quote.total_cny}</div>}<div className="text-xs text-[var(--ink-muted)]">预算差 ¥{build.quote.budget_delta_cny}</div></div>
+        <div className="text-right"><div className="tabular text-xl font-semibold">¥{build.quote.budget_basis === "new_purchase" ? build.quote.purchase_total_cny ?? build.quote.total_cny : build.quote.total_cny}</div>{build.quote.purchase_total_cny != null && <div className="text-xs text-[var(--ink-muted)]">新增购买 ¥{build.quote.purchase_total_cny} · 整机参考 ¥{build.quote.total_cny}</div>}<div className="text-xs text-[var(--ink-muted)]">{build.quote.budget_known === false ? "预算未说明" : `预算差 ¥${build.quote.budget_delta_cny}`}</div></div>
       </div>
       <dl className="mt-4 grid grid-cols-3 gap-3 text-xs"><Meta label="父版本" value={build.summary.parent_version ? `v${build.summary.parent_version}` : "—"} /><Meta label="价格快照" value={build.quote.snapshot_date} /><Meta label="缺价项" value={String(build.quote.missing_count)} /></dl>
       <div className="mt-4"><PriceFreshnessNotice value={build.quote.price_freshness} compact /></div>
@@ -79,6 +80,7 @@ function Parts({ build, allowReplace, onReplace }: { build: BuildView; allowRepl
       <div className="col-span-2 row-start-2 min-w-0 break-words"><div className="font-medium">{part?.name ?? "未选择"}</div>{part?.rationale && <p className="mt-1 text-xs text-[var(--ink-muted)]">{part.rationale}</p>}{part?.price_observed_date && <p className={`mt-1 text-xs ${part.price_freshness === "stale" ? "status-fail" : part.price_freshness === "aging" || part.price_freshness === "unknown" ? "status-review" : "text-[var(--ink-subtle)]"}`}>观察于 {part.price_observed_date} · {freshnessLabel(part.price_freshness)}</p>}<PriceAvailabilityNotice value={part?.price_availability_basis} />{part?.quantity && part.quantity > 1 ? <span className="text-xs text-[var(--ink-subtle)]">数量 × {part.quantity}</span> : null}</div>
       <div className="col-start-2 row-start-1 text-right"><div className="tabular text-sm">{part?.subtotal_cny ? `¥${part.subtotal_cny}` : <span className="status-review">缺价，未计入合计</span>}</div>{part?.owned && <div className="text-xs text-[var(--ink-muted)]">用户已有，无需购买</div>}{allowReplace && !part?.owned && <Button variant="ghost" size="sm" className="mt-1" onClick={() => onReplace(category)}>更换此件</Button>}</div>
     </div>; })}
+    {build.candidate_snapshot?.reply && <details className="border-b px-4 py-3 text-sm"><summary className="cursor-pointer">本版本选型说明与取舍</summary><p className="mt-3 whitespace-pre-wrap leading-6">{build.candidate_snapshot.reply}</p>{(build.candidate_snapshot.assumptions ?? []).length > 0 && <><p className="mt-3 text-xs text-[var(--ink-muted)]">以下为选配假设，不是用户已表达的要求：</p><ul className="mt-2 list-disc space-y-2 pl-4 text-xs">{build.candidate_snapshot.assumptions?.map((a, i) => <li key={i}>{a}</li>)}</ul></>}</details>}
     <Disclaimers values={build.disclaimers} />
   </div>;
 }
@@ -90,6 +92,7 @@ function Validation({ build }: { build: BuildView }) {
 
 export function RequirementReadOnly({ build }: { build: BuildView }) {
   const r = build.requirement;
+  if (r.schema_version === 2) return <div className="space-y-4 p-4">{Object.entries(r.requirement_state.fields).filter(([, f]) => f.status === "active").map(([key, f]) => <div key={key}><p className="text-xs text-[var(--ink-muted)]">{requirementLabel(key)}</p><p className="mt-1">{requirementValue(key, f.value)}</p></div>)}<Disclaimers values={build.disclaimers} /></div>;
   return <div className="space-y-5 p-4 sm:p-6"><dl className="grid grid-cols-2 gap-4 text-sm"><Meta label="预算" value={`¥${r.budget_cny}`} /><Meta label="弹性" value={`${Math.round(r.budget_flex * 100)}%`} /><Meta label="用途" value={r.use_case.type} /><Meta label="尺寸" value={r.size_pref} /><Meta label="噪音" value={r.noise_pref} /><Meta label="分辨率" value={r.use_case.resolution ?? "—"} /></dl>{r.use_case.titles.length > 0 && <div><div className="text-xs text-[var(--ink-subtle)]">目标应用 / 游戏</div><p className="mt-1">{r.use_case.titles.join("、")}</p></div>}<div><div className="text-xs text-[var(--ink-subtle)]">补充说明</div><p className="mt-1 whitespace-pre-wrap text-[var(--ink-muted)]">{r.notes || "无"}</p></div><Disclaimers values={build.disclaimers} /></div>;
 }
 

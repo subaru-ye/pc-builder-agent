@@ -1,5 +1,7 @@
 # Agent 评估
 
+> 新默认 planning 的测试与限额冒烟见[自主规划流程](../tech/自主规划流程.md)。本目录旧 v2/legacy 基线保留，不作为新执行器的通过率声明。
+
 本目录汇集 Agent 评估的方法论、项目落地分析与**产品侧档案**:评估集怎么建的、每次真实跑测出了什么。方法论出处与路线图见 [methodology/](methodology/),实现设计见 [../tech/评估Runner设计.md](../tech/评估Runner设计.md)。
 
 | 文档 | 内容 |

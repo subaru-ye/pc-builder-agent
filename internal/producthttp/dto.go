@@ -9,6 +9,7 @@ import (
 )
 
 type sessionSummaryDTO struct {
+	StatusLabel   string             `json:"status_label,omitempty"`
 	SchemaVersion int                `json:"schema_version"`
 	ID            string             `json:"id"`
 	Title         string             `json:"title"`
@@ -42,6 +43,7 @@ type runDTO struct {
 }
 
 type sessionDTO struct {
+	Proposal json.RawMessage `json:"proposal,omitempty"`
 	sessionSummaryDTO
 	Messages                  []messageDTO        `json:"messages"`
 	PendingRequirement        json.RawMessage     `json:"pending_requirement"`
@@ -59,6 +61,7 @@ type sessionDTO struct {
 
 func toSessionSummary(s store.WebSession) sessionSummaryDTO {
 	return sessionSummaryDTO{
+		StatusLabel:   s.StatusLabel,
 		SchemaVersion: 1, ID: s.ID, Title: s.Title, Phase: s.Phase, Archived: s.Archived,
 		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt, VersionCount: s.VersionCount,
 	}
@@ -99,6 +102,7 @@ func toSession(detail product.SessionDetail) sessionDTO {
 		lastError = json.RawMessage("null")
 	}
 	return sessionDTO{
+		Proposal:                  detail.Proposal,
 		sessionSummaryDTO:         toSessionSummary(detail.Session),
 		Messages:                  messages,
 		PendingRequirement:        pending,

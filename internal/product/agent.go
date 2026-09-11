@@ -16,6 +16,7 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
 	"github.com/subaru-ye/pc-builder-agent/internal/buildharness"
 	"github.com/subaru-ye/pc-builder-agent/internal/hostruntime"
+	"github.com/subaru-ye/pc-builder-agent/internal/planning"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
 
@@ -39,6 +40,7 @@ type ScreenResult struct {
 }
 
 type RemoteResult struct {
+	Planning *planning.Result
 	Text     string
 	Decision *buildharness.Decision
 }
@@ -236,6 +238,7 @@ func collectAgentText(seq func(func(*session.Event, error) bool), author string)
 func collectRemoteResult(seq func(func(*session.Event, error) bool), author string) (RemoteResult, error) {
 	last := ""
 	var decision *buildharness.Decision
+	var planned *planning.Result
 	var runErr error
 	seq(func(ev *session.Event, err error) bool {
 		if err != nil {
@@ -254,6 +257,9 @@ func collectRemoteResult(seq func(func(*session.Event, error) bool), author stri
 		}
 		var b strings.Builder
 		for _, part := range ev.Content.Parts {
+			if value := pipeline.ReadPlanningResult(part); value != nil {
+				planned = value
+			}
 			if parsed := pipeline.ReadBuildDecisionPart(part); parsed != nil {
 				decision = parsed
 			}
@@ -272,5 +278,5 @@ func collectRemoteResult(seq func(func(*session.Event, error) bool), author stri
 	if last == "" && decision == nil {
 		return RemoteResult{}, fmt.Errorf("agent 未返回面向用户的文本")
 	}
-	return RemoteResult{Text: last, Decision: decision}, nil
+	return RemoteResult{Text: last, Decision: decision, Planning: planned}, nil
 }

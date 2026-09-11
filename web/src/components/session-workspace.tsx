@@ -3,12 +3,13 @@
 import { ChatMessage } from "@/components/chat-message";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowLeft, Loader2, MessageSquare, PanelRight, RefreshCw } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { AppHeader } from "./app-header";
 import { BuildInspector, RequirementReadOnly } from "./build-inspector";
 import { Composer } from "./composer";
+import { ProposalInspector } from "./proposal-inspector";
 import { RequirementForm } from "./requirement-form";
 import { RequirementStatus, RequirementSummary } from "./requirement-status";
 import { SessionNavigation, SessionNavigationTrigger } from "./session-navigation";
@@ -27,6 +28,7 @@ import { useUIStore } from "@/stores/ui";
 export function SessionWorkspace({ sessionID }: { sessionID: string }) {
   const client = useQueryClient();
   const search = useSearchParams();
+  const router = useRouter();
   const [draft, setDraft] = useState("");
   const [run, setRun] = useState<Run | null>(null);
   const [stage, setStage] = useState<string | null>(null);
@@ -58,7 +60,13 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
     await Promise.all([client.invalidateQueries({ queryKey: queryKeys.session(sessionID) }), client.invalidateQueries({ queryKey: queryKeys.builds(sessionID) })]);
     if (version) await client.invalidateQueries({ queryKey: queryKeys.build(sessionID, version) });
     await client.invalidateQueries({ queryKey: ["diff", sessionID] });
-  }, [client, sessionID]);
+    if (version) {
+      setInspectorTab("build");
+      const params = new URLSearchParams(search.toString());
+      params.delete("version");
+      router.replace(`/s/${sessionID}${params.size ? `?${params}` : ""}`, { scroll: false });
+    }
+  }, [client, sessionID, router, search, setInspectorTab]);
   const onEvent = useCallback((event: RunEvent) => {
     if (event.event === "run.progress") setStage(String(event.data.payload.stage ?? ""));
     if (event.event === "requirement.ready" || event.event === "requirement.updated" || event.event === "assistant.completed") void refreshSession();
@@ -110,8 +118,8 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
     }
   };
   const confirm = useMutation({
-    mutationFn: async ({ value, dirty }: { value: RequirementSpec; dirty: boolean }) => {
-      if (dirty) await api.replaceRequirement(sessionID, value, crypto.randomUUID());
+    mutationFn: async ({ value, dirty }: { value: NonNullable<Session["pending_requirement"]>; dirty: boolean }) => {
+      if (dirty && value.schema_version === 1) await api.replaceRequirement(sessionID, value, crypto.randomUUID());
       return api.confirmRequirement(sessionID, crypto.randomUUID());
     },
     onSuccess: (nextRun) => { followLatest.current = true; setRun(nextRun); setStage("remote_processing"); afterDetailClose.current = focusRequirementsEntry; setDetailsOpen(false); setInspectorTab("build"); void refreshSession(); },
@@ -176,10 +184,11 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
   const errorExplainedInChat = !!data.last_error?.detail && lastMessage?.role === "assistant" && !!lastMessage.display_content?.includes(data.last_error.detail);
   const busy = data.phase === "building" || data.phase === "changing" || !!currentRun;
   const canSend = data.phase === "collecting" || data.phase === "ready" || data.phase === "requirement_ready" || data.phase === "error";
-  const inspector = <BuildInspector sessionID={sessionID} builds={builds.data ?? []} build={build.data} latestVersion={latestVersion} canChange={data.phase === "ready"} onReplace={replace} />;
+  const configuration = <BuildInspector sessionID={sessionID} builds={builds.data ?? []} build={build.data} latestVersion={latestVersion} canChange={data.phase === "ready"} onReplace={replace} />;
+  const inspector = data.proposal ? <ProposalInspector key={data.proposal.id} proposal={data.proposal}>{configuration}</ProposalInspector> : configuration;
   const requirements = data.requirement_state
     ? <div className="h-full overflow-y-auto"><RequirementStatus session={data} busy={busy || confirm.isPending || send.isPending} onUpdate={updateRequirement} onSource={showSource} onConfirm={() => data.pending_requirement ? confirm.mutateAsync({ value: data.pending_requirement, dirty: false }).then(() => undefined) : Promise.resolve()} /></div>
-    : data.phase === "requirement_ready" && data.pending_requirement
+    : data.phase === "requirement_ready" && data.pending_requirement?.schema_version === 1
       ? <div className="h-full overflow-y-auto"><RequirementForm value={data.pending_requirement} busy={confirm.isPending} onSave={saveRequirement} onConfirm={(value, dirty) => confirm.mutateAsync({ value, dirty }).then(() => undefined)} /></div>
       : build.data
         ? <div className="h-full overflow-y-auto"><p className="px-4 pt-4 text-sm text-[var(--ink-muted)]">配置 v{build.data.summary.version} 的已确认需求（只读）</p><RequirementReadOnly build={build.data} /></div>
@@ -195,11 +204,11 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
         </div>
         <div ref={conversationScroll} className="min-h-0 flex-1 overflow-y-auto" onScroll={(event) => { const scroll = event.currentTarget; followLatest.current = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 96; }}>
           <div className={`mx-auto w-full max-w-4xl px-4 py-5 sm:px-6 ${data.messages.length === 0 ? "flex min-h-full flex-col" : ""}`}>
-          <div className={`mb-5 min-h-11 items-center justify-between gap-3 text-xs text-[var(--ink-muted)] ${data.messages.length === 0 ? "flex lg:hidden" : "flex"}`}><span>{phaseLabels[data.phase]}</span><Button variant="ghost" size="sm" className="lg:hidden" aria-label="查看配置详情" onClick={() => openDetails("build")}><PanelRight size={15} />{data.version_count ? `查看配置 · ${data.version_count} 个版本` : "查看配置"}</Button></div>
+          <div className={`mb-5 min-h-11 items-center justify-between gap-3 text-xs text-[var(--ink-muted)] ${data.messages.length === 0 ? "flex lg:hidden" : "flex"}`}><span>{data.status_label || phaseLabels[data.phase]}</span><Button variant="ghost" size="sm" className="lg:hidden" aria-label="查看配置详情" onClick={() => openDetails("build")}><PanelRight size={15} />{data.version_count ? `查看配置 · ${data.version_count} 个版本` : "查看配置"}</Button></div>
           {data.messages.length === 0 && <div className="my-auto flex w-full flex-col items-center py-8 text-center" data-testid="conversation-welcome"><MessageSquare size={24} className="mb-4 text-[var(--ink-subtle)]" aria-hidden="true" /><h1 className="text-xl font-semibold">开始新的装机对话</h1><p className="mt-2 max-w-md text-sm text-[var(--ink-muted)]">先说说预算和主要用途，其他偏好可以边聊边补充。</p><SuggestedPrompts centered onSelect={setDraft} /></div>}
           <div className="space-y-5">{data.messages.map((message) => <ChatMessage key={message.id} message={message} activeRunID={currentRun?.id} />)}</div>
           {busy && <RunProgress stage={stage} connection={connection} />}
-          {data.phase === "requirement_ready" && <div className="mt-6 rounded-md border border-[var(--primary)]/45 bg-[var(--primary)]/5 p-4 text-sm"><p className="font-medium">需求已经整理好</p><p className="mt-1 text-[var(--ink-muted)]">请核对当前需求并确认，确认前不会生成配置。</p><Button variant="outline" className="mt-3" onClick={() => openDetails("requirement")}>核对当前需求</Button></div>}
+          {data.phase === "requirement_ready" && (!data.proposal || data.requirement_status === "modified") && <div className="mt-6 rounded-md border border-[var(--primary)]/45 bg-[var(--primary)]/5 p-4 text-sm"><p className="font-medium">可以开始选配</p><p className="mt-1 text-[var(--ink-muted)]">请核对当前需求后开始选配。未知项会保留，可继续讨论。</p><Button variant="outline" className="mt-3" onClick={() => openDetails("requirement")}>核对当前需求</Button></div>}
           {data.phase === "error" && <div role="alert" className="mt-6 border-l-2 border-l-[var(--error)] bg-[var(--surface-1)] p-4"><p className="font-medium status-fail">{data.last_error?.title ?? "本次运行失败"}</p>{!errorExplainedInChat && <p className="mt-1 text-sm text-[var(--ink-muted)]">{data.last_error ? userMessage(new ApiError(data.last_error)) : "已保存此前数据，你可以显式重试。"}</p>}<div className="mt-3 flex flex-wrap gap-2">{data.requirement_state && <Button variant="outline" disabled={busy} onClick={() => openDetails("requirement")}>查看或补充需求</Button>}<Button variant="outline" disabled={send.isPending || confirm.isPending} onClick={retry}><RefreshCw size={15} />重试上一步</Button></div></div>}
           {(send.isError || confirm.isError) && <p role="alert" className="mt-4 status-fail">{userMessage(send.error ?? confirm.error)}</p>}
           </div>

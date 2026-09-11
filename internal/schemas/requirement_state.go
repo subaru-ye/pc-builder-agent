@@ -71,6 +71,8 @@ type RequirementChange struct {
 }
 
 type RequirementState struct {
+	Reply         string                      `json:"reply,omitempty"`
+	NextAction    string                      `json:"next_action,omitempty"`
 	SchemaVersion int                         `json:"schema_version"`
 	Revision      int                         `json:"revision"`
 	Fields        map[string]RequirementField `json:"fields"`
@@ -93,6 +95,8 @@ type RequirementOperation struct {
 }
 
 type RequirementUpdate struct {
+	Reply        string                        `json:"reply,omitempty"`
+	NextAction   string                        `json:"next_action,omitempty"`
 	Operations   []RequirementOperation        `json:"operations"`
 	Observations []RequirementObservationInput `json:"observations,omitempty"`
 }
@@ -147,6 +151,7 @@ func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, so
 			next.Fields[key] = RequirementField{Status: "unknown"}
 		}
 	}
+	next.Reply, next.NextAction = update.Reply, update.NextAction
 	next.Revision++
 	next.Changes = []RequirementChange{}
 	if next.Alternatives == nil {
@@ -157,6 +162,11 @@ func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, so
 	}
 	for _, op := range update.Operations {
 		before, ok := next.Fields[op.Field]
+		if !ok && FreeField(op.Field) {
+			before = RequirementField{Status: "unknown"}
+			next.Fields[op.Field] = before
+			ok = true
+		}
 		if !ok || !knownRequirementField(op.Field) {
 			return state, fmt.Errorf("requirement update: 未知字段 %q", op.Field)
 		}
@@ -298,6 +308,9 @@ func ValidRequirementKind(kind string) bool {
 }
 
 func knownRequirementField(key string) bool {
+	if FreeField(key) {
+		return true
+	}
 	for _, known := range RequirementFieldKeys {
 		if key == known {
 			return true
@@ -316,6 +329,9 @@ func defaultRequirementStrength(key string) string {
 }
 
 func validateRequirementValue(key string, raw json.RawMessage) error {
+	if FreeField(key) {
+		key = "notes"
+	}
 	if !json.Valid(raw) || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return fmt.Errorf("requirement update: %s 必须提供非空 JSON 值", key)
 	}
@@ -331,8 +347,8 @@ func validateRequirementValue(key string, raw json.RawMessage) error {
 	case "budget_flex":
 		var n float64
 		err = json.Unmarshal(raw, &n)
-		if err == nil && (n < 0 || n > maxBudgetFlex) {
-			err = fmt.Errorf("必须在 [0,0.3] 内")
+		if err == nil && n < 0 {
+			err = fmt.Errorf("必须为非负数")
 		}
 	case "use_case.type":
 		value = new(UseCaseType)
@@ -552,6 +568,9 @@ func RequirementStateQuestions(state RequirementState) string {
 }
 
 func RequirementFieldLabel(key string) string {
+	if FreeField(key) {
+		return "补充要求"
+	}
 	labels := map[string]string{"budget_cny": "预算", "budget_flex": "预算弹性", "budget_basis": "预算口径", "use_case.type": "用途", "use_case.titles": "游戏或软件", "use_case.resolution": "分辨率", "use_case.fps_target": "目标帧率", "existing_parts": "已有配件", "owned_parts": "已有配件型号", "brand_pref.cpu": "CPU 品牌", "brand_pref.gpu": "显卡品牌", "noise_pref": "静音", "size_pref": "尺寸", "appearance": "外观", "notes": "补充说明", "recipient": "装机对象"}
 	if label := labels[key]; label != "" {
 		return label

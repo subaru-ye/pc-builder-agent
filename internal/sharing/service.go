@@ -2,6 +2,7 @@ package sharing
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/url"
@@ -120,6 +121,7 @@ type PublicBrandPref struct {
 }
 
 type PublicRequirementSummary struct {
+	KnownFields       *[]string          `json:"known_fields,omitempty"`
 	BudgetCNY         string             `json:"budget_cny"`
 	BudgetFlexPercent int                `json:"budget_flex_percent"`
 	UseCase           PublicUseCase      `json:"use_case"`
@@ -160,6 +162,7 @@ type PublicShareMeta struct {
 }
 
 type PublicBuildView struct {
+	Sources       []PublicSource           `json:"sources,omitempty"`
 	SchemaVersion int                      `json:"schema_version"`
 	Summary       PublicBuildSummary       `json:"summary"`
 	Requirement   PublicRequirementSummary `json:"requirement"`
@@ -168,6 +171,12 @@ type PublicBuildView struct {
 	Validation    PublicValidation         `json:"validation"`
 	Disclaimers   []string                 `json:"disclaimers"`
 	Share         PublicShareMeta          `json:"share"`
+}
+
+type PublicSource struct {
+	URL        string `json:"url"`
+	Title      string `json:"title"`
+	CapturedAt string `json:"captured_at"`
 }
 
 func (s *Service) Public(ctx context.Context, token string) (PublicBuildView, error) {
@@ -204,6 +213,49 @@ func (s *Service) publicShare(ctx context.Context, token string) (store.BuildSha
 
 func toPublic(view presenter.BuildView, createdAt time.Time) (PublicBuildView, error) {
 	requirement, err := schemas.DecodeRequirementSpec(view.Requirement)
+	var input schemas.PlanningInput
+	known := []string(nil)
+	var knownFields *[]string
+	if json.Unmarshal(view.Requirement, &input) == nil && input.SchemaVersion == 2 {
+		err = nil
+		requirement = schemas.RequirementSpec{}
+		known = []string{}
+		read := func(key string, dst any) {
+			if f := input.State.Fields[key]; f.Status == "active" {
+				if json.Unmarshal(f.Value, dst) == nil {
+					known = append(known, key)
+				}
+			}
+		}
+		read("budget_cny", &requirement.BudgetCNY)
+		read("budget_flex", &requirement.BudgetFlex)
+		read("use_case.type", &requirement.UseCase.Type)
+		read("use_case.titles", &requirement.UseCase.Titles)
+		read("use_case.resolution", &requirement.UseCase.Resolution)
+		read("use_case.fps_target", &requirement.UseCase.FPSTarget)
+		read("size_pref", &requirement.SizePref)
+		read("noise_pref", &requirement.NoisePref)
+		read("brand_pref.cpu", &requirement.BrandPref.CPU)
+		read("brand_pref.gpu", &requirement.BrandPref.GPU)
+		read("existing_parts", &requirement.ExistingParts)
+		read("priority", &requirement.Priority)
+		if requirement.UseCase.Type == "" {
+			requirement.UseCase.Type = "unknown"
+		}
+		if requirement.SizePref == "" {
+			requirement.SizePref = "unknown"
+		}
+		if requirement.NoisePref == "" {
+			requirement.NoisePref = "unknown"
+		}
+		if requirement.BrandPref.CPU == "" {
+			requirement.BrandPref.CPU = "unknown"
+		}
+		if requirement.BrandPref.GPU == "" {
+			requirement.BrandPref.GPU = "unknown"
+		}
+		knownFields = &known
+	}
 	if err != nil {
 		return PublicBuildView{}, fmt.Errorf("sharing: 公开需求摘要解码失败: %w", err)
 	}
@@ -232,14 +284,25 @@ func toPublic(view presenter.BuildView, createdAt time.Time) (PublicBuildView, e
 		checks = append(checks, PublicValidationCheck{RuleID: check.RuleID, Outcome: check.Outcome,
 			Severity: check.Severity, MissingFields: missing, Detail: check.Detail})
 	}
+	var snapshot struct {
+		Evidence []PublicSource `json:"evidence"`
+	}
+	_ = json.Unmarshal(view.CandidateSnapshot, &snapshot)
+	sources := []PublicSource{}
+	for _, e := range snapshot.Evidence {
+		if strings.HasPrefix(e.URL, "https://") {
+			sources = append(sources, e)
+		}
+	}
 	return PublicBuildView{
+		Sources:       sources,
 		SchemaVersion: 1,
 		Summary: PublicBuildSummary{SchemaVersion: 1, Version: view.Summary.Version,
 			ParentVersion: view.Summary.ParentVersion, IntentLabel: intentLabel(view.Summary.Intent),
 			TotalCNY: view.Summary.TotalCNY, SnapshotDate: view.Summary.SnapshotDate,
 			PriceFreshness: view.Summary.PriceFreshness,
 			OverallStatus:  view.Summary.OverallStatus, CreatedAt: view.Summary.CreatedAt},
-		Requirement: PublicRequirementSummary{BudgetCNY: presenter.FormatFen(requirement.BudgetCNY * 100),
+		Requirement: PublicRequirementSummary{KnownFields: knownFields, BudgetCNY: presenter.FormatFen(requirement.BudgetCNY * 100),
 			BudgetFlexPercent: int(math.Round(requirement.BudgetFlex * 100)),
 			UseCase: PublicUseCase{Type: requirement.UseCase.Type, Titles: titles, Resolution: resolution,
 				FPSTarget: requirement.UseCase.FPSTarget},

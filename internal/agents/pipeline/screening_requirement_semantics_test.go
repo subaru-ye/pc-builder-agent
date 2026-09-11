@@ -70,7 +70,7 @@ func TestScreeningInvalidFieldDoesNotRejectOtherFields(t *testing.T) {
 	next := semanticTurn(t, schemas.NewRequirementState(), "手头9000，做点文档，弹性还没想好", `{"operations":[
 		{"op":"set","field":"budget_cny","value":9000,"evidence":"stated","quote":"手头9000"},
 		{"op":"set","field":"use_case.type","value":"general","evidence":"stated","quote":"做点文档"},
-		{"op":"set","field":"budget_flex","value":0.9,"evidence":"stated","quote":"弹性还没想好"},
+		{"op":"set","field":"budget_flex","value":-0.9,"evidence":"stated","quote":"弹性还没想好"},
 		{"op":"set","field":"noise_pref","value":"silent","evidence":"stated","quote":"旧消息中要求静音"}
 	]}`)
 	if next.Fields["budget_cny"].Status != "active" || next.Fields["use_case.type"].Status != "active" || next.Fields["budget_flex"].Status != "conflict" || next.Fields["noise_pref"].Status != "unknown" {

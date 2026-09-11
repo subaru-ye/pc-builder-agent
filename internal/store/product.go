@@ -51,6 +51,7 @@ const (
 )
 
 type WebSession struct {
+	StatusLabel               string
 	ID                        string
 	OwnerID                   string
 	CreateRequestID           string
@@ -111,7 +112,12 @@ func (s *Store) Ping(ctx context.Context) error {
 const webSessionColumns = `s.id, s.owner_id, s.create_request_id::text, s.title, s.phase,
        s.recovery_phase, s.pending_requirement, s.last_error, s.created_at, s.updated_at,
        (SELECT count(*) FROM builds b WHERE b.session_id = s.id),
-       s.requirement_state, s.confirmed_requirement_state, s.confirmed_requirement, s.confirmed_at, s.archived`
+       s.requirement_state, s.confirmed_requirement_state, s.confirmed_requirement, s.confirmed_at, s.archived,
+       CASE WHEN s.phase='requirement_ready' AND EXISTS (
+           SELECT 1 FROM session_proposals p WHERE p.id=(SELECT max(p2.id) FROM session_proposals p2 WHERE p2.session_id=s.id)
+           AND p.result->>'outcome'='proposal'
+           AND p.requirement->'requirement_state'->>'revision'=s.requirement_state->>'revision'
+       ) THEN '方案待完善' ELSE '' END`
 
 func scanWebSession(row interface{ Scan(...any) error }) (WebSession, error) {
 	var (
@@ -120,7 +126,7 @@ func scanWebSession(row interface{ Scan(...any) error }) (WebSession, error) {
 	)
 	err := row.Scan(&s.ID, &s.OwnerID, &s.CreateRequestID, &s.Title, &s.Phase,
 		&recovery, &s.PendingRequirement, &s.LastError, &s.CreatedAt, &s.UpdatedAt, &s.VersionCount,
-		&s.RequirementState, &s.ConfirmedRequirementState, &s.ConfirmedRequirement, &s.ConfirmedAt, &s.Archived)
+		&s.RequirementState, &s.ConfirmedRequirementState, &s.ConfirmedRequirement, &s.ConfirmedAt, &s.Archived, &s.StatusLabel)
 	if recovery != nil {
 		p := SessionPhase(*recovery)
 		s.RecoveryPhase = &p
@@ -140,7 +146,7 @@ func (s *Store) CreateWebSession(ctx context.Context, id, ownerID, requestID str
 		DO UPDATE SET create_request_id = EXCLUDED.create_request_id
 		RETURNING id, owner_id, create_request_id::text, title, phase, recovery_phase,
 		          pending_requirement, last_error, created_at, updated_at, 0,
-		          requirement_state, confirmed_requirement_state, confirmed_requirement, confirmed_at, archived`, id, ownerID, requestID, state)
+		          requirement_state, confirmed_requirement_state, confirmed_requirement, confirmed_at, archived, ''`, id, ownerID, requestID, state)
 	ws, err := scanWebSession(row)
 	if err != nil {
 		return WebSession{}, fmt.Errorf("store: 创建产品会话失败: %w", err)
@@ -476,7 +482,19 @@ func (s *Store) StartConfirmRun(ctx context.Context, p StartConfirmRunParams) (A
 		if err := json.Unmarshal(requirementState, &state); err != nil {
 			return AgentRun{}, nil, false, ErrRequirementRevision
 		}
-		spec, missing, err := schemas.RequirementStateSpec(state)
+		spec, missing, err := planningProjection(state)
+		var header struct {
+			SchemaVersion int `json:"schema_version"`
+		}
+		_ = json.Unmarshal(pending, &header)
+		if header.SchemaVersion == 1 && err == nil {
+			// Explicit confirmation upgrades this draft only. Historical builds
+			// retain their original requirement and candidate snapshots.
+			pending = spec
+			if _, err := tx.Exec(ctx, `UPDATE web_sessions SET pending_requirement = $2 WHERE id = $1`, p.SessionID, pending); err != nil {
+				return AgentRun{}, nil, false, err
+			}
+		}
 		var actual, proposed any
 		if err != nil || len(missing) > 0 || json.Unmarshal(spec, &proposed) != nil || json.Unmarshal(pending, &actual) != nil || !reflect.DeepEqual(actual, proposed) {
 			return AgentRun{}, nil, false, ErrRequirementRevision
@@ -539,6 +557,21 @@ func (s *Store) CompleteRun(ctx context.Context, p CompleteRunParams) (*WebMessa
 		return nil, fmt.Errorf("store: 开启完成运行事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	return s.completeRunStandalone(ctx, tx, p)
+}
+
+func (s *Store) completeRunStandalone(ctx context.Context, tx pgx.Tx, p CompleteRunParams) (*WebMessage, error) {
+	message, err := completeRunTx(ctx, tx, p)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("store: 提交运行结果失败: %w", err)
+	}
+	return message, nil
+}
+
+func completeRunTx(ctx context.Context, tx pgx.Tx, p CompleteRunParams) (*WebMessage, error) {
 	cmd, err := tx.Exec(ctx, `UPDATE agent_runs SET status = $2, error = $3, finished_at = now()
 		WHERE id = $1 AND session_id = $4 AND status = 'running'`, p.RunID, p.Status, nullableJSON(p.Error), p.SessionID)
 	if err != nil {
@@ -569,9 +602,6 @@ func (s *Store) CompleteRun(ctx context.Context, p CompleteRunParams) (*WebMessa
 		p.SetRequirementState, nullableJSON(p.RequirementState))
 	if err != nil {
 		return nil, fmt.Errorf("store: 更新运行最终阶段失败: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("store: 提交运行结果失败: %w", err)
 	}
 	return message, nil
 }
@@ -636,4 +666,9 @@ func (s *Store) LatestBuildVersion(ctx context.Context, sessionID string) (int, 
 		return 0, false, nil
 	}
 	return *v, true, nil
+}
+
+func planningProjection(state schemas.RequirementState) (json.RawMessage, []string, error) {
+	raw, err := schemas.PlanningRequirement(state)
+	return raw, []string{}, err
 }

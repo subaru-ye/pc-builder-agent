@@ -58,6 +58,7 @@ const SessionPhase = z.enum([
   "error",
 ]);
 const SessionSummary = z.object({
+  status_label: z.string().optional(),
   schema_version: z.number().int(),
   id: z.string(),
   title: z.string(),
@@ -76,6 +77,65 @@ const Message = z.object({
   run_id: z.union([z.string(), z.null()]).optional(),
   created_at: z.string().datetime({ offset: true }),
 });
+const RequirementSource = z.object({
+  kind: z.enum(["chat", "edit", "confirmed"]),
+  message_id: z.string(),
+  quote: z.string(),
+});
+const RequirementField: z.ZodType<components["schemas"]["RequirementField"]> = z.lazy(() =>
+  z.object({
+    value: z.unknown().optional(),
+    status: z.enum(["unknown", "active", "removed", "conflict"]),
+    kind: z.enum(["fact", "context", "constraint"]).optional(),
+    evidence: z.enum(["stated", "uncertain"]).optional(),
+    strength: z.enum(["must", "prefer"]).optional(),
+    scope: z.enum(["session", "temporary"]).optional(),
+    source: RequirementSource.optional(),
+    previous: RequirementField.optional(),
+  })
+);
+const RequirementAlternative = z.object({
+  field: z.string(),
+  value: z.unknown(),
+  strength: z.enum(["must", "prefer"]),
+  scope: z.enum(["session", "temporary"]),
+  source: RequirementSource,
+  kind: z.enum(["fact", "context", "constraint"]).optional(),
+});
+const RequirementChange = z.object({
+  revision: z.number().int().gte(1),
+  op: z.enum(["set", "remove", "restore", "alternative", "conflict"]),
+  field: z.string(),
+  before: RequirementField.optional(),
+  after: RequirementField.optional(),
+  source: RequirementSource,
+});
+const RequirementObservation = z.object({
+  field: z.string().optional(),
+  text: z.string().min(1),
+  reason: z.string(),
+  source: RequirementSource,
+  resolved: z.boolean().optional(),
+});
+const RequirementState = z.object({
+  schema_version: z.number().int(),
+  reply: z.string().optional(),
+  next_action: z.enum(["collect", "confirm"]).optional(),
+  revision: z.number().int().gte(0),
+  fields: z.record(z.string(), RequirementField),
+  alternatives: z.array(RequirementAlternative),
+  changes: z.array(RequirementChange),
+  history: z.array(RequirementChange),
+  observations: z.array(RequirementObservation).optional(),
+});
+const PlanningInput = z
+  .object({
+    schema_version: z.number().int(),
+    requirement_state: RequirementState,
+    base_draft: z.object({}).partial().passthrough().optional(),
+    previous_proposal: z.object({}).partial().passthrough().optional(),
+  })
+  .passthrough();
 const PartCategory = z.enum([
   "cpu",
   "gpu",
@@ -86,18 +146,120 @@ const PartCategory = z.enum([
   "case",
   "cooler",
 ]);
-const RequirementSource = z.object({
-  kind: z.enum(["chat", "edit"]),
-  message_id: z.string(),
-  quote: z.string(),
+const PlanningCandidate = z
+  .object({
+    id: z.string(),
+    category: PartCategory,
+    brand: z.string(),
+    model: z.string(),
+    specs: z.object({}).partial().passthrough(),
+    price_cny: z.union([z.string(), z.null()]),
+    evidence: z.array(z.string()),
+    field_evidence: z.record(z.string(), z.string()).optional(),
+    field_quotes: z.record(z.string(), z.string()).optional(),
+    attributes: z.object({}).partial().passthrough().optional(),
+    merchant: z.string().optional(),
+    currency: z.string().optional(),
+    price_observed_at: z.string().optional(),
+    unknown: z.array(z.string()).optional(),
+    external: z.boolean(),
+  })
+  .passthrough();
+const PlanningEvidence = z
+  .object({
+    id: z.string(),
+    url: z.string(),
+    title: z.string(),
+    text: z.string(),
+    captured_at: z.string(),
+    kind: z.string(),
+    candidate_id: z.string().optional(),
+    field: z.string().optional(),
+  })
+  .passthrough();
+const ValidationCheck = z.object({
+  rule_id: z.string(),
+  outcome: z.enum(["pass", "fail", "unknown"]),
+  severity: z.enum(["none", "warning", "error"]),
+  observed: z.object({}).partial().passthrough(),
+  missing_fields: z.array(z.string()),
+  detail: z.string(),
 });
-const RequirementObservation = z.object({
-  field: z.string().optional(),
-  text: z.string().min(1),
-  reason: z.string(),
-  source: RequirementSource,
-  resolved: z.boolean().optional(),
+const ValidationReport = z.object({
+  overall_status: z.enum(["pass", "review", "fail"]),
+  checks: z.array(ValidationCheck).min(12).max(12),
 });
+const PlanningResult = z
+  .object({
+    schema_version: z.number().int(),
+    outcome: z.enum([
+      "collect",
+      "clarify",
+      "proposal",
+      "ready",
+      "technical_fault",
+    ]),
+    model_outcome: z.string().optional(),
+    build_version: z.number().int().gte(1).optional(),
+    delivery: z
+      .object({
+        status: z.enum([
+          "not_applicable",
+          "unresolved",
+          "eligible",
+          "delivered",
+          "stale",
+        ]),
+        issues: z.array(z.string()),
+      })
+      .passthrough()
+      .optional(),
+    reply: z.string(),
+    draft: z.object({}).partial().passthrough().optional(),
+    assessments: z
+      .array(
+        z
+          .object({
+            field: z.string(),
+            status: z.enum(["met", "unmet", "unknown"]),
+            explanation: z.string(),
+            evidence: z.array(z.string()),
+          })
+          .passthrough()
+      )
+      .optional(),
+    issues: z.array(z.string()),
+    assumptions: z.array(z.string()),
+    candidates: z.array(PlanningCandidate),
+    evidence: z.array(PlanningEvidence),
+    validation: ValidationReport.optional(),
+    quote: z
+      .object({
+        total_cny: z.string(),
+        missing_count: z.number().int(),
+        snapshot_date: z.string(),
+      })
+      .passthrough()
+      .optional(),
+    model_calls: z.number().int().optional(),
+    tool_calls: z.number().int().optional(),
+    search_calls: z.number().int().optional(),
+    search_requests: z.number().int().optional(),
+    page_calls: z.number().int().optional(),
+    tokens: z.number().int().optional(),
+    duration_ms: z.number().int().optional(),
+    stage_ms: z.record(z.string(), z.number().int()).optional(),
+  })
+  .passthrough();
+const SessionProposal = z
+  .object({
+    id: z.number().int(),
+    requirement: PlanningInput,
+    parent_version: z.number().int(),
+    created_at: z.string(),
+    result: PlanningResult,
+  })
+  .passthrough();
 const RequirementSpec = z.object({
   schema_version: z.number().int(),
   budget_cny: z.number().int().gte(1),
@@ -134,43 +296,6 @@ const RequirementSpec = z.object({
     .object({ appearance: z.string(), recipient: z.string() })
     .partial()
     .optional(),
-});
-const RequirementField: z.ZodType<components["schemas"]["RequirementField"]> = z.lazy(() =>
-  z.object({
-    value: z.unknown().optional(),
-    status: z.enum(["unknown", "active", "removed", "conflict"]),
-    kind: z.enum(["fact", "context", "constraint"]).optional(),
-    evidence: z.enum(["stated", "uncertain"]).optional(),
-    strength: z.enum(["must", "prefer"]).optional(),
-    scope: z.enum(["session", "temporary"]).optional(),
-    source: RequirementSource.optional(),
-    previous: RequirementField.optional(),
-  })
-);
-const RequirementAlternative = z.object({
-  field: z.string(),
-  value: z.unknown(),
-  strength: z.enum(["must", "prefer"]),
-  scope: z.enum(["session", "temporary"]),
-  source: RequirementSource,
-  kind: z.enum(["fact", "context", "constraint"]).optional(),
-});
-const RequirementChange = z.object({
-  revision: z.number().int().gte(1),
-  op: z.enum(["set", "remove", "restore", "alternative", "conflict"]),
-  field: z.string(),
-  before: RequirementField.optional(),
-  after: RequirementField.optional(),
-  source: RequirementSource,
-});
-const RequirementState = z.object({
-  schema_version: z.number().int(),
-  revision: z.number().int().gte(0),
-  fields: z.record(z.string(), RequirementField),
-  alternatives: z.array(RequirementAlternative),
-  changes: z.array(RequirementChange),
-  history: z.array(RequirementChange),
-  observations: z.array(RequirementObservation).optional(),
 });
 const Problem = z
   .object({
@@ -217,6 +342,7 @@ const Session = SessionSummary.and(
   z
     .object({
       messages: z.array(Message),
+      proposal: SessionProposal.optional(),
       pending_requirement: z.union([RequirementSpec, z.null()]),
       requirement_state: z.union([RequirementState, z.null()]),
       requirement_status: z.enum([
@@ -299,6 +425,14 @@ const BuildSummary = z.object({
   overall_status: z.enum(["pass", "review", "fail"]),
   created_at: z.string().datetime({ offset: true }),
 });
+const SavedPlanningAssessment = z
+  .object({
+    field: z.string(),
+    status: z.enum(["met", "unmet", "unknown"]),
+    explanation: z.string(),
+    evidence: z.array(z.string()),
+  })
+  .passthrough();
 const PartLine = z.object({
   owned: z.boolean().optional(),
   category: PartCategory,
@@ -324,6 +458,7 @@ const PriceFreshnessSummary = z.object({
   unknown_count: z.number().int().gte(0),
 });
 const Quote = z.object({
+  budget_known: z.boolean().optional(),
   purchase_total_cny: Money.regex(/^-?[0-9]+\.[0-9]{2}$/).optional(),
   budget_basis: z.enum(["new_purchase", "full_build"]).optional(),
   snapshot_date: z.string(),
@@ -334,22 +469,21 @@ const Quote = z.object({
   missing_skus: z.array(z.string()),
   price_freshness: PriceFreshnessSummary.optional(),
 });
-const ValidationCheck = z.object({
-  rule_id: z.string(),
-  outcome: z.enum(["pass", "fail", "unknown"]),
-  severity: z.enum(["none", "warning", "error"]),
-  observed: z.object({}).partial().passthrough(),
-  missing_fields: z.array(z.string()),
-  detail: z.string(),
-});
-const ValidationReport = z.object({
-  overall_status: z.enum(["pass", "review", "fail"]),
-  checks: z.array(ValidationCheck).min(12).max(12),
-});
 const BuildView = z.object({
+  candidate_snapshot: z
+    .object({
+      candidates: z.array(PlanningCandidate),
+      evidence: z.array(PlanningEvidence),
+      assessments: z.array(SavedPlanningAssessment),
+      assumptions: z.array(z.string()),
+      reply: z.string(),
+    })
+    .partial()
+    .passthrough()
+    .optional(),
   schema_version: z.number().int(),
   summary: BuildSummary,
-  requirement: RequirementSpec,
+  requirement: z.union([RequirementSpec, PlanningInput]),
   parts: z.array(PartLine),
   quote: Quote,
   validation: ValidationReport,
@@ -399,19 +533,20 @@ const PublicBuildSummary = z.object({
   created_at: z.string().datetime({ offset: true }),
 });
 const PublicRequirementSummary = z.object({
+  known_fields: z.array(z.string()).optional(),
   budget_cny: Money.regex(/^-?[0-9]+\.[0-9]{2}$/),
-  budget_flex_percent: z.number().int().gte(0).lte(30),
+  budget_flex_percent: z.number().int().gte(0),
   use_case: z.object({
-    type: z.enum(["gaming", "productivity", "general"]),
+    type: z.enum(["gaming", "productivity", "general", "unknown"]),
     titles: z.array(z.string()),
     resolution: z.union([z.enum(["1080p", "2K", "4K"]), z.null()]),
     fps_target: z.union([z.number(), z.null()]),
   }),
-  size_pref: z.enum(["atx", "matx", "itx", "any"]),
-  noise_pref: z.enum(["silent", "normal", "any"]),
+  size_pref: z.enum(["atx", "matx", "itx", "any", "unknown"]),
+  noise_pref: z.enum(["silent", "normal", "any", "unknown"]),
   brand_pref: z.object({
-    cpu: z.enum(["any", "intel", "amd"]),
-    gpu: z.enum(["any", "nvidia", "amd"]),
+    cpu: z.enum(["any", "intel", "amd", "unknown"]),
+    gpu: z.enum(["any", "nvidia", "amd", "unknown"]),
   }),
   existing_parts: z.array(PartCategory),
   priority: z.array(PartCategory),
@@ -424,6 +559,13 @@ const PublicValidationCheck = z.object({
   detail: z.string(),
 });
 const PublicBuildView = z.object({
+  sources: z
+    .array(
+      z
+        .object({ url: z.string(), title: z.string(), captured_at: z.string() })
+        .passthrough()
+    )
+    .optional(),
   schema_version: z.number().int(),
   summary: PublicBuildSummary,
   requirement: PublicRequirementSummary,
@@ -449,14 +591,21 @@ export const schemas = {
   SessionPhase,
   SessionSummary,
   Message,
-  PartCategory,
   RequirementSource,
-  RequirementObservation,
-  RequirementSpec,
   RequirementField,
   RequirementAlternative,
   RequirementChange,
+  RequirementObservation,
   RequirementState,
+  PlanningInput,
+  PartCategory,
+  PlanningCandidate,
+  PlanningEvidence,
+  ValidationCheck,
+  ValidationReport,
+  PlanningResult,
+  SessionProposal,
+  RequirementSpec,
   Problem,
   Run,
   Session,
@@ -471,11 +620,10 @@ export const schemas = {
   Money,
   PriceFreshness,
   BuildSummary,
+  SavedPlanningAssessment,
   PartLine,
   PriceFreshnessSummary,
   Quote,
-  ValidationCheck,
-  ValidationReport,
   BuildView,
   DiffLine,
   BuildDiff,

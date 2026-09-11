@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"time"
 )
 
@@ -19,14 +20,15 @@ var ErrBuildNotFound = errors.New("配置版本不存在")
 // RequirementID 与 RequirementSpec 二选一:前者复用既有需求单(swap_part 不改需求),
 // 后者插入新 requirements 行(v1 首次落库、adjust_budget/change_constraint 派生需求)。
 type SaveBuildVersionParams struct {
-	SessionID       string
-	ParentID        *int64          // nil = v1(树根)
-	RequirementID   *int64          // 非 nil:复用既有需求单
-	RequirementSpec json.RawMessage // RequirementID 为 nil 时必填:新需求单 JSON
-	Change          json.RawMessage // 产生本版本的 ChangeRequest 原文;v1 为 nil
-	Draft           json.RawMessage // BuildDraft 全文
-	Validation      json.RawMessage // ValidationReport
-	Quote           json.RawMessage // Quote(含 snapshot_date)
+	CandidateSnapshot json.RawMessage
+	SessionID         string
+	ParentID          *int64          // nil = v1(树根)
+	RequirementID     *int64          // 非 nil:复用既有需求单
+	RequirementSpec   json.RawMessage // RequirementID 为 nil 时必填:新需求单 JSON
+	Change            json.RawMessage // 产生本版本的 ChangeRequest 原文;v1 为 nil
+	Draft             json.RawMessage // BuildDraft 全文
+	Validation        json.RawMessage // ValidationReport
+	Quote             json.RawMessage // Quote(含 snapshot_date)
 }
 
 // SavedBuild 落库结果:版本号由 DB 侧派生(会话内最大版本 +1),是版本号唯一真值。
@@ -54,6 +56,19 @@ func (s *Store) SaveBuildVersion(ctx context.Context, p SaveBuildVersionParams) 
 		return SavedBuild{}, fmt.Errorf("store: 开启事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	out, err := saveBuildVersionTx(ctx, tx, p)
+	if err != nil {
+		return SavedBuild{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return SavedBuild{}, fmt.Errorf("store: 提交事务失败: %w", err)
+	}
+	return out, nil
+}
+
+// Shared by the standalone historical writer and atomic planning completion.
+func saveBuildVersionTx(ctx context.Context, tx pgx.Tx, p SaveBuildVersionParams) (SavedBuild, error) {
+	var err error
 
 	// 父版本必须属于同一会话,防止跨会话串树。
 	if p.ParentID != nil {
@@ -82,20 +97,17 @@ func (s *Store) SaveBuildVersion(ctx context.Context, p SaveBuildVersionParams) 
 	// 版本号 = 会话内最大版本 +1(UNIQUE(session_id, version) 兜底并发冲突)。
 	var out SavedBuild
 	err = tx.QueryRow(ctx,
-		`INSERT INTO builds (session_id, version, parent_id, requirement_id, change, draft, validation, quote)
-		 SELECT $1, COALESCE(MAX(version), 0) + 1, $2, $3, $4, $5, $6, $7
+		`INSERT INTO builds (session_id, version, parent_id, requirement_id, change, draft, validation, quote, candidate_snapshot)
+		 SELECT $1, COALESCE(MAX(version), 0) + 1, $2, $3, $4, $5, $6, $7, $8
 		   FROM builds WHERE session_id = $1
 		 RETURNING id, version`,
-		p.SessionID, p.ParentID, reqID, nullableJSON(p.Change), p.Draft, p.Validation, p.Quote).
+		p.SessionID, p.ParentID, reqID, nullableJSON(p.Change), p.Draft, p.Validation, p.Quote, nullableJSON(p.CandidateSnapshot)).
 		Scan(&out.ID, &out.Version)
 	if err != nil {
 		return SavedBuild{}, fmt.Errorf("store: 插入版本失败: %w", err)
 	}
 	out.RequirementID = reqID
 
-	if err := tx.Commit(ctx); err != nil {
-		return SavedBuild{}, fmt.Errorf("store: 提交事务失败: %w", err)
-	}
 	return out, nil
 }
 
@@ -109,25 +121,26 @@ func nullableJSON(b json.RawMessage) any {
 
 // BuildVersion builds 表单行(版本树节点),JSONB 原文透传由调用方解码。
 type BuildVersion struct {
-	ID            int64
-	SessionID     string
-	Version       int
-	ParentID      *int64
-	RequirementID int64
-	Change        json.RawMessage // v1 为 nil
-	Draft         json.RawMessage
-	Validation    json.RawMessage
-	Quote         json.RawMessage
-	CreatedAt     time.Time
+	CandidateSnapshot json.RawMessage
+	ID                int64
+	SessionID         string
+	Version           int
+	ParentID          *int64
+	RequirementID     int64
+	Change            json.RawMessage // v1 为 nil
+	Draft             json.RawMessage
+	Validation        json.RawMessage
+	Quote             json.RawMessage
+	CreatedAt         time.Time
 }
 
-const buildVersionColumns = `id, session_id, version, parent_id, requirement_id, change, draft, validation, quote, created_at`
+const buildVersionColumns = `id, session_id, version, parent_id, requirement_id, change, draft, validation, quote, created_at, candidate_snapshot`
 
 // scanBuildVersion 按 buildVersionColumns 列序扫一行。
 func scanBuildVersion(row interface{ Scan(...any) error }) (BuildVersion, error) {
 	var b BuildVersion
 	err := row.Scan(&b.ID, &b.SessionID, &b.Version, &b.ParentID, &b.RequirementID,
-		&b.Change, &b.Draft, &b.Validation, &b.Quote, &b.CreatedAt)
+		&b.Change, &b.Draft, &b.Validation, &b.Quote, &b.CreatedAt, &b.CandidateSnapshot)
 	return b, err
 }
 

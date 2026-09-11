@@ -91,7 +91,9 @@ func main() {
 		QueryEmbedder: embedder,
 	}
 	var root agent.Agent
-	if harnessMode == buildharness.ModeV2 {
+	if harnessMode == buildharness.ModePlanning {
+		root, err = pipeline.NewRemotePlanning(pipelineConfig)
+	} else if harnessMode == buildharness.ModeV2 {
 		root, err = pipeline.NewRemoteV2(pipelineConfig)
 	} else {
 		root, err = pipeline.NewRemote(pipelineConfig)

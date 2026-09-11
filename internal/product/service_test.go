@@ -273,16 +273,15 @@ func TestServiceRequirementConfirmBuild(t *testing.T) {
 	}
 }
 
-func TestServiceContextExpired(t *testing.T) {
+func TestServiceCanContinueWithoutRemoteContext(t *testing.T) {
 	st := newFakeProductStore()
 	st.session.Phase = store.PhaseReady
 	agent := &fakeAgent{store: st, contextAvailable: false}
 	svc, _ := NewService(context.Background(), st, agent, newFakeSink())
 	_, err := svc.StartMessage(context.Background(), "owner-1", "session-1",
 		"00000000-0000-4000-8000-000000000003", "换成 A 卡")
-	var problem Problem
-	if !errors.As(err, &problem) || problem.Code != "context_expired" {
-		t.Fatalf("应返回 context_expired,得到 %T %v", err, err)
+	if err != nil {
+		t.Fatalf("已持久化的会话不应被远端上下文过期阻断: %v", err)
 	}
 }
 

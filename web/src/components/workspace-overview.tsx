@@ -151,7 +151,7 @@ export function WorkspaceOverview({ sessions, sessionsPending, sessionsError }: 
             <Icon size={16} aria-hidden="true" className={`shrink-0 ${phaseClass(session.phase)}`} />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm text-[var(--ink)]">{session.title}</span>
-              <span className={`mt-0.5 block text-xs ${phaseClass(session.phase)}`}>{phaseLabels[session.phase]}</span>
+              <span className={`mt-0.5 block text-xs ${phaseClass(session.phase)}`}>{session.status_label || phaseLabels[session.phase]}</span>
             </span>
             <span className="shrink-0 text-xs tabular-nums text-[var(--ink-subtle)]">{session.version_count} 版</span>
           </Link>;

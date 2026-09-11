@@ -72,7 +72,7 @@ function NavigationContent({ currentSessionID, onNavigate }: NavigationProps & {
           className={`block rounded-lg py-3 pr-12 pl-3 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${current ? "bg-[var(--surface-2)] text-[var(--ink)]" : "hover:bg-[var(--surface-2)]"}`}
         >
           <span className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate text-sm">{session.title || "新对话"}</span>{current && <Check size={14} aria-label="当前会话" className="shrink-0 text-[var(--primary)]" />}</span>
-          <span className="mt-1 flex justify-between gap-2 text-xs text-[var(--ink-subtle)]"><span>{phaseLabels[session.phase]}</span><span>{session.version_count} 版</span></span>
+          <span className="mt-1 flex justify-between gap-2 text-xs text-[var(--ink-subtle)]"><span>{session.status_label || phaseLabels[session.phase]}</span><span>{session.version_count} 版</span></span>
         </Link><SessionActions session={session} current={current} onLeave={navigate} /></li>;
       })}</ul> : !sessions.isPending && !sessions.isError && <p className="px-2 py-3 text-sm leading-6 text-[var(--ink-muted)]">{archived ? "还没有已归档的对话。" : "还没有会话。新建对话，或直接发送第一条需求。"}</p>}
     </nav>

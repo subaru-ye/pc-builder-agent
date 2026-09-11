@@ -784,6 +784,7 @@ components:
       additionalProperties: false
       required: [schema_version, id, title, phase, created_at, updated_at, version_count]
       properties:
+        status_label: {type: string, description: 服务端提供的细化状态文案；省略时使用阶段名称}
         schema_version: {type: integer, const: 1}
         id: {type: string}
         title: {type: string}
@@ -801,6 +802,7 @@ components:
             messages:
               type: array
               items: {$ref: "#/components/schemas/Message"}
+            proposal: {$ref: "#/components/schemas/SessionProposal"}
             pending_requirement:
               oneOf:
                 - $ref: "#/components/schemas/RequirementSpec"
@@ -918,7 +920,7 @@ components:
       additionalProperties: false
       required: [kind, message_id, quote]
       properties:
-        kind: {type: string, enum: [chat, edit]}
+        kind: {type: string, enum: [chat, edit, confirmed]}
         message_id: {type: string}
         quote: {type: string}
     RequirementField:
@@ -987,6 +989,8 @@ components:
       description: 仅当前装机会话的需求真值；未知、撤销、冲突字段不被程序默认值覆盖；临时例外可恢复之前的字段。备选讨论不改变当前有效需求。
       properties:
         schema_version: {type: integer, const: 1}
+        reply: {type: string}
+        next_action: {type: string, enum: [collect, confirm]}
         revision: {type: integer, minimum: 0}
         fields:
           type: object
@@ -1003,6 +1007,108 @@ components:
         observations:
           type: array
           items: {$ref: "#/components/schemas/RequirementObservation"}
+    PlanningInput:
+      type: object
+      required: [schema_version, requirement_state]
+      properties:
+        schema_version: {type: integer, const: 2}
+        requirement_state: {$ref: "#/components/schemas/RequirementState"}
+        base_draft: {type: object, additionalProperties: true}
+        previous_proposal: {type: object, additionalProperties: true}
+    PlanningEvidence:
+      type: object
+      required: [id, url, title, text, captured_at, kind]
+      properties:
+        id: {type: string}
+        url: {type: string}
+        title: {type: string}
+        text: {type: string}
+        captured_at: {type: string}
+        kind: {type: string}
+        candidate_id: {type: string, description: 关联的配件编号；历史记录可能缺失}
+        field: {type: string, description: 资料对应的规格或价格字段}
+    PlanningCandidate:
+      type: object
+      required: [id, category, brand, model, specs, price_cny, evidence, external]
+      properties:
+        id: {type: string}
+        category: {$ref: "#/components/schemas/PartCategory"}
+        brand: {type: string}
+        model: {type: string}
+        specs: {type: object, additionalProperties: true}
+        price_cny: {type: [string, "null"]}
+        evidence: {type: array, items: {type: string}}
+        field_evidence: {type: object, additionalProperties: {type: string}}
+        field_quotes: {type: object, additionalProperties: {type: string}}
+        attributes: {type: object, additionalProperties: true}
+        merchant: {type: string}
+        currency: {type: string}
+        price_observed_at: {type: string}
+        unknown: {type: array, items: {type: string}}
+        external: {type: boolean}
+    PlanningResult:
+      type: object
+      required: [schema_version, outcome, reply, issues, assumptions, candidates, evidence]
+      properties:
+        schema_version: {type: integer, const: 1}
+        outcome: {type: string, enum: [collect, clarify, proposal, ready, technical_fault]}
+        model_outcome: {type: string, description: 模型原始意图，不是服务端交付结论}
+        build_version: {type: integer, minimum: 1, description: 原子保存后关联的正式版本}
+        delivery:
+          type: object
+          required: [status, issues]
+          properties:
+            status: {type: string, enum: [not_applicable, unresolved, eligible, delivered, stale]}
+            issues: {type: array, items: {type: string}}
+        reply: {type: string}
+        draft: {type: object, additionalProperties: true}
+        assessments:
+          type: array
+          items:
+            type: object
+            required: [field, status, explanation, evidence]
+            properties:
+              field: {type: string}
+              status: {type: string, enum: [met, unmet, unknown]}
+              explanation: {type: string}
+              evidence: {type: array, items: {type: string}}
+        issues: {type: array, items: {type: string}}
+        assumptions: {type: array, items: {type: string}}
+        candidates: {type: array, items: {$ref: "#/components/schemas/PlanningCandidate"}}
+        evidence: {type: array, items: {$ref: "#/components/schemas/PlanningEvidence"}}
+        validation: {$ref: "#/components/schemas/ValidationReport"}
+        quote:
+          type: object
+          required: [total_cny, missing_count, snapshot_date]
+          properties:
+            total_cny: {type: string}
+            missing_count: {type: integer}
+            snapshot_date: {type: string}
+        model_calls: {type: integer}
+        tool_calls: {type: integer}
+        search_calls: {type: integer}
+        search_requests: {type: integer}
+        page_calls: {type: integer}
+        tokens: {type: integer}
+        duration_ms: {type: integer}
+        stage_ms: {type: object, additionalProperties: {type: integer}}
+    SavedPlanningAssessment:
+      type: object
+      required: [field, status, explanation, evidence]
+      properties:
+        field: {type: string}
+        status: {type: string, enum: [met, unmet, unknown]}
+        explanation: {type: string}
+        evidence: {type: array, items: {type: string}}
+    SessionProposal:
+      type: object
+      required: [id, requirement, parent_version, created_at, result]
+      properties:
+        id: {type: integer}
+        requirement: {$ref: "#/components/schemas/PlanningInput"}
+        parent_version: {type: integer}
+        created_at: {type: string}
+        result: {$ref: "#/components/schemas/PlanningResult"}
     RequirementSpec:
       type: object
       additionalProperties: false
@@ -1177,6 +1283,7 @@ components:
       additionalProperties: false
       required: [snapshot_date, total_cny, budget_cny, budget_delta_cny, missing_count, missing_skus]
       properties:
+        budget_known: {type: boolean}
         purchase_total_cny: {$ref: "#/components/schemas/Money"}
         budget_basis: {type: string, enum: [new_purchase, full_build]}
         snapshot_date: {type: string, format: date}
@@ -1194,9 +1301,20 @@ components:
       additionalProperties: false
       required: [schema_version, summary, requirement, parts, quote, validation, disclaimers]
       properties:
+        candidate_snapshot:
+          type: object
+          properties:
+            candidates: {type: array, items: {$ref: "#/components/schemas/PlanningCandidate"}}
+            evidence: {type: array, items: {$ref: "#/components/schemas/PlanningEvidence"}}
+            assessments: {type: array, items: {$ref: "#/components/schemas/SavedPlanningAssessment"}}
+            assumptions: {type: array, items: {type: string}}
+            reply: {type: string}
         schema_version: {type: integer, const: 1}
         summary: {$ref: "#/components/schemas/BuildSummary"}
-        requirement: {$ref: "#/components/schemas/RequirementSpec"}
+        requirement:
+          oneOf:
+            - $ref: "#/components/schemas/RequirementSpec"
+            - $ref: "#/components/schemas/PlanningInput"
         parts:
           type: array
           items: {$ref: "#/components/schemas/PartLine"}
@@ -1271,14 +1389,15 @@ components:
       additionalProperties: false
       required: [budget_cny, budget_flex_percent, use_case, size_pref, noise_pref, brand_pref, existing_parts, priority]
       properties:
+        known_fields: {type: array, items: {type: string}}
         budget_cny: {$ref: "#/components/schemas/Money"}
-        budget_flex_percent: {type: integer, minimum: 0, maximum: 30}
+        budget_flex_percent: {type: integer, minimum: 0}
         use_case:
           type: object
           additionalProperties: false
           required: [type, titles, resolution, fps_target]
           properties:
-            type: {type: string, enum: [gaming, productivity, general]}
+            type: {type: string, enum: [gaming, productivity, general, unknown]}
             titles: {type: array, items: {type: string}}
             resolution:
               oneOf:
@@ -1288,15 +1407,15 @@ components:
               oneOf:
                 - {type: integer, minimum: 1}
                 - {type: "null"}
-        size_pref: {type: string, enum: [atx, matx, itx, any]}
-        noise_pref: {type: string, enum: [silent, normal, any]}
+        size_pref: {type: string, enum: [atx, matx, itx, any, unknown]}
+        noise_pref: {type: string, enum: [silent, normal, any, unknown]}
         brand_pref:
           type: object
           additionalProperties: false
           required: [cpu, gpu]
           properties:
-            cpu: {type: string, enum: [any, intel, amd]}
-            gpu: {type: string, enum: [any, nvidia, amd]}
+            cpu: {type: string, enum: [any, intel, amd, unknown]}
+            gpu: {type: string, enum: [any, nvidia, amd, unknown]}
         existing_parts:
           type: array
           items: {$ref: "#/components/schemas/PartCategory"}
@@ -1336,6 +1455,15 @@ components:
       additionalProperties: false
       required: [schema_version, summary, requirement, parts, quote, validation, disclaimers, share]
       properties:
+        sources:
+          type: array
+          items:
+            type: object
+            required: [url, title, captured_at]
+            properties:
+              url: {type: string}
+              title: {type: string}
+              captured_at: {type: string}
         schema_version: {type: integer, const: 1}
         summary: {$ref: "#/components/schemas/PublicBuildSummary"}
         requirement: {$ref: "#/components/schemas/PublicRequirementSummary"}

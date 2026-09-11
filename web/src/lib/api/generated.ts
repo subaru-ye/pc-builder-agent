@@ -592,6 +592,8 @@ export interface components {
         /** @enum {string} */
         SessionPhase: "collecting" | "requirement_ready" | "building" | "ready" | "changing" | "error";
         SessionSummary: {
+            /** @description 服务端提供的细化状态文案；省略时使用阶段名称 */
+            status_label?: string;
             /** @constant */
             schema_version: 1;
             id: string;
@@ -607,6 +609,7 @@ export interface components {
         };
         Session: components["schemas"]["SessionSummary"] & {
             messages: components["schemas"]["Message"][];
+            proposal?: components["schemas"]["SessionProposal"];
             pending_requirement: components["schemas"]["RequirementSpec"] | null;
             requirement_state: components["schemas"]["RequirementState"] | null;
             /**
@@ -684,7 +687,7 @@ export interface components {
         };
         RequirementSource: {
             /** @enum {string} */
-            kind: "chat" | "edit";
+            kind: "chat" | "edit" | "confirmed";
             message_id: string;
             quote: string;
         };
@@ -750,6 +753,9 @@ export interface components {
         RequirementState: {
             /** @constant */
             schema_version: 1;
+            reply?: string;
+            /** @enum {string} */
+            next_action?: "collect" | "confirm";
             revision: number;
             fields: {
                 [key: string]: components["schemas"]["RequirementField"];
@@ -758,6 +764,114 @@ export interface components {
             changes: components["schemas"]["RequirementChange"][];
             history: components["schemas"]["RequirementChange"][];
             observations?: components["schemas"]["RequirementObservation"][];
+        };
+        PlanningInput: {
+            /** @constant */
+            schema_version: 2;
+            requirement_state: components["schemas"]["RequirementState"];
+            base_draft?: {
+                [key: string]: unknown;
+            };
+            previous_proposal?: {
+                [key: string]: unknown;
+            };
+        };
+        PlanningEvidence: {
+            id: string;
+            url: string;
+            title: string;
+            text: string;
+            captured_at: string;
+            kind: string;
+            /** @description 关联的配件编号；历史记录可能缺失 */
+            candidate_id?: string;
+            /** @description 资料对应的规格或价格字段 */
+            field?: string;
+        };
+        PlanningCandidate: {
+            id: string;
+            category: components["schemas"]["PartCategory"];
+            brand: string;
+            model: string;
+            specs: {
+                [key: string]: unknown;
+            };
+            price_cny: string | null;
+            evidence: string[];
+            field_evidence?: {
+                [key: string]: string;
+            };
+            field_quotes?: {
+                [key: string]: string;
+            };
+            attributes?: {
+                [key: string]: unknown;
+            };
+            merchant?: string;
+            currency?: string;
+            price_observed_at?: string;
+            unknown?: string[];
+            external: boolean;
+        };
+        PlanningResult: {
+            /** @constant */
+            schema_version: 1;
+            /** @enum {string} */
+            outcome: "collect" | "clarify" | "proposal" | "ready" | "technical_fault";
+            /** @description 模型原始意图，不是服务端交付结论 */
+            model_outcome?: string;
+            /** @description 原子保存后关联的正式版本 */
+            build_version?: number;
+            delivery?: {
+                /** @enum {string} */
+                status: "not_applicable" | "unresolved" | "eligible" | "delivered" | "stale";
+                issues: string[];
+            };
+            reply: string;
+            draft?: {
+                [key: string]: unknown;
+            };
+            assessments?: {
+                field: string;
+                /** @enum {string} */
+                status: "met" | "unmet" | "unknown";
+                explanation: string;
+                evidence: string[];
+            }[];
+            issues: string[];
+            assumptions: string[];
+            candidates: components["schemas"]["PlanningCandidate"][];
+            evidence: components["schemas"]["PlanningEvidence"][];
+            validation?: components["schemas"]["ValidationReport"];
+            quote?: {
+                total_cny: string;
+                missing_count: number;
+                snapshot_date: string;
+            };
+            model_calls?: number;
+            tool_calls?: number;
+            search_calls?: number;
+            search_requests?: number;
+            page_calls?: number;
+            tokens?: number;
+            duration_ms?: number;
+            stage_ms?: {
+                [key: string]: number;
+            };
+        };
+        SavedPlanningAssessment: {
+            field: string;
+            /** @enum {string} */
+            status: "met" | "unmet" | "unknown";
+            explanation: string;
+            evidence: string[];
+        };
+        SessionProposal: {
+            id: number;
+            requirement: components["schemas"]["PlanningInput"];
+            parent_version: number;
+            created_at: string;
+            result: components["schemas"]["PlanningResult"];
         };
         RequirementSpec: {
             /** @constant */
@@ -897,6 +1011,7 @@ export interface components {
             checks: components["schemas"]["ValidationCheck"][];
         };
         Quote: {
+            budget_known?: boolean;
             purchase_total_cny?: components["schemas"]["Money"];
             /** @enum {string} */
             budget_basis?: "new_purchase" | "full_build";
@@ -911,10 +1026,17 @@ export interface components {
             price_freshness?: components["schemas"]["PriceFreshnessSummary"];
         };
         BuildView: {
+            candidate_snapshot?: {
+                candidates?: components["schemas"]["PlanningCandidate"][];
+                evidence?: components["schemas"]["PlanningEvidence"][];
+                assessments?: components["schemas"]["SavedPlanningAssessment"][];
+                assumptions?: string[];
+                reply?: string;
+            };
             /** @constant */
             schema_version: 1;
             summary: components["schemas"]["BuildSummary"];
-            requirement: components["schemas"]["RequirementSpec"];
+            requirement: components["schemas"]["RequirementSpec"] | components["schemas"]["PlanningInput"];
             parts: components["schemas"]["PartLine"][];
             quote: components["schemas"]["Quote"];
             validation: components["schemas"]["ValidationReport"];
@@ -963,24 +1085,25 @@ export interface components {
             revoked_at: string | null;
         };
         PublicRequirementSummary: {
+            known_fields?: string[];
             budget_cny: components["schemas"]["Money"];
             budget_flex_percent: number;
             use_case: {
                 /** @enum {string} */
-                type: "gaming" | "productivity" | "general";
+                type: "gaming" | "productivity" | "general" | "unknown";
                 titles: string[];
                 resolution: ("1080p" | "2K" | "4K") | null;
                 fps_target: number | null;
             };
             /** @enum {string} */
-            size_pref: "atx" | "matx" | "itx" | "any";
+            size_pref: "atx" | "matx" | "itx" | "any" | "unknown";
             /** @enum {string} */
-            noise_pref: "silent" | "normal" | "any";
+            noise_pref: "silent" | "normal" | "any" | "unknown";
             brand_pref: {
                 /** @enum {string} */
-                cpu: "any" | "intel" | "amd";
+                cpu: "any" | "intel" | "amd" | "unknown";
                 /** @enum {string} */
-                gpu: "any" | "nvidia" | "amd";
+                gpu: "any" | "nvidia" | "amd" | "unknown";
             };
             existing_parts: components["schemas"]["PartCategory"][];
             priority: components["schemas"]["PartCategory"][];
@@ -1011,6 +1134,11 @@ export interface components {
         };
         /** @description 独立最小披露 DTO;不含 notes、observed、session/user/chat/run/内部 build id。 */
         PublicBuildView: {
+            sources?: {
+                url: string;
+                title: string;
+                captured_at: string;
+            }[];
             /** @constant */
             schema_version: 1;
             summary: components["schemas"]["PublicBuildSummary"];

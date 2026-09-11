@@ -5,6 +5,7 @@ package producthttp
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"iter"
@@ -35,6 +36,7 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/product"
 	"github.com/subaru-ye/pc-builder-agent/internal/runevents"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
+	"github.com/subaru-ye/pc-builder-agent/internal/sharing"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
@@ -188,7 +190,7 @@ func (g *requirementReplayGateway) Remote(ctx context.Context, _, sessionID stri
 	return product.RemoteResult{Text: "离线验证：录制初筛与选件输出经过真实需求合并、候选准备、Harness、规则、报价和版本保存；选件为测试 oracle，不代表真实模型选配效果。"}, err
 }
 
-func requirementIntegrationAPI(t *testing.T) (*API, *product.Service, *store.Store) {
+func requirementIntegrationAPI(t *testing.T, planningMode ...bool) (*API, *product.Service, *store.Store) {
 	t.Helper()
 	dsn := os.Getenv("PG_TEST_DSN")
 	if dsn == "" {
@@ -258,6 +260,9 @@ func requirementIntegrationAPI(t *testing.T) (*API, *product.Service, *store.Sto
 	if _, err = seed.Exec(ctx, "INSERT INTO prices(snapshot_id,sku,price_cny,source) VALUES($1,'offline-gpu-4060',2299,'synthetic-offline-fixture')", snapshot); err != nil {
 		t.Fatal(err)
 	}
+	if len(planningMode) > 0 && planningMode[0] {
+		seedPlanningRecording(t, seed, snapshot, &fixture)
+	}
 	_ = seed.Close(ctx)
 	st, err := store.New(ctx, u.String())
 	if err != nil {
@@ -265,7 +270,10 @@ func requirementIntegrationAPI(t *testing.T) (*API, *product.Service, *store.Sto
 	}
 	t.Cleanup(st.Close)
 	events := runevents.NewMemory()
-	gateway := &requirementReplayGateway{store: st, fixture: fixture}
+	var gateway product.AgentGateway = &requirementReplayGateway{store: st, fixture: fixture}
+	if len(planningMode) > 0 && planningMode[0] {
+		gateway = &planningReplayGateway{gateway.(*requirementReplayGateway)}
+	}
 	service, err := product.NewService(ctx, st, gateway, events)
 	if err != nil {
 		t.Fatal(err)
@@ -275,7 +283,18 @@ func requirementIntegrationAPI(t *testing.T) (*API, *product.Service, *store.Sto
 	if webURL == "" {
 		webURL = "http://127.0.0.1:3102"
 	}
-	api, err := New(service, presenter.New(st), &fakeShareService{}, events, st, fakeRedis{}, Config{PublicWebBaseURL: webURL})
+	var shares ShareService = &fakeShareService{}
+	if len(planningMode) > 0 && planningMode[0] {
+		codec, e := sharing.NewTokenCodec(base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("s", 32))))
+		if e != nil {
+			t.Fatal(e)
+		}
+		shares, e = sharing.New(st, presenter.New(st), codec, webURL)
+		if e != nil {
+			t.Fatal(e)
+		}
+	}
+	api, err := New(service, presenter.New(st), shares, events, st, fakeRedis{}, Config{PublicWebBaseURL: webURL})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +302,7 @@ func requirementIntegrationAPI(t *testing.T) (*API, *product.Service, *store.Sto
 }
 
 func TestRequirementStatePersistentWorkflow(t *testing.T) {
-	api, service, st := requirementIntegrationAPI(t)
+	api, service, st := requirementIntegrationAPI(t, true)
 	server := httptest.NewServer(api.Handler())
 	defer server.Close()
 	ctx := context.Background()
@@ -335,7 +354,7 @@ func TestRequirementStatePersistentWorkflow(t *testing.T) {
 		return state
 	}
 	detail := chat("预算8000，玩游戏，要安静一点，尽量用N卡，帮朋友装机")
-	if !reflect.DeepEqual(detail.MissingFields, []string{"use_case.resolution"}) {
+	if len(detail.MissingFields) != 0 {
 		t.Fatalf("重复追问已知字段: %v", detail.MissingFields)
 	}
 	detail = chat("预算改成6000")
@@ -403,7 +422,7 @@ func TestRequirementStatePersistentWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	last := storedMessages[len(storedMessages)-1]
-	if last.BuildVersion != 1 || last.DisplayContent == "" || last.DisplayContent == last.Content {
+	if last.BuildVersion != 1 || !strings.Contains(last.DisplayContent, "配置已保存为 v1") || last.DisplayContent != last.Content {
 		t.Fatalf("配置摘要未与原始回复及版本一起持久化: %+v", last)
 	}
 	detail = chat("预算改成6000")
@@ -433,8 +452,8 @@ func TestRequirementStatePersistentWorkflow(t *testing.T) {
 	withdrawn, err := service.EditRequirement(ctx, owner, ws.ID, uuid.NewString(), product.RequirementEdit{
 		ExpectedRevision: state.Revision, Operations: []schemas.RequirementOperation{{Op: "remove", Field: "budget_cny"}},
 	})
-	if err != nil || len(withdrawn.Session.PendingRequirement) > 0 {
-		t.Fatalf("撤销预算应清除待确认投影: %v", err)
+	if err != nil || stateOf(withdrawn).Fields["budget_cny"].Status != "removed" {
+		t.Fatalf("撤销预算应保留未知需求并允许继续讨论: %v", err)
 	}
 	retry, err := service.StartConfirm(ctx, owner, ws.ID, confirmKey)
 	if err != nil || !retry.Duplicate || retry.Run.ID != confirmed.Run.ID {
@@ -458,7 +477,7 @@ func TestRequirementStatePersistentWorkflow(t *testing.T) {
 // Reproduce the reported path through recorded Screening, UI strength edit,
 // confirmation, real Harness/validator, PostgreSQL and the persisted read model.
 func TestVideoRequirementConfirmationReplay(t *testing.T) {
-	_, service, st := requirementIntegrationAPI(t)
+	_, service, st := requirementIntegrationAPI(t, true)
 	ctx := context.Background()
 	owner := "offline-video-owner"
 	ws, err := service.CreateSession(ctx, owner, uuid.NewString())
@@ -550,9 +569,9 @@ func TestVideoRequirementConfirmationReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	detail = wait(failed.Run.ID, store.RunFailed)
+	detail = wait(failed.Run.ID, store.RunSucceeded)
 	if detail.Session.VersionCount != 1 || stateOf(detail).Fields["noise_pref"].Strength != "must" {
-		t.Fatal("hard condition was silently relaxed or saved as success")
+		t.Fatal("must condition was silently relaxed or saved as a formal version")
 	}
 	messages, err := st.WebMessages(ctx, ws.ID)
 	if err != nil {

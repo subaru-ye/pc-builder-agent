@@ -130,13 +130,21 @@ def test_listing_matching_requires_exact_identity_and_two_merchants() -> None:
     assert _matches("AMD Ryzen 5 7600X", ryzen_identity) is False
 
 
-def test_canary_uses_exactly_twelve_calls_and_never_publishes(tmp_path: Path) -> None:
+def test_canary_uses_exactly_twelve_calls_and_never_publishes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+    reservations = []
+    def reserve(args, **kwargs):
+        reservations.append(args)
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr("pcdata.serpapi_baidu.subprocess.run", reserve)
     with FakeSerpApi() as server:
         report = collect_serpapi_baidu(
             _paths(tmp_path), mode="canary",
             scheduled_for=datetime(2026, 8, 27, 3, 45, tzinfo=UTC),
             client=SerpApiClient(_settings(server)),
         )
+    assert len(reservations) == 12
+    assert all("./cmd/searchquota" in args for args in reservations)
     assert report["calls"] == 12
     assert report["shopping_result_skus"] == 12
     assert report["dual_match_skus"] == 12

@@ -47,6 +47,7 @@ type ProductStore interface {
 }
 
 type SessionDetail struct {
+	Proposal          json.RawMessage
 	Session           store.WebSession
 	Messages          []store.WebMessage
 	ActiveRun         *store.AgentRun
@@ -101,7 +102,14 @@ func (s *Service) GetSession(ctx context.Context, ownerID, sessionID string) (Se
 	}
 	status, missing := requirementLifecycle(ws)
 	s.presentMessages(ctx, sessionID, messages)
-	return SessionDetail{Session: ws, Messages: messages, ActiveRun: active, Degraded: s.events.Degraded(), RequirementStatus: status, MissingFields: missing}, nil
+	var proposal json.RawMessage
+	if st, ok := s.store.(proposalStore); ok {
+		proposal, err = st.LatestProposal(ctx, sessionID)
+		if err != nil {
+			return SessionDetail{}, err
+		}
+	}
+	return SessionDetail{Proposal: proposal, Session: ws, Messages: messages, ActiveRun: active, Degraded: s.events.Degraded(), RequirementStatus: status, MissingFields: missing}, nil
 }
 
 func (s *Service) GetRun(ctx context.Context, ownerID, runID string) (store.AgentRun, error) {
@@ -146,26 +154,15 @@ func (s *Service) StartMessage(ctx context.Context, ownerID, sessionID, requestI
 	} else if found {
 		return StartResult{Run: existing, Duplicate: true}, nil
 	}
-	ws, err := s.store.WebSessionByOwner(ctx, ownerID, sessionID)
+	_, err := s.store.WebSessionByOwner(ctx, ownerID, sessionID)
 	if err != nil {
 		return StartResult{}, err
-	}
-	recoveryReady := ws.Phase == store.PhaseError && ws.RecoveryPhase != nil && *ws.RecoveryPhase == store.PhaseReady
-	if len(ws.RequirementState) == 0 && (ws.Phase == store.PhaseReady || recoveryReady) {
-		ok, err := s.agent.ContextAvailable(ctx, ownerID, sessionID)
-		if err != nil {
-			return StartResult{}, err
-		}
-		if !ok {
-			return StartResult{}, NewProblem("context_expired", "Agent 上下文已过期", 409,
-				"无法保证增量改单锁定语义，请基于当前需求新建会话整单生成。", requestID)
-		}
 	}
 	runID := uuid.NewString()
 	r, duplicate, err := s.store.StartMessageRun(ctx, store.StartMessageRunParams{
 		OwnerID: ownerID, SessionID: sessionID, RequestID: requestID, RunID: runID,
 		MessageID: uuid.NewString(), Text: text, Title: TitleFromText(text),
-		ForceScreening: len(ws.RequirementState) > 0,
+		ForceScreening: true,
 	})
 	if err != nil {
 		return StartResult{}, err
@@ -495,9 +492,20 @@ func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID s
 		s.failInternal(ctx, r, recoveryFor(r.Kind), "")
 		return
 	}
+	payload, err = s.planningContext(ctx, r.SessionID, payload)
+	if err != nil {
+		s.failInternal(ctx, r, recoveryFor(r.Kind), "")
+		return
+	}
 	result, err := s.agent.Remote(ctx, ownerID, r.SessionID, payload)
 	if err != nil {
 		s.failFromError(ctx, r, err, recoveryFor(r.Kind), "")
+		return
+	}
+	if result.Planning != nil {
+		if err := s.completePlanning(ctx, r, payload, *result.Planning, before); err != nil {
+			s.failInternal(ctx, r, recoveryFor(r.Kind), result.Text)
+		}
 		return
 	}
 	s.progress(ctx, r.ID, "finalizing", "正在保存最终结果", 3)

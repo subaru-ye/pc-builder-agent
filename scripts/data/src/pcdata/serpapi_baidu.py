@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import unicodedata
 import uuid
 from dataclasses import dataclass
@@ -413,6 +414,16 @@ def collect_serpapi_baidu(
     for sku in skus:
         checkpoint["attempted_at"][sku] = _rfc3339(scheduled_for)
         _atomic_json(_checkpoint_path(paths), checkpoint)
+        # Both interactive planning and this collector reserve from the same PG ledger.
+        try:
+            reservation = subprocess.run(
+                ["go", "run", "./cmd/searchquota", "-usage", str(account["usage"]), "-budget", str(settings.monthly_budget)],
+                cwd=paths.repo_root, capture_output=True, timeout=60, check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise PipelineError("serpapi_budget_unavailable", "共享搜索额度不可用，未发送搜索请求") from exc
+        if reservation.returncode != 0:
+            raise PipelineError("serpapi_budget_unavailable", "共享搜索额度不可用，未发送搜索请求")
         payload, body = client.search(_identity(config, parts[sku])["query"])
         raw_dir.mkdir(parents=True, exist_ok=True)
         (raw_dir / f"{sku}.json").write_bytes(stable_json_bytes(_redacted_payload(payload)))

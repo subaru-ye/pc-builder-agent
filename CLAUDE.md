@@ -32,7 +32,7 @@ go build ./... && go vet ./...
 | docs/tech/系统架构.md | 服务边界与模块导航 |
 | docs/tech/开发约定.md | 目录、模型、状态与验证纪律 |
 | docs/tech/技术选型.md | 栈级决策；实际版本以锁文件为准 |
-| docs/tech/Agent-Harness-2.0.md | 默认候选准备、修复与双轨边界 |
+| docs/tech/自主规划流程.md | 默认自主检索、方案、证据与调用边界 |
 | docs/api/openapi.yaml | HTTP 路径与 DTO；流式细节见同目录 SSE 协议 |
 | docs/data/数据获取与发布规则.md | 数据与条件发布的强制约束 |
 | docs/ops/本地运行与部署.md | 启动、迁移和排障 |
@@ -45,7 +45,7 @@ go build ./... && go vet ./...
 
 - **版本纪律**:ADK-Go/a2a-go 迭代快,文档不写死 import 路径与 API 签名;首装后回填技术选型.md 末尾版本锁定表。模型默认值集中在 `internal/modelprovider`,部署值只进未跟踪 `.env`;文档示例需与 `.env.example` 同步。
 - **模型纪律**:不得在启动时探测模型;真实调用只通过显式 `modelcheck` 或 Live 门禁。日志/指标只写 provider、role、model、状态和安全错误类别。**额度降级链(2026-09 修订)**:chat 角色可配置 `SCREENING_MODEL_CHAIN`/`BUILDER_MODEL_CHAIN`(显式白名单,非跨供应商回退),运行中候选 403/404/配额耗尽自动切下一个并记日志,全部耗尽才失败;链外不得静默换模型。
-- **Harness 纪律**:`BUILD_HARNESS_MODE` 只允许 legacy/v2；默认 v2 最多三次无工具 builder 调用，失败不得自动执行 legacy。legacy 仅供操作者显式诊断。
+- **Harness 纪律**:`BUILD_HARNESS_MODE` 默认 planning；最多 8 次模型往返、24 次工具执行、3 次外部搜索和 6 次网页读取。需求不做程序准入或候选硬筛选；真实校验结果作为反馈。v2/legacy 仅供显式历史诊断，不自动回退。见[自主规划流程](docs/tech/自主规划流程.md)。
 - **认证纪律**:浏览器和 Next.js 不接触 Supabase Token、不读取 `auth.*`;产品 API 只用 HttpOnly opaque Cookie，Token 加密存 Redis。已认领 owner 不得匿名访问，公开分享接口不得读取身份 Cookie。
 - **数据纪律**:网络响应和模型辅助结果默认只能进入候选区;只有精确身份、确定性证据和全部门禁通过的低风险变化可条件自动发布,其余进入 quarantine 并保持 last-known-good。定时主链模型调用必须为 0。数据操作以 `docs/data/数据获取与发布规则.md` 为准。
 - **目录纪律**:见 `docs/tech/开发约定.md`；按实际职责建目录。

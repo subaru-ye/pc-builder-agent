@@ -31,6 +31,7 @@ func (s *Store) ManageWebSession(ctx context.Context, owner, id string, title *s
 		}
 		// builds/requirements 也服务旧开发会话，未设置 web_sessions 外键，显式清理。
 		for _, query := range []string{
+			`DELETE FROM session_proposals WHERE session_id=$1`,
 			`DELETE FROM builds WHERE session_id=$1`,
 			`DELETE FROM requirements r WHERE session_id=$1 AND NOT EXISTS(SELECT 1 FROM builds b WHERE b.requirement_id=r.id)`,
 			`DELETE FROM web_sessions WHERE id=$1`,

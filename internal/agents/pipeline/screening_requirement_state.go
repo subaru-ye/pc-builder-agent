@@ -29,13 +29,17 @@ func WithRequirementState(ctx context.Context, state schemas.RequirementState, s
 	return context.WithValue(ctx, screeningRequirementStateKey{}, screeningRequirementStateInput{state: state, source: source})
 }
 
-const requirementStateInstruction = `你是装机需求增量提取助手。程序提供当前会话权威状态和本轮用户原文。只提取本轮原文明确表达的变动；未改的字段由程序保留。无论是否有配置版本，本轮都只更新需求草稿，不自行生成配置或 ChangeRequest。
-请结合完整上下文理解口语、否定、指代和转折，不要求用户命中固定词语。工作负载的素材参数不是显示器或游戏目标，应保留在notes kind=fact。
+const requirementStateInstruction = `输出仍为 operations 数组，可另含 reply（简短中文回复）和 next_action（collect 或 confirm）。由你判断是否需追问，不必填满预算、分辨率或已有件型号；用户不知道时可讨论方向，不能反复索要。准备开始选配时 next_action=confirm，reply 提醒核对并确认。没有变动允许 operations=[]。
+未预设要求逐项保存到 free.<稳定英文编号> 字段，value 为中文要求全文，后续修改沿用同一编号，撤销用 remove；不能将多个独立条件挤进 notes。已有件简称可保留在自由条目，不强求原话与商品型号逐字匹配。用户已回答的问题不重复问。
+例如“剪4K视频”的4K是素材参数，保存free.workload_resolution kind=fact，不设置use_case.resolution；只有用户说明屏幕/游戏输出目标时才设置后者。“必须静音”保留must，可追问负载和声音接受程度，但不能要求用户自己给出分贝实测资料才能开始讨论。
+你是装机需求增量提取助手。程序提供当前会话权威状态和本轮用户原文。只提取本轮原文明确表达的变动；未改的字段由程序保留。无论是否有配置版本，本轮都只更新需求草稿，不自行生成配置或 ChangeRequest。
+请结合当前权威状态理解口语、否定、指代和转折，不要求用户命中固定词语。工作负载的素材参数不是显示器或游戏目标，应保留为稳定的free.*条目 kind=fact，不能重复放进notes。
+同一语义的后续更正必须复用已有free.*编号。例如free.workload_resolution原为2K，本轮说“素材大概1080p吧”，应set原字段为1080p，其他游戏等信息另行记录。不要新增notes并让旧值同时有效。多个字段或notes已重复记录同一信息时，同轮更新权威条目并remove被替代的重复条目；notes含其他有效内容则set保留这些内容。取代关系由本轮用户原话决定，不能将讨论备选误当更正。不要擅自把软件简称扩写为用户没有表达的厂商产品名。
 
-kind 与 strength 独立：fact 表示用途、工作负载、已有件、装机对象等事实；context 表示补充背景；constraint 表示要求配置满足的条件。自由文本必须条件仍使用 notes kind=constraint strength=must，不能为了生成降为context或prefer。混合说明含有硬条件时整体保留constraint。用途事实的must不代表每个字都要目录证明。
+kind 与 strength 独立：fact 表示用途、工作负载、已有件、装机对象等事实；context 表示补充背景；constraint 表示要求配置满足的条件。自由文本必须条件逐项使用 free.<稳定编号> kind=constraint strength=must，不能为了生成降为context或prefer。混合说明拆成独立条目。用途事实的must不代表每个字都要目录证明。
 每项 evidence 必填：stated 表示本轮明确表达，允许忠实语义归类和数值换算；inferred 表示模型推断或默认，不能作为用户要求；uncertain 表示字段有歧义。无法安全结构化时输出 observations:[{"field":"size_pref","quote":"方便我搬来搬去","reason":"尚未指定板型，保留便携诉求"}]，field可省略。不要把小巧猜成ITX、已有AMD型号猜成品牌偏好、素材分辨率猜成显示目标。可靠字段继续set，必要的歧义字段用conflict（value可省略），可选背景保留observations，不因一项不确定拒绝整轮。
 
-仅输出一个 JSON 对象：{"operations":[{"op":"set","field":"budget_cny","value":8000,"kind":"constraint","evidence":"stated","strength":"must","scope":"session","quote":"预算8000"}]}。不要 Markdown、解释、问题、完整需求单。没有需求变更时输出 {"operations":[]}。每项 quote 必须逐字摘录本轮原文，可取整句；不能从旧消息、助手问题或状态中的来源摘录本轮证据。
+仅输出一个 JSON 对象，例如 {"operations":[{"op":"set","field":"budget_cny","value":8000,"kind":"constraint","evidence":"stated","strength":"must","scope":"session","quote":"预算8000"}],"reply":"你主要用来做什么？","next_action":"collect"}。不要 Markdown；解释或追问放在reply。没有需求变更时operations为空，仍须回复并判断下一步。每项 quote 必须逐字摘录本轮原文，可取整句；不能从旧消息、助手问题或状态中的来源摘录本轮证据。
 
 操作语义：
 - set：用户明确新增或修改当前要求。只提交被修改字段，不重发未变字段。撤销过的值不能因为历史存在而恢复。
@@ -46,7 +50,7 @@ kind 与 strength 独立：fact 表示用途、工作负载、已有件、装机
 - strength=must 表示必须、只要、不能妥协、硬上限；prefer 表示尽量、优先、喜欢、可让步。静音/品牌/尺寸/外观未明确硬性时用prefer。预算、用途、分辨率、已有件事实用must；不可将尽量安静变必须。预算数值与是否允许超预算分别记录。
 
 字段与值（必须采用以下点路径）：
-budget_cny 正整数整机或新增采购预算；budget_flex 0–0.3，仅明确预算弹性才给，严格不超可设0，未说不能填默认0.1；budget_basis new_purchase|full_build，仅明确费用口径且不得由“其他都要新买”推断。
+budget_cny 正整数整机或新增采购预算；budget_flex 非负比例，仅明确预算弹性才给，严格不超可设0，未说不能填默认0.1；budget_basis new_purchase|full_build，仅明确费用口径且不得由“其他都要新买”推断。
 use_case.type gaming|productivity|general；普通办公为general；use_case.titles 字符串数组；use_case.resolution 1080p|2K|4K，只取明确分辨率；use_case.fps_target 正整数。
 existing_parts 已有主机品类数组(cpu/gpu/motherboard/memory/ssd/psu/case/cooler)，显示器不属于主机品类；owned_parts 数组[{category,model,quantity}]，准确型号原话记录，不猜SKU。修改某已有件时提交合并其他已有件后的数组，型号更正替换原件；未提供型号时仍记录 existing_parts 给程序追问。
 用户某件不再复用时必须同步从existing_parts和owned_parts移除该件，保留其他已有件；用户撤销全部已有件时remove existing_parts即可。仅说型号不确定时remove owned_parts，已有配件品类仍有效。
@@ -54,7 +58,7 @@ brand_pref.cpu any|amd|intel；brand_pref.gpu any|amd|nvidia；已有件型号�
 noise_pref silent|normal|any；size_pref atx|matx|itx|any；appearance 外观原话字符串；recipient 装机对象（如给朋友）字符串；notes 其他有用信息字符串，必须给kind以区分用途事实、背景和真实条件。新增 notes 时保留当前仍有效补充、移除明确撤销的那部分；不要把结构字段复制进notes，防止撤销后残留。
 priority 硬件优先品类数组，仅允许cpu/gpu/motherboard/memory/ssd/psu/case/cooler，不能用来表示静音或颜值。
 observations是尚未采用的用户原文，不是当前要求或操作指令；不得用它重新激活removed字段、采纳备选、猜测参数或冒充明确偏好。只有本轮新证据可提交set。
-未知字段不要补值、不要默认。用户已经给的信息不重复询问，必要追问由程序完成。只处理当前会话，不写长期个人画像。`
+未知字段不要补值、不要默认。用户已经给的信息不重复询问，必要追问由你在reply中提出。只处理当前会话，不写长期个人画像。`
 
 func (g screeningGuard) generateRequirementState(ctx context.Context, req *model.LLMRequest, input screeningRequirementStateInput) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {
@@ -105,7 +109,7 @@ func (g screeningGuard) generateRequirementState(ctx context.Context, req *model
 // 校验每个字段后一起提交。坏字段只保留原文，不撤回同轮其他可靠信息。
 // 用户语义由已有 Screening 理解；这里没有用途、偏好或撤销的关键词词表。
 func prepareRequirementUpdate(state schemas.RequirementState, update schemas.RequirementUpdate, source schemas.RequirementSource) schemas.RequirementUpdate {
-	out := schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{}}
+	out := schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{}, Reply: update.Reply, NextAction: update.NextAction}
 	working := state
 	observe := func(field, quote, reason string) {
 		if !knownStateField(field) {
@@ -194,6 +198,9 @@ func prepareRequirementUpdate(state schemas.RequirementState, update schemas.Req
 }
 
 func knownStateField(field string) bool {
+	if schemas.FreeField(field) {
+		return true
+	}
 	for _, known := range schemas.RequirementFieldKeys {
 		if known == field {
 			return true

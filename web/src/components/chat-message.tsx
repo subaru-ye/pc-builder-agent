@@ -16,7 +16,7 @@ export function ChatMessage({ message, activeRunID }: { message: Session["messag
     <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border bg-[var(--surface-1)]" aria-hidden>
       {isUser ? <User size={14} /> : <Bot size={14} />}
     </div>
-    <div className="min-w-0 flex-1">
+    <div className="relative min-w-0 flex-1">
       <div className={`mb-1 text-xs text-[var(--ink-subtle)] ${isUser ? "text-right" : ""}`}>{isUser ? "你" : "装机助手"}</div>
       <div className={`prose-chat space-y-3 text-sm [overflow-wrap:anywhere] [&_p]:whitespace-pre-wrap [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li+li]:mt-1 [&_pre]:overflow-x-auto ${isUser ? "rounded-lg bg-[var(--surface-2)] px-3 py-2" : ""}`}>
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>

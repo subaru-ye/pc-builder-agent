@@ -82,7 +82,7 @@ func replayScreening(ctx context.Context, input product.ScreenInput, output stri
 	if err != nil {
 		return product.ScreenResult{}, err
 	}
-	ctx = pipeline.WithRequirementState(ctx, *input.RequirementState, input.RequirementSource)
+	ctx = pipeline.WithRequirementState(ctx, *input.RequirementState, input.RequirementSource, input.Conversation)
 	var text string
 	for event, err := range r.Run(ctx, "offline", uuid.NewString(), genai.NewContentFromText(input.Context, genai.RoleUser), agent.RunConfig{}) {
 		if err != nil {

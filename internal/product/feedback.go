@@ -54,5 +54,6 @@ func screeningEvidence(input ScreenInput) map[string]any {
 		configured = profile
 	}
 	return map[string]any{"text": input.Text, "user_sources": input.UserSources, "context": input.Context, "has_build": input.HasBuild,
+		"requirement_state": input.RequirementState, "conversation": input.Conversation,
 		"configured_model": configured, "model_evidence_source": "api_environment_at_execution_not_per_request_identity"}
 }

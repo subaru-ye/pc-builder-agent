@@ -119,6 +119,9 @@ func DecodeRequirementUpdate(raw []byte) (RequirementUpdate, error) {
 	if update.Operations == nil || len(update.Operations) > 32 || len(update.Observations) > 32 {
 		return update, fmt.Errorf("requirement update: operations 必须为数组且最多 32 项")
 	}
+	if update.NextAction != "" && update.NextAction != "collect" && update.NextAction != "confirm" && update.NextAction != "plan" {
+		return update, fmt.Errorf("requirement update: next_action 无效")
+	}
 	return update, nil
 }
 
@@ -585,6 +588,11 @@ func RequirementFieldLabel(key string) string {
 // 来源按需展示在产品里；模型通过本轮原文增量更新，不能再次提取过去的旧要求。
 func RequirementStatePromptView(state RequirementState) json.RawMessage {
 	keys := append([]string(nil), RequirementFieldKeys...)
+	for key := range state.Fields {
+		if FreeField(key) {
+			keys = append(keys, key)
+		}
+	}
 	sort.Strings(keys)
 	fields := map[string]any{}
 	for _, key := range keys {

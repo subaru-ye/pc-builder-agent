@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Run, RunEvent } from "@/lib/api/types";
 import { readRunStream } from "@/lib/api/sse";
 
@@ -8,8 +8,13 @@ const delays = [1000, 2000, 5000, 10000, 15000];
 
 export function useRunStream(run: Run | null | undefined, onEvent: (event: RunEvent) => void, onExpired: () => void) {
   const [connection, setConnection] = useState<"idle" | "connected" | "unstable" | "long" | "polling">("idle");
+  const callbacks = useRef({ onEvent, onExpired });
+  useEffect(() => { callbacks.current = { onEvent, onExpired }; }, [onEvent, onExpired]);
+  const id = run?.id;
+  const status = run?.status;
+  const url = run?.events_url;
   useEffect(() => {
-    if (!run || run.status !== "running") return;
+    if (!id || status !== "running" || !url) return;
     const controller = new AbortController();
     let stopped = false;
     let lastID: string | undefined;
@@ -24,7 +29,7 @@ export function useRunStream(run: Run | null | undefined, onEvent: (event: RunEv
       while (!stopped) {
         try {
           const response = await readRunStream({
-            url: run.events_url,
+            url,
             lastEventID: lastID,
             signal: controller.signal,
             onActivity: () => { lastActivity = Date.now(); setConnection("connected"); },
@@ -32,13 +37,13 @@ export function useRunStream(run: Run | null | undefined, onEvent: (event: RunEv
               if (seen.has(event.id)) return;
               seen.add(event.id);
               lastID = event.id;
-              onEvent(event);
+              callbacks.current.onEvent(event);
               if (event.event === "run.completed") stopped = true;
             },
           });
           if (response.status === 410) {
             setConnection("polling");
-            onExpired();
+            callbacks.current.onExpired();
             return;
           }
           if (response.ok && stopped) return;
@@ -52,7 +57,9 @@ export function useRunStream(run: Run | null | undefined, onEvent: (event: RunEv
     };
     void connect();
     return () => { stopped = true; controller.abort(); window.clearInterval(monitor); };
-  }, [onEvent, onExpired, run]);
+  // Rendering progress or receiving a fresh copy of the same run must not abort
+  // an in-flight stream before its completion event arrives.
+  }, [id, status, url]);
 
   return run?.status === "running" ? connection : "idle";
 }

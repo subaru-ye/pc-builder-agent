@@ -1,0 +1,11 @@
+{
+  "provenance": "2026-09-11 local saved conversation: c7bb0cc3-8550-4a42-9203-c5d3f50ac1f1; candidate from local 2026-07-28 catalog. Corrected decisions in test code are offline oracles, not live model output.",
+  "user": "把处理器换更好的，预算还很充足啊，其他配件尽量不动",
+  "original_reply": "好的，已记录优先升级处理器、其他配件尽量不动。你希望处理器升级到什么档次，或者有具体型号偏好吗？",
+  "original_next_action": "collect",
+  "candidate": {
+    "id": "cpu-r7-5700x", "category": "cpu", "brand": "AMD", "model": "Ryzen 7 5700X",
+    "specs": {"tdp_w": 65, "socket": "AM4", "has_igpu": false, "supported_chipsets": ["A520", "B450", "B550", "X470", "X570"]},
+    "price_cny": "979.00"
+  }
+}

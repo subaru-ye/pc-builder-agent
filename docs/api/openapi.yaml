@@ -990,7 +990,7 @@ components:
       properties:
         schema_version: {type: integer, const: 1}
         reply: {type: string}
-        next_action: {type: string, enum: [collect, confirm]}
+        next_action: {type: string, enum: [collect, confirm, plan], description: "plan 仅用于首次需求确认后的明确聊天执行指令；同一运行继续规划。"}
         revision: {type: integer, minimum: 0}
         fields:
           type: object
@@ -1015,6 +1015,7 @@ components:
         requirement_state: {$ref: "#/components/schemas/RequirementState"}
         base_draft: {type: object, additionalProperties: true}
         previous_proposal: {type: object, additionalProperties: true}
+        request: {$ref: "#/components/schemas/RequirementSource", description: 本轮已授权执行的用户原话，供规划理解修改目标，不作为新增偏好}
     PlanningEvidence:
       type: object
       required: [id, url, title, text, captured_at, kind]

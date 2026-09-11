@@ -754,8 +754,11 @@ export interface components {
             /** @constant */
             schema_version: 1;
             reply?: string;
-            /** @enum {string} */
-            next_action?: "collect" | "confirm";
+            /**
+             * @description plan 仅用于首次需求确认后的明确聊天执行指令；同一运行继续规划。
+             * @enum {string}
+             */
+            next_action?: "collect" | "confirm" | "plan";
             revision: number;
             fields: {
                 [key: string]: components["schemas"]["RequirementField"];
@@ -775,6 +778,8 @@ export interface components {
             previous_proposal?: {
                 [key: string]: unknown;
             };
+            /** @description 本轮已授权执行的用户原话，供规划理解修改目标，不作为新增偏好 */
+            request?: components["schemas"]["RequirementSource"];
         };
         PlanningEvidence: {
             id: string;

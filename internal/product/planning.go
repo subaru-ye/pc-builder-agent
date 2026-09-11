@@ -17,6 +17,34 @@ type proposalStore interface {
 	BuildByVersion(context.Context, string, int) (store.BuildVersion, error)
 }
 
+// A chat command authorizes another planning pass after initial confirmation.
+// Persist the updated state before invoking Builder, within the same run.
+func (s *Service) planFromScreening(ctx context.Context, ownerID string, r store.AgentRun, state schemas.RequirementState, source schemas.RequirementSource) error {
+	st, ok := s.store.(interface {
+		ContinueScreeningRun(context.Context, string, string, string, schemas.RequirementState) (store.AgentRun, json.RawMessage, error)
+	})
+	if !ok {
+		return fmt.Errorf("planning continuation unavailable")
+	}
+	next, pending, err := st.ContinueScreeningRun(ctx, ownerID, r.SessionID, r.ID, state)
+	if err != nil {
+		return err
+	}
+	var input schemas.PlanningInput
+	if err = json.Unmarshal(pending, &input); err != nil {
+		return err
+	}
+	input.Request = &source
+	payload, err := json.Marshal(input)
+	if err != nil {
+		return err
+	}
+	raw, _ := json.Marshal(state)
+	s.publish(ctx, r.ID, "requirement.updated", json.RawMessage(raw))
+	s.executeRemote(ctx, next, ownerID, payload)
+	return nil
+}
+
 func (s *Service) planningContext(ctx context.Context, sessionID string, payload json.RawMessage) (json.RawMessage, error) {
 	var input schemas.PlanningInput
 	if json.Unmarshal(payload, &input) != nil {

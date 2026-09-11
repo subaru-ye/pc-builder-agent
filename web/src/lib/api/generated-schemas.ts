@@ -120,7 +120,7 @@ const RequirementObservation = z.object({
 const RequirementState = z.object({
   schema_version: z.number().int(),
   reply: z.string().optional(),
-  next_action: z.enum(["collect", "confirm"]).optional(),
+  next_action: z.enum(["collect", "confirm", "plan"]).optional(),
   revision: z.number().int().gte(0),
   fields: z.record(z.string(), RequirementField),
   alternatives: z.array(RequirementAlternative),
@@ -134,6 +134,7 @@ const PlanningInput = z
     requirement_state: RequirementState,
     base_draft: z.object({}).partial().passthrough().optional(),
     previous_proposal: z.object({}).partial().passthrough().optional(),
+    request: RequirementSource.optional(),
   })
   .passthrough();
 const PartCategory = z.enum([

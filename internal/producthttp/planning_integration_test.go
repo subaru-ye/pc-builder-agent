@@ -3,6 +3,7 @@ package producthttp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"iter"
 	"net/http"
 	"os"
@@ -62,6 +63,45 @@ func seedPlanningRecording(t *testing.T, conn *pgx.Conn, snapshot int64, fixture
 			t.Fatal(err)
 		}
 	}
+	upgradeRaw, err := os.ReadFile("testdata/cpu_upgrade_recording.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var upgrade struct{ Candidate planning.Candidate }
+	if err = json.Unmarshal(upgradeRaw, &upgrade); err != nil {
+		t.Fatal(err)
+	}
+	c := upgrade.Candidate
+	if _, err = conn.Exec(ctx, `INSERT INTO parts(sku,category,brand,model,specs) VALUES($1,$2,$3,$4,$5) ON CONFLICT(sku) DO NOTHING`, c.ID, c.Category, c.Brand, c.Model, c.Specs); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = conn.Exec(ctx, `INSERT INTO prices(snapshot_id,sku,price_cny,source) VALUES($1,$2,$3,'saved-local-catalog') ON CONFLICT(snapshot_id,sku) DO NOTHING`, snapshot, c.ID, c.Price); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Explicit semantic oracle, isolated to offline tests. Production routing never
+// compares these phrases; it uses the single Screening model's next_action.
+func (g *planningReplayGateway) Screen(ctx context.Context, owner, sessionID string, input product.ScreenInput) (product.ScreenResult, error) {
+	output := ""
+	switch input.Text {
+	case "预算7000，剪1080p多轨视频，不要求静音":
+		output = `{"next_action":"confirm","operations":[{"op":"set","field":"budget_cny","value":7000,"strength":"must","quote":"预算7000"},{"op":"set","field":"free.workload_resolution","value":"1080p多轨视频剪辑","kind":"fact","strength":"must","quote":"剪1080p多轨视频"},{"op":"remove","field":"noise_pref","quote":"不要求静音"}]}`
+	case "把处理器换更好的，预算还很充足啊，其他配件尽量不动":
+		if input.Conversation.CanPlan && (!input.HasBuild || !strings.Contains(string(input.Conversation.BaseDraft), "cpu-r5-5600") || !strings.Contains(string(input.Conversation.Parts), "Ryzen 5 5600") || len(input.Conversation.Quote) == 0 || input.RequirementState.Fields["free.workload_resolution"].Status != "active") {
+			return product.ScreenResult{}, fmt.Errorf("upgrade did not receive actual current configuration and workload")
+		}
+		output = `{"next_action":"plan","operations":[{"op":"set","field":"priority","value":["cpu"],"strength":"prefer","quote":"把处理器换更好的"},{"op":"set","field":"free.preserve_other_parts","value":"其他配件尽量不动","kind":"constraint","strength":"prefer","quote":"其他配件尽量不动"}]}`
+	case "如果换更好的CPU会怎样，先别执行":
+		output = `{"next_action":"collect","reply":"可以比较升级方向，尚未更换当前配置。","operations":[{"op":"alternative","field":"priority","value":["cpu"],"quote":"如果换更好的CPU会怎样"}]}`
+	case "预算先记8000，先不要重新生成":
+		output = `{"next_action":"confirm","reply":"预算已记录，尚未重新生成。","operations":[{"op":"set","field":"budget_cny","value":8000,"quote":"预算先记8000"}]}`
+	case "没有具体偏好，直接继续选配":
+		output = `{"next_action":"plan","operations":[]}`
+	default:
+		return g.requirementReplayGateway.Screen(ctx, owner, sessionID, input)
+	}
+	return replayScreening(ctx, input, output)
 }
 
 func TestPlanningSharedQuotaIsAtomic(t *testing.T) {
@@ -92,6 +132,24 @@ func (g *planningReplayGateway) Remote(ctx context.Context, _, sessionID string,
 		return product.RemoteResult{}, e
 	}
 	m := &planningReplayModel{draft: g.fixture.Draft, input: input}
+	if input.Request != nil && input.State.Fields["priority"].Status == "active" {
+		if len(input.BaseDraft) == 0 || len(input.PreviousProposal) == 0 || input.Request.MessageID == "" {
+			return product.RemoteResult{}, fmt.Errorf("missing continuation context")
+		}
+		var base map[string]json.RawMessage
+		if e := json.Unmarshal(input.BaseDraft, &base); e != nil {
+			return product.RemoteResult{}, e
+		}
+		var selection map[string]json.RawMessage
+		_ = json.Unmarshal(base["selection"], &selection)
+		selection["cpu"] = json.RawMessage(`"cpu-r7-5700x"`)
+		base["selection"], _ = json.Marshal(selection)
+		var rationale map[string]string
+		_ = json.Unmarshal(base["rationale"], &rationale)
+		rationale["cpu"] = "离线升级回放：从本地检索到 Ryzen 7 5700X，保留其他配件并重新校验与报价。"
+		base["rationale"], _ = json.Marshal(rationale)
+		m.draft, _ = json.Marshal(base)
+	}
 	result, e := (planning.Runner{Model: m, Catalog: g.store}).Run(ctx, input)
 	return product.RemoteResult{Text: result.Reply, Planning: &result}, e
 }
@@ -106,6 +164,13 @@ func (*planningReplayModel) Name() string { return "offline-planning-recording" 
 func (m *planningReplayModel) GenerateContent(_ context.Context, req *model.LLMRequest, _ bool) iter.Seq2[*model.LLMResponse, error] {
 	return func(y func(*model.LLMResponse, error) bool) {
 		m.calls++
+		if m.input.Request != nil && m.calls == 2 && strings.Contains(string(m.draft), "cpu-r7-5700x") {
+			toolResults, _ := json.Marshal(req.Contents[len(req.Contents)-1])
+			if !strings.Contains(string(toolResults), "cpu-r7-5700x") {
+				y(nil, fmt.Errorf("upgrade candidate was not retrieved by search_local"))
+				return
+			}
+		}
 		var content *genai.Content
 		if m.calls < 3 {
 			action, payload := "search_local", `{"category":"cpu"}`
@@ -122,7 +187,7 @@ func (m *planningReplayModel) GenerateContent(_ context.Context, req *model.LLMR
 					continue
 				}
 				status := "met"
-				if (field == "noise_pref" || strings.HasPrefix(field, "free.")) && v.Strength == "must" {
+				if (field == "noise_pref" || strings.HasPrefix(field, "free.")) && v.Strength == "must" && v.Kind != "fact" {
 					status = "unknown"
 					outcome = "proposal"
 					issues = append(issues, "需要核对"+schemas.RequirementFieldLabel(field)+"的商品或实测资料")

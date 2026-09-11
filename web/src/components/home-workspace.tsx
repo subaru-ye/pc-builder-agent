@@ -33,7 +33,7 @@ export function HomeWorkspace({ showEvaldesk = false }: { showEvaldesk?: boolean
     },
   });
   return (
-    <main className="flex h-dvh flex-col overflow-hidden bg-[var(--canvas)]">
+    <main className="relative flex h-dvh flex-col overflow-hidden bg-[var(--canvas)]">
       <AppHeader showAccount={false} showEvaldesk={showEvaldesk} navigation={<SessionNavigationTrigger />} />
       <ResizableWorkspace overview>
         <SessionNavigation />

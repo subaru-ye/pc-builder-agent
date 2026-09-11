@@ -74,7 +74,7 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
     if (event.event === "run.failed") toast.error(String(event.data.payload.title ?? "运行失败"));
     if (event.event === "run.completed") { setRun(null); setStage(null); setPollExpired(false); void client.invalidateQueries({ queryKey: queryKeys.run(event.data.run_id) }); void refreshSession(); }
   }, [client, refreshBuilds, refreshSession]);
-  const connection = useRunStream(currentRun, onEvent, () => setPollExpired(true));
+  const connection = useRunStream(currentRun, onEvent, () => { setRun(null); setPollExpired(true); void refreshSession(); });
   useEffect(() => {
     // Browser history and direct links also enter sessions, bypassing sidebar clicks.
     useUIStore.setState({ mobilePane: "chat", inspectorTab: "build", diffFrom: null, diffTo: null });
@@ -168,7 +168,7 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
     setDetailView(tab);
     setDetailsOpen(true);
   };
-  const shell = (children: ReactNode) => <main className="flex h-dvh flex-col overflow-hidden bg-[var(--canvas)]">
+  const shell = (children: ReactNode) => <main className="relative flex h-dvh flex-col overflow-hidden bg-[var(--canvas)]">
     <AppHeader navigation={<SessionNavigationTrigger currentSessionID={sessionID} />} title={session.data?.title} exportHref={requestedVersion ? exportURL(sessionID, requestedVersion) : undefined} share={build.data && requestedVersion ? { sessionID, version: requestedVersion } : undefined} />
     <ResizableWorkspace>
       <SessionNavigation currentSessionID={sessionID} />
@@ -202,7 +202,7 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
             {data.requirement_state ? <RequirementSummary session={data} onOpen={() => openDetails("requirement")} /> : <div className="flex items-center justify-between gap-3 px-4 py-2 sm:px-6"><span className="text-sm text-[var(--ink-muted)]">{phaseLabels[data.phase]}</span><Button variant="ghost" size="sm" onClick={() => openDetails("requirement")}>查看需求</Button></div>}
           </div>
         </div>
-        <div ref={conversationScroll} className="min-h-0 flex-1 overflow-y-auto" onScroll={(event) => { const scroll = event.currentTarget; followLatest.current = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 96; }}>
+        <div ref={conversationScroll} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain" onScroll={(event) => { const scroll = event.currentTarget; followLatest.current = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 96; }}>
           <div className={`mx-auto w-full max-w-4xl px-4 py-5 sm:px-6 ${data.messages.length === 0 ? "flex min-h-full flex-col" : ""}`}>
           <div className={`mb-5 min-h-11 items-center justify-between gap-3 text-xs text-[var(--ink-muted)] ${data.messages.length === 0 ? "flex lg:hidden" : "flex"}`}><span>{data.status_label || phaseLabels[data.phase]}</span><Button variant="ghost" size="sm" className="lg:hidden" aria-label="查看配置详情" onClick={() => openDetails("build")}><PanelRight size={15} />{data.version_count ? `查看配置 · ${data.version_count} 个版本` : "查看配置"}</Button></div>
           {data.messages.length === 0 && <div className="my-auto flex w-full flex-col items-center py-8 text-center" data-testid="conversation-welcome"><MessageSquare size={24} className="mb-4 text-[var(--ink-subtle)]" aria-hidden="true" /><h1 className="text-xl font-semibold">开始新的装机对话</h1><p className="mt-2 max-w-md text-sm text-[var(--ink-muted)]">先说说预算和主要用途，其他偏好可以边聊边补充。</p><SuggestedPrompts centered onSelect={setDraft} /></div>}

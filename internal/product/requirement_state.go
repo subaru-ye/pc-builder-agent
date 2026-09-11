@@ -289,11 +289,57 @@ func (s *Service) attachRequirementState(ctx context.Context, ownerID string, r 
 		state = schemas.LegacyPlanningState(raw)
 	}
 	input.RequirementState = &state
+	input.HasBuild = ws.VersionCount > 0
+	input.Conversation.CanPlan = len(ws.ConfirmedRequirement) > 0
+	if st, ok := s.store.(proposalStore); ok {
+		if ws.VersionCount > 0 {
+			base, err := st.BuildByVersion(ctx, r.SessionID, ws.VersionCount)
+			if err != nil {
+				return err
+			}
+			input.Conversation.BuildVersion = base.Version
+			input.Conversation.BaseDraft, input.Conversation.Quote = base.Draft, base.Quote
+			var snapshot struct {
+				Candidates []struct {
+					ID       string `json:"id"`
+					Category string `json:"category"`
+					Brand    string `json:"brand"`
+					Model    string `json:"model"`
+				} `json:"candidates"`
+			}
+			if json.Unmarshal(base.CandidateSnapshot, &snapshot) == nil {
+				input.Conversation.Parts, _ = json.Marshal(snapshot.Candidates)
+			}
+		}
+		previous, err := st.LatestProposal(ctx, r.SessionID)
+		if err != nil {
+			return err
+		}
+		// Only continuation details: hundreds of sources belong in Builder tools.
+		var proposal struct {
+			Result struct {
+				Outcome string          `json:"outcome"`
+				Draft   json.RawMessage `json:"draft,omitempty"`
+				Issues  []string        `json:"issues"`
+				Reply   string          `json:"reply"`
+			} `json:"result"`
+		}
+		if len(previous) > 0 && json.Unmarshal(previous, &proposal) == nil {
+			input.Conversation.Proposal, _ = json.Marshal(proposal.Result)
+		}
+	}
 	messages, err := s.store.WebMessages(ctx, r.SessionID)
 	if err != nil {
 		return err
 	}
 	for _, message := range messages {
+		if message.Role == "assistant" {
+			text := []rune(message.Content)
+			if len(text) > 3000 {
+				text = text[:3000]
+			}
+			input.Conversation.LastAssistant = string(text)
+		}
 		if message.Role == "user" && message.RunID != nil && *message.RunID == r.ID {
 			input.RequirementSource = schemas.RequirementSource{MessageID: message.ID, Kind: "chat", Quote: message.Content}
 			break

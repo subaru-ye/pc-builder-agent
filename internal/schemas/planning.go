@@ -8,10 +8,23 @@ import (
 // PlanningInput is the versioned execution snapshot. Unknown requirements remain
 // unknown; the legacy RequirementSpec projection is not an admission gate.
 type PlanningInput struct {
-	SchemaVersion    int              `json:"schema_version"`
-	State            RequirementState `json:"requirement_state"`
-	BaseDraft        json.RawMessage  `json:"base_draft,omitempty"`
-	PreviousProposal json.RawMessage  `json:"previous_proposal,omitempty"`
+	SchemaVersion    int                `json:"schema_version"`
+	State            RequirementState   `json:"requirement_state"`
+	BaseDraft        json.RawMessage    `json:"base_draft,omitempty"`
+	PreviousProposal json.RawMessage    `json:"previous_proposal,omitempty"`
+	Request          *RequirementSource `json:"request,omitempty"` // 本轮执行原话，不是新增的用户偏好。
+}
+
+// ScreeningConversation supplies execution facts and the last assistant turn for
+// reference resolution. It is not a second requirement memory or user evidence.
+type ScreeningConversation struct {
+	CanPlan       bool            `json:"can_plan"`
+	BuildVersion  int             `json:"build_version,omitempty"`
+	BaseDraft     json.RawMessage `json:"base_draft,omitempty"`
+	Quote         json.RawMessage `json:"quote,omitempty"`
+	Parts         json.RawMessage `json:"parts,omitempty"`
+	Proposal      json.RawMessage `json:"proposal,omitempty"`
+	LastAssistant string          `json:"last_assistant,omitempty"`
 }
 
 func PlanningRequirement(state RequirementState) (json.RawMessage, error) {

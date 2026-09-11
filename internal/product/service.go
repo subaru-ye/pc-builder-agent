@@ -240,6 +240,18 @@ func (s *Service) executeScreening(ctx context.Context, r store.AgentRun, ownerI
 			return
 		}
 		state, mergeErr := schemas.ApplyRequirementUpdate(*input.RequirementState, *result.RequirementUpdate, input.RequirementSource)
+		if mergeErr == nil && state.NextAction == "plan" {
+			if input.Conversation.CanPlan {
+				mergeErr = s.planFromScreening(ctx, ownerID, r, state, input.RequirementSource)
+				if mergeErr != nil {
+					s.failInternal(ctx, r, store.PhaseCollecting, "")
+				}
+				return
+			}
+			// Initial requirement confirmation remains explicit. A model action
+			// cannot silently skip it or claim execution before it starts.
+			state.NextAction, state.Reply = "confirm", ScreeningReadyMessage
+		}
 		if mergeErr == nil {
 			mergeErr = s.completeRequirementState(ctx, ownerID, r, state)
 		}
@@ -485,7 +497,6 @@ func parseDeterministicGPUBrandSwap(text string) (string, bool) {
 }
 
 func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID string, payload json.RawMessage) {
-	s.captureEvidence(ctx, r.ID, "build_input", map[string]any{"payload": payload, "actual_builder_model": nil, "model_evidence_source": "remote_identity_unavailable"})
 	s.progress(ctx, r.ID, "remote_processing", "正在生成并校验配置", 2)
 	before, _, err := s.store.LatestBuildVersion(ctx, r.SessionID)
 	if err != nil {
@@ -497,6 +508,7 @@ func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID s
 		s.failInternal(ctx, r, recoveryFor(r.Kind), "")
 		return
 	}
+	s.captureEvidence(ctx, r.ID, "build_input", map[string]any{"payload": payload, "actual_builder_model": nil, "model_evidence_source": "remote_identity_unavailable"})
 	result, err := s.agent.Remote(ctx, ownerID, r.SessionID, payload)
 	if err != nil {
 		s.failFromError(ctx, r, err, recoveryFor(r.Kind), "")

@@ -19,20 +19,27 @@ type screeningRequirementStateKey struct{}
 var ErrRequirementUpdate = errors.New("初筛需求更新无效，原需求保持不变")
 
 type screeningRequirementStateInput struct {
-	state  schemas.RequirementState
-	source schemas.RequirementSource
+	state        schemas.RequirementState
+	source       schemas.RequirementSource
+	conversation schemas.ScreeningConversation
 }
 
 // WithRequirementState 启用产品会话增量协议。旧 host/评估入口未传该上下文时
 // 保持原协议；每轮仍只有现有 Screening 调用，不追加独立总结模型。
-func WithRequirementState(ctx context.Context, state schemas.RequirementState, source schemas.RequirementSource) context.Context {
-	return context.WithValue(ctx, screeningRequirementStateKey{}, screeningRequirementStateInput{state: state, source: source})
+func WithRequirementState(ctx context.Context, state schemas.RequirementState, source schemas.RequirementSource, conversation ...schemas.ScreeningConversation) context.Context {
+	input := screeningRequirementStateInput{state: state, source: source}
+	if len(conversation) > 0 {
+		input.conversation = conversation[0]
+	}
+	return context.WithValue(ctx, screeningRequirementStateKey{}, input)
 }
 
-const requirementStateInstruction = `输出仍为 operations 数组，可另含 reply（简短中文回复）和 next_action（collect 或 confirm）。由你判断是否需追问，不必填满预算、分辨率或已有件型号；用户不知道时可讨论方向，不能反复索要。准备开始选配时 next_action=confirm，reply 提醒核对并确认。没有变动允许 operations=[]。
+const requirementStateInstruction = `输出仍为 operations 数组，可另含 reply（简短中文回复）和 next_action（collect、confirm 或 plan）。由你判断是否需追问，不必填满预算、分辨率或已有件型号；用户不知道时可讨论方向，不能反复索要。没有变动允许 operations=[]。
+首次选配前（can_plan=false）准备开始选配时用confirm，提醒核对需求；不能直接plan。需求已确认过（can_plan=true），用户明确要求执行升级、更换、重新选配或继续解决方案时用plan，程序会在本轮直接调用Builder检索、比较和校验，不要再要求用户确认同一个方向。用户仅讨论备选、询问建议或说先记录/不要执行时不能plan。必要问题才用collect；型号、兼容性和可买到什么由Builder检索，不要把本可检索解决的任务退回给用户。型号无偏好、其他配件尽量不动不是缺少升级授权，不能追问CPU档次、重复预算分配或要求用户自己选型号。
+执行上下文中的base_draft、parts和quote是本会话正式配置；proposal是上次选配进展。它们不是用户手头已购的配件，不写成owned_parts，不需要用户重复提供其中已有的CPU、主板和内存。保留与更换基于这些配置交给Builder规划。last_assistant仅帮助理解“好的”“没有”等回答，不得当作用户事实，不得重新激活旧值。只问一次真正缺少的关键信息，用户已让你自行选择时采用明确标注的执行假设继续规划。
 未预设要求逐项保存到 free.<稳定英文编号> 字段，value 为中文要求全文，后续修改沿用同一编号，撤销用 remove；不能将多个独立条件挤进 notes。已有件简称可保留在自由条目，不强求原话与商品型号逐字匹配。用户已回答的问题不重复问。
 例如“剪4K视频”的4K是素材参数，保存free.workload_resolution kind=fact，不设置use_case.resolution；只有用户说明屏幕/游戏输出目标时才设置后者。“必须静音”保留must，可追问负载和声音接受程度，但不能要求用户自己给出分贝实测资料才能开始讨论。
-你是装机需求增量提取助手。程序提供当前会话权威状态和本轮用户原文。只提取本轮原文明确表达的变动；未改的字段由程序保留。无论是否有配置版本，本轮都只更新需求草稿，不自行生成配置或 ChangeRequest。
+你是装机需求增量提取助手。程序提供当前会话权威状态、执行上下文和本轮用户原文。只提取本轮原文明确表达的变动；未改的字段由程序保留。你不自行生成配置或ChangeRequest，以next_action交接给Builder。优先升级CPU可set priority=["cpu"]；“其他配件尽量不动”另存free.preserve_other_parts kind=constraint strength=prefer，不变成强制锁定。
 请结合当前权威状态理解口语、否定、指代和转折，不要求用户命中固定词语。工作负载的素材参数不是显示器或游戏目标，应保留为稳定的free.*条目 kind=fact，不能重复放进notes。
 同一语义的后续更正必须复用已有free.*编号。例如free.workload_resolution原为2K，本轮说“素材大概1080p吧”，应set原字段为1080p，其他游戏等信息另行记录。不要新增notes并让旧值同时有效。多个字段或notes已重复记录同一信息时，同轮更新权威条目并remove被替代的重复条目；notes含其他有效内容则set保留这些内容。取代关系由本轮用户原话决定，不能将讨论备选误当更正。不要擅自把软件简称扩写为用户没有表达的厂商产品名。
 
@@ -69,8 +76,9 @@ func (g screeningGuard) generateRequirementState(ctx context.Context, req *model
 		}
 		config.SystemInstruction = &genai.Content{Parts: []*genai.Part{{Text: requirementStateInstruction}}}
 		copyReq.Config = &config
-		// 旧会话文本不参与本轮提取，撤销墓碑与当前值是唯一状态依据。
-		copyReq.Contents = []*genai.Content{genai.NewContentFromText("当前会话需求（数据）：\n"+string(schemas.RequirementStatePromptView(input.state))+"\n本轮用户原文（数据）：\n"+input.source.Quote, genai.RoleUser)}
+		// 不重放历史用户消息。配置与上一条助手消息只提供执行及指代上下文。
+		conversation, _ := json.Marshal(input.conversation)
+		copyReq.Contents = []*genai.Content{genai.NewContentFromText("当前会话需求（数据）：\n"+string(schemas.RequirementStatePromptView(input.state))+"\n执行上下文（数据，不是用户表达）：\n"+string(conversation)+"\n本轮用户原文（数据）：\n"+input.source.Quote, genai.RoleUser)}
 		for response, err := range g.LLM.GenerateContent(ctx, &copyReq, false) {
 			if err != nil || response == nil || response.ErrorCode != "" || response.ErrorMessage != "" {
 				if !yield(response, err) {

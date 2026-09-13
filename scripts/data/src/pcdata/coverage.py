@@ -1,7 +1,8 @@
 """完整率报告:每类 SKU 数、错误级规则字段覆盖、warning 专属字段 null 统计、价格覆盖。
 
-门禁(实施计划 Test Plan):每类恰好 20 SKU、错误级规则字段覆盖率 100%、
-价格覆盖率 100%;warning 专属字段允许 null,但必须统计。
+门禁:每类至少 EXPECTED_PER_CATEGORY(20,历史种子下限,扩库后可超出且各类不等)、
+错误级规则字段覆盖率 100%、价格覆盖率 100%;warning 专属字段允许 null,但必须统计。
+重复 SKU、非法记录在加载时立即失败,数量开放不放宽身份与字段校验。
 
 用法:uv run python -m pcdata.coverage parts.jsonl [prices.csv]
 prices.csv 固定表头 sku,price_cny,source,captured_at(与 D6 导入器同格式)。
@@ -26,6 +27,7 @@ __all__ = [
     "build_report",
 ]
 
+# 历史种子下限:每类至少 20 条;扩库新增可超出且各类数量不等,不足即门禁失败。
 EXPECTED_PER_CATEGORY = 20
 
 # 错误级规则(#1/#2/#3/#5/#6/#7/#8/#9/#10/#11 及 #7 的 error 档)所需字段:
@@ -136,7 +138,7 @@ def build_report(
             for field in WARNING_ONLY_FIELDS[category]:
                 if r["specs"][field] is None:
                     warning_nulls[field].append(r["sku"])
-        count_ok = len(records) == EXPECTED_PER_CATEGORY
+        count_ok = len(records) >= EXPECTED_PER_CATEGORY
         fields_ok = not missing
         all_ok = all_ok and count_ok and fields_ok
         per_category[category] = {

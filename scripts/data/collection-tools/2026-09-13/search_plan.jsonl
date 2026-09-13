@@ -1,0 +1,139 @@
+{"query_id": "q001_cpu", "category": "cpu", "keyword": "i3 14100F 盒装", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q002_cpu", "category": "cpu", "keyword": "i5 14400F 盒装", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q003_cpu", "category": "cpu", "keyword": "i5 13490F", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q004_cpu", "category": "cpu", "keyword": "i5 12490F", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q005_cpu", "category": "cpu", "keyword": "i5 13600KF", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q006_cpu", "category": "cpu", "keyword": "i7 13700F", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q007_cpu", "category": "cpu", "keyword": "i7 12700F", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q008_cpu", "category": "cpu", "keyword": "Ultra 7 265K", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q009_cpu", "category": "cpu", "keyword": "Ultra 5 225K", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q010_cpu", "category": "cpu", "keyword": "R5 5600GT", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q011_cpu", "category": "cpu", "keyword": "R5 5600G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q012_cpu", "category": "cpu", "keyword": "R7 5700X3D", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q013_cpu", "category": "cpu", "keyword": "R7 5800X3D", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q014_cpu", "category": "cpu", "keyword": "R5 8400F", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q015_cpu", "category": "cpu", "keyword": "R7 8700F", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q016_cpu", "category": "cpu", "keyword": "R7 8700G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q017_cpu", "category": "cpu", "keyword": "R5 4500", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q018_cpu", "category": "cpu", "keyword": "R9 7900X", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q019_cpu", "category": "cpu", "keyword": "R9 9950X3D", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q020_cpu", "category": "cpu", "keyword": "Ultra 9 285K", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q021_gpu", "category": "gpu", "keyword": "七彩虹 RTX 5060 战斧", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q022_gpu", "category": "gpu", "keyword": "华硕 RTX 5060 PRIME 8G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q023_gpu", "category": "gpu", "keyword": "RTX 5060 Ti 8G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q024_gpu", "category": "gpu", "keyword": "RTX 5050 8G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q025_gpu", "category": "gpu", "keyword": "Arc B570", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q026_gpu", "category": "gpu", "keyword": "蓝戟 Arc B580", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q027_gpu", "category": "gpu", "keyword": "Arc A750", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q028_gpu", "category": "gpu", "keyword": "RX 7600 XT 16G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q029_gpu", "category": "gpu", "keyword": "RX 9060 XT 8G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q030_gpu", "category": "gpu", "keyword": "蓝宝石 RX 9070 极地", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q031_gpu", "category": "gpu", "keyword": "撼讯 RX 9070 XT", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q032_gpu", "category": "gpu", "keyword": "蓝宝石 RX 9070 XT 极地", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q033_gpu", "category": "gpu", "keyword": "讯景 RX 7800 XT", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q034_gpu", "category": "gpu", "keyword": "RX 7900 GRE", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q035_gpu", "category": "gpu", "keyword": "影驰 RTX 5070", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q036_gpu", "category": "gpu", "keyword": "索泰 RTX 5070 Ti", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q037_gpu", "category": "gpu", "keyword": "技嘉 RTX 5070 Ti", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q038_gpu", "category": "gpu", "keyword": "华硕 RTX 5070 Ti PRIME", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q039_gpu", "category": "gpu", "keyword": "微星 RTX 5080 万图师", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q040_gpu", "category": "gpu", "keyword": "七彩虹 RTX 4060", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q041_gpu", "category": "gpu", "keyword": "RTX 4060 Ti 16G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q042_gpu", "category": "gpu", "keyword": "RTX 3050 8G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q043_mb", "category": "motherboard", "keyword": "B450M 迫击炮", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q044_mb", "category": "motherboard", "keyword": "B450M 迫击炮 MAX", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q045_mb", "category": "motherboard", "keyword": "华硕 B550M PLUS", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q046_mb", "category": "motherboard", "keyword": "华擎 B760M", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q047_mb", "category": "motherboard", "keyword": "华擎 B650M Pro RS", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q048_mb", "category": "motherboard", "keyword": "七彩虹 CVN B650M 巡洋舰", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q049_mb", "category": "motherboard", "keyword": "铭瑄 B650M 终结者", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q050_mb", "category": "motherboard", "keyword": "B760M 迫击炮 DDR4", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q051_mb", "category": "motherboard", "keyword": "华硕 TUF B760M", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q052_mb", "category": "motherboard", "keyword": "技嘉 B760M 小雕", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q053_mb", "category": "motherboard", "keyword": "华硕 TUF B850M", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q054_mb", "category": "motherboard", "keyword": "B850M 迫击炮", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q055_mb", "category": "motherboard", "keyword": "华擎 B850M Pro RS", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q056_mb", "category": "motherboard", "keyword": "技嘉 X870 小雕", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q057_mb", "category": "motherboard", "keyword": "微星 X870 战斧导弹", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q058_mb", "category": "motherboard", "keyword": "华硕 TUF X870", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q059_mb", "category": "motherboard", "keyword": "华硕 H610M", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q060_mb", "category": "motherboard", "keyword": "B650I", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q061_mb", "category": "motherboard", "keyword": "华硕 B760-I", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q062_mem", "category": "memory", "keyword": "金百达 16G×2 6000 C30", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q063_mem", "category": "memory", "keyword": "金百达 DDR4 3200 16G×2", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q064_mem", "category": "memory", "keyword": "金百达 8G×2 6000", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q065_mem", "category": "memory", "keyword": "金百达 24G×2 6000", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q066_mem", "category": "memory", "keyword": "光威 天策 6000 32G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q067_mem", "category": "memory", "keyword": "光威 天策 DDR4 3200 32G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q068_mem", "category": "memory", "keyword": "玖合 6000 32G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q069_mem", "category": "memory", "keyword": "英睿达 Pro DDR5 6000 32G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q070_mem", "category": "memory", "keyword": "宏碁掠夺者 6000 32G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q071_mem", "category": "memory", "keyword": "科赋 6000 32G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q072_mem", "category": "memory", "keyword": "英睿达 DDR4 3600 16G×2", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q073_mem", "category": "memory", "keyword": "金士顿 野兽 6000 32G 白色", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q074_mem", "category": "memory", "keyword": "芝奇 幻锋戟 6000 32G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q075_mem", "category": "memory", "keyword": "威刚 龙耀 6000 32G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q076_mem", "category": "memory", "keyword": "海盗船 8G×2 6000", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q077_ssd", "category": "ssd", "keyword": "致态 TiPlus5000 1TB", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q078_ssd", "category": "ssd", "keyword": "致态 Ti600 1TB", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q079_ssd", "category": "ssd", "keyword": "致态 TiPlus7100 2TB", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q080_ssd", "category": "ssd", "keyword": "致态 Ti600 2TB", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q081_ssd", "category": "ssd", "keyword": "金士顿 NV3 1TB", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q082_ssd", "category": "ssd", "keyword": "金士顿 NV3 2TB", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q083_ssd", "category": "ssd", "keyword": "英睿达 P310 1TB", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q084_ssd", "category": "ssd", "keyword": "西数 SN5000 1TB", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q085_ssd", "category": "ssd", "keyword": "三星 990 EVO Plus 1TB", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q086_ssd", "category": "ssd", "keyword": "梵想 S500Pro 1TB", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q087_ssd", "category": "ssd", "keyword": "雷克沙 NM790 1TB", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q088_ssd", "category": "ssd", "keyword": "雷克沙 NM620 1TB", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q089_ssd", "category": "ssd", "keyword": "西数 SN770 500G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q090_ssd", "category": "ssd", "keyword": "英睿达 BX500 500G", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q091_ssd", "category": "ssd", "keyword": "英睿达 P3 Plus 2TB", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q092_psu", "category": "psu", "keyword": "鑫谷 昆仑 650W", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q093_psu", "category": "psu", "keyword": "鑫谷 GM650W", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q094_psu", "category": "psu", "keyword": "长城 650W 全模组", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q095_psu", "category": "psu", "keyword": "航嘉 650W 金牌", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q096_psu", "category": "psu", "keyword": "全汉 650W 金牌", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q097_psu", "category": "psu", "keyword": "振华 650W 金牌", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q098_psu", "category": "psu", "keyword": "安钛克 NE650", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q099_psu", "category": "psu", "keyword": "先马 金牌 650W", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q100_psu", "category": "psu", "keyword": "九州风神 PQ650M", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q101_psu", "category": "psu", "keyword": "华硕 TUF 650W 金牌", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q102_psu", "category": "psu", "keyword": "微星 A650GL", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q103_psu", "category": "psu", "keyword": "微星 A750BN", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q104_psu", "category": "psu", "keyword": "联力 SP750", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q105_psu", "category": "psu", "keyword": "海盗船 RM650e", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q106_psu", "category": "psu", "keyword": "海韵 FOCUS GX-650", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q107_case", "category": "case", "keyword": "先马平头哥M2", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q108_case", "category": "case", "keyword": "先马趣造", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q109_case", "category": "case", "keyword": "爱国者 YOGO M2", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q110_case", "category": "case", "keyword": "酷冷至尊 Q300L", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q111_case", "category": "case", "keyword": "酷冷至尊 NR400", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q112_case", "category": "case", "keyword": "乔思伯 D31", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q113_case", "category": "case", "keyword": "乔思伯 U4", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q114_case", "category": "case", "keyword": "联力 LANCOOL 207", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q115_case", "category": "case", "keyword": "联力 205", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q116_case", "category": "case", "keyword": "安钛克 DP502", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q117_case", "category": "case", "keyword": "华硕 TUF GT301", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q118_case", "category": "case", "keyword": "分形工艺 Pop Mini", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q119_case", "category": "case", "keyword": "NZXT H3 Flow", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q120_cooler", "category": "cooler", "keyword": "玄冰400 V5", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q121_cooler", "category": "cooler", "keyword": "利民 AX120 R SE", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q122_cooler", "category": "cooler", "keyword": "九州风神 AK400", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q123_cooler", "category": "cooler", "keyword": "ID-COOLING SE-214-XT", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q124_cooler", "category": "cooler", "keyword": "乔思伯 HX6210", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q125_cooler", "category": "cooler", "keyword": "利民 Frozen Warframe 240", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q126_cooler", "category": "cooler", "keyword": "瓦尔基里 E240", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q127_cooler", "category": "cooler", "keyword": "猫头鹰 NH-L9i", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q128_cooler", "category": "cooler", "keyword": "利民 AXP90-X36", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q129_cooler", "category": "cooler", "keyword": "超频三 东海 X7", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q130_cooler", "category": "cooler", "keyword": "利民 Aqua Elite 360", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q131_cooler", "category": "cooler", "keyword": "乔思伯 MX600", "source": 0, "max_pages": 1, "purpose": "new_model"}
+{"query_id": "q132_case", "category": "case", "keyword": "先马平头哥M1机箱", "source": 0, "max_pages": 1, "purpose": "new_model_round2"}
+{"query_id": "q133_case", "category": "case", "keyword": "先马平头哥M9机箱", "source": 0, "max_pages": 1, "purpose": "new_model_round2"}
+{"query_id": "q134_case", "category": "case", "keyword": "乔思伯 D31 MESH 机箱", "source": 0, "max_pages": 1, "purpose": "new_model_round2"}
+{"query_id": "q135_ssd", "category": "ssd", "keyword": "西数 SN7100 1TB", "source": 0, "max_pages": 1, "purpose": "new_model_round2"}
+{"query_id": "q136_cooler", "category": "cooler", "keyword": "瓦尔基里 E360 水冷", "source": 0, "max_pages": 1, "purpose": "new_model_round2"}
+{"query_id": "q137_cpu", "category": "cpu", "keyword": "英特尔 Ultra7 265K 盒装", "source": 0, "max_pages": 1, "purpose": "new_model_round2"}
+{"query_id": "q138_memory", "category": "memory", "keyword": "宏碁掠夺者 影乐 32G 6000", "source": 0, "max_pages": 1, "purpose": "new_model_round2"}
+{"query_id": "q139_gpu", "category": "gpu", "keyword": "讯景 7800XT", "source": 0, "max_pages": 1, "purpose": "new_model_round2"}

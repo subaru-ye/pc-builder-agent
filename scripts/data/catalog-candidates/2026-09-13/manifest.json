@@ -1,0 +1,41 @@
+{
+  "batch": "2026-09-13-maishou-expansion-01",
+  "date": "2026-09-13",
+  "source_type": "aggregator_secondary",
+  "review_basis": "Agent 辅助复核",
+  "skill": "买手技能(uv run scripts/main.py search/detail)",
+  "budget": {
+    "search": "139/200",
+    "detail": "82/120",
+    "http_requests": 303
+  },
+  "counts": {
+    "candidates": 115,
+    "offers": 385,
+    "models_detail_checked": 82,
+    "with_missing_fields": 95
+  },
+  "files": {
+    "candidates.jsonl": {
+      "sha256": "fc0fc0d197446b86b553f0427b0c316a8114be64218ecb4bc5c4b72214ac215c",
+      "bytes": 53327
+    },
+    "offers.jsonl": {
+      "sha256": "1152debccc4a319932d9a9971493531bb5d5b89b9f9e895fb028f4160567b0b6",
+      "bytes": 166164
+    },
+    "review-decisions.jsonl": {
+      "sha256": "7a68194e5ab55a53fc333d7d17b43f28fd2c0b2c8ed32000ade43545582359b7",
+      "bytes": 47684
+    },
+    "missing-specs.md": {
+      "sha256": "781a3ee0731a26c9ca30013ae975dc3a4b715ae132ec56054f5b0f33480a10ca",
+      "bytes": 6719
+    },
+    "legacy-price-hits.jsonl": {
+      "sha256": "c1e7a1cc8ec9ca4ef1d0034737d7ccbdfba59724c127fc2e6539b26c4f95f5a5",
+      "bytes": 482711
+    }
+  },
+  "not_imported": "本批仅为候选,未导入产品库/基线;同型号多店铺为多 offer 非多 SKU"
+}

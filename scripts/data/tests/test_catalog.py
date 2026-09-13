@@ -166,7 +166,7 @@ class TestWriteParts:
 
 
 class TestCommittedSelections:
-    """已提交 selection 文件的静态门禁:结构合法、每类恰好 20 条、override 字段合法。"""
+    """已提交 selection 文件的静态门禁:结构合法、每类至少 20 条(扩库可超出且各类不等)、override 字段合法。"""
 
     @pytest.mark.parametrize(
         "path", sorted(DEFAULT_CATALOG_DIR.glob("*.json")), ids=lambda p: p.stem
@@ -174,7 +174,7 @@ class TestCommittedSelections:
     def test_selection文件(self, path):
         doc = load_selection(path)
         assert doc["category"] == path.stem
-        assert len(doc["entries"]) == EXPECTED_PER_CATEGORY
+        assert len(doc["entries"]) >= EXPECTED_PER_CATEGORY
         allowed = set(SPEC_FIELDS[doc["category"]])
         for entry in doc["entries"]:
             unknown = sorted(set(entry["override"]) - allowed)

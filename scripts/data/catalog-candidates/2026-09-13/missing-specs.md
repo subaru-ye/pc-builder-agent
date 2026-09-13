@@ -1,0 +1,100 @@
+# 新型号候选缺规格清单 2026-09-13
+
+规格仅记录标题/详情页可见字段(不猜造);下表为接受候选中缺失的字段。
+
+共 95/115 个候选存在缺项(其余字段齐备)。
+- `cpu-i3-14100f` Intel Core i3-14100F 缺: cores, threads
+- `cpu-i5-12490f` Intel Core i5-12490F 缺: cores, threads
+- `cpu-i5-13490f` Intel Core i5-13490F 缺: cores, threads
+- `cpu-i5-13600kf` Intel Core i5-13600KF 缺: cores, threads
+- `cpu-i5-14400f` Intel Core i5-14400F 缺: cores, threads
+- `cpu-i7-12700f` Intel Core i7-12700F 缺: cores, threads
+- `cpu-i7-13700f` Intel Core i7-13700F 缺: cores, threads
+- `cpu-ultra7-265k` Intel Core Ultra 7 265K 缺: cores, threads
+- `cpu-ultra9-285k` Intel Core Ultra 9 285K 缺: cores, threads
+- `cpu-r5-4500` AMD Ryzen 5 4500 缺: cores, threads
+- `cpu-r5-5600gt` AMD Ryzen 5 5600GT 缺: form, cores, threads
+- `cpu-r5-5700x3d` AMD Ryzen 7 5700X3D 缺: cores, threads
+- `cpu-r7-5800x3d` AMD Ryzen 7 5800X3D 缺: cores, threads
+- `cpu-r5-8400f` AMD Ryzen 5 8400F 缺: cores, threads
+- `cpu-r7-8700f` AMD Ryzen 7 8700F 缺: cores, threads
+- `cpu-r7-8700g` AMD Ryzen 7 8700G 缺: cores, threads
+- `cpu-r9-7900x` AMD Ryzen 9 7900X 缺: cores, threads
+- `cpu-r9-9950x3d` AMD Ryzen 9 9950X3D 缺: cores, threads
+- `gpu-rtx5050-colorful` 七彩虹 RTX 5050 8G(战斧/Ultra W) 缺: tdp_w
+- `gpu-rtx5050-zotac` 索泰 RTX 5050 8G(星夜) 缺: tdp_w
+- `gpu-rtx5050-py` 电竞叛客 RTX 5050 X2B 8G 缺: tdp_w
+- `gpu-rtx5050-asus` 华硕 RTX 5050 8G(雪豹) 缺: tdp_w
+- `gpu-rtx3050-8g-colorful` 七彩虹 RTX 3050 8G(战斧 DUO V2/Ultra W) 缺: tdp_w
+- `gpu-rtx3050-8g-gigabyte` 技嘉 RTX 3050 WF2OC 8G 缺: tdp_w
+- `gpu-rtx3050-8g-yeston` 盈通 RTX 3050 8G(大地之神) 缺: mem_gb, tdp_w
+- `gpu-arc-a750-gunnir` 蓝戟 Arc A750 Photon 8G OC 缺: tdp_w
+- `gpu-arc-a750-sparkle` 旌宇 Arc A750 ORC 月光版 8G 缺: tdp_w
+- `gpu-arc-b570-gunnir` 蓝戟 Arc B570 Index 10G 缺: tdp_w
+- `gpu-arc-b570-sparkle` 旌宇 Arc B570 双星 10G 缺: tdp_w
+- `gpu-rx7600xt-asrock` 华擎 RX 7600 XT SL 16G 缺: mem_gb, tdp_w
+- `gpu-rx9070-sapphire` 蓝宝石 RX 9070 16G(非XT) 缺: tdp_w
+- `gpu-rx7800xt-xfx` 讯景 RX 7800 XT 16G 缺: tdp_w
+- `gpu-rtx5060-colorful` 七彩虹 RTX 5060 8G 缺: tdp_w
+- `gpu-rtx5060ti8g-msi` 微星 RTX 5060 Ti 8G 万图师 VENTUS 3X OC 缺: tdp_w
+- `gpu-rtx5060ti8g-galax` 影驰 RTX 5060 Ti 8G 金属大师 缺: tdp_w
+- `gpu-rtx5060ti8g-yeston` 盈通 RTX 5060 Ti 8G 大地之神 缺: mem_gb, tdp_w
+- `gpu-rtx5060ti16g-colorful` 七彩虹 RTX 5060 Ti 16G 缺: tdp_w
+- `gpu-rtx5070-galax` 影驰 RTX 5070 12G 缺: tdp_w
+- `gpu-rtx5070ti-zotac` 索泰 RTX 5070 Ti 16G 缺: tdp_w
+- `gpu-rtx5070ti-gigabyte` 技嘉 RTX 5070 Ti(风魔/魔鹰) 缺: tdp_w
+- `gpu-rtx5070ti-asus` 华硕 RTX 5070 Ti(PRIME/TUF) 缺: tdp_w
+- `mb-asus-tuf-b760m-plus-wifi2-d5` 华硕 TUF B760M-PLUS WIFI II 重炮手 DDR5 缺: form, m2_slots
+- `mb-asus-tuf-b850m-plus-wifi7` 华硕 TUF B850M-PLUS WIFI7 DDR5 缺: ddr, form, m2_slots
+- `mb-asus-b850m-e-tuf` 华硕 TUF B850M-E WIFI 缺: ddr, m2_slots
+- `mb-asus-prime-h610m-k` 华硕 PRIME H610M-K (ARGB) 缺: form, wifi, m2_slots
+- `mb-asus-prime-h610m-a` 华硕 PRIME H610M-A 缺: form, m2_slots
+- `mb-asus-rog-b760i` 华硕 ROG STRIX B760-I GAMING WIFI 缺: ddr, m2_slots
+- `mb-asus-tuf-x870-plus` 华硕 TUF GAMING X870-PLUS WIFI 缺: ddr, m2_slots
+- `mb-gb-b760m-aorus-elite-d4` 技嘉 B760M AORUS ELITE 小雕 WIFI6E DDR4 缺: form, m2_slots
+- `mb-gb-b760m-aorus-elite-d5` 技嘉 B760M AORUS ELITE 小雕 GEN5 DDR5 缺: form, wifi, m2_slots
+- `mb-gb-x870e-aorus-elite` 技嘉 X870E AORUS ELITE 小雕 WIFI7 缺: ddr, form, m2_slots
+- `mb-gb-x870-aorus-elite` 技嘉 X870 AORUS ELITE 小雕 WIFI7 缺: form, m2_slots
+- `mb-msi-b850m-mortar-wifi` 微星 MAG B850M MORTAR WIFI 迫击炮 缺: ddr, form, m2_slots
+- `mb-msi-b850m-edge-ti` 微星 MAG B850M EDGE TI WIFI 刀锋 缺: ddr, form, m2_slots
+- `mb-msi-b760m-mortar-wifi2-d5` 微星 MAG B760M MORTAR WIFI II DDR5 迫击炮 缺: form, m2_slots
+- `mb-msi-b550m-mortar-wifi` 微星 MAG B550M MORTAR WIFI 迫击炮 缺: ddr, form, m2_slots
+- `mb-msi-b650i-edge` 微星 MPG B650I EDGE WIFI 刀锋 缺: ddr, form, m2_slots
+- `mb-msi-x870e-tomahawk` 微星 MAG X870E TOMAHAWK 战斧导弹 缺: ddr, m2_slots
+- `mb-asrock-b760m-proa-d5` 华擎 B760M Pro-A WIFI DDR5 缺: ddr, form, m2_slots
+- `mb-asrock-b850m-pro-rs` 华擎 B850M Pro RS DDR5 缺: form, m2_slots
+- `mb-maxsun-b650i-ice` 铭瑄 B650ITX WIFI ICE 缺: m2_slots
+- `mb-jginyu-b650i-nightdevil` 精粤 B650I Night Devil 夜魔 DDR5 缺: form, wifi, m2_slots
+- `ssd-zhitai-tiplus5000-1tb` 致态 TiPlus5000 1TB 缺: pcie, nand
+- `ssd-zhitai-ti600-1tb` 致态 Ti600 1TB 缺: nand
+- `ssd-zhitai-ti600-2tb` 致态 Ti600 2TB 缺: nand
+- `ssd-zhitai-tiplus7100-1tb` 致态 TiPlus7100 1TB 缺: pcie, nand
+- `ssd-zhitai-tiplus7100-2tb` 致态 TiPlus7100 2TB 缺: nand
+- `ssd-zhitai-tiplus9100-1tb` 致态 TiPlus9100 1TB 缺: pcie, nand
+- `ssd-kingston-nv3-1tb` 金士顿 NV3 1TB 缺: nand
+- `ssd-kingston-nv3-2tb` 金士顿 NV3 2TB 缺: nand
+- `ssd-lexar-nm790-1tb` 雷克沙 NM790 1TB 缺: nand
+- `ssd-wd-sn5000-1tb` WD Black SN5000 1TB 缺: nand
+- `ssd-wd-sn7100-1tb` WD Black SN7100 1TB 缺: nand
+- `ssd-samsung-990evoplus-1tb` 三星 990 EVO Plus 1TB 缺: nand
+- `ssd-crucial-p310-1tb` 英睿达 P310 1TB 缺: pcie, nand
+- `ssd-crucial-p510-1tb` 英睿达 P510 1TB 缺: pcie, nand
+- `ssd-kingston-nv3-500g` 金士顿 NV3 500G 缺: nand
+- `psu-huntkey-wd650evo` 航嘉 WD650EVO 炫金 650W 金牌 缺: atx
+- `case-sama-pingtouge-m1` 先马 平头哥 M1 MATX 缺: front
+- `case-sama-pingtouge-m9` 先马 平头哥 M9 缺: front
+- `case-aigo-yogo-m2` 爱国者 YOGO M2 MATX 缺: front
+- `case-coolermaster-q300l-v2` 酷冷至尊 Q300L V2 缺: front, side
+- `case-lianli-lancool-207` 联力 LANCOOL 207 海景房 缺: form, front, side
+- `case-nzxt-h3-flow` NZXT H3 Flow Micro-ATX 缺: front, side
+- `case-asus-tuf-gt301` 华硕 TUF GT301 缺: form, front
+- `cooler-deepcool-xuanbing400-v5` 九州风神 玄冰400 V5 缺: heatpipes
+- `cooler-idcooling-se214xt-v2` ID-COOLING SE-214-XT V2 ARGB 缺: heatpipes
+- `gpu-arc-a580-gunnir` 蓝戟 Arc A580 8G Index 缺: tdp_w
+- `gpu-arc-a770-8g-gunnir` 蓝戟 Arc A770 8G Photon 缺: tdp_w
+- `gpu-arc-a770-16g-gunnir` 蓝戟 Arc A770 16G Photon 缺: tdp_w
+- `ssd-lexar-nm610pro-1tb` 雷克沙 NM610 PRO 1TB 缺: pcie, nand
+- `ssd-wd-sn7100-500g` WD Black SN7100 500G 缺: nand
+- `case-sama-quzao3` 先马 趣造3 便携 MATX/ITX 缺: side
+- `case-fractal-pop-mini-air` 分形工艺 Pop Mini Air RGB 缺: front
+- `case-fractal-pop-mini-silent` 分形工艺 Pop Mini Silent 缺: front

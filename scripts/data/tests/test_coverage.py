@@ -125,3 +125,63 @@ class TestLoadPricedSKUs:
         )
         with pytest.raises(SpecError, match="重复 SKU"):
             load_priced_skus(p)
+
+
+class TestOpenScale:
+    """扩库数量开放:>=20 下限、各类不等、可超 160;身份与非法记录校验不放宽。"""
+
+    @staticmethod
+    def _expanded(sample_parts, per_cat=21):
+        parts = []
+        for category in [
+            "cpu", "gpu", "motherboard", "memory", "ssd", "psu", "case", "cooler",
+        ]:
+            template = next(p for p in sample_parts if p["category"] == category)
+            # cooler 多 3 条,保证各类数量不等。
+            n = per_cat + 3 if category == "cooler" else per_cat
+            for i in range(n):
+                parts.append({
+                    **template,
+                    "sku": f"{category}-scale-{i:03d}",
+                    "model": f"{template['model']} scale {i}",
+                })
+        return parts
+
+    def test_超160条且各类不等全部通过(self, sample_parts):
+        parts = self._expanded(sample_parts)
+        assert len(parts) > 160
+        report = build_report(parts, priced_skus={p["sku"] for p in parts})
+        assert report["total_skus"] == len(parts)
+        for category, stats in report["per_category"].items():
+            assert stats["count_ok"], category
+        assert (
+            report["per_category"]["cooler"]["sku_count"]
+            > report["per_category"]["cpu"]["sku_count"]
+        )
+        assert report["price"]["price_ok"]
+        assert report["catalog_ok"]
+
+    def test_低于下限的类仍失败(self, sample_parts):
+        parts = [p for p in self._expanded(sample_parts) if p["category"] != "gpu"]
+        report = build_report(parts)
+        assert not report["per_category"]["gpu"]["count_ok"]
+        assert not report["catalog_ok"]
+        assert report["per_category"]["cpu"]["count_ok"]
+
+    def test_扩容后重复sku仍拒绝(self, sample_parts, tmp_path):
+        import json
+
+        lines = [json.dumps(p, ensure_ascii=False) for p in self._expanded(sample_parts)]
+        p = tmp_path / "big.jsonl"
+        p.write_text("\n".join(lines) + "\n" + lines[0] + "\n", encoding="utf-8")
+        with pytest.raises(SpecError, match="重复 SKU"):
+            load_parts_jsonl(p)
+
+    def test_扩容后非法记录仍拒绝(self, sample_parts, tmp_path):
+        import json
+
+        lines = [json.dumps(p, ensure_ascii=False) for p in self._expanded(sample_parts)]
+        p = tmp_path / "big.jsonl"
+        p.write_text("\n".join(lines) + "\n" + '{"sku": "x"}\n', encoding="utf-8")
+        with pytest.raises(SpecError, match="big.jsonl"):
+            load_parts_jsonl(p)

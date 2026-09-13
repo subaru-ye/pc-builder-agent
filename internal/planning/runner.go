@@ -28,6 +28,7 @@ read_page: {url:链接}，读取资料正文。搜索摘要只能作为线索，
 read_evidence: {id:来源编号}，展开此前已保存的完整摘录，不发起网络请求。
 register_candidate: {id:ext-唯一编号,category:cpu|gpu|motherboard|memory|ssd|psu|case|cooler,brand:品牌,model:完整型号,specs:{规范字段:值},price_cny:价格字符串或null,evidence:[来源编号],field_evidence:{model:来源编号,每个specs键:来源编号,price_cny:来源编号},unknown:[缺失或冲突说明]}。只能提取已读取正文的事实；不明确的参数省略，不猜测。注册到会话候选，不是全局目录发布。
 注册时同时提供field_quotes:{字段:支持该值的逐字正文摘录}，价格还须带merchant、currency=CNY和price_observed_at日期。非兼容性字段（接口数量、噪声等）可放specs，会另存为attributes供推理。多来源冲突放unknown；不能只附链接却编造数值。
+规格来源字段推荐使用完整路径，例如field_evidence:{"specs.socket":"source-1"}及field_quotes:{"specs.socket":"AM4接口"}；工具也兼容socket这样的短键。注册结果会返回实际保留的candidate及unknown；registered不表示所有参数已核实。收到缺项应优先补查厂商规格再更新候选，不要沿用被剔除的数据宣称兼容。可以在同一回复调用多个独立工具；注意每次反馈中的剩余往返额度，尽早检查规格与兼容性，为必要修复留出往返。
 evaluate: {draft:{schema_version:1,requirement_ref:current,build_ref:proposal,selection:{cpu:候选id,gpu:候选id或null,motherboard:候选id,memory:候选id,ssd:[{sku:候选id,quantity:1}],psu:候选id,case:候选id,cooler:候选id},rationale:{品类:简短选型理由}}}，兼容性和报价反馈供你继续修复，不自动终止对话。
 最终只输出JSON：{outcome:collect|clarify|proposal|ready,reply:简短中文回复,draft:完整draft或null,assessments:[{field:需求字段,status:met|unmet|unknown,explanation:依据和取舍,evidence:[来源编号或local:候选id]}],issues:[待解决问题],assumptions:[与用户要求区分的执行假设]}。
 完整选配先evaluate，按反馈自主修正；即使有冲突也可输出proposal。每项active constraint必须在assessments中说明，must未知或未满足时不能ready。不得仅因有来源链接就宣称条件满足，证据必须支持该条件；静音等主观条件无法保证时诚实标为unknown。只有完整、已校验且要求已解决的配置才能ready。collect/clarify是正常对话，不是报错。
@@ -172,6 +173,7 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 					action, _ := f.Args["action"].(string)
 					x.result.StageMS[action] += time.Since(toolStarted).Milliseconds()
 				}
+				value["remaining"] = map[string]int{"model_turns": turns - turn - 1, "tool_turns": max(0, turns-turn-2), "tool_calls": 24 - x.result.ToolCalls, "search_calls": 3 - x.result.SearchCalls, "page_calls": 6 - x.result.PageCalls}
 				responses.Parts = append(responses.Parts, &genai.Part{FunctionResponse: &genai.FunctionResponse{ID: f.ID, Name: f.Name, Response: value}})
 			} else {
 				text.WriteString(part.Text)
@@ -358,7 +360,12 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		if e := x.register(c); e != nil {
 			return map[string]any{"error": e.Error()}
 		}
-		return map[string]any{"registered": c.ID}
+		for _, saved := range x.candidates {
+			if saved.ID == c.ID {
+				return map[string]any{"registered": c.ID, "candidate": saved, "instruction": "candidate是实际保存的参数；unknown中的项目尚未核验，需补查正文后重新注册。注册成功不等于兼容性通过。"}
+			}
+		}
+		return map[string]any{"error": "候选注册后未找到"}
 	case "evaluate":
 		return x.evaluate(ctx, p.Draft)
 	default:
@@ -398,6 +405,21 @@ func (x *execution) register(c Candidate) error {
 	var specs map[string]json.RawMessage
 	if json.Unmarshal(c.Specs, &specs) != nil {
 		return fmt.Errorf("specs须为对象")
+	}
+	// Accept both documented spec paths and older flat keys. This is only wire
+	// normalization: evidence still has to point to an exact recorded page quote.
+	c.FieldEvidence = copyFieldMap(c.FieldEvidence)
+	c.FieldQuotes = copyFieldMap(c.FieldQuotes)
+	for field := range specs {
+		for _, refs := range []map[string]string{c.FieldEvidence, c.FieldQuotes} {
+			if full, ok := refs["specs."+field]; ok {
+				if short, exists := refs[field]; exists && short != full {
+					return fmt.Errorf("%s 的短键与完整路径来源冲突，请统一后重新注册", field)
+				}
+				refs[field] = full
+				delete(refs, "specs."+field)
+			}
+		}
 	}
 	for field := range specs {
 		page, ok := pages[c.FieldEvidence[field]]
@@ -447,6 +469,14 @@ func (x *execution) register(c Candidate) error {
 	}
 	x.candidates = append(x.candidates, c)
 	return nil
+}
+
+func copyFieldMap(input map[string]string) map[string]string {
+	out := make(map[string]string, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
 }
 
 func (x *execution) evaluate(ctx context.Context, raw json.RawMessage) map[string]any {

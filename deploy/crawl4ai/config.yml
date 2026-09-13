@@ -1,0 +1,75 @@
+# Crawl4AI 0.9.3 HTTP service; no provider keys or LLM extraction.
+app:
+  title: "PC Builder page reader"
+  version: "1.0.0"
+  host: "0.0.0.0"
+  port: 11235
+  reload: false
+  workers: 1
+  timeout_keep_alive: 60
+llm:
+  provider: "openai/gpt-4o-mini"
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  password: ""
+  task_ttl_seconds: 3600
+  ssl: false
+limits:
+  max_body_bytes: 65536
+  max_pages: 1
+  max_depth: 0
+  wall_clock_s: 45
+  queue:
+    maxsize: 8
+    workers: 2
+    per_principal: 2
+rate_limiting:
+  enabled: true
+  default_limit: "60/minute"
+  trusted_proxies: []
+  storage_uri: "memory://"
+security:
+  enabled: true
+  jwt_enabled: false
+  api_token: ""
+  https_redirect: false
+  trusted_hosts: ["127.0.0.1", "localhost", "crawl4ai"]
+  cors_allow_origins: []
+  headers:
+    x_content_type_options: "nosniff"
+    x_frame_options: "DENY"
+    content_security_policy: "default-src 'self'"
+crawler:
+  base_config:
+    simulate_user: false
+  memory_threshold_percent: 80.0
+  rate_limiter:
+    enabled: true
+    base_delay: [1.0, 2.0]
+  timeouts:
+    stream_init: 10.0
+    batch_process: 45.0
+  pool:
+    max_pages: 2
+    idle_ttl_sec: 120
+  browser:
+    kwargs:
+      headless: true
+      text_mode: true
+    extra_args:
+      - "--no-sandbox"
+      - "--disable-dev-shm-usage"
+      - "--disable-gpu"
+logging:
+  level: "WARNING"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+observability:
+  prometheus:
+    enabled: true
+    endpoint: "/metrics"
+  health_check:
+    endpoint: "/health"
+webhooks:
+  enabled: false

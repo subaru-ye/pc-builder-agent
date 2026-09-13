@@ -11,6 +11,34 @@
 name: pc-builder-agent
 
 services:
+  crawl4ai:
+    image: unclecode/crawl4ai:0.9.3
+    profiles: ["research"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11235:11235"
+    environment:
+      CRAWL4AI_API_TOKEN: ${CRAWL4AI_API_TOKEN:-}
+      CRAWL4AI_ALLOW_INTERNAL_URLS: "false"
+      CRAWL4AI_ALLOW_INSECURE_TLS: "false"
+      CRAWL4AI_HOOKS_ENABLED: "false"
+      CRAWL4AI_EXECUTE_JS_ENABLED: "false"
+    volumes:
+      - ./deploy/crawl4ai/config.yml:/app/config.yml:ro
+    shm_size: "1gb"
+    mem_limit: "4g"
+    cpus: 2
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:11235/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 60s
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "2"
+
   postgres:
     image: pgvector/pgvector:pg16
 

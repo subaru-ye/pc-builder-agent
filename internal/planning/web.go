@@ -26,6 +26,9 @@ type Web struct {
 	RequireFree     bool
 	Quota           Quota
 	OnSearchRequest func()
+	CrawlerURL      string
+	CrawlerToken    string
+	CrawlerClient   *http.Client
 }
 
 func NewWeb(quota Quota) *Web {
@@ -37,7 +40,8 @@ func NewWeb(quota Quota) *Web {
 	if base == "" {
 		base = "https://serpapi.com"
 	}
-	return &Web{Client: safeClient(), Key: os.Getenv("SERPAPI_API_KEY"), BaseURL: base, Budget: budget, RequireFree: os.Getenv("SERPAPI_REQUIRE_FREE_PLAN") != "false", Quota: quota}
+	return &Web{Client: safeClient(), Key: os.Getenv("SERPAPI_API_KEY"), BaseURL: base, Budget: budget, RequireFree: os.Getenv("SERPAPI_REQUIRE_FREE_PLAN") != "false", Quota: quota,
+		CrawlerURL: strings.TrimSpace(os.Getenv("CRAWL4AI_URL")), CrawlerToken: os.Getenv("CRAWL4AI_API_TOKEN"), CrawlerClient: crawlerClient()}
 }
 
 // DNS is checked in the actual dialer, including redirects, to prevent a fetched
@@ -173,6 +177,9 @@ func (w *Web) Search(ctx context.Context, query string) ([]Evidence, error) {
 }
 
 func (w *Web) Read(ctx context.Context, link string) (Evidence, error) {
+	if w.CrawlerURL != "" {
+		return w.readWithCrawler(ctx, link)
+	}
 	data, e := w.get(ctx, link)
 	if e != nil {
 		return Evidence{}, e

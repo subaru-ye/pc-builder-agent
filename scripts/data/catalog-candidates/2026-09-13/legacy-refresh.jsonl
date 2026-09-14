@@ -1,0 +1,160 @@
+{"sku": "case-asus-prime-ap201", "decision": "carry", "reason": "no_hit", "old_price": 412.0, "new_price": null, "evidence": []}
+{"sku": "case-bequiet-pure-base-500dx", "decision": "carry", "reason": "no_hit", "old_price": 749.0, "new_price": null, "evidence": []}
+{"sku": "case-bequiet-shadow-base-800-fx", "decision": "carry", "reason": "no_hit", "old_price": 1444.0, "new_price": null, "evidence": []}
+{"sku": "case-coolermaster-nr200p", "decision": "review", "reason": "tier_B", "old_price": 699.0, "new_price": 369.0, "delta": 0.528, "evidence": [{"row_key": "0948986b70c4f712", "title": "酷冷至尊魔方NR200P V3铝合金机箱 itx便携式台式主机 MF400机箱", "price": 369.0, "shop": "星球杯数码DIY", "platform": "1", "tier": "B", "tray": false}]}
+{"sku": "case-coolermaster-td500-mesh-v2", "decision": "carry", "reason": "no_hit", "old_price": 499.0, "new_price": null, "evidence": []}
+{"sku": "case-corsair-4000d-airflow", "decision": "carry", "reason": "no_hit", "old_price": 599.0, "new_price": null, "evidence": []}
+{"sku": "case-corsair-5000d-airflow", "decision": "carry", "reason": "no_hit", "old_price": 999.0, "new_price": null, "evidence": []}
+{"sku": "case-fractal-define-7", "decision": "carry", "reason": "no_hit", "old_price": 1249.0, "new_price": null, "evidence": []}
+{"sku": "case-fractal-meshify-2-compact", "decision": "carry", "reason": "no_hit", "old_price": 399.0, "new_price": null, "evidence": []}
+{"sku": "case-fractal-north", "decision": "carry", "reason": "no_hit", "old_price": 999.0, "new_price": null, "evidence": []}
+{"sku": "case-fractal-pop-air", "decision": "carry", "reason": "no_hit", "old_price": 649.0, "new_price": null, "evidence": []}
+{"sku": "case-fractal-terra", "decision": "carry", "reason": "no_hit", "old_price": 1449.0, "new_price": null, "evidence": []}
+{"sku": "case-fractal-torrent", "decision": "carry", "reason": "no_hit", "old_price": 1349.0, "new_price": null, "evidence": []}
+{"sku": "case-lianli-a3-matx", "decision": "carry", "reason": "no_hit", "old_price": 499.0, "new_price": null, "evidence": []}
+{"sku": "case-lianli-lancool-216", "decision": "carry", "reason": "no_hit", "old_price": 579.0, "new_price": null, "evidence": []}
+{"sku": "case-lianli-o11-dynamic-evo", "decision": "carry", "reason": "no_hit", "old_price": 1099.0, "new_price": null, "evidence": []}
+{"sku": "case-montech-air-903-max", "decision": "carry", "reason": "no_hit", "old_price": 349.0, "new_price": null, "evidence": []}
+{"sku": "case-nzxt-h5-flow-2024", "decision": "carry", "reason": "no_hit", "old_price": 649.0, "new_price": null, "evidence": []}
+{"sku": "case-nzxt-h6-flow-2023", "decision": "carry", "reason": "no_hit", "old_price": 799.0, "new_price": null, "evidence": []}
+{"sku": "case-nzxt-h7-flow-2024", "decision": "carry", "reason": "no_hit", "old_price": 499.0, "new_price": null, "evidence": []}
+{"sku": "cooler-arctic-lf2-240", "decision": "carry", "reason": "no_hit", "old_price": 399.0, "new_price": null, "evidence": []}
+{"sku": "cooler-arctic-lf3-240", "decision": "carry", "reason": "no_hit", "old_price": 905.3, "new_price": null, "evidence": []}
+{"sku": "cooler-arctic-lf3-360", "decision": "carry", "reason": "no_hit", "old_price": 584.0, "new_price": null, "evidence": []}
+{"sku": "cooler-bequiet-dark-rock-pro-4", "decision": "carry", "reason": "no_hit", "old_price": 357.83, "new_price": null, "evidence": []}
+{"sku": "cooler-bequiet-dark-rock-pro-5", "decision": "carry", "reason": "no_hit", "old_price": 569.0, "new_price": null, "evidence": []}
+{"sku": "cooler-coolermaster-hyper212-black", "decision": "carry", "reason": "no_hit", "old_price": 54.5, "new_price": null, "evidence": []}
+{"sku": "cooler-corsair-h100i-elite-capellix-xt", "decision": "carry", "reason": "no_hit", "old_price": 1330.0, "new_price": null, "evidence": []}
+{"sku": "cooler-corsair-h150i-elite-capellix-xt", "decision": "carry", "reason": "no_hit", "old_price": 1549.0, "new_price": null, "evidence": []}
+{"sku": "cooler-deepcool-ag400", "decision": "carry", "reason": "no_hit", "old_price": 79.0, "new_price": null, "evidence": []}
+{"sku": "cooler-deepcool-ak620", "decision": "carry", "reason": "no_hit", "old_price": 482.24, "new_price": null, "evidence": []}
+{"sku": "cooler-deepcool-assassin-iv", "decision": "carry", "reason": "no_hit", "old_price": 529.0, "new_price": null, "evidence": []}
+{"sku": "cooler-deepcool-lt520", "decision": "carry", "reason": "no_hit", "old_price": 559.52, "new_price": null, "evidence": []}
+{"sku": "cooler-msi-mag-coreliquid-e360", "decision": "carry", "reason": "no_hit", "old_price": 599.0, "new_price": null, "evidence": []}
+{"sku": "cooler-noctua-nh-d15", "decision": "carry", "reason": "no_hit", "old_price": 699.0, "new_price": null, "evidence": []}
+{"sku": "cooler-noctua-nh-u12s", "decision": "carry", "reason": "no_hit", "old_price": 480.0, "new_price": null, "evidence": []}
+{"sku": "cooler-nzxt-kraken-240", "decision": "carry", "reason": "no_hit", "old_price": 999.0, "new_price": null, "evidence": []}
+{"sku": "cooler-nzxt-kraken-x63", "decision": "carry", "reason": "no_hit", "old_price": 1199.0, "new_price": null, "evidence": []}
+{"sku": "cooler-thermalright-frozen-prism-240", "decision": "carry", "reason": "no_hit", "old_price": 335.0, "new_price": null, "evidence": []}
+{"sku": "cooler-thermalright-pa120se", "decision": "carry", "reason": "no_hit", "old_price": 132.47, "new_price": null, "evidence": []}
+{"sku": "cooler-thermalright-ps120se", "decision": "carry", "reason": "no_hit", "old_price": 132.47, "new_price": null, "evidence": []}
+{"sku": "cpu-i3-12100f", "decision": "carry", "reason": "no_hit", "old_price": 619.0, "new_price": null, "evidence": []}
+{"sku": "cpu-i5-12400f", "decision": "accept", "reason": "tier_A", "old_price": 899.0, "new_price": 899.0, "delta": 1.0, "evidence": [{"row_key": "aa7ba15f1f06be24", "title": "英特尔酷睿i5/i7/U7/U5全新盒装CPU12600KF/14600KF/12400F/14400F/14490F/14700KF游戏办公台式机处理器 i5 12400F盒装【三年官方联保】", "price": 899.0, "shop": "INTEL英睿专卖店", "platform": "2", "tier": "A", "tray": false}, {"row_key": "cfc4ec5b46ecb2d4", "title": "英特尔（Intel） / I5 12400F/14600KF/12600KF/13490F/12 13 14代CPU I5 12400F 散", "price": 1191.68, "shop": "翔龙数码配件经营部", "platform": "2", "tier": "A", "tray": false}]}
+{"sku": "cpu-i5-12600k", "decision": "accept", "reason": "仅散片", "old_price": 1499.0, "new_price": 1548.12, "delta": 1.033, "evidence": [{"row_key": "8061d35ba3029979", "title": "英特尔（Intel）i5 12600KF 13600KF 14600K 12700K 14700K 14900K散盒CPU i5 12600KF 散片【店保三年】", "price": 1548.12, "shop": "翔龙数码配件经营部", "platform": "2", "tier": "A", "tray": true}]}
+{"sku": "cpu-i5-13400f", "decision": "carry", "reason": "no_hit", "old_price": 1233.0, "new_price": null, "evidence": []}
+{"sku": "cpu-i5-14600kf", "decision": "carry", "reason": "no_hit", "old_price": 1499.0, "new_price": null, "evidence": []}
+{"sku": "cpu-i7-14700k", "decision": "carry", "reason": "no_hit", "old_price": 2699.0, "new_price": null, "evidence": []}
+{"sku": "cpu-r5-5500", "decision": "accept", "reason": "tier_A", "old_price": 599.0, "new_price": 624.0, "delta": 1.042, "evidence": [{"row_key": "7e1b113256a35488", "title": "AMDAMD锐龙 R7 5700X3D R7 5700X R5 5500盒装 散片CPU处理器 游戏 R5 5500盒装", "price": 624.0, "shop": "星域电脑配件工作室", "platform": "2", "tier": "A", "tray": false}, {"row_key": "c738ab102047896d", "title": "AMD锐龙 R7 5700X3D R7 5700X R5 5500盒装 散片CPU处理器CPU 游戏 R5 5500盒装", "price": 624.0, "shop": "星域电脑配件工作室", "platform": "2", "tier": "A", "tray": false}]}
+{"sku": "cpu-r5-5600", "decision": "carry", "reason": "no_hit", "old_price": 799.0, "new_price": null, "evidence": []}
+{"sku": "cpu-r5-7500f", "decision": "accept", "reason": "tier_A", "old_price": 829.0, "new_price": 784.0, "delta": 0.946, "evidence": [{"row_key": "f9bf33b89f641fed", "title": "AMD锐龙CPU R5 R7 R9 8700F 9700X 7800X3D 9900X盒装 散片CPU处理器 R5 7500F盒装", "price": 784.0, "shop": "星域电脑配件工作室", "platform": "2", "tier": "A", "tray": false}]}
+{"sku": "cpu-r5-7600", "decision": "carry", "reason": "no_hit", "old_price": 1492.7, "new_price": null, "evidence": []}
+{"sku": "cpu-r5-7600x", "decision": "accept", "reason": "tier_A", "old_price": 1799.0, "new_price": 1074.0, "delta": 0.597, "evidence": [{"row_key": "17de34d2a9bf74b6", "title": "AMD锐龙CPU R5 R7 R9 8700F 9700X 7800X3D 9900X盒装 散片CPU处理器 R5 7600X盒装", "price": 1074.0, "shop": "星域电脑配件工作室", "platform": "2", "tier": "A", "tray": false}]}
+{"sku": "cpu-r5-9600x", "decision": "accept", "reason": "tier_A", "old_price": 1329.0, "new_price": 1294.0, "delta": 0.974, "evidence": [{"row_key": "facb939bfb322e42", "title": "AMD锐龙CPU R5 R7 R9 8700F 9700X 7800X3D 9900X盒装 散片CPU处理器 R5 9600X盒装", "price": 1294.0, "shop": "星域电脑配件工作室", "platform": "2", "tier": "A", "tray": false}]}
+{"sku": "cpu-r7-5700x", "decision": "accept", "reason": "tier_A", "old_price": 1399.0, "new_price": 1164.0, "delta": 0.832, "evidence": [{"row_key": "599c34df7ee9df90", "title": "AMDAMD锐龙 R7 5700X3D R7 5700X R5 5500盒装 散片CPU处理器 游戏 R7 5700X盒装", "price": 1164.0, "shop": "星域电脑配件工作室", "platform": "2", "tier": "A", "tray": false}, {"row_key": "bbb2bd28f0a13f5d", "title": "AMD锐龙 R7 5700X3D R7 5700X R5 5500盒装 散片CPU处理器CPU 游戏 R7 5700X盒装", "price": 1364.0, "shop": "星域电脑配件工作室", "platform": "2", "tier": "A", "tray": false}]}
+{"sku": "cpu-r7-7700", "decision": "review", "reason": "仅散片", "old_price": 2399.0, "new_price": 1269.0, "delta": 0.529, "evidence": [{"row_key": "22df502e63164a36", "title": "AMD 锐龙7500F 7600X 7700 7800X3D 9700X 9800X3D 9850X3D 8600G 8700G 5nmCPU处理器 R7 7700 散片CPU", "price": 1269.0, "shop": "金怡电脑配件专营店", "platform": "2", "tier": "A", "tray": true}]}
+{"sku": "cpu-r7-7800x3d", "decision": "accept", "reason": "tier_A", "old_price": 2299.0, "new_price": 2253.0, "delta": 0.98, "evidence": [{"row_key": "c7626d5e4eb39072", "title": "AMD锐龙CPU R5 R7 R9 8700F 9700X 7800X3D 9900X盒装 散片CPU处理器 R7 7800X3D盒装", "price": 2253.0, "shop": "星域电脑配件工作室", "platform": "2", "tier": "A", "tray": false}]}
+{"sku": "cpu-r7-9700x", "decision": "accept", "reason": "tier_A", "old_price": 1749.0, "new_price": 1764.0, "delta": 1.009, "evidence": [{"row_key": "7b0b581b2ec1b94c", "title": "AMD锐龙CPU R5 R7 R9 8700F 9700X 7800X3D 9900X盒装 散片CPU处理器 R7 9700X盒装", "price": 1764.0, "shop": "星域电脑配件工作室", "platform": "2", "tier": "A", "tray": false}]}
+{"sku": "cpu-r7-9800x3d", "decision": "accept", "reason": "tier_A", "old_price": 2969.0, "new_price": 2984.0, "delta": 1.005, "evidence": [{"row_key": "13d047ed0ddfcd35", "title": "AMD锐龙CPU R5 R7 R9 8700F 9700X 7800X3D 9900X盒装 散片CPU处理器 R7 9800X3D盒装", "price": 2984.0, "shop": "星域电脑配件工作室", "platform": "2", "tier": "A", "tray": false}]}
+{"sku": "cpu-r9-7900", "decision": "carry", "reason": "no_hit", "old_price": 2549.0, "new_price": null, "evidence": []}
+{"sku": "cpu-r9-9900x", "decision": "accept", "reason": "tier_A", "old_price": 2499.0, "new_price": 2624.0, "delta": 1.05, "evidence": [{"row_key": "036bc8fdf034fe72", "title": "AMD锐龙CPU R5 R7 R9 8700F 9700X 7800X3D 9900X盒装 散片CPU处理器 R9 9900X盒装", "price": 2624.0, "shop": "星域电脑配件工作室", "platform": "2", "tier": "A", "tray": false}, {"row_key": "925f34dd88505c57", "title": "AMD锐龙CPU/R5/R7/R9/9500F/9600X/7800X3D/7900X/7950X/9850X3D/9950X3D2盒装台式电脑散片处理器 R9 9900X【全新原盒】", "price": 2698.0, "shop": "讯驰电脑配件经营部", "platform": "2", "tier": "A", "tray": false}]}
+{"sku": "cpu-ultra5-245k", "decision": "carry", "reason": "no_hit", "old_price": 1219.0, "new_price": null, "evidence": []}
+{"sku": "gpu-asus-4060ti-dual-evo", "decision": "carry", "reason": "no_hit", "old_price": 2939.0, "new_price": null, "evidence": []}
+{"sku": "gpu-asus-4070tis-tuf", "decision": "carry", "reason": "no_hit", "old_price": 7479.0, "new_price": null, "evidence": []}
+{"sku": "gpu-asus-4080s-tuf", "decision": "carry", "reason": "no_hit", "old_price": 8990.0, "new_price": null, "evidence": []}
+{"sku": "gpu-gb-4070-windforce", "decision": "carry", "reason": "no_hit", "old_price": 5050.0, "new_price": null, "evidence": []}
+{"sku": "gpu-gb-5060-windforce", "decision": "review", "reason": "tier_A", "old_price": 2499.0, "new_price": 4228.5, "delta": 1.692, "evidence": [{"row_key": "79533fafb1e60e50", "title": "技嘉原装RTX5060ti游戏独立显示卡5060显卡技嘉RTX5070ti电脑显示卡4060 技嘉RTX5060 WINDFORCE OC ", "price": 4228.5, "shop": "汇商数码办公店", "platform": "2", "tier": "A", "tray": false}, {"row_key": "8586d5f31c2c05bd", "title": "技嘉原装RTX5060ti游戏独显5060显卡RTX5070ti电脑显卡4060 技嘉RTX5060 WINDFORCE OC ", "price": 4421.28, "shop": "昭睿数码办公店", "platform": "2", "tier": "A", "tray": false}]}
+{"sku": "gpu-gb-5060ti-windforce-16g", "decision": "carry", "reason": "no_hit", "old_price": 3599.0, "new_price": null, "evidence": []}
+{"sku": "gpu-gb-5070-windforce-sff", "decision": "carry", "reason": "no_hit", "old_price": 4599.0, "new_price": null, "evidence": []}
+{"sku": "gpu-gb-5080-gaming", "decision": "carry", "reason": "no_hit", "old_price": 15099.0, "new_price": null, "evidence": []}
+{"sku": "gpu-intel-b580-le", "decision": "carry", "reason": "no_hit", "old_price": 2049.0, "new_price": null, "evidence": []}
+{"sku": "gpu-msi-3060-ventus2x", "decision": "carry", "reason": "no_hit", "old_price": 2099.0, "new_price": null, "evidence": []}
+{"sku": "gpu-msi-4060-ventus2x-black", "decision": "carry", "reason": "no_hit", "old_price": 2399.0, "new_price": null, "evidence": []}
+{"sku": "gpu-msi-4070s-ventus2x", "decision": "carry", "reason": "no_hit", "old_price": 4999.0, "new_price": null, "evidence": []}
+{"sku": "gpu-msi-5070ti-ventus3x", "decision": "carry", "reason": "no_hit", "old_price": 9999.0, "new_price": null, "evidence": []}
+{"sku": "gpu-sapphire-6600-pulse", "decision": "carry", "reason": "no_hit", "old_price": 1799.0, "new_price": null, "evidence": []}
+{"sku": "gpu-sapphire-7600-pulse", "decision": "carry", "reason": "no_hit", "old_price": 2199.0, "new_price": null, "evidence": []}
+{"sku": "gpu-sapphire-7700xt-pulse", "decision": "carry", "reason": "no_hit", "old_price": 3299.0, "new_price": null, "evidence": []}
+{"sku": "gpu-sapphire-7800xt-pulse", "decision": "carry", "reason": "no_hit", "old_price": 5515.16, "new_price": null, "evidence": []}
+{"sku": "gpu-sapphire-7900xt-pulse", "decision": "carry", "reason": "no_hit", "old_price": 5799.0, "new_price": null, "evidence": []}
+{"sku": "gpu-sapphire-9060xt-pulse-16g", "decision": "accept", "reason": "tier_A", "old_price": 4649.0, "new_price": 4589.0, "delta": 0.987, "evidence": [{"row_key": "a76cd1e7c83607f7", "title": "蓝宝石（Sapphire）AMD RX9070XT极地/脉动/氮动/9060XT/7700XT极地/7650GRE游戏台式显卡 蓝宝石 RX 9060 XT 16G 脉动", "price": 4589.0, "shop": "宽澜数码工作室", "platform": "2", "tier": "A", "tray": false}]}
+{"sku": "gpu-sapphire-9070xt-pulse", "decision": "accept", "reason": "tier_A", "old_price": 5649.0, "new_price": 6699.0, "delta": 1.186, "evidence": [{"row_key": "16f60b259b2d0f74", "title": "蓝宝石（Sapphire）AMD RX9070 9070XT 16G脉动 极地 氮动 畅玩无畏契约三角洲 AI养虾 建模渲染独立游戏显卡 RX 9070XT 脉动 16G", "price": 6699.0, "shop": "华储电脑专营店", "platform": "2", "tier": "A", "tray": false}, {"row_key": "2c8b8d31a8ec373b", "title": "蓝宝石（Sapphire）AMD RX9070 9070XT 16G脉动 极地 氮动 畅玩无畏契约三角洲 AI养虾 建模渲染独立游戏显卡 RX 9070XT 合金脉动 16G", "price": 6799.0, "shop": "华储电脑专营店", "platform": "2", "tier": "A", "tray": false}, {"row_key": "6b959d11e0625cfb", "title": "蓝宝石（Sapphire）AMD RX9070XT极地/脉动/氮动/9060XT/7700XT极地/7650GRE游戏台式显卡 蓝宝石RX 9070 XT 16G 脉动", "price": 6889.0, "shop": "宽澜数码工作室", "platform": "2", "tier": "A", "tray": false}]}
+{"sku": "mb-asrock-b650m-hdv-m2", "decision": "carry", "reason": "no_hit", "old_price": 639.0, "new_price": null, "evidence": []}
+{"sku": "mb-asus-b650e-f-strix", "decision": "carry", "reason": "no_hit", "old_price": 1799.0, "new_price": null, "evidence": []}
+{"sku": "mb-gb-b550-aorus-elite-v2", "decision": "carry", "reason": "no_hit", "old_price": 649.0, "new_price": null, "evidence": []}
+{"sku": "mb-gb-b650-aorus-elite-ax", "decision": "carry", "reason": "no_hit", "old_price": 1899.0, "new_price": null, "evidence": []}
+{"sku": "mb-gb-b650i-aorus-ultra", "decision": "carry", "reason": "no_hit", "old_price": 1999.0, "new_price": null, "evidence": []}
+{"sku": "mb-gb-b760-gaming-x-ax", "decision": "carry", "reason": "no_hit", "old_price": 750.0, "new_price": null, "evidence": []}
+{"sku": "mb-gb-x870-eagle-wifi7", "decision": "carry", "reason": "no_hit", "old_price": 1649.0, "new_price": null, "evidence": []}
+{"sku": "mb-msi-b550-tomahawk", "decision": "carry", "reason": "no_hit", "old_price": 999.0, "new_price": null, "evidence": []}
+{"sku": "mb-msi-b550m-pro-vdh-wifi", "decision": "carry", "reason": "no_hit", "old_price": 599.0, "new_price": null, "evidence": []}
+{"sku": "mb-msi-b650-tomahawk-wifi", "decision": "carry", "reason": "no_hit", "old_price": 1499.0, "new_price": null, "evidence": []}
+{"sku": "mb-msi-b650m-mortar-wifi", "decision": "carry", "reason": "no_hit", "old_price": 1098.0, "new_price": null, "evidence": []}
+{"sku": "mb-msi-b760m-a-wifi", "decision": "carry", "reason": "no_hit", "old_price": 949.0, "new_price": null, "evidence": []}
+{"sku": "mb-msi-b760m-a-wifi-ddr4", "decision": "carry", "reason": "no_hit", "old_price": 929.0, "new_price": null, "evidence": []}
+{"sku": "mb-msi-b850-tomahawk-max", "decision": "carry", "reason": "no_hit", "old_price": 1749.0, "new_price": null, "evidence": []}
+{"sku": "mb-msi-b860-tomahawk-wifi", "decision": "carry", "reason": "no_hit", "old_price": 1699.0, "new_price": null, "evidence": []}
+{"sku": "mb-msi-b860m-a-wifi", "decision": "carry", "reason": "no_hit", "old_price": 1049.0, "new_price": null, "evidence": []}
+{"sku": "mb-msi-h610m-g-ddr4", "decision": "carry", "reason": "no_hit", "old_price": 549.0, "new_price": null, "evidence": []}
+{"sku": "mb-msi-pro-a620m-e", "decision": "carry", "reason": "no_hit", "old_price": 699.0, "new_price": null, "evidence": []}
+{"sku": "mb-msi-z790-p-wifi", "decision": "carry", "reason": "no_hit", "old_price": 1499.0, "new_price": null, "evidence": []}
+{"sku": "mb-msi-z890-tomahawk-wifi", "decision": "carry", "reason": "no_hit", "old_price": 2573.0, "new_price": null, "evidence": []}
+{"sku": "mem-adata-lancer-32-5200", "decision": "carry", "reason": "no_hit", "old_price": 2799.0, "new_price": null, "evidence": []}
+{"sku": "mem-corsair-lpx-16-3200", "decision": "carry", "reason": "no_hit", "old_price": 1149.0, "new_price": null, "evidence": []}
+{"sku": "mem-corsair-lpx-32-3600", "decision": "carry", "reason": "no_hit", "old_price": 1759.0, "new_price": null, "evidence": []}
+{"sku": "mem-corsair-veng-32-6000", "decision": "carry", "reason": "no_hit", "old_price": 3799.0, "new_price": null, "evidence": []}
+{"sku": "mem-corsair-veng-rgb-32-6000", "decision": "carry", "reason": "no_hit", "old_price": 3299.0, "new_price": null, "evidence": []}
+{"sku": "mem-crucial-ballistix-16-3200", "decision": "carry", "reason": "no_hit", "old_price": 569.0, "new_price": null, "evidence": []}
+{"sku": "mem-gskill-flarex5-32-6000", "decision": "carry", "reason": "no_hit", "old_price": 4299.0, "new_price": null, "evidence": []}
+{"sku": "mem-gskill-ripjawsv-16-3600", "decision": "carry", "reason": "no_hit", "old_price": 949.0, "new_price": null, "evidence": []}
+{"sku": "mem-gskill-ripjawsv-32-3200", "decision": "carry", "reason": "no_hit", "old_price": 399.0, "new_price": null, "evidence": []}
+{"sku": "mem-gskill-s5-32-6000", "decision": "carry", "reason": "no_hit", "old_price": 688.0, "new_price": null, "evidence": []}
+{"sku": "mem-gskill-z5-rgb-32-6400", "decision": "carry", "reason": "no_hit", "old_price": 1798.0, "new_price": null, "evidence": []}
+{"sku": "mem-gskill-z5neo-rgb-32-6000", "decision": "carry", "reason": "no_hit", "old_price": 999.0, "new_price": null, "evidence": []}
+{"sku": "mem-kingston-beast-16-3200-d4", "decision": "carry", "reason": "no_hit", "old_price": 1198.0, "new_price": null, "evidence": []}
+{"sku": "mem-kingston-beast-16-5200", "decision": "carry", "reason": "no_hit", "old_price": 2379.0, "new_price": null, "evidence": []}
+{"sku": "mem-kingston-beast-16-6000", "decision": "carry", "reason": "no_hit", "old_price": 2499.0, "new_price": null, "evidence": []}
+{"sku": "mem-kingston-beast-32-3600-d4", "decision": "carry", "reason": "no_hit", "old_price": 2198.0, "new_price": null, "evidence": []}
+{"sku": "mem-kingston-beast-32-5600", "decision": "carry", "reason": "no_hit", "old_price": 3704.05, "new_price": null, "evidence": []}
+{"sku": "mem-kingston-beast-32-6000", "decision": "carry", "reason": "no_hit", "old_price": 4299.0, "new_price": null, "evidence": []}
+{"sku": "mem-team-delta-32-3200-d4", "decision": "carry", "reason": "no_hit", "old_price": 899.0, "new_price": null, "evidence": []}
+{"sku": "mem-team-delta-32-6000-white", "decision": "carry", "reason": "no_hit", "old_price": 3799.0, "new_price": null, "evidence": []}
+{"sku": "psu-bq-pp12m-750", "decision": "carry", "reason": "no_hit", "old_price": 759.0, "new_price": null, "evidence": []}
+{"sku": "psu-bq-pp12m-850", "decision": "carry", "reason": "no_hit", "old_price": 1068.0, "new_price": null, "evidence": []}
+{"sku": "psu-bq-sp12-1000", "decision": "carry", "reason": "no_hit", "old_price": 1699.0, "new_price": null, "evidence": []}
+{"sku": "psu-bq-sp12-750", "decision": "carry", "reason": "no_hit", "old_price": 999.0, "new_price": null, "evidence": []}
+{"sku": "psu-corsair-cx650m", "decision": "carry", "reason": "no_hit", "old_price": 699.0, "new_price": null, "evidence": []}
+{"sku": "psu-corsair-hx1000i-2022", "decision": "carry", "reason": "no_hit", "old_price": 1779.0, "new_price": null, "evidence": []}
+{"sku": "psu-corsair-rm1000x-2021", "decision": "carry", "reason": "no_hit", "old_price": 1199.0, "new_price": null, "evidence": []}
+{"sku": "psu-corsair-rm750e", "decision": "carry", "reason": "no_hit", "old_price": 899.0, "new_price": null, "evidence": []}
+{"sku": "psu-corsair-rm850e", "decision": "carry", "reason": "no_hit", "old_price": 839.0, "new_price": null, "evidence": []}
+{"sku": "psu-corsair-rm850x-2021", "decision": "carry", "reason": "no_hit", "old_price": 1049.0, "new_price": null, "evidence": []}
+{"sku": "psu-gb-ud850gm-pg5", "decision": "carry", "reason": "no_hit", "old_price": 1099.0, "new_price": null, "evidence": []}
+{"sku": "psu-msi-mag-a650bn", "decision": "accept", "reason": "tier_A", "old_price": 279.0, "new_price": 269.0, "delta": 0.964, "evidence": [{"row_key": "8fc26d8b54b8ce2b", "title": "微星MSI MAG A650BNL A550BNL A750BN A600DN 650W台式机电脑atx电源 MAG A650BNL额定650W铜牌/3年保", "price": 269.0, "shop": "宽澜数码工作室", "platform": "2", "tier": "A", "tray": false}, {"row_key": "e98e71b478a4ab03", "title": "微星MSI MAG A650BNL A550BNL A750BN A600DN 650W台式机电脑atx电源 MAG A650BNL 白色650W铜牌/3年保", "price": 269.0, "shop": "宽澜数码工作室", "platform": "2", "tier": "A", "tray": false}]}
+{"sku": "psu-msi-mag-a750gl", "decision": "carry", "reason": "no_hit", "old_price": 1047.78, "new_price": null, "evidence": []}
+{"sku": "psu-msi-mag-a850gl", "decision": "carry", "reason": "no_hit", "old_price": 977.62, "new_price": null, "evidence": []}
+{"sku": "psu-msi-mpg-a850g", "decision": "carry", "reason": "no_hit", "old_price": 649.0, "new_price": null, "evidence": []}
+{"sku": "psu-seasonic-focus-gx750-atx30", "decision": "carry", "reason": "no_hit", "old_price": 1149.0, "new_price": null, "evidence": []}
+{"sku": "psu-seasonic-focus-gx850-atx30", "decision": "carry", "reason": "no_hit", "old_price": 1099.0, "new_price": null, "evidence": []}
+{"sku": "psu-seasonic-vertex-gx1000", "decision": "carry", "reason": "no_hit", "old_price": 1549.0, "new_price": null, "evidence": []}
+{"sku": "psu-tt-gf3-750", "decision": "carry", "reason": "no_hit", "old_price": 599.0, "new_price": null, "evidence": []}
+{"sku": "psu-tt-gf3-850", "decision": "carry", "reason": "no_hit", "old_price": 699.0, "new_price": null, "evidence": []}
+{"sku": "ssd-adata-legend800-1tb", "decision": "carry", "reason": "no_hit", "old_price": 329.0, "new_price": null, "evidence": []}
+{"sku": "ssd-adata-s70blade-1tb", "decision": "carry", "reason": "no_hit", "old_price": 949.0, "new_price": null, "evidence": []}
+{"sku": "ssd-crucial-bx500-1tb", "decision": "review", "reason": "tier_B", "old_price": 549.0, "new_price": 1226.0, "delta": 2.233, "evidence": [{"row_key": "67d9625b25c5a37d", "title": "CRUCIAL/镁光 BX500 英睿达固态硬盘 SATA 240G 500G 1TB", "price": 1226.0, "shop": "南湾数码", "platform": "1", "tier": "B", "tray": false}, {"row_key": "c9f4b7e3517216f5", "title": "英睿达（crucial）BX500 SATA3.0固态硬盘 美光MX500 240G/500G/1T 笔记本SSD 【性价比优选】BX500-540MB/s+装机配件 1TB", "price": 1636.74, "shop": "永盛新科技工作室", "platform": "2", "tier": "A", "tray": false}]}
+{"sku": "ssd-crucial-mx500-1tb", "decision": "carry", "reason": "no_hit", "old_price": 1599.0, "new_price": null, "evidence": []}
+{"sku": "ssd-crucial-p3plus-1tb", "decision": "carry", "reason": "no_hit", "old_price": 379.0, "new_price": null, "evidence": []}
+{"sku": "ssd-crucial-p5plus-1tb", "decision": "carry", "reason": "no_hit", "old_price": 439.0, "new_price": null, "evidence": []}
+{"sku": "ssd-crucial-t500-2tb", "decision": "carry", "reason": "no_hit", "old_price": 2212.08, "new_price": null, "evidence": []}
+{"sku": "ssd-intel-670p-1tb", "decision": "carry", "reason": "no_hit", "old_price": 689.0, "new_price": null, "evidence": []}
+{"sku": "ssd-kingston-a400-480gb", "decision": "carry", "reason": "no_hit", "old_price": 593.1, "new_price": null, "evidence": []}
+{"sku": "ssd-kingston-kc3000-1tb", "decision": "carry", "reason": "no_hit", "old_price": 1699.0, "new_price": null, "evidence": []}
+{"sku": "ssd-kingston-nv2-1tb", "decision": "carry", "reason": "no_hit", "old_price": 709.0, "new_price": null, "evidence": []}
+{"sku": "ssd-samsung-870evo-1tb", "decision": "carry", "reason": "no_hit", "old_price": 1089.0, "new_price": null, "evidence": []}
+{"sku": "ssd-samsung-870qvo-2tb", "decision": "carry", "reason": "no_hit", "old_price": 799.0, "new_price": null, "evidence": []}
+{"sku": "ssd-samsung-970evoplus-1tb", "decision": "carry", "reason": "no_hit", "old_price": 1199.0, "new_price": null, "evidence": []}
+{"sku": "ssd-samsung-980pro-1tb", "decision": "carry", "reason": "no_hit", "old_price": 599.0, "new_price": null, "evidence": []}
+{"sku": "ssd-samsung-990pro-2tb", "decision": "carry", "reason": "no_hit", "old_price": 2699.0, "new_price": null, "evidence": []}
+{"sku": "ssd-wd-sa510-1tb", "decision": "carry", "reason": "no_hit", "old_price": 1699.0, "new_price": null, "evidence": []}
+{"sku": "ssd-wd-sn580-1tb", "decision": "carry", "reason": "no_hit", "old_price": 1075.0, "new_price": null, "evidence": []}
+{"sku": "ssd-wd-sn770-1tb", "decision": "carry", "reason": "no_hit", "old_price": 1719.0, "new_price": null, "evidence": []}
+{"sku": "ssd-wd-sn850x-2tb", "decision": "carry", "reason": "no_hit", "old_price": 2599.0, "new_price": null, "evidence": []}

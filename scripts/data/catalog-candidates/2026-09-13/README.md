@@ -18,6 +18,28 @@
 - 命中旧 160 SKU 身份的行分流至 legacy-price-hits.jsonl(926 行,覆盖 68 个旧 SKU,
   可用于下次基线报价刷新,本批不处理)。
 
+## 旧 SKU 基线刷新(legacy-refresh.jsonl + prices/2026-09-13.csv)
+
+同日零新增调用,用 legacy-price-hits.jsonl 按 v3.1 判例刷新旧 160 SKU 报价
+(工具:collection-tools/2026-09-13/refresh_legacy_20260913.py,含 --sku 可复现审计):
+
+- 判例落地:①京东变体选择器行按尾部/【】区段绑定(tier A,需 zone 内含全部身份
+  token 且无其他型号 token);②非京东行多型号链接显示最低档价不可用,即便尾部命中
+  也要求全标题单型号;③tier B 仅接受守卫唯一且全标题单型号的行。
+- 守卫:品类容量/频率/瓦数、跨品牌混列 FORB、散片/套装/配件排除、logical 去重
+  (同价+同规范化标题)、系列精修(-pulse SKU 的选中变体后缀必须含"脉动")、
+  散片判定看选中变体后缀而非全标题;盒装与散片并存取盒装。
+- 偏离旧基线超出 [0.55, 1.5] → review(自动 carry,留待人工),不自动晋升。
+- 结果:**accept 14 / review 4 / carry 142**。accept 全部为京东选择器行,逐条附
+  row_key 证据;review 4 条(nr200p 0.53、r7-7700 0.53 仅散片、gb-5060 1.69、
+  bx500 2.23)按 carry 处理留待人工。
+- 未刷新的原因分布:无非京东可绑定行、多型号混列、系列不匹配(如 7700XT 只有
+  白金版行,7900XT 只有极地版行,均非 Pulse,不冒充)、变体行本身是数显/二代等
+  改版(AK620 数显、AG400 G2)。mx500 选择器行无容量证据,同样 carry。
+- prices/2026-09-13.csv:14 行 maishou88/2026-09-13,其余 146 行逐字沿用 09-08
+  (含 07-28 的 jd/taobao/zol/pdd 行);pcdata 载入最新文件整体生效。
+
+
 ## 交付物
 
 | 文件 | 内容 |
@@ -26,6 +48,7 @@
 | offers.jsonl | 385 条报价行(去重后):goodsId、店铺、标题、价格、is_primary、buy_url |
 | review-decisions.jsonl | 全部 164 个模型条目的 accept/reject 决策与理由(含改名/拆分记录) |
 | missing-specs.md | 95/115 个候选的缺规格清单 |
+| legacy-refresh.jsonl | 旧 160 SKU 基线刷新决策留痕(accept/review/carry + row_key 证据) |
 | manifest.json | 文件 SHA-256、预算消耗、数量统计 |
 | legacy-price-hits.jsonl | 旧 160 SKU 的价格命中行(926 行 / 68 SKU,供基线刷新用) |
 

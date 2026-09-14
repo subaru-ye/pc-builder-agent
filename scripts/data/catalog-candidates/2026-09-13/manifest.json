@@ -13,7 +13,12 @@
     "candidates": 115,
     "offers": 385,
     "models_detail_checked": 82,
-    "with_missing_fields": 95
+    "with_missing_fields": 95,
+    "legacy_refresh": {
+      "accept": 14,
+      "review": 4,
+      "carry": 142
+    }
   },
   "files": {
     "candidates.jsonl": {
@@ -35,6 +40,14 @@
     "legacy-price-hits.jsonl": {
       "sha256": "c1e7a1cc8ec9ca4ef1d0034737d7ccbdfba59724c127fc2e6539b26c4f95f5a5",
       "bytes": 482711
+    },
+    "legacy-refresh.jsonl": {
+      "sha256": "81b0b67602c83eaca746799af266801a255aad39f72c7e0ef0dfc124b436d9c2",
+      "bytes": 28024
+    },
+    "README.md": {
+      "sha256": "e47a166080902c109870f2aab6fea499fc68ed8d585748f0af6bd479ecf18b5c",
+      "bytes": 4382
     }
   },
   "not_imported": "本批仅为候选,未导入产品库/基线;同型号多店铺为多 offer 非多 SKU"

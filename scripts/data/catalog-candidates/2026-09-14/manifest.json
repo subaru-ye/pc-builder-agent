@@ -1,0 +1,38 @@
+{
+  "batch": "2026-09-14-legacy-refresh-01",
+  "date": "2026-09-14",
+  "source_type": "aggregator_secondary",
+  "review_basis": "Agent 辅助复核",
+  "skill": "买手技能(uv run scripts/main.py search,source=0 聚合)",
+  "budget": {
+    "search": "61/200(批次口径;全局含 09-13 批 139 已触顶 200/200)",
+    "detail": "0/120(全局 82/120)",
+    "http_requests": 123
+  },
+  "scope": "仅旧 160 SKU 中仍挂 2026-07-28 基线的 57 个 SKU 定向重扫;不做新型号发现",
+  "counts": {
+    "legacy_targets": 57,
+    "legacy_hits_rows": 254,
+    "legacy_hits_skus": 46,
+    "legacy_refresh": {
+      "accept": 5,
+      "review": 5,
+      "carry": 150
+    }
+  },
+  "files": {
+    "legacy-hits.jsonl": {
+      "sha256": "068b593295141735aef577ac93aff30d6d84b7a57a45d7e4146fba7d249a0a6f",
+      "bytes": 130485
+    },
+    "legacy-refresh.jsonl": {
+      "sha256": "7fe71ff8892c29d90de4b4d62ff49a2d4b8be996f2e4f02192541294918463ff",
+      "bytes": 25410
+    },
+    "README.md": {
+      "sha256": "c81ce10dc0dadb99dca3962b6b91facaf5f8f389bfddcef6ba51cd76c2cb4387",
+      "bytes": 3728
+    }
+  },
+  "not_imported": "本批不导入产品库;prices/2026-09-14.csv 5 行新价 + 155 行逐字沿用 2026-09-13.csv,待人工执行 importprices"
+}

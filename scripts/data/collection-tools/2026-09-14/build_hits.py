@@ -23,7 +23,7 @@ RAW = Path(sys.argv[sys.argv.index("--raw-dir") + 1]) if "--raw-dir" in sys.argv
     HERE.parents[3] / "var/data/collections/2026-09-14-legacy-refresh-01"
 )
 
-JUNK = ["拆机", "二手", "准新", "坏", "维修", "回收", "出租", "样品", "询价", "议价", "成新", "矿卡", "整机", "板u", "主板cpu套装"]
+JUNK = ["拆机", "二手", "准新", "坏", "维修", "回收", "出租", "样品", "询价", "议价", "成新", "矿卡", "整机", "板u", "主板cpu套装", "展机"]
 
 
 def sq(s: str) -> str:
@@ -33,8 +33,13 @@ def sq(s: str) -> str:
 
 
 def main() -> int:
+    plans = (
+        sys.argv[sys.argv.index("--plan") + 1].split(",")
+        if "--plan" in sys.argv
+        else ["search_plan.jsonl", "retry_plan.jsonl"]
+    )
     plan: dict = {}
-    for pf in ("search_plan.jsonl", "retry_plan.jsonl"):
+    for pf in plans:
         p = HERE / pf
         if p.exists():
             plan.update({

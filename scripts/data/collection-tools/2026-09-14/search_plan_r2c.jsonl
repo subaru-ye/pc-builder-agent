@@ -1,0 +1,25 @@
+{"query_id": "r2d_01_mem", "category": "mem", "keyword": "芝奇幻锋戟 6000 32G", "source": 2, "max_pages": 1, "sku": "mem-gskill-s5-32-6000"}
+{"query_id": "r2d_02_mem", "category": "mem", "keyword": "芝奇幻光戟 6400 32G", "source": 2, "max_pages": 1, "sku": "mem-gskill-z5-rgb-32-6400"}
+{"query_id": "r2d_03_mem", "category": "mem", "keyword": "芝奇焰光戟 6000 32G", "source": 2, "max_pages": 1, "sku": "mem-gskill-z5neo-rgb-32-6000"}
+{"query_id": "r2d_04_mem", "category": "mem", "keyword": "海盗船复仇者RGB 6000 32G", "source": 2, "max_pages": 1, "sku": "mem-corsair-veng-rgb-32-6000"}
+{"query_id": "r2d_05_mem", "category": "mem", "keyword": "威刚 LANCER 5200 32G", "source": 2, "max_pages": 1, "sku": "mem-adata-lancer-32-5200"}
+{"query_id": "r2d_06_mem", "category": "mem", "keyword": "芝奇RipjawsV 3200 32G", "source": 2, "max_pages": 1, "sku": "mem-gskill-ripjawsv-32-3200"}
+{"query_id": "r2d_07_mem", "category": "mem", "keyword": "十铨 Delta 3200 32G", "source": 2, "max_pages": 1, "sku": "mem-team-delta-32-3200-d4"}
+{"query_id": "r2d_08_ssd", "category": "ssd", "keyword": "三星980PRO 1TB", "source": 2, "max_pages": 1, "sku": "ssd-samsung-980pro-1tb"}
+{"query_id": "r2d_09_ssd", "category": "ssd", "keyword": "三星970EVO Plus 1TB", "source": 2, "max_pages": 1, "sku": "ssd-samsung-970evoplus-1tb"}
+{"query_id": "r2d_10_ssd", "category": "ssd", "keyword": "三星870QVO 2TB", "source": 2, "max_pages": 1, "sku": "ssd-samsung-870qvo-2tb"}
+{"query_id": "r2d_11_ssd", "category": "ssd", "keyword": "英特尔670P 1TB", "source": 2, "max_pages": 1, "sku": "ssd-intel-670p-1tb"}
+{"query_id": "r2d_12_ssd", "category": "ssd", "keyword": "威刚LEGEND 800 1TB", "source": 2, "max_pages": 1, "sku": "ssd-adata-legend800-1tb"}
+{"query_id": "r2d_13_ssd", "category": "ssd", "keyword": "威刚S70BLADE 1TB", "source": 2, "max_pages": 1, "sku": "ssd-adata-s70blade-1tb"}
+{"query_id": "r2d_14_ssd", "category": "ssd", "keyword": "英睿达P3 Plus 1TB", "source": 2, "max_pages": 1, "sku": "ssd-crucial-p3plus-1tb"}
+{"query_id": "r2d_15_ssd", "category": "ssd", "keyword": "英睿达P5 Plus 1TB", "source": 2, "max_pages": 1, "sku": "ssd-crucial-p5plus-1tb"}
+{"query_id": "r2d_16_gpu", "category": "gpu", "keyword": "Intel锐炫B580 12GB", "source": 2, "max_pages": 1, "sku": "gpu-intel-b580-le"}
+{"query_id": "r2d_17_gpu", "category": "gpu", "keyword": "微星RTX3060万图师12G", "source": 2, "max_pages": 1, "sku": "gpu-msi-3060-ventus2x"}
+{"query_id": "r2d_18_case", "category": "case", "keyword": "NZXT H7 Flow 机箱", "source": 2, "max_pages": 1, "sku": "case-nzxt-h7-flow-2024"}
+{"query_id": "r2d_19_case", "category": "case", "keyword": "分形工艺Define 7", "source": 2, "max_pages": 1, "sku": "case-fractal-define-7"}
+{"query_id": "r2d_20_case", "category": "case", "keyword": "海盗船4000D 机箱", "source": 2, "max_pages": 1, "sku": "case-corsair-4000d-airflow"}
+{"query_id": "r2d_21_case", "category": "case", "keyword": "分形工艺Meshify 2 Compact", "source": 2, "max_pages": 1, "sku": "case-fractal-meshify-2-compact"}
+{"query_id": "r2d_22_psu", "category": "psu", "keyword": "be quiet Straight Power 12 750W", "source": 2, "max_pages": 1, "sku": "psu-bq-sp12-750"}
+{"query_id": "r2d_23_psu", "category": "psu", "keyword": "be quiet Pure Power 12 M 750W", "source": 2, "max_pages": 1, "sku": "psu-bq-pp12m-750"}
+{"query_id": "r2d_24_cooler", "category": "cooler", "keyword": "微星CORELIQUID E360", "source": 2, "max_pages": 1, "sku": "cooler-msi-mag-coreliquid-e360"}
+{"query_id": "r2d_25_mb", "category": "mb", "keyword": "华擎B650M-HDV/M.2", "source": 2, "max_pages": 1, "sku": "mb-asrock-b650m-hdv-m2"}

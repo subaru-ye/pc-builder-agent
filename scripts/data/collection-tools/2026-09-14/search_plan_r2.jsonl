@@ -1,0 +1,55 @@
+{"query_id": "r2_01_case", "category": "case", "keyword": "be quiet Pure Base 500DX 机箱", "source": 0, "max_pages": 1, "sku": "case-bequiet-pure-base-500dx"}
+{"query_id": "r2_02_case", "category": "case", "keyword": "海盗船 4000D AIRFLOW 中塔机箱", "source": 0, "max_pages": 1, "sku": "case-corsair-4000d-airflow"}
+{"query_id": "r2_03_case", "category": "case", "keyword": "分形工艺 Define 7 静音机箱", "source": 0, "max_pages": 1, "sku": "case-fractal-define-7"}
+{"query_id": "r2_04_case", "category": "case", "keyword": "分形工艺 Meshify 2 Compact 机箱", "source": 0, "max_pages": 1, "sku": "case-fractal-meshify-2-compact"}
+{"query_id": "r2_05_case", "category": "case", "keyword": "Montech AIR 903 MAX 机箱", "source": 0, "max_pages": 1, "sku": "case-montech-air-903-max"}
+{"query_id": "r2_06_case", "category": "case", "keyword": "NZXT H5 Flow 2024款 机箱", "source": 0, "max_pages": 1, "sku": "case-nzxt-h5-flow-2024"}
+{"query_id": "r2_07_case", "category": "case", "keyword": "NZXT H6 Flow 2023款 机箱", "source": 0, "max_pages": 1, "sku": "case-nzxt-h6-flow-2023"}
+{"query_id": "r2_08_case", "category": "case", "keyword": "NZXT H7 Flow 2024款 机箱", "source": 0, "max_pages": 1, "sku": "case-nzxt-h7-flow-2024"}
+{"query_id": "r2_09_cooler", "category": "cooler", "keyword": "ARCTIC Liquid Freezer II 240 一体式水冷", "source": 0, "max_pages": 1, "sku": "cooler-arctic-lf2-240"}
+{"query_id": "r2_10_cooler", "category": "cooler", "keyword": "be quiet Dark Rock Pro 4 风冷散热器", "source": 0, "max_pages": 1, "sku": "cooler-bequiet-dark-rock-pro-4"}
+{"query_id": "r2_11_cooler", "category": "cooler", "keyword": "海盗船 iCUE H100i ELITE CAPELLIX XT 240水冷", "source": 0, "max_pages": 1, "sku": "cooler-corsair-h100i-elite-capellix-xt"}
+{"query_id": "r2_12_cooler", "category": "cooler", "keyword": "海盗船 iCUE H150i ELITE CAPELLIX XT 360水冷", "source": 0, "max_pages": 1, "sku": "cooler-corsair-h150i-elite-capellix-xt"}
+{"query_id": "r2_13_cooler", "category": "cooler", "keyword": "微星 MAG CORELIQUID E360 一体式水冷", "source": 0, "max_pages": 1, "sku": "cooler-msi-mag-coreliquid-e360"}
+{"query_id": "r2_14_cooler", "category": "cooler", "keyword": "NZXT Kraken 240 一体式水冷", "source": 0, "max_pages": 1, "sku": "cooler-nzxt-kraken-240"}
+{"query_id": "r2_15_cooler", "category": "cooler", "keyword": "NZXT 海妖 X63 280一体式水冷", "source": 0, "max_pages": 1, "sku": "cooler-nzxt-kraken-x63"}
+{"query_id": "r2_16_cpu", "category": "cpu", "keyword": "AMD 锐龙9 7900 盒装", "source": 0, "max_pages": 1, "sku": "cpu-r9-7900"}
+{"query_id": "r2_17_cpu", "category": "cpu", "keyword": "AMD 锐龙7 7700 盒装", "source": 0, "max_pages": 1, "sku": "cpu-r7-7700"}
+{"query_id": "r2_18_gpu", "category": "gpu", "keyword": "华硕 DUAL RTX4060Ti EVO 8G", "source": 0, "max_pages": 1, "sku": "gpu-asus-4060ti-dual-evo"}
+{"query_id": "r2_19_gpu", "category": "gpu", "keyword": "技嘉 RTX5060Ti 风魔 16G", "source": 0, "max_pages": 1, "sku": "gpu-gb-5060ti-windforce-16g"}
+{"query_id": "r2_20_gpu", "category": "gpu", "keyword": "技嘉 RTX5070 风魔 SFF", "source": 0, "max_pages": 1, "sku": "gpu-gb-5070-windforce-sff"}
+{"query_id": "r2_21_gpu", "category": "gpu", "keyword": "Intel 锐炫 B580 12GB 限量版", "source": 0, "max_pages": 1, "sku": "gpu-intel-b580-le"}
+{"query_id": "r2_22_gpu", "category": "gpu", "keyword": "微星 RTX3060 VENTUS 2X 12G 万图师", "source": 0, "max_pages": 1, "sku": "gpu-msi-3060-ventus2x"}
+{"query_id": "r2_23_gpu", "category": "gpu", "keyword": "微星 RTX4060 VENTUS 2X BLACK 万图师", "source": 0, "max_pages": 1, "sku": "gpu-msi-4060-ventus2x-black"}
+{"query_id": "r2_24_gpu", "category": "gpu", "keyword": "微星 RTX4070SUPER VENTUS 2X 万图师", "source": 0, "max_pages": 1, "sku": "gpu-msi-4070s-ventus2x"}
+{"query_id": "r2_25_gpu", "category": "gpu", "keyword": "蓝宝石 RX6600 8G 脉动", "source": 0, "max_pages": 1, "sku": "gpu-sapphire-6600-pulse"}
+{"query_id": "r2_26_gpu", "category": "gpu", "keyword": "蓝宝石 RX7600 8G 脉动", "source": 0, "max_pages": 1, "sku": "gpu-sapphire-7600-pulse"}
+{"query_id": "r2_27_gpu", "category": "gpu", "keyword": "蓝宝石 RX7900XT 20G 脉动", "source": 0, "max_pages": 1, "sku": "gpu-sapphire-7900xt-pulse"}
+{"query_id": "r2_28_mb", "category": "mb", "keyword": "华擎 B650M-HDV/M.2 主板", "source": 0, "max_pages": 1, "sku": "mb-asrock-b650m-hdv-m2"}
+{"query_id": "r2_29_mb", "category": "mb", "keyword": "技嘉 B550 AORUS ELITE V2 小雕主板", "source": 0, "max_pages": 1, "sku": "mb-gb-b550-aorus-elite-v2"}
+{"query_id": "r2_30_mb", "category": "mb", "keyword": "技嘉 B650I AORUS ULTRA ITX主板", "source": 0, "max_pages": 1, "sku": "mb-gb-b650i-aorus-ultra"}
+{"query_id": "r2_31_mb", "category": "mb", "keyword": "微星 MAG B650 TOMAHAWK WIFI 战斧导弹主板", "source": 0, "max_pages": 1, "sku": "mb-msi-b650-tomahawk-wifi"}
+{"query_id": "r2_32_mb", "category": "mb", "keyword": "微星 MAG B860 TOMAHAWK WIFI 战斧导弹主板", "source": 0, "max_pages": 1, "sku": "mb-msi-b860-tomahawk-wifi"}
+{"query_id": "r2_33_mem", "category": "mem", "keyword": "威刚 XPG LANCER DDR5 5200 32G(16G*2)", "source": 0, "max_pages": 1, "sku": "mem-adata-lancer-32-5200"}
+{"query_id": "r2_34_mem", "category": "mem", "keyword": "海盗船 复仇者RGB DDR5 6000 32G(16G*2)", "source": 0, "max_pages": 1, "sku": "mem-corsair-veng-rgb-32-6000"}
+{"query_id": "r2_35_mem", "category": "mem", "keyword": "芝奇 RipjawsV DDR4 3200 32G(16G*2)", "source": 0, "max_pages": 1, "sku": "mem-gskill-ripjawsv-32-3200"}
+{"query_id": "r2_36_mem", "category": "mem", "keyword": "芝奇 幻锋戟 DDR5 6000 C30 32G(16G*2)", "source": 0, "max_pages": 1, "sku": "mem-gskill-s5-32-6000"}
+{"query_id": "r2_37_mem", "category": "mem", "keyword": "芝奇 幻光戟 DDR5 6400 32G(16G*2)", "source": 0, "max_pages": 1, "sku": "mem-gskill-z5-rgb-32-6400"}
+{"query_id": "r2_38_mem", "category": "mem", "keyword": "芝奇 焰光戟 DDR5 6000 32G(16G*2)", "source": 0, "max_pages": 1, "sku": "mem-gskill-z5neo-rgb-32-6000"}
+{"query_id": "r2_39_mem", "category": "mem", "keyword": "十铨 T-Force Delta DDR4 3200 32G(16G*2)", "source": 0, "max_pages": 1, "sku": "mem-team-delta-32-3200-d4"}
+{"query_id": "r2_40_psu", "category": "psu", "keyword": "be quiet Pure Power 12 M 750W 金牌全模组", "source": 0, "max_pages": 1, "sku": "psu-bq-pp12m-750"}
+{"query_id": "r2_41_psu", "category": "psu", "keyword": "be quiet Straight Power 12 1000W 白金牌", "source": 0, "max_pages": 1, "sku": "psu-bq-sp12-1000"}
+{"query_id": "r2_42_psu", "category": "psu", "keyword": "be quiet Straight Power 12 750W 白金牌", "source": 0, "max_pages": 1, "sku": "psu-bq-sp12-750"}
+{"query_id": "r2_43_psu", "category": "psu", "keyword": "海盗船 CX650M 650W 铜牌电源", "source": 0, "max_pages": 1, "sku": "psu-corsair-cx650m"}
+{"query_id": "r2_44_psu", "category": "psu", "keyword": "微星 MPG A850G 金牌全模组电源", "source": 0, "max_pages": 1, "sku": "psu-msi-mpg-a850g"}
+{"query_id": "r2_45_psu", "category": "psu", "keyword": "海韵 FOCUS GX-750 ATX3.0 金牌全模组", "source": 0, "max_pages": 1, "sku": "psu-seasonic-focus-gx750-atx30"}
+{"query_id": "r2_46_ssd", "category": "ssd", "keyword": "威刚 LEGEND 800 1TB M.2固态硬盘", "source": 0, "max_pages": 1, "sku": "ssd-adata-legend800-1tb"}
+{"query_id": "r2_47_ssd", "category": "ssd", "keyword": "威刚 S70 Blade 1TB M.2固态硬盘", "source": 0, "max_pages": 1, "sku": "ssd-adata-s70blade-1tb"}
+{"query_id": "r2_48_ssd", "category": "ssd", "keyword": "英睿达 P3 Plus 1TB NVMe固态硬盘", "source": 0, "max_pages": 1, "sku": "ssd-crucial-p3plus-1tb"}
+{"query_id": "r2_49_ssd", "category": "ssd", "keyword": "英睿达 P5 Plus 1TB NVMe固态硬盘", "source": 0, "max_pages": 1, "sku": "ssd-crucial-p5plus-1tb"}
+{"query_id": "r2_50_ssd", "category": "ssd", "keyword": "英特尔 670P 1TB M.2固态硬盘", "source": 0, "max_pages": 1, "sku": "ssd-intel-670p-1tb"}
+{"query_id": "r2_51_ssd", "category": "ssd", "keyword": "三星 870 QVO 2TB SATA固态硬盘", "source": 0, "max_pages": 1, "sku": "ssd-samsung-870qvo-2tb"}
+{"query_id": "r2_52_ssd", "category": "ssd", "keyword": "三星 970 EVO Plus 1TB M.2固态硬盘", "source": 0, "max_pages": 1, "sku": "ssd-samsung-970evoplus-1tb"}
+{"query_id": "r2_53_ssd", "category": "ssd", "keyword": "三星 980 PRO 1TB NVMe固态硬盘", "source": 0, "max_pages": 1, "sku": "ssd-samsung-980pro-1tb"}
+{"query_id": "r2_54_ssd", "category": "ssd", "keyword": "西数 SN580 1TB M.2固态硬盘", "source": 0, "max_pages": 1, "sku": "ssd-wd-sn580-1tb"}
+{"query_id": "r2_55_ssd", "category": "ssd", "keyword": "西数 SN770 1TB M.2固态硬盘", "source": 0, "max_pages": 1, "sku": "ssd-wd-sn770-1tb"}

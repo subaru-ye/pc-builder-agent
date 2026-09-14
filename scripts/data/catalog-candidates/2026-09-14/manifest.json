@@ -34,5 +34,36 @@
       "bytes": 3728
     }
   },
-  "not_imported": "本批不导入产品库;prices/2026-09-14.csv 5 行新价 + 155 行逐字沿用 2026-09-13.csv,待人工执行 importprices"
+  "not_imported": "本批不导入产品库;prices/2026-09-14.csv 5 行新价 + 155 行逐字沿用 2026-09-13.csv,待人工执行 importprices",
+  "r2": {
+    "batch": "2026-09-14-legacy-refresh-02",
+    "skill": "买手技能 search(source=0 聚合 + source=2 京东直搜)",
+    "budget": {
+      "search": "100/100(批次口径;全局 09-13 批 139 + r1 61 + r2 100 = 300/300,用户批准上限 200→300)",
+      "detail": "0(全局 82/120)"
+    },
+    "scope": "r1 后仍挂 2026-07-28 的 54 个 SKU 定向重扫(54 主搜 + 14 换词 + 25 JD 直搜 + 12 JD 换词);JD 游客态接口对多数精确词返回空,等效失败留痕",
+    "counts": {
+      "legacy_targets": 54,
+      "legacy_hits_rows": 219,
+      "legacy_hits_skus": 39,
+      "legacy_refresh": {
+        "accept": 8,
+        "review": 4,
+        "carry": 148
+      },
+      "stale_0728_after": 52
+    },
+    "tool_judgment_updates": "TAIL_ID 补全 44 项;MEM_CAP 容量守卫;b580-le 合作伙伴 FORB;4000d-airflow 需 airflow 字样;3060-ventus2x FORB OC;JUNK 增展机",
+    "files": {
+      "legacy-refresh-r2.jsonl": {
+        "sha256": "c150b192f40cc4e5ae3554754755c874f8f001b8dfc59c524c0ac0f0f476acd3",
+        "bytes": 24523
+      },
+      "README.md": {
+        "sha256": "57f4f9c27aebe51f2a3793c53eb365fb23fc12370a2700382cacc1684e79ade9",
+        "bytes": 6171
+      }
+    }
+  }
 }

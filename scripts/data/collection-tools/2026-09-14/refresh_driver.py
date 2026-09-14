@@ -35,8 +35,8 @@ RAW = Path(
 ).resolve()
 SKILL = Path(os.environ.get("MAISHOU_SKILL_DIR", r"C:\Users\83818\.qoder\skills\taobao"))
 
-BUDGET_SEARCH = 200
-BUDGET_DETAIL = 120
+BUDGET_SEARCH = int(os.environ.get("COLLECTION_SEARCH_BUDGET", "200"))
+BUDGET_DETAIL = int(os.environ.get("COLLECTION_DETAIL_BUDGET", "120"))
 MAX_PAGES = 5
 SLEEP_SECONDS = 0.7
 
@@ -54,7 +54,7 @@ def load_checkpoint() -> dict:
     if CHECKPOINT.exists():
         return json.loads(CHECKPOINT.read_text(encoding="utf-8"))
     return {
-        "batch": "2026-09-14-legacy-refresh-01",
+        "batch": os.environ.get("COLLECTION_BATCH", "2026-09-14-legacy-refresh-01"),
         "search_count": 0,
         "detail_count": 0,
         "http_requests": 0,

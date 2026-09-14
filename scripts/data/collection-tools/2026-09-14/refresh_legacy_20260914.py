@@ -39,7 +39,7 @@ SANITY_LO, SANITY_HI = 0.55, 1.5
 
 JUNK = ["拆机", "二手", "准新", "坏", "维修", "回收", "出租", "样品", "询价", "议价", "成新",
         "矿卡", "整机", "板u", "主板cpu套装", "冷头", "模组线", "线材", "支架", "延长线",
-        "挡板", "理线", "集线器", "电源线", "数据线", "防尘罩", "保护套", "扩展坞",
+        "展机", "挡板", "理线", "集线器", "电源线", "数据线", "防尘罩", "保护套", "扩展坞",
         "电脑主机", "电竞主机", "游戏主机"]
 
 
@@ -208,6 +208,29 @@ SSD_CAP = {
     "ssd-samsung-990pro-2tb": 2, "ssd-kingston-a400-480gb": 480,
 }
 
+# 非 MEM_SPEC 内存 SKU 的容量守卫(不进 TAIL_ID,避免 32g/16g 污染同品类 other 集合)
+MEM_CAP: dict[str, int] = {
+    "mem-adata-lancer-32-5200": 32, "mem-corsair-veng-rgb-32-6000": 32,
+    "mem-gskill-ripjawsv-32-3200": 32, "mem-gskill-ripjawsv-16-3600": 16,
+    "mem-gskill-z5-rgb-32-6400": 32, "mem-gskill-z5neo-rgb-32-6000": 32,
+    "mem-team-delta-32-3200-d4": 32, "mem-team-delta-32-6000-white": 32,
+    "mem-kingston-beast-16-3200-d4": 16, "mem-kingston-beast-16-5200": 16,
+    "mem-kingston-beast-32-3600-d4": 32, "mem-kingston-beast-32-6000": 32,
+    "mem-corsair-lpx-16-3200": 16, "mem-corsair-lpx-32-3600": 32,
+}
+for _sku, _cap in MEM_CAP.items():
+    FORBS[_sku] += [r"2x8"] if _cap == 32 else [r"2x16"]
+
+# b580-le 是 Intel 官方 Limited Edition;任何板卡合作伙伴行(iCraft/蓝戟/Sparkle 等)不得冒充
+FORBS["gpu-intel-b580-le"] += [
+    r"icraft|milestone|铭瑄|蓝戟|gunnir|sparkle|撼与|华擎|asrock|宏碁|acer",
+    r"七彩虹|colorful|索泰|zotac|影驰|galax|耕升|gainward|盈通|yeston|昂达|万丽|manli",
+]
+# 4000D 目录身份为 Airflow;无"风流/airflow"字样的行可能是普通版 4000D,不冒充
+REQS["case-corsair-4000d-airflow"] += [r"风流|airflow"]
+# VENTUS 2X 目录为非 OC;选中变体尾部带 OC 的行是另一型号
+FORBS["gpu-msi-3060-ventus2x"] += [r"oc"]
+
 # 系列精修:sku 名内嵌系列(-pulse)的,选中变体后缀必须含该系列 token
 # (家族前缀会罗列 极地/脉动/氮动,故查身份 token 之后的后缀,而非全标题)
 SERIES_SUFFIX = {
@@ -270,6 +293,36 @@ TAIL_ID: dict[str, list[str]] = {
     "psu-corsair-cx650m": ["cx650m", "650w"], "psu-corsair-hx1000i-2022": ["hx1000i", "1000w"],
     "psu-gb-ud850gm-pg5": ["ud850gm", "850w"],
     "psu-msi-mag-a750gl": ["a750gl", "750w"], "psu-msi-mag-a850gl": ["a850gl", "850w"],
+    "cpu-r9-7900": ["7900"],
+    "mb-asrock-b650m-hdv-m2": ["b650mhdv"], "mb-asus-b650e-f-strix": ["b650ef"],
+    "mb-gb-b650-aorus-elite-ax": ["b650aoruselite"], "mb-gb-b760-gaming-x-ax": ["b760gamingx"],
+    "mb-msi-b550-tomahawk": ["b550tomahawk"], "mb-msi-b550m-pro-vdh-wifi": ["b550mprovdh"],
+    "mb-msi-b650-tomahawk-wifi": ["b650tomahawk"],
+    "mb-msi-b760m-a-wifi-ddr4": ["b760mawifi", "ddr4"],
+    "mb-msi-b850-tomahawk-max": ["b850tomahawk"], "mb-msi-b860-tomahawk-wifi": ["b860tomahawk"],
+    "mb-msi-h610m-g-ddr4": ["h610mg", "ddr4"], "mb-msi-pro-a620m-e": ["a620me"],
+    "mb-msi-z890-tomahawk-wifi": ["z890tomahawk"],
+    "mem-kingston-beast-32-6000": ["beast", "6000"],
+    "mem-team-delta-32-6000-white": ["delta", "6000"],
+    "ssd-adata-legend800-1tb": ["legend800"], "ssd-adata-s70blade-1tb": ["s70blade"],
+    "ssd-crucial-p5plus-1tb": ["p5plus"], "ssd-intel-670p-1tb": ["670p"],
+    "ssd-samsung-870evo-1tb": ["870evo"], "ssd-samsung-870qvo-2tb": ["870qvo"],
+    "ssd-samsung-970evoplus-1tb": ["970evoplus"], "ssd-samsung-980pro-1tb": ["980pro"],
+    "ssd-wd-sa510-1tb": ["sa510"],
+    "case-bequiet-shadow-base-800-fx": ["shadowbase800fx"],
+    "case-coolermaster-td500-mesh-v2": ["td500mesh"],
+    "case-fractal-north": ["north"], "case-fractal-pop-air": ["popair"],
+    "case-fractal-terra": ["terra"], "case-fractal-torrent": ["torrent"],
+    "case-lianli-a3-matx": ["a3matx"], "case-lianli-lancool-216": ["lancool216"],
+    "case-lianli-o11-dynamic-evo": ["o11"],
+    "cooler-arctic-lf3-240": ["liquidfreezeriii", "240"],
+    "cooler-arctic-lf3-360": ["liquidfreezeriii", "360"],
+    "cooler-bequiet-dark-rock-pro-5": ["darkrockpro5"],
+    "cooler-coolermaster-hyper212-black": ["hyper212"],
+    "cooler-deepcool-assassin-iv": ["assassiniv"], "cooler-deepcool-lt520": ["lt520"],
+    "cooler-noctua-nh-d15": ["nhd15"], "cooler-noctua-nh-u12s": ["nhu12s"],
+    "cooler-thermalright-frozen-prism-240": ["frozenprism", "240"],
+    "cooler-thermalright-ps120se": ["ps120se"],
     "psu-msi-mpg-a850g": ["a850g", "850w"],
     "psu-seasonic-focus-gx750-atx30": ["gx750", "750w"],
     "psu-seasonic-focus-gx850-atx30": ["gx850", "850w"],
@@ -312,7 +365,7 @@ EXTRA_LITS = {
     "mem": ["lancer", "lpx", "ripjawsv", "ripjaws", "tridentz5rgb", "tridentz5neo",
             "tridentz5", "幻光戟", "delta", "3200", "3600", "5200", "5600", "6000",
             "6400", "6800"],
-    "ssd": ["sn5100", "sn7100", "nv3", "980", "990", "970evo", "p3", "p5plus", "mx500",
+    "ssd": ["sn5100", "sn7100", "sn8100", "nv3", "980", "990", "970evo", "p3", "p5plus", "mx500",
             "670p", "870evo", "870qvo", "sa510", "legend800", "s70blade", "kc3000aero",
             "sn3000", "sn5000"],
     "psu": ["pp12m", "purepower12", "sp12", "straightpower12", "cx650m", "hx1000i",
@@ -457,6 +510,8 @@ def eligible(sku: str, stitle: str) -> tuple[bool, str]:
             return False, f"cap{sorted(caps)}!={cap}"
         if speed not in mem_speeds(stitle):
             return False, "speed_missing"
+    if sku in MEM_CAP and max(mem_caps(stitle), default=0) != MEM_CAP[sku]:
+        return False, "memcap_mismatch"
     if sku in SSD_CAP:
         caps = ssd_caps(stitle)
         if len(caps) != 1 or SSD_CAP[sku] not in caps:
@@ -523,7 +578,20 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--emit", action="store_true")
     ap.add_argument("--sku", action="append", default=[], help="调试:打印指定 SKU 的全部候选行")
+    ap.add_argument("--hits", default=None, help="覆盖 HITS 输入路径")
+    ap.add_argument("--prev", default=None, help="覆盖 PREV_CSV 沿用基线")
+    ap.add_argument("--out-csv", default=None, help="覆盖 OUT_CSV 输出")
+    ap.add_argument("--out-decisions", default=None, help="覆盖 OUT_DECISIONS 输出")
     args = ap.parse_args()
+    global HITS, PREV_CSV, OUT_CSV, OUT_DECISIONS
+    if args.hits:
+        HITS = Path(args.hits)
+    if args.prev:
+        PREV_CSV = Path(args.prev)
+    if args.out_csv:
+        OUT_CSV = Path(args.out_csv)
+    if args.out_decisions:
+        OUT_DECISIONS = Path(args.out_decisions)
 
     rows = [json.loads(l) for l in HITS.read_text(encoding="utf-8").splitlines() if l.strip()]
     prev = load_prev()

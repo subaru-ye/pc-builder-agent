@@ -48,8 +48,8 @@
       "legacy_hits_rows": 219,
       "legacy_hits_skus": 39,
       "legacy_refresh": {
-        "accept": 8,
-        "review": 4,
+        "accept": 9,
+        "review": 3,
         "carry": 148
       },
       "stale_0728_after": 52
@@ -57,13 +57,23 @@
     "tool_judgment_updates": "TAIL_ID 补全 44 项;MEM_CAP 容量守卫;b580-le 合作伙伴 FORB;4000d-airflow 需 airflow 字样;3060-ventus2x FORB OC;JUNK 增展机",
     "files": {
       "legacy-refresh-r2.jsonl": {
-        "sha256": "c150b192f40cc4e5ae3554754755c874f8f001b8dfc59c524c0ac0f0f476acd3",
-        "bytes": 24523
+        "sha256": "1002b45012b2e68021b29bd2842bcab6c4dbccace077f18d5d458389116fe942",
+        "bytes": 26084
       },
       "README.md": {
-        "sha256": "57f4f9c27aebe51f2a3793c53eb365fb23fc12370a2700382cacc1684e79ade9",
-        "bytes": 6171
+        "sha256": "cfed156e7e618a65df2536ebe8cd99d8498238403fea480f6c211c7d34c2ce94",
+        "bytes": 6742
       }
+    },
+    "disposition": {
+      "decided_by": "用户 2026-09-14 会话裁定",
+      "manual_accept": [
+        "cpu-r7-7700(散片 1226,旧行 09-08 盒装 2399)"
+      ],
+      "removed_0728_rows": 52,
+      "final_rows": 108,
+      "tool": "collection-tools/2026-09-14/cull_stale_20260914.py",
+      "note": "剔除 SKU 保留产品目录,仅无现价;留痕 final=removed_20260914"
     }
   }
 }

@@ -192,6 +192,13 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 			continue
 		}
 		match := ok && (want.Status == "" || got.Status == want.Status) && (want.Strength == "" || got.Strength == want.Strength) && (want.Kind == "" || got.Kind == want.Kind) && (len(want.Value) == 0 || requirementValueEqual(name, got.Value, want.Value))
+		if len(want.Contains) > 0 {
+			var value string
+			match = match && json.Unmarshal(got.Value, &value) == nil
+			for _, fragment := range want.Contains {
+				match = match && fragment != "" && strings.Contains(value, fragment)
+			}
+		}
 		check("state:"+name, match, got)
 		if ok && got.Status == "active" {
 			check("source:"+name, got.Source != nil && got.Source.MessageID != "", got.Source)

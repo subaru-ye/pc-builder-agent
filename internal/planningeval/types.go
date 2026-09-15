@@ -59,6 +59,7 @@ type FieldExpect struct {
 	Status   string          `json:"status,omitempty"`
 	Strength string          `json:"strength,omitempty"`
 	Kind     string          `json:"kind,omitempty"`
+	Contains []string        `json:"contains,omitempty"`
 }
 type Expect struct {
 	OutcomeOneOf       []string                              `json:"outcome_one_of,omitempty"`

@@ -43,3 +43,30 @@ func TestReferenceRetentionUsesSavedContent(t *testing.T) {
 		t.Fatal("empty assertion accepted")
 	}
 }
+
+func TestFieldContainsChecksOnlyStringValue(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		pass  bool
+	}{
+		{`"同事"`, true}, {`"给同事装机"`, true}, {`"自己"`, false},
+		{`{"同事":"自己"}`, false}, {`null`, false},
+	} {
+		r := StepRecord{State: schemas.RequirementState{Fields: map[string]schemas.RequirementField{"recipient": {
+			Status: "active", Value: json.RawMessage(tc.value), Source: &schemas.RequirementSource{Quote: "给同事"},
+		}}}}
+		Grade(&r, Expect{Fields: map[string]FieldExpect{"recipient": {Status: "active", Contains: []string{"同事"}}}}, nil)
+		found := false
+		for _, c := range r.Checks {
+			if c.Name == "state:recipient" {
+				found = true
+				if c.Pass != tc.pass {
+					t.Fatalf("%s: got %v, want %v", tc.value, c.Pass, tc.pass)
+				}
+			}
+		}
+		if !found {
+			t.Fatal("missing field check")
+		}
+	}
+}

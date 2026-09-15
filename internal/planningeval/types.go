@@ -51,6 +51,8 @@ type FieldExpect struct {
 	Kind     string          `json:"kind,omitempty"`
 }
 type Expect struct {
+	NextAction         string                                `json:"next_action,omitempty"`
+	CPUChanged         bool                                  `json:"cpu_changed,omitempty"`
 	BudgetCeilingCNY   string                                `json:"budget_ceiling_cny,omitempty"`
 	Versions           int                                   `json:"versions"`
 	Fields             map[string]FieldExpect                `json:"fields,omitempty"`

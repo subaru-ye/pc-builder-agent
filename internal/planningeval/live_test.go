@@ -2,14 +2,17 @@ package planningeval
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"iter"
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/validate"
 	"github.com/subaru-ye/pc-builder-agent/internal/planning"
+	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 )
@@ -88,6 +91,40 @@ func TestBudgetCeilingRejectsUnknownAndOverBudget(t *testing.T) {
 		for _, c := range r.Checks {
 			if c.Name == "budget_ceiling" && c.Pass != tc.pass {
 				t.Fatalf("wrong budget grade: %+v", tc)
+			}
+		}
+	}
+}
+
+func TestCPUChangeRequiresDifferentSelectionAndPreviousDraft(t *testing.T) {
+	raw, err := os.ReadFile("../planning/testdata/budget_accounting_recording.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved struct{ Result planning.Result }
+	if err := json.Unmarshal(raw, &saved); err != nil {
+		t.Fatal(err)
+	}
+	prior := StepRecord{Result: &saved.Result}
+	for _, changed := range []bool{false, true} {
+		var draft map[string]any
+		if err := json.Unmarshal(saved.Result.Draft, &draft); err != nil {
+			t.Fatal(err)
+		}
+		if changed {
+			draft["selection"].(map[string]any)["cpu"] = "cpu-r7-5700x"
+		}
+		encoded, _ := json.Marshal(draft)
+		for _, previous := range []*StepRecord{nil, &prior} {
+			r := StepRecord{Result: &planning.Result{Draft: encoded}, State: schemas.RequirementState{NextAction: "collect"}}
+			Grade(&r, Expect{CPUChanged: true, NextAction: "plan"}, previous)
+			for _, c := range r.Checks {
+				if c.Name == "changed_cpu" && c.Pass != (changed && previous != nil) {
+					t.Fatalf("CPU change grade: changed=%v previous=%v check=%+v", changed, previous != nil, c)
+				}
+				if c.Name == "next_action" && c.Pass {
+					t.Fatal("continued collection counted as execution")
+				}
 			}
 		}
 	}

@@ -43,6 +43,9 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 	}
 	check("run_completed", r.Error == "", r.Error)
 	check("version_count", r.Versions == e.Versions, r.Versions)
+	if e.NextAction != "" {
+		check("next_action", r.State.NextAction == e.NextAction, r.State.NextAction)
+	}
 	for name, want := range e.Fields {
 		got, ok := r.State.Fields[name]
 		if want.Status == "absent" {
@@ -208,6 +211,16 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 			ok = ea == nil && eb == nil && reflect.DeepEqual(a.Selection, b.Selection)
 		}
 		check("preserved_other_parts", ok, "")
+	}
+	if e.CPUChanged {
+		ok := false
+		if r.Result != nil && previous != nil && previous.Result != nil {
+			a, ea := schemas.DecodeBuildDraft(r.Result.Draft)
+			b, eb := schemas.DecodeBuildDraft(previous.Result.Draft)
+			ok = ea == nil && eb == nil && a.Selection.CPU != "" && a.Selection.CPU != b.Selection.CPU
+		}
+		// Identity change proves execution, not a performance improvement.
+		check("changed_cpu", ok, "performance benefit needs separate evidence review")
 	}
 	// A delivered result must be server linked, not merely model 'ready'.
 	if r.Result != nil && r.Result.Outcome == "ready" {

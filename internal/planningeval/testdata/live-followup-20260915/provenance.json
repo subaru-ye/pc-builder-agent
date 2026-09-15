@@ -1,0 +1,9 @@
+{
+  "source_suite_sha256": "99fc0269d1cdb277b9868ea42633e9bd99edea2909d4ed0db4c628f3794b3a4f",
+  "suite_sha256": "249162a29b7967df92710d1ad68b885dadb0f9acd3d818c86b4004ccf7363317",
+  "max_model_requests": 24,
+  "external_requests": 0,
+  "embedding_requests": 0,
+  "comparison": "Separate targeted batch, not a rerun of SM-001 under unchanged scoring",
+  "upgrade_grading": "CPU identity change verifies execution only. Preserve-other-parts is a targeted feasibility check; any necessary linkage must be reviewed, never silently counted as a pass."
+}

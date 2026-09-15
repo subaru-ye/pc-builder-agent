@@ -17,9 +17,13 @@ import (
 )
 
 func TestRecordedBudgetClarificationGetsOneReview(t *testing.T) {
-	for _, mode := range []string{"keep_question", "repair", "no_remaining_turns"} {
+	for _, mode := range []string{"keep_question", "repair", "no_remaining_turns", "live_repair"} {
 		t.Run(mode, func(t *testing.T) {
-			raw, err := os.ReadFile("testdata/budget_clarification_recording_20260915.json")
+			file, recordedCalls := "testdata/budget_clarification_recording_20260915.json", 4
+			if mode == "live_repair" {
+				file, recordedCalls = "testdata/budget_clarification_success_recording_20260915.json", 7
+			}
+			raw, err := os.ReadFile(file)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -32,7 +36,7 @@ func TestRecordedBudgetClarificationGetsOneReview(t *testing.T) {
 			if err = json.Unmarshal(raw, &f); err != nil {
 				t.Fatal(err)
 			}
-			if len(f.Responses) != 4 {
+			if len(f.Responses) != recordedCalls {
 				t.Fatal("original recording changed")
 			}
 			catalogRaw, err := os.ReadFile(f.CatalogFile)
@@ -59,7 +63,13 @@ func TestRecordedBudgetClarificationGetsOneReview(t *testing.T) {
 			}
 			before, _ := json.Marshal(f.Input)
 			m := &scriptedModel{respond: func(n int, req *model.LLMRequest) *genai.Content {
-				if n <= 4 {
+				if mode == "live_repair" && n == 6 {
+					feedback := req.Contents[len(req.Contents)-1].Parts[0].Text
+					if !strings.Contains(feedback, "交付核验反馈") || len(req.Config.Tools) == 0 {
+						t.Fatal("successful real continuation missed review")
+					}
+				}
+				if n <= recordedCalls {
 					return f.Responses[n-1]
 				}
 				if n == 5 {
@@ -85,7 +95,7 @@ func TestRecordedBudgetClarificationGetsOneReview(t *testing.T) {
 			if mode == "no_remaining_turns" {
 				maxTurns, wantCalls = 4, 4
 			}
-			if mode == "repair" {
+			if mode == "repair" || mode == "live_repair" {
 				wantCalls = 7
 			}
 			got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: maxTurns}).Run(context.Background(), f.Input)
@@ -96,13 +106,17 @@ func TestRecordedBudgetClarificationGetsOneReview(t *testing.T) {
 			if string(before) != string(after) {
 				t.Fatal("user requirements or base changed")
 			}
-			if mode != "repair" {
+			if mode != "repair" && mode != "live_repair" {
 				if got.Outcome != "clarify" || len(got.Issues) == 0 || got.Quote.TotalCNY != "9428.70" {
 					t.Fatalf("question lost: outcome=%s issues=%v", got.Outcome, got.Issues)
 				}
 				return
 			}
-			if got.Outcome != "ready" || got.Quote.TotalCNY != "7114.00" || got.ToolCalls != 13 || got.Validation.OverallStatus != schemas.OverallPass {
+			wantTotal, wantTools := "7114.00", 13
+			if mode == "live_repair" {
+				wantTotal, wantTools = "6754.00", 10
+			}
+			if got.Outcome != "ready" || got.Quote.TotalCNY != wantTotal || got.ToolCalls != wantTools || got.Validation.OverallStatus != schemas.OverallPass {
 				t.Fatalf("repair failed: outcome=%s quote=%+v tools=%d issues=%v", got.Outcome, got.Quote, got.ToolCalls, got.Issues)
 			}
 			base, _ := schemas.DecodeBuildDraft(f.Input.BaseDraft)

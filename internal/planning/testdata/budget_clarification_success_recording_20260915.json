@@ -1,0 +1,247 @@
+{
+  "source_report": "artifacts/planning-clarification-review-live-20260915-r1/report.json",
+  "source_report_sha256": "99633c4989ea16085267e20f11d6e6dcddfa5165b590d500a2dda836b1b93108",
+  "source_code": "e47aae3",
+  "case_id": "L2-104",
+  "input": {
+    "schema_version": 2,
+    "requirement_state": {
+      "schema_version": 1,
+      "revision": 1,
+      "fields": {
+        "appearance": {
+          "status": "unknown"
+        },
+        "brand_pref.cpu": {
+          "status": "unknown"
+        },
+        "brand_pref.gpu": {
+          "status": "unknown"
+        },
+        "budget_basis": {
+          "status": "unknown"
+        },
+        "budget_cny": {
+          "value": 7500,
+          "status": "active",
+          "kind": "constraint",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "428d674e-e425-4a93-9029-ae057155346b",
+            "quote": "通过需求面板修改：预算改为7500（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；游戏或软件改为[\n                \"黑神话:悟空\"\n              ]（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；补充要求改为\"{\\\"schema_version\\\":1,\\\"base_build_ref\\\":\\\"base_a\\\",\\\"intent\\\":\\\"adjust_budget\\\",\\\"budget_delta_cny\\\":-500,\\\"locked_categories\\\":[\\\"gpu\\\"]}\"（补充说明）；补充要求改为\"必须保留原方案配件：gpu\"（配置条件，必须满足）"
+          }
+        },
+        "budget_flex": {
+          "status": "unknown"
+        },
+        "existing_parts": {
+          "status": "unknown"
+        },
+        "free.historical_change": {
+          "value": "{\"schema_version\":1,\"base_build_ref\":\"base_a\",\"intent\":\"adjust_budget\",\"budget_delta_cny\":-500,\"locked_categories\":[\"gpu\"]}",
+          "status": "active",
+          "kind": "context",
+          "strength": "prefer",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "428d674e-e425-4a93-9029-ae057155346b",
+            "quote": "通过需求面板修改：预算改为7500（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；游戏或软件改为[\n                \"黑神话:悟空\"\n              ]（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；补充要求改为\"{\\\"schema_version\\\":1,\\\"base_build_ref\\\":\\\"base_a\\\",\\\"intent\\\":\\\"adjust_budget\\\",\\\"budget_delta_cny\\\":-500,\\\"locked_categories\\\":[\\\"gpu\\\"]}\"（补充说明）；补充要求改为\"必须保留原方案配件：gpu\"（配置条件，必须满足）"
+          }
+        },
+        "free.locked_parts": {
+          "value": "必须保留原方案配件：gpu",
+          "status": "active",
+          "kind": "constraint",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "428d674e-e425-4a93-9029-ae057155346b",
+            "quote": "通过需求面板修改：预算改为7500（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；游戏或软件改为[\n                \"黑神话:悟空\"\n              ]（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；补充要求改为\"{\\\"schema_version\\\":1,\\\"base_build_ref\\\":\\\"base_a\\\",\\\"intent\\\":\\\"adjust_budget\\\",\\\"budget_delta_cny\\\":-500,\\\"locked_categories\\\":[\\\"gpu\\\"]}\"（补充说明）；补充要求改为\"必须保留原方案配件：gpu\"（配置条件，必须满足）"
+          }
+        },
+        "noise_pref": {
+          "status": "unknown"
+        },
+        "notes": {
+          "status": "unknown"
+        },
+        "owned_parts": {
+          "status": "unknown"
+        },
+        "priority": {
+          "status": "unknown"
+        },
+        "recipient": {
+          "status": "unknown"
+        },
+        "size_pref": {
+          "status": "unknown"
+        },
+        "use_case.fps_target": {
+          "status": "unknown"
+        },
+        "use_case.resolution": {
+          "value": "2K",
+          "status": "active",
+          "kind": "fact",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "428d674e-e425-4a93-9029-ae057155346b",
+            "quote": "通过需求面板修改：预算改为7500（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；游戏或软件改为[\n                \"黑神话:悟空\"\n              ]（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；补充要求改为\"{\\\"schema_version\\\":1,\\\"base_build_ref\\\":\\\"base_a\\\",\\\"intent\\\":\\\"adjust_budget\\\",\\\"budget_delta_cny\\\":-500,\\\"locked_categories\\\":[\\\"gpu\\\"]}\"（补充说明）；补充要求改为\"必须保留原方案配件：gpu\"（配置条件，必须满足）"
+          }
+        },
+        "use_case.titles": {
+          "value": [
+            "黑神话:悟空"
+          ],
+          "status": "active",
+          "kind": "fact",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "428d674e-e425-4a93-9029-ae057155346b",
+            "quote": "通过需求面板修改：预算改为7500（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；游戏或软件改为[\n                \"黑神话:悟空\"\n              ]（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；补充要求改为\"{\\\"schema_version\\\":1,\\\"base_build_ref\\\":\\\"base_a\\\",\\\"intent\\\":\\\"adjust_budget\\\",\\\"budget_delta_cny\\\":-500,\\\"locked_categories\\\":[\\\"gpu\\\"]}\"（补充说明）；补充要求改为\"必须保留原方案配件：gpu\"（配置条件，必须满足）"
+          }
+        },
+        "use_case.type": {
+          "value": "gaming",
+          "status": "active",
+          "kind": "fact",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "428d674e-e425-4a93-9029-ae057155346b",
+            "quote": "通过需求面板修改：预算改为7500（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；游戏或软件改为[\n                \"黑神话:悟空\"\n              ]（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；补充要求改为\"{\\\"schema_version\\\":1,\\\"base_build_ref\\\":\\\"base_a\\\",\\\"intent\\\":\\\"adjust_budget\\\",\\\"budget_delta_cny\\\":-500,\\\"locked_categories\\\":[\\\"gpu\\\"]}\"（补充说明）；补充要求改为\"必须保留原方案配件：gpu\"（配置条件，必须满足）"
+          }
+        }
+      },
+      "alternatives": [],
+      "changes": [],
+      "history": []
+    },
+    "base_draft": {
+      "build_ref": "base_a",
+      "selection": {
+        "cpu": "cpu-r5-7600",
+        "gpu": "gpu-sapphire-7700xt-pulse",
+        "psu": "psu-msi-mag-a650bn",
+        "ssd": [
+          {
+            "sku": "ssd-adata-legend800-1tb",
+            "quantity": 1
+          }
+        ],
+        "case": "case-montech-air-903-max",
+        "cooler": "cooler-deepcool-ak620",
+        "memory": "mem-team-delta-32-6000-white",
+        "motherboard": "mb-msi-pro-a620m-e"
+      },
+      "schema_version": 1,
+      "requirement_ref": "historical-fixture"
+    }
+  },
+  "catalog_file": "../planningeval/testdata/legacy-retrieval-recheck-20260915/suite.json",
+  "catalog_sha256": "7c5c11e40287d70f63b0085ed40715078fa3716b2d3db9ef00a2ea16c8bdf6bb",
+  "responses": [
+    {
+      "parts": [
+        {
+          "functionCall": {
+            "id": "call_de24b9a298824d0684152ae9",
+            "args": {
+              "action": "search_local_batch",
+              "payload": "{\"queries\": [{\"category\": \"memory\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"motherboard\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"cpu\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"cooler\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"case\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"ssd\", \"order_by\": \"price_asc\", \"limit\": 8}]}"
+            },
+            "name": "planning_action"
+          }
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "functionCall": {
+            "id": "call_07aea1149a314735b22e4d6a",
+            "args": {
+              "action": "evaluate",
+              "payload": "{\"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal_budget_7500_v1\", \"selection\": {\"cpu\": \"cpu-r5-7500f\", \"gpu\": \"gpu-sapphire-7700xt-pulse\", \"motherboard\": \"mb-msi-pro-a620m-e\", \"memory\": \"mem-kingston-beast-16-6000\", \"ssd\": [{\"sku\": \"ssd-zhitai-ti600-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"R5 7500F同为AM5平台，游戏性能接近7600且便宜约700元，保留原主板兼容；无核显但用户有独显不影响\", \"gpu\": \"用户锁定必须保留RX 7700 XT\", \"motherboard\": \"沿用原MSI PRO A620M-E，与7500F兼容且已是目录最低AM5板\", \"memory\": \"降为16GB DDR5-6000以压缩预算；容量减半但频率不变，满足黑神话2K基本需求\", \"ssd\": \"换致态Ti600 1TB NVMe，价格已知且较原无价项可控\", \"psu\": \"沿用650W铜牌，7700 XT+7500F功耗在安全范围\", \"case\": \"换AP201节省机箱开支，支持mATX及338mm显卡长度足够\", \"cooler\": \"7500F TDP 65W，AG400散热足够且大幅降价\"}}}"
+            },
+            "name": "planning_action"
+          }
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "functionCall": {
+            "id": "call_779f8a890e6e4c10a682a360",
+            "args": {
+              "action": "search_local",
+              "payload": "{\"category\": \"memory\", \"query\": \"DDR5 16GB 2x8GB\", \"order_by\": \"price_asc\", \"limit\": 8}"
+            },
+            "name": "planning_action"
+          }
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "functionCall": {
+            "id": "call_2e125582d0e743b98b0dc234",
+            "args": {
+              "action": "evaluate",
+              "payload": "{\"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal_budget_7500_v2\", \"selection\": {\"cpu\": \"cpu-r5-7500f\", \"gpu\": \"gpu-sapphire-7700xt-pulse\", \"motherboard\": \"mb-msi-pro-a620m-e\", \"memory\": \"mem-kingston-beast-16-5200\", \"ssd\": [{\"sku\": \"ssd-zhitai-ti600-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"R5 7500F为AM5平台最低价游戏CPU，与7700 XT搭配打黑神话2K可行；无核显但有独显不影响\", \"gpu\": \"用户锁定必须保留RX 7700 XT\", \"motherboard\": \"沿用MSI PRO A620M-E，兼容7500F且已是目录最低AM5板\", \"memory\": \"选目录最便宜DDR5 16GB套装（5200 CL40），容量减半、频率略降以压缩预算；仍满足黑神话2K基本需求\", \"ssd\": \"致态Ti600 1TB NVMe价格已知且性能足够\", \"psu\": \"650W铜牌对7500F+7700 XT负载余量充足\", \"case\": \"AP201支持mATX及338mm显卡，节省机箱开支\", \"cooler\": \"AG400解热220W远超7500F TDP，性价比高于AK620\"}}}"
+            },
+            "name": "planning_action"
+          }
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "text": "当前目录中DDR5内存最低价为2379元（16GB），即使搭配最便宜的AM5 CPU和配件，总价仍达8596元，远超7500预算。要满足预算需换用DDR4平台（如R5 5600+B550M+DDR4），但这意味着放弃原方案的AM5平台和DDR5内存。由于用户仅锁定GPU，其他配件可调整，但平台切换属于重大取舍，需确认是否接受。\n\n{\n  \"outcome\": \"clarify\",\n  \"reply\": \"在保留RX 7700 XT的前提下，当前目录中AM5+DDR5平台最低配置总价约8596元，无法压到7500元以内。若必须控制在7500内，需切换到AM4+DDR4平台（例如R5 5600 + B550M + DDR4-3200 16GB），预计可满足预算且兼容7700 XT，但会失去AM5升级潜力和DDR5带宽优势。请确认：1）是否接受降至AM4/DDR4平台以达成7500预算；或2）是否可将预算上调至约8600元以保留AM5/DDR5方案。\",\n  \"draft\": null,\n  \"assessments\": [\n    {\n      \"field\": \"budget_cny\",\n      \"status\": \"unmet\",\n      \"explanation\": \"保留GPU锁定时，AM5+DDR5最低可行配置总价8596元，超出7500预算1096元；目录无更低价DDR5内存或AM5 CPU可进一步压缩\",\n      \"evidence\": [\"local:mem-kingston-beast-16-5200\", \"local:cpu-r5-7500f\", \"local:mb-msi-pro-a620m-e\"]\n    },\n    {\n      \"field\": \"free.locked_parts\",\n      \"status\": \"met\",\n      \"explanation\": \"所有候选方案均保留gpu-sapphire-7700xt-pulse\",\n      \"evidence\": [\"local:gpu-sapphire-7700xt-pulse\"]\n    },\n    {\n      \"field\": \"use_case.titles\",\n      \"status\": \"unknown\",\n      \"explanation\": \"黑神话悟空2K性能依赖具体画质设置，7700 XT+7500F/R5 5600组合方向合理但无实测数据保证帧率\",\n      \"evidence\": []\n    }\n  ],\n  \"issues\": [\n    \"7500预算与保留7700 XT+AM5/DDR5平台存在硬性冲突，需用户决定降平台或提预算\"\n  ],\n  \"assumptions\": [\n    \"用户未明确禁止平台切换，仅锁定GPU\",\n    \"黑神话悟空2K游玩为软性目标，非必须达到特定帧率\"\n  ]\n}"
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "functionCall": {
+            "id": "call_4d870683e46e40f4b85394c5",
+            "args": {
+              "action": "evaluate",
+              "payload": "{\"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal_budget_7500_v3_am4\", \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-7700xt-pulse\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-crucial-ballistix-16-3200\", \"ssd\": [{\"sku\": \"ssd-zhitai-ti600-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"R5 5600为AM4平台性价比游戏CPU，搭配7700 XT打黑神话2K可行；切换AM4以达成7500预算\", \"gpu\": \"用户锁定必须保留RX 7700 XT\", \"motherboard\": \"B550M PRO-VDH WIFI支持R5 5600且带WiFi，价格低于A620M\", \"memory\": \"DDR4-3200 16GB为目录最低价位内存，满足AM4平台需求\", \"ssd\": \"致态Ti600 1TB NVMe兼容B550M M.2槽位\", \"psu\": \"650W铜牌对5600+7700 XT负载余量充足\", \"case\": \"AP201支持mATX及338mm显卡长度足够\", \"cooler\": \"AG400解热220W远超5600 TDP，性价比高\"}}}"
+            },
+            "name": "planning_action"
+          }
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "text": "{\n  \"outcome\": \"proposal\",\n  \"reply\": \"已切换至AM4+DDR4平台以满足7500预算并保留RX 7700 XT。新方案总价6754元，低于预算746元，所有兼容性校验通过。主要调整：CPU换为R5 5600，主板换B550M PRO-VDH WIFI（带WiFi），内存降为DDR4-3200 16GB，散热和机箱选用高性价比型号。该配置可运行黑神话悟空2K，但具体帧率取决于画质设置；AM4平台无后续CPU升级空间，如需保留AM5潜力需上调预算至约8600元。\",\n  \"draft\": {\n    \"schema_version\": 1,\n    \"requirement_ref\": \"current\",\n    \"build_ref\": \"proposal_budget_7500_v3_am4\",\n    \"selection\": {\n      \"cpu\": \"cpu-r5-5600\",\n      \"gpu\": \"gpu-sapphire-7700xt-pulse\",\n      \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\",\n      \"memory\": \"mem-crucial-ballistix-16-3200\",\n      \"ssd\": [{\"sku\": \"ssd-zhitai-ti600-1tb\", \"quantity\": 1}],\n      \"psu\": \"psu-msi-mag-a650bn\",\n      \"case\": \"case-asus-prime-ap201\",\n      \"cooler\": \"cooler-deepcool-ag400\"\n    },\n    \"rationale\": {\n      \"cpu\": \"R5 5600为AM4平台性价比游戏CPU，搭配7700 XT打黑神话2K可行；切换AM4以达成7500预算\",\n      \"gpu\": \"用户锁定必须保留RX 7700 XT\",\n      \"motherboard\": \"B550M PRO-VDH WIFI支持R5 5600且带WiFi，价格低于A620M\",\n      \"memory\": \"DDR4-3200 16GB为目录最低价位内存，满足AM4平台需求\",\n      \"ssd\": \"致态Ti600 1TB NVMe兼容B550M M.2槽位\",\n      \"psu\": \"650W铜牌对5600+7700 XT负载余量充足\",\n      \"case\": \"AP201支持mATX及338mm显卡长度足够\",\n      \"cooler\": \"AG400解热220W远超5600 TDP，性价比高\"\n    }\n  },\n  \"assessments\": [\n    {\n      \"field\": \"budget_cny\",\n      \"status\": \"met\",\n      \"explanation\": \"总价6754元，低于7500元预算上限\",\n      \"evidence\": [\"local:cpu-r5-5600\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-crucial-ballistix-16-3200\"]\n    },\n    {\n      \"field\": \"free.locked_parts\",\n      \"status\": \"met\",\n      \"explanation\": \"保留gpu-sapphire-7700xt-pulse未更换\",\n      \"evidence\": [\"local:gpu-sapphire-7700xt-pulse\"]\n    },\n    {\n      \"field\": \"use_case.titles\",\n      \"status\": \"unknown\",\n      \"explanation\": \"R5 5600+7700 XT组合方向适合黑神话悟空2K，但无实测数据保证特定帧率或画质表现\",\n      \"evidence\": []\n    },\n    {\n      \"field\": \"use_case.resolution\",\n      \"status\": \"met\",\n      \"explanation\": \"7700 XT定位2K游戏显卡，搭配5600可满足2K分辨率基本需求\",\n      \"evidence\": [\"local:gpu-sapphire-7700xt-pulse\"]\n    }\n  ],\n  \"issues\": [],\n  \"assumptions\": [\n    \"用户接受从AM5/DDR5降至AM4/DDR4平台以达成预算目标\",\n    \"黑神话悟空2K游玩为软性目标，不要求特定帧率保证\"\n  ]\n}"
+        }
+      ],
+      "role": "model"
+    }
+  ],
+  "note": "Seven unchanged real responses: clarification on 5, actual review, evaluate AM4 on 6, deliver on 7. Delivery does not verify performance/upgrade claims in prose."
+}

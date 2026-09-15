@@ -34,6 +34,9 @@ type RequirementField struct {
 	Scope    string             `json:"scope,omitempty"`
 	Source   *RequirementSource `json:"source,omitempty"`
 	Previous *RequirementField  `json:"previous,omitempty"`
+	// DerivedFrom links an ownership update to its category/model counterpart,
+	// so restoring a temporary exception does not overwrite a later direct edit.
+	DerivedFrom string `json:"derived_from,omitempty"`
 }
 
 type RequirementAlternative struct {
@@ -126,7 +129,7 @@ func DecodeRequirementUpdate(raw []byte) (RequirementUpdate, error) {
 }
 
 // ApplyRequirementUpdate 是聊天和界面编辑的唯一 reducer。完整校验成功才返回新状态，
-// 未出现的字段永远保持；传入值不被修改，可直接保留为已确认快照。
+// 未出现的字段保持，仅联动已有件品类与型号；传入值不被修改，可保留为已确认快照。
 func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, source RequirementSource) (RequirementState, error) {
 	if source.Kind != "chat" && source.Kind != "edit" {
 		return state, fmt.Errorf("requirement source: kind 仅允许 chat 或 edit")
@@ -249,31 +252,8 @@ func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, so
 		default:
 			return state, fmt.Errorf("requirement update: 未知操作 %q", op.Op)
 		}
-		next.Fields[op.Field] = after
-		if op.Op != "alternative" && op.Op != "conflict" {
-			for i := range next.Observations {
-				if next.Observations[i].Field == op.Field {
-					next.Observations[i].Resolved = true
-				}
-			}
-		}
-		change := RequirementChange{Revision: next.Revision, Op: op.Op, Field: op.Field, Before: &before, After: &after, Source: evidence}
-		next.Changes = append(next.Changes, change)
-		next.History = append(next.History, change)
-		// 撤销整个已有件事实时，型号也不再有效；仅撤回型号时仍保留已知品类。
-		if op.Op == "remove" && op.Field == "existing_parts" {
-			ownedBefore := next.Fields["owned_parts"]
-			ownedAfter := RequirementField{Status: "removed", Source: &evidence}
-			next.Fields["owned_parts"] = ownedAfter
-			for i := range next.Observations {
-				if next.Observations[i].Field == "owned_parts" {
-					next.Observations[i].Resolved = true
-				}
-			}
-			ownedChange := RequirementChange{Revision: next.Revision, Op: "remove", Field: "owned_parts", Before: &ownedBefore, After: &ownedAfter, Source: evidence}
-			next.Changes = append(next.Changes, ownedChange)
-			next.History = append(next.History, ownedChange)
-		}
+		recordRequirementChange(&next, op.Field, op.Op, before, after, evidence)
+		syncOwnershipFields(&next, op, after, evidence)
 	}
 	if len(update.Observations) > 32 {
 		return state, fmt.Errorf("requirement update: observations 最多 32 项")

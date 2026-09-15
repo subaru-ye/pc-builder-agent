@@ -69,8 +69,8 @@ kind 与 strength 独立：fact 表示用途、工作负载、已有件、装机
 字段与值（必须采用以下点路径）：
 budget_cny 正整数整机或新增采购预算；budget_flex 非负比例，仅明确预算弹性才给，严格不超可设0，未说不能填默认0.1；budget_basis new_purchase|full_build，仅明确费用口径且不得由“其他都要新买”推断。
 use_case.type gaming|productivity|general；普通办公为general；use_case.titles 字符串数组；use_case.resolution 1080p|2K|4K，只取明确分辨率；use_case.fps_target 正整数。
-existing_parts 已有主机品类数组(cpu/gpu/motherboard/memory/ssd/psu/case/cooler)，显示器不属于主机品类；owned_parts 数组[{category,model,quantity}]，准确型号原话记录，不猜SKU。修改某已有件时提交合并其他已有件后的数组，型号更正替换原件；未提供准确型号时保留existing_parts及自由条目中的简称，由Builder先检索比较，只有影响当前决定且无法检索确定的信息才追问。
-用户某件不再复用时必须同步从existing_parts和owned_parts移除该件，保留其他已有件；用户撤销全部已有件时remove existing_parts即可。仅说型号不确定时remove owned_parts，已有配件品类仍有效。
+existing_parts 已有主机品类数组(cpu/gpu/motherboard/memory/ssd/psu/case/cooler)，显示器不属于主机品类；owned_parts 数组[{category,model,quantity}]，准确型号原话记录，不猜SKU。准确型号所带category由服务端同步补入existing_parts，不必为此重复提交品类。修改某已有件时提交合并其他已有件后的数组，型号更正替换原件；未提供准确型号时只记录已知品类及自由条目中的简称，不提交model:null或空型号，由Builder先检索比较，只有影响当前决定且无法检索确定的信息才追问。
+用户某件不再复用时从existing_parts数组移除该品类并保留其他品类，服务端同步移除对应型号；用户撤销全部已有件时remove existing_parts即可。仅说型号不确定时remove owned_parts，已有配件品类仍有效。临时例外用scope=temporary，恢复用restore；服务端同步相关型号，不要再重发旧数组覆盖后来更正。
 brand_pref.cpu any|amd|intel；brand_pref.gpu any|amd|nvidia；已有件型号的品牌不等于购买品牌偏好。未提品牌不能填any，any仅代表用户明确不限。
 noise_pref silent|normal|any；size_pref atx|matx|itx|any；appearance 外观原话字符串；recipient 装机对象（如给朋友）字符串；notes 仅保留无法独立表达的补充背景，kind=context。可独立修改的用途事实和条件使用已有结构字段或free.*；处理历史notes时保留其中仍有效内容，移除明确撤销的部分，不把结构字段复制进notes，防止撤销后残留。
 priority 硬件优先品类数组，仅允许cpu/gpu/motherboard/memory/ssd/psu/case/cooler，不能用来表示静音或颜值。

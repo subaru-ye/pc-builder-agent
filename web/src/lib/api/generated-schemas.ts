@@ -92,6 +92,7 @@ const RequirementField: z.ZodType<components["schemas"]["RequirementField"]> = z
     scope: z.enum(["session", "temporary"]).optional(),
     source: RequirementSource.optional(),
     previous: RequirementField.optional(),
+    derived_from: z.enum(["existing_parts", "owned_parts"]).optional(),
   })
 );
 const RequirementAlternative = z.object({

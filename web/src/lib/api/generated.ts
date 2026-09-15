@@ -705,6 +705,11 @@ export interface components {
             scope?: "session" | "temporary";
             source?: components["schemas"]["RequirementSource"];
             previous?: components["schemas"]["RequirementField"];
+            /**
+             * @description 服务端已有件品类与型号的联动来源；用于临时恢复，不接受客户端指定。
+             * @enum {string}
+             */
+            derived_from?: "existing_parts" | "owned_parts";
         };
         RequirementOperation: {
             /** @enum {string} */

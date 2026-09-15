@@ -936,6 +936,10 @@ components:
         scope: {type: string, enum: [session, temporary]}
         source: {$ref: "#/components/schemas/RequirementSource"}
         previous: {$ref: "#/components/schemas/RequirementField"}
+        derived_from:
+          type: string
+          enum: [existing_parts, owned_parts]
+          description: 服务端已有件品类与型号的联动来源；用于临时恢复，不接受客户端指定。
     RequirementOperation:
       type: object
       additionalProperties: false

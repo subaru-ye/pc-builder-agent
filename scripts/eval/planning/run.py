@@ -1,4 +1,4 @@
-"""Offline evaluation in a dedicated container; never uses shared DB or .env."""
+"""Dedicated evaluation database; offline by default, explicit pinned live models."""
 import argparse
 import hashlib
 import json
@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--out', required=True)
     parser.add_argument('--suite', default='internal/planningeval/testdata/v2.0.json')
     parser.add_argument('--go-tests', nargs='+', help='Run existing Go tests in the same isolated database container')
+    parser.add_argument('--test-timeout', default='10m', help='Go test timeout; offline interactive browser runs may explicitly use 30m')
     parser.add_argument('--intake-packet', help='Rehearse a reviewed intake using its real files in the isolated database')
     parser.add_argument('--live', action='store_true', help='Explicit real chat models; web remains offline')
     parser.add_argument('--max-calls', type=int, default=0, help='Positive shared cap required with --live')
@@ -59,7 +60,7 @@ def main():
                     raise ValueError('Go test packages must be relative package paths')
                 env['PG_TEST_DSN'] = env['PLANNING_EVAL_DSN']
                 out.mkdir(parents=True)
-                result = subprocess.run(['go', 'test', '-count=1', '-p', '1', *args.go_tests], cwd=ROOT, env=env, capture_output=True, text=True, encoding='utf-8')
+                result = subprocess.run(['go', 'test', '-count=1', '-p', '1', '-timeout', args.test_timeout, *args.go_tests], cwd=ROOT, env=env, capture_output=True, text=True, encoding='utf-8')
                 (out / 'tests.log').write_bytes((result.stdout + result.stderr).encode('utf-8'))
                 print(result.stdout + result.stderr)
             else:
@@ -81,6 +82,7 @@ def main():
                     'max_model_requests': args.max_calls,
                     'exit_code': result.returncode,
                     'go_tests': args.go_tests,
+                    'test_timeout': args.test_timeout if args.go_tests else None,
                     'intake_packet': args.intake_packet,
                 }
                 (out / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')

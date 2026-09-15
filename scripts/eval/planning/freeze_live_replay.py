@@ -33,6 +33,12 @@ def main():
                         raise ValueError("Multiple Screening responses are not supported")
                     parts = trace["response"]["parts"]
                     text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+                    # Product Screening accepts one fenced JSON payload too.
+                    # Preserve the raw response in the source run; this fixture
+                    # stores the parsed protocol object consumed by the reducer.
+                    text = text.strip()
+                    if text.startswith("```json\n") and text.endswith("```"):
+                        text = text[len("```json\n"):-3].strip()
                     step["screen_oracle"] = json.loads(text)
                 elif trace["role"] == "builder":
                     step.setdefault("builder_oracle", []).append(trace["response"])

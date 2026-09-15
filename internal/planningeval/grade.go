@@ -208,6 +208,8 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 			a, ea := schemas.DecodeBuildDraft(r.Result.Draft)
 			b, eb := schemas.DecodeBuildDraft(previous.Result.Draft)
 			a.Selection.CPU = b.Selection.CPU
+			// Each new draft may have its own reference; it is not a part.
+			a.Selection.BuildRef = b.Selection.BuildRef
 			ok = ea == nil && eb == nil && reflect.DeepEqual(a.Selection, b.Selection)
 		}
 		check("preserved_other_parts", ok, "")

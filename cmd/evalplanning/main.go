@@ -1,5 +1,5 @@
 // evalplanning runs the current product flow in a fresh isolated database.
-// It does not load project credentials; the default model is an offline oracle.
+// Offline is the default; only explicit live modes load pinned model settings.
 package main
 
 import (

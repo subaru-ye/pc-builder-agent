@@ -129,3 +129,36 @@ func TestCPUChangeRequiresDifferentSelectionAndPreviousDraft(t *testing.T) {
 		}
 	}
 }
+
+func TestPreservedPartsIgnoreNewReferenceButDetectHardwareChanges(t *testing.T) {
+	raw, err := os.ReadFile("../planning/testdata/budget_accounting_recording.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved struct{ Result planning.Result }
+	if err := json.Unmarshal(raw, &saved); err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range []string{"cpu_only", "memory", "quantity"} {
+		var draft map[string]any
+		if err := json.Unmarshal(saved.Result.Draft, &draft); err != nil {
+			t.Fatal(err)
+		}
+		draft["build_ref"] = "new-upgrade-draft"
+		parts := draft["selection"].(map[string]any)
+		parts["cpu"] = "cpu-r7-5700x"
+		if change == "memory" {
+			parts["memory"] = "mem-other"
+		} else if change == "quantity" {
+			parts["ssd"].([]any)[0].(map[string]any)["quantity"] = 2
+		}
+		encoded, _ := json.Marshal(draft)
+		r := StepRecord{Result: &planning.Result{Draft: encoded}}
+		Grade(&r, Expect{PreserveOtherParts: true}, &StepRecord{Result: &saved.Result})
+		for _, c := range r.Checks {
+			if c.Name == "preserved_other_parts" && c.Pass != (change == "cpu_only") {
+				t.Fatalf("wrong part preservation grade for %s: %+v", change, c)
+			}
+		}
+	}
+}

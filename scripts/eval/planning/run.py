@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[3]
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--out', required=True)
-    parser.add_argument('--suite', default='internal/planningeval/testdata/v2.0.json')
+    parser.add_argument('--suite', default='internal/planningeval/testdata/proposal-review-20260915/suite.json')
     parser.add_argument('--go-tests', nargs='+', help='Run existing Go tests in the same isolated database container')
     parser.add_argument('--test-timeout', default='10m', help='Go test timeout; offline interactive browser runs may explicitly use 30m')
     parser.add_argument('--intake-packet', help='Rehearse a reviewed intake using its real files in the isolated database')

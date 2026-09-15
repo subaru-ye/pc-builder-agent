@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	suitePath := flag.String("suite", "internal/planningeval/testdata/v2.0.json", "frozen planning suite")
+	suitePath := flag.String("suite", "internal/planningeval/testdata/proposal-review-20260915/suite.json", "frozen planning suite")
 	out := flag.String("out", "", "new output directory")
 	mode := flag.String("mode", "check", "check, replay, plan-live (zero calls), or live (explicit bounded provider calls)")
 	maxCalls := flag.Int("max-calls", 0, "required positive shared model request ceiling for live")

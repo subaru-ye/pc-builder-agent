@@ -16,7 +16,7 @@ import (
 
 func frozen(t *testing.T) ([]byte, Suite) {
 	t.Helper()
-	b, err := os.ReadFile("testdata/v2.0.json")
+	b, err := os.ReadFile("testdata/proposal-review-20260915/suite.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func frozen(t *testing.T) ([]byte, Suite) {
 
 func TestFrozenSuiteAndDrift(t *testing.T) {
 	b, s := frozen(t)
-	p, err := os.ReadFile("testdata/provenance.json")
+	p, err := os.ReadFile("testdata/proposal-review-20260915/provenance.json")
 	if err != nil {
 		t.Fatal(err)
 	}

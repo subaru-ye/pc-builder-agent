@@ -3,6 +3,7 @@ package planning
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"reflect"
 	"testing"
 
@@ -149,5 +150,103 @@ func TestInvalidLocalBatchDoesNotRunQueries(t *testing.T) {
 		if response["error"] == nil || len(x.seen) != 0 || len(x.result.StageMS) != 0 {
 			t.Fatalf("invalid batch ran: %+v", response)
 		}
+	}
+}
+
+func TestPriceOrderingAndRangeKeepUnpricedAlternatives(t *testing.T) {
+	price := func(value string) *string { return &value }
+	candidates := []Candidate{
+		{ID: "target", Category: schemas.CategoryMemory, Model: "DDR5", Price: price("100.00")},
+		{ID: "cheap", Category: schemas.CategoryMemory, Model: "DDR4", Price: price("9.99")},
+		{ID: "high-a", Category: schemas.CategoryMemory, Price: price("9007199254740993.01")},
+		{ID: "high-b", Category: schemas.CategoryMemory, Price: price("9007199254740993.02")},
+		{ID: "unknown", Category: schemas.CategoryMemory},
+		{ID: "outside", Category: schemas.CategoryCPU, Price: price("1.00")},
+	}
+	for _, tc := range []struct {
+		order string
+		ids   []string
+	}{
+		{"relevance", []string{"target", "cheap", "high-a", "high-b", "unknown"}},
+		{"price_asc", []string{"cheap", "target", "high-a", "high-b", "unknown"}},
+		{"price_desc", []string{"high-b", "high-a", "target", "cheap", "unknown"}},
+	} {
+		x := execution{candidates: candidates, seen: map[string]bool{}}
+		payload, _ := json.Marshal(map[string]any{"category": "memory", "query": "DDR5", "order_by": tc.order})
+		response := x.call(context.Background(), map[string]any{"action": "search_local", "payload": string(payload)})
+		ids := []string{}
+		for _, candidate := range response["candidates"].([]Candidate) {
+			ids = append(ids, candidate.ID)
+		}
+		if !reflect.DeepEqual(ids, tc.ids) {
+			t.Fatalf("%s order=%v", tc.order, ids)
+		}
+		rangeInfo := response["price_range_cny"].(map[string]any)
+		if *rangeInfo["min"].(*string) != "9.99" || *rangeInfo["max"].(*string) != "9007199254740993.02" || rangeInfo["priced_count"] != 4 || rangeInfo["unknown_count"] != 1 {
+			t.Fatalf("wrong category-wide range: %+v", rangeInfo)
+		}
+	}
+}
+
+func TestRecordedExpensiveMemoryQueryCanExploreAnotherPlatform(t *testing.T) {
+	raw, err := os.ReadFile("../planningeval/testdata/legacy-retrieval-recheck-20260915/suite.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var suite struct {
+		Catalog struct{ Candidates []Candidate }
+	}
+	if err = json.Unmarshal(raw, &suite); err != nil {
+		t.Fatal(err)
+	}
+	x := execution{candidates: suite.Catalog.Candidates, seen: map[string]bool{}}
+	// Keep the failed real query's words. Only request price ordering; the
+	// service must not infer a DDR5 requirement or hide another platform.
+	response := x.call(context.Background(), map[string]any{"action": "search_local", "payload": `{"category":"memory","query":"DDR5 32GB 6000 CL30 价格低","order_by":"price_asc","limit":1}`})
+	found := response["candidates"].([]Candidate)
+	if len(found) != 1 || found[0].Price == nil || *found[0].Price != "569.0" && *found[0].Price != "569" {
+		t.Fatalf("cheaper real candidate missing: %+v", found)
+	}
+	var specs struct{ Generation string }
+	if json.Unmarshal(found[0].Specs, &specs) != nil || specs.Generation != "ddr4" {
+		t.Fatalf("unrequested platform filter applied: %+v", found)
+	}
+	if response["total"] != 21 || response["truncated"] != 20 {
+		t.Fatalf("catalog paths removed: %+v", response)
+	}
+}
+
+func TestBatchPreservesIndependentPriceOrderAndNullRange(t *testing.T) {
+	value := "10.00"
+	catalog := recordedCatalog{store.CatalogSnapshot{Candidates: []store.Candidate{
+		{SKU: "priced", Category: schemas.CategoryCPU, PriceCNY: &value},
+		{SKU: "unpriced", Category: schemas.CategoryCPU},
+		{SKU: "only-unknown", Category: schemas.CategoryMemory},
+	}}}
+	m := &scriptedModel{respond: func(n int, req *model.LLMRequest) *genai.Content {
+		if n == 1 {
+			return function("search_local_batch", `{"queries":[{"category":"cpu","order_by":"price_desc","limit":1},{"category":"memory","order_by":"price_asc"},{"category":"gpu","order_by":"price_asc"}]}`)
+		}
+		results := req.Contents[len(req.Contents)-1].Parts[0].FunctionResponse.Response["results"].([]map[string]any)
+		first := results[0]["result"].(map[string]any)
+		if first["candidates"].([]Candidate)[0].ID != "priced" || first["order_by"] != "price_desc" {
+			t.Fatal("batch ignored ordering")
+		}
+		for _, item := range results[1:] {
+			rangeInfo := item["result"].(map[string]any)["price_range_cny"].(map[string]any)
+			if rangeInfo["min"].(*string) != nil || rangeInfo["max"].(*string) != nil || rangeInfo["priced_count"] != 0 {
+				t.Fatal("unknown price became zero")
+			}
+		}
+		return genai.NewContentFromText(`{"outcome":"collect","reply":"保留不同路径供比较","issues":[]}`, genai.RoleModel)
+	}}
+	result, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), schemas.PlanningInput{SchemaVersion: 2, State: schemas.NewRequirementState()})
+	if err != nil || result.ToolCalls != 3 || result.ModelCalls != 2 {
+		t.Fatalf("extra calls: %+v %v", result, err)
+	}
+	x := execution{seen: map[string]bool{}}
+	response := x.call(context.Background(), map[string]any{"action": "search_local", "payload": `{"order_by":"cheapest"}`})
+	if response["error"] == nil {
+		t.Fatal("invalid order silently accepted")
 	}
 }

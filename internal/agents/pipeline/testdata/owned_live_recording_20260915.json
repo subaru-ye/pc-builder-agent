@@ -1,0 +1,32 @@
+{
+  "source_report": "artifacts\\planning-legacy-screening-current-20260915-r1\\report.json",
+  "source_sha256": "0eebe12461340b18a125531f9e470356873684df15da2f666301893a468b7c16",
+  "mode": "saved_real_output_replay_no_live_calls",
+  "cases": [
+    {
+      "id": "L4-214",
+      "steps": [
+        {
+          "message": "配日常办公主机，我已有一颗 AMD Ryzen 5 7600 CPU，其他配件都需要新买。预算只算新增购买费用，金额还没告诉你。",
+          "raw_response": "{\"operations\":[{\"op\":\"set\",\"field\":\"use_case.type\",\"value\":\"general\",\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"配日常办公主机\"},{\"op\":\"set\",\"field\":\"owned_parts\",\"value\":[{\"category\":\"cpu\",\"model\":\"AMD Ryzen 5 7600\",\"quantity\":1}],\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"我已有一颗 AMD Ryzen 5 7600 CPU\"},{\"op\":\"set\",\"field\":\"budget_basis\",\"value\":\"new_purchase\",\"kind\":\"constraint\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"预算只算新增购买费用\"}],\"observations\":[{\"field\":\"budget_cny\",\"quote\":\"金额还没告诉你\",\"reason\":\"用户明确表示稍后提供预算金额\"}],\"next_action\":\"confirm\",\"reply\":\"已记录办公用途、已有AMD Ryzen 5 7600 CPU，以及预算按新增采购计算。预算金额可稍后补充，请核对需求面板后开始选配。\"}",
+          "expected_model": "AMD Ryzen 5 7600"
+        }
+      ]
+    },
+    {
+      "id": "L5-308",
+      "steps": [
+        {
+          "message": "办公电脑，新增购买预算6000元，已有一颗 AMD Ryzen 5 7600。",
+          "raw_response": "{\"operations\":[{\"op\":\"set\",\"field\":\"use_case.type\",\"value\":\"general\",\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"办公电脑\"},{\"op\":\"set\",\"field\":\"budget_cny\",\"value\":6000,\"kind\":\"constraint\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"新增购买预算6000元\"},{\"op\":\"set\",\"field\":\"budget_basis\",\"value\":\"new_purchase\",\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"新增购买预算6000元\"},{\"op\":\"set\",\"field\":\"owned_parts\",\"value\":[{\"category\":\"cpu\",\"model\":\"AMD Ryzen 5 7600\",\"quantity\":1}],\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"已有一颗 AMD Ryzen 5 7600\"}],\"next_action\":\"confirm\",\"reply\":\"已记录办公用途、6000元新增预算和已有的 AMD Ryzen 5 7600，请核对需求面板后开始选配。\"}",
+          "expected_model": "AMD Ryzen 5 7600"
+        },
+        {
+          "message": "我看错了，实际已有CPU是一颗 Intel Core i5-12400F，请以这个型号为准。",
+          "raw_response": "{\"operations\":[{\"op\":\"set\",\"field\":\"owned_parts\",\"value\":[{\"category\":\"cpu\",\"model\":\"Intel Core i5-12400F\",\"quantity\":1}],\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"实际已有CPU是一颗 Intel Core i5-12400F，请以这个型号为准。\"}],\"next_action\":\"confirm\",\"reply\":\"已更新已有CPU为 Intel Core i5-12400F，其余记录保持不变，请核对需求面板后开始选配。\"}",
+          "expected_model": "Intel Core i5-12400F"
+        }
+      ]
+    }
+  ]
+}

@@ -617,6 +617,7 @@ func copyFieldMap(input map[string]string) map[string]string {
 }
 
 func (x *execution) evaluate(ctx context.Context, raw json.RawMessage) map[string]any {
+	previousDraft, previousValidation, previousQuote := x.result.Draft, x.result.Validation, x.result.Quote
 	draft, e := schemas.DecodeBuildDraft(raw)
 	if e != nil {
 		x.result.Draft = append(json.RawMessage(nil), raw...)
@@ -635,7 +636,21 @@ func (x *execution) evaluate(ctx context.Context, raw json.RawMessage) map[strin
 	x.result.Validation = &result.Report
 	ownedQuote := validate.WithOwnership(result.Quote, x.verifiedOwnership(draft))
 	x.result.Quote = &ownedQuote
-	return map[string]any{"validation": result.Report, "quote": ownedQuote, "instruction": "根据事实继续修复或保存待解决方案，未知不表示市场无解"}
+	feedback := map[string]any{"validation": result.Report, "quote": ownedQuote, "instruction": "根据事实继续修复或保存待解决方案，未知不表示市场无解"}
+	if previous, err := schemas.DecodeBuildDraft(previousDraft); err == nil && previousValidation != nil && previousQuote != nil {
+		// Compare verified facts, not narrative/build IDs. Always re-evaluate:
+		// a selected external candidate may have acquired new specifications.
+		before, after := previous.Selection, draft.Selection
+		before.BuildRef, after.BuildRef = "", ""
+		sameSelection := reflect.DeepEqual(before, after)
+		sameValidation := reflect.DeepEqual(previousValidation.Checks, result.Report.Checks)
+		sameQuote := reflect.DeepEqual(*previousQuote, ownedQuote)
+		feedback["comparison"] = map[string]bool{"same_selection": sameSelection, "same_validation": sameValidation, "same_quote": sameQuote}
+		if sameSelection && sameValidation && sameQuote && result.Report.OverallStatus != schemas.OverallPass {
+			feedback["instruction"] = "与上次相比，选件、核验结果及报价均未变化；重复校验本身不能补齐缺项。可比较已检索的其他候选、追加检索或补充来源，再决定是否调整。由你选择路径，不必坚持原候选；不能声称未知已通过或市场无解。"
+		}
+	}
+	return feedback
 }
 
 // Initial catalog samples can be selected without a search_local call. Preserve

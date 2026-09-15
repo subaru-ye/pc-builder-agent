@@ -236,6 +236,14 @@ func missingRequirementValue(op schemas.RequirementOperation) bool {
 	if len(value) == 0 || bytes.Equal(value, []byte("null")) {
 		return true
 	}
+	// Model protocol sentinel, not a user-language heuristic. Free text can
+	// legitimately be "unknown"; only typed fields have an absent-value meaning.
+	if bytes.Equal(value, []byte(`"unknown"`)) {
+		switch op.Field {
+		case "budget_cny", "budget_flex", "budget_basis", "use_case.type", "use_case.resolution", "use_case.fps_target", "brand_pref.cpu", "brand_pref.gpu", "noise_pref", "size_pref", "existing_parts", "owned_parts", "use_case.titles", "priority":
+			return true
+		}
+	}
 	if op.Field != "owned_parts" {
 		return false
 	}

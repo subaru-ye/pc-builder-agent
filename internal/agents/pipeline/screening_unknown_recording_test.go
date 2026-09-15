@@ -60,22 +60,29 @@ func TestRecordedUnknownInformationIsNotConflict(t *testing.T) {
 }
 
 func TestUnknownValueDoesNotReviveRemovalOrHideCorrection(t *testing.T) {
-	for _, status := range []string{"unknown", "removed", "active", "conflict"} {
-		t.Run(status, func(t *testing.T) {
-			state := schemas.NewRequirementState()
-			state.Fields["use_case.resolution"] = schemas.RequirementField{Status: status, Strength: "must"}
-			if status == "active" {
-				state.Fields["use_case.resolution"] = schemas.RequirementField{Status: status, Strength: "must", Value: json.RawMessage(`"2K"`)}
-			}
-			state = semanticTurn(t, state, "分辨率没确定", `{"operations":[{"op":"set","field":"use_case.resolution","value":null,"evidence":"uncertain","quote":"分辨率没确定"}]}`)
-			expected := status
-			if status == "active" {
-				expected = "conflict"
-			}
-			if state.Fields["use_case.resolution"].Status != expected {
-				t.Fatalf("%s became %s", status, state.Fields["use_case.resolution"].Status)
-			}
-		})
+	for _, value := range []string{"null", `"unknown"`} {
+		for _, status := range []string{"unknown", "removed", "active", "conflict"} {
+			t.Run(value+"/"+status, func(t *testing.T) {
+				state := schemas.NewRequirementState()
+				state.Fields["use_case.resolution"] = schemas.RequirementField{Status: status, Strength: "must"}
+				if status == "active" {
+					state.Fields["use_case.resolution"] = schemas.RequirementField{Status: status, Strength: "must", Value: json.RawMessage(`"2K"`)}
+				}
+				state = semanticTurn(t, state, "分辨率没确定", `{"operations":[{"op":"set","field":"use_case.resolution","value":`+value+`,"evidence":"uncertain","quote":"分辨率没确定"}]}`)
+				expected := status
+				if status == "active" {
+					expected = "conflict"
+				}
+				if state.Fields["use_case.resolution"].Status != expected {
+					t.Fatalf("%s became %s", status, state.Fields["use_case.resolution"].Status)
+				}
+			})
+		}
+	}
+	for _, field := range []string{"notes", "appearance", "recipient", "free.reference"} {
+		if missingRequirementValue(schemas.RequirementOperation{Field: field, Value: json.RawMessage(`"unknown"`)}) {
+			t.Fatalf("free text was treated as a protocol sentinel: %s", field)
+		}
 	}
 	state := semanticTurn(t, schemas.NewRequirementState(), "分辨率在2K和4K之间还没商量好", `{"operations":[{"op":"conflict","field":"use_case.resolution","evidence":"uncertain","quote":"分辨率在2K和4K之间还没商量好"}]}`)
 	if state.Fields["use_case.resolution"].Status != "conflict" {

@@ -5,6 +5,27 @@ import json
 from pathlib import Path
 
 
+def screening_payload(text):
+    """Match pipeline.extractJSONObject, preserving the raw text in its report."""
+    decoder = json.JSONDecoder()
+    fallback = None
+    index = 0
+    while (index := text.find('{', index)) >= 0:
+        try:
+            value, end = decoder.raw_decode(text[index:])
+        except ValueError:
+            index += 1
+            continue
+        if 'schema_version' in value:
+            return value
+        if fallback is None:
+            fallback = value
+        index += end
+    if fallback is None:
+        raise ValueError('No parseable Screening object')
+    return fallback
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", required=True)
@@ -33,13 +54,9 @@ def main():
                         raise ValueError("Multiple Screening responses are not supported")
                     parts = trace["response"]["parts"]
                     text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
-                    # Product Screening accepts one fenced JSON payload too.
-                    # Preserve the raw response in the source run; this fixture
-                    # stores the parsed protocol object consumed by the reducer.
-                    text = text.strip()
-                    if text.startswith("```json\n") and text.endswith("```"):
-                        text = text[len("```json\n"):-3].strip()
-                    step["screen_oracle"] = json.loads(text)
+                    # Use the same object selection as the product, including
+                    # successful responses with prose before a fenced payload.
+                    step["screen_oracle"] = screening_payload(text)
                 elif trace["role"] == "builder":
                     step.setdefault("builder_oracle", []).append(trace["response"])
                 else:

@@ -29,6 +29,9 @@ import (
 type Models struct {
 	Screening, Builder model.LLM
 	MaxCalls           int
+	// Journal runs before a provider request and after each response/step. An
+	// evidence write error stops execution instead of spending without a record.
+	Journal func(any) error
 }
 type gateway struct {
 	mu     sync.Mutex
@@ -81,8 +84,11 @@ func (m *tracedModel) GenerateContent(ctx context.Context, req *model.LLMRequest
 			m.g.mu.Unlock()
 		}()
 		m.g.mu.Lock()
-		m.g.calls++
-		exhausted := m.g.models.MaxCalls > 0 && m.g.calls > m.g.models.MaxCalls
+		exhausted := m.g.models.MaxCalls > 0 && m.g.calls >= m.g.models.MaxCalls
+		if !exhausted {
+			m.g.calls++
+		}
+		call := m.g.calls
 		m.g.mu.Unlock()
 		if exhausted {
 			trace.Error = "evaluation model-call limit reached"
@@ -90,8 +96,18 @@ func (m *tracedModel) GenerateContent(ctx context.Context, req *model.LLMRequest
 			return
 		}
 		if m.live != nil {
+			if err := m.g.journal(map[string]any{"event": "model_request", "call": call, "role": m.role, "request": json.RawMessage(raw)}); err != nil {
+				trace.Error = err.Error()
+				yield(nil, err)
+				return
+			}
 			trace.ProviderCalled = true
 			for response, err := range m.live.GenerateContent(ctx, req, stream) {
+				if journalErr := m.g.journal(map[string]any{"event": "model_response", "call": call, "response": response, "error": fmt.Sprint(err)}); journalErr != nil {
+					trace.Error = journalErr.Error()
+					yield(nil, journalErr)
+					return
+				}
 				if err != nil {
 					trace.Error = err.Error()
 				}
@@ -100,6 +116,8 @@ func (m *tracedModel) GenerateContent(ctx context.Context, req *model.LLMRequest
 					if response.UsageMetadata != nil {
 						n := response.UsageMetadata.TotalTokenCount
 						trace.Tokens = &n
+						input, output := response.UsageMetadata.PromptTokenCount, response.UsageMetadata.CandidatesTokenCount
+						trace.InputTokens, trace.OutputTokens = &input, &output
 					}
 				}
 				if !yield(response, err) {
@@ -117,6 +135,13 @@ func (m *tracedModel) GenerateContent(ctx context.Context, req *model.LLMRequest
 		m.index++
 		yield(&model.LLMResponse{Content: trace.Response}, nil)
 	}
+}
+
+func (g *gateway) journal(value any) error {
+	if g.models.Journal != nil {
+		return g.models.Journal(value)
+	}
+	return nil
 }
 func (g *gateway) ContextAvailable(context.Context, string, string) (bool, error) { return true, nil }
 func (g *gateway) Screen(ctx context.Context, owner, id string, input product.ScreenInput) (product.ScreenResult, error) {

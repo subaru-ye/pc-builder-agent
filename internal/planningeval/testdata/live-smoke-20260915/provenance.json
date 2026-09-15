@@ -1,0 +1,9 @@
+{
+  "suite_sha256": "99fc0269d1cdb277b9868ea42633e9bd99edea2909d4ed0db4c628f3794b3a4f",
+  "snapshot": "artifacts/data-intake-after-memory-case-20260915-r1/database-snapshot.json",
+  "snapshot_sha256": "b5d33609c593193f50861de9dc44613d3b0d3a401cab8a0cad94caa7e7c97f79",
+  "price_snapshot_id": 8,
+  "max_model_requests": 12,
+  "external_requests": 0,
+  "embedding_requests": 0
+}

@@ -3,6 +3,7 @@ package planningeval
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"reflect"
 	"strings"
 
@@ -158,6 +159,15 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 	}
 	if e.MissingPrices != nil {
 		check("missing_prices", r.Result != nil && r.Result.Quote != nil && r.Result.Quote.MissingCount == *e.MissingPrices, r.Result)
+	}
+	if e.BudgetCeilingCNY != "" {
+		within := false
+		ceiling, valid := new(big.Rat).SetString(e.BudgetCeilingCNY)
+		if valid && ceiling.Sign() > 0 && r.Result != nil && r.Result.Quote != nil && r.Result.Quote.MissingCount == 0 {
+			total, ok := new(big.Rat).SetString(r.Result.Quote.TotalCNY)
+			within = ok && total.Sign() > 0 && total.Cmp(ceiling) <= 0
+		}
+		check("budget_ceiling", within, e.BudgetCeilingCNY)
 	}
 	for _, s := range e.IssuesContain {
 		found := false

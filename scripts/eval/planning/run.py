@@ -18,7 +18,12 @@ def main():
     parser.add_argument('--suite', default='internal/planningeval/testdata/v2.0.json')
     parser.add_argument('--go-tests', nargs='+', help='Run existing Go tests in the same isolated database container')
     parser.add_argument('--intake-packet', help='Rehearse a reviewed intake using its real files in the isolated database')
+    parser.add_argument('--live', action='store_true', help='Explicit real chat models; web remains offline')
+    parser.add_argument('--max-calls', type=int, default=0, help='Positive shared cap required with --live')
+    parser.add_argument('--model-pin', default='docs/eval/planning-v2/baseline-20260915.json')
     args = parser.parse_args()
+    if args.live and (args.max_calls <= 0 or args.intake_packet or args.go_tests):
+        parser.error('--live requires a positive --max-calls and cannot run intake or Go tests')
     out = Path(args.out).resolve()
     if out.exists():
         raise SystemExit('Use a new output directory')
@@ -58,7 +63,10 @@ def main():
                 (out / 'tests.log').write_bytes((result.stdout + result.stderr).encode('utf-8'))
                 print(result.stdout + result.stderr)
             else:
-                result = subprocess.run([str(exe), '-mode', 'replay', '-suite', args.suite, '-out', str(out)], cwd=ROOT, env=env)
+                command = [str(exe), '-mode', 'live' if args.live else 'replay', '-suite', args.suite, '-out', str(out)]
+                if args.live:
+                    command += ['-max-calls', str(args.max_calls), '-model-pin', args.model_pin]
+                result = subprocess.run(command, cwd=ROOT, env=env)
             if out.is_dir():
                 manifest = {
                     'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
@@ -69,6 +77,8 @@ def main():
                                 for p in (ROOT / folder).rglob('*') if p.is_file() and p.suffix in {'.go', '.sql', '.py', '.json'}},
                     'shared_services_restarted': False,
                     'external_web_requests': 0,
+                    'live_models': args.live,
+                    'max_model_requests': args.max_calls,
                     'exit_code': result.returncode,
                     'go_tests': args.go_tests,
                     'intake_packet': args.intake_packet,

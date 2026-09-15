@@ -59,7 +59,20 @@ python scripts/eval/planning/run.py --out artifacts/planning-eval-new
 
 输出包括 `report.json`、当次 `suite.json`、`provenance.json` 和 `manifest.json`。报告逐轮保存真实输入、模型响应、工具反馈、最终状态、断言、耗时；清单保存 Git HEAD、可执行文件/代码/迁移哈希和容器镜像 ID。工作区有未提交改动时，不能只凭 HEAD 复现，须保留对应代码。原始产物位于忽略目录，审查结论和可重放输入在源码中保留。
 
-用量口径：`screening_calls` / `builder_calls` 是协议调用数；`actual_model_requests` 是实际提供方调用数；`search_calls` / `page_calls` 是工具层逻辑次数；`external_requests` 是真正联网次数。离线模式可出现 1 次搜索工具执行但 0 次联网。每轮 `duration_ms`、模型 Trace 耗时与 Builder `stage_ms` 可用于定位本地开销，不可据此估算真实响应时间。离线 Token 和金额为 null，不伪装成真实推理零成本。当前 CLI 仅有 check/replay 模式；真实模型适配器和严格总调用上限是 Go 层扩展点，未对 CLI 开放。
+用量口径：`screening_calls` / `builder_calls` 是协议调用数；`actual_model_requests` 是已尝试的提供方调用数（失败也计入，不能等同于计费成功次数）；`search_calls` / `page_calls` 是工具层逻辑次数；`external_requests` 是真正的资料联网次数，不含模型端点。离线模式可出现1次搜索工具执行但0次联网。每轮 `duration_ms`、模型Trace耗时与Builder `stage_ms` 用于定位开销。离线Token和金额为null，不伪装成真实推理零成本。
+
+## 显式真实模型模式
+
+`plan-live`仅校验冻结套件和本机模型配置并生成计划，零数据库/模型调用；`live`通过相同产品与工具路径调用真实Screening/Builder，网页仍为冻结回放，Embedding不启用。真实套件必须标记 `live:true`，禁止含oracle；模型配置须与指定的脱敏基线完全一致，禁止模型链及SDK自动重试。总调用上限跨角色共享，超过上限的尝试不发送给提供方，失败和后续未完成场景仍保留在分母。
+
+```bash
+go run ./cmd/evalplanning -mode plan-live -suite internal/planningeval/testdata/live-smoke-20260915/suite.json -out artifacts/live-plan-new -max-calls 12
+python scripts/eval/planning/run.py --live --suite internal/planningeval/testdata/live-smoke-20260915/suite.json --out artifacts/live-smoke-new --max-calls 12
+```
+
+每个输出目录只能使用一次；不自动重跑失败批次。CLI在调用前保存plan、suite与provenance；events.jsonl逐次同步保存请求前记录、原始响应和每步产品结果，包含输入/输出/总token。中断时以journal为证据，不因缺最终report而重置额度。计划保存模型配置、完整目录/套件/二进制哈希；启动器另存源码/镜像身份。凭据不进入报告。这里的测试文本是已登记的合成场景，不应把真人私人对话直接写入这些完整轨迹。
+
+首批只有预算修改及8000元2K游戏生成，不代表历史50题或CPU升级等场景已跑完。要求完整报价、真实兼容性通过、预算不超上限和正式版本关联，不固定具体SKU或模型轮数。真实模型效果须以实际报告为准。
 
 本轮结果见[验收记录](validation-20260914.md)。没有浏览器验证、真实模型效果、外网读取质量或生产容量结论。A2A 仅验证结构化结果编解码，未验证 HTTP 传输及远端会话故障；语义检索/Embedding 质量也不在本轮覆盖内。
 

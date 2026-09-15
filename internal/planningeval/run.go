@@ -45,9 +45,12 @@ func Load(raw []byte) (Suite, error) {
 		}
 		seen[c.ID] = true
 		for _, step := range c.Steps {
+			if s.Live && (len(step.Screen) != 0 || len(step.Builder) != 0) {
+				return s, fmt.Errorf("live suite must not contain model oracles")
+			}
 			switch step.Kind {
 			case "message":
-				if len(step.Screen) == 0 {
+				if !s.Live && len(step.Screen) == 0 {
 					return s, fmt.Errorf("missing screening oracle in %s", c.ID)
 				}
 			case "confirm", "edit", "refresh", "retry":
@@ -140,6 +143,11 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 	report := Report{SchemaVersion: 1, SuiteVersion: suite.Version, SuiteSHA256: Hash(raw), CatalogSHA256: Hash(catalogRaw), Mode: "offline_oracle", Classifications: map[string]int{}, Limitations: []string{"Oracle outputs verify execution contracts, not live semantic accuracy.", "Web/search are fixture-only. Latency excludes real model and external service latency.", "Tokens/cash are unknown unless reported by a real provider; protocol calls are counted separately.", "No UI or production capacity claim. Exact selections are frozen regression oracles, not the only acceptable live solutions."}}
 	if models.Screening != nil || models.Builder != nil {
 		report.Mode = "live_models_offline_tools"
+		report.Limitations = []string{"Real fixed chat models, fixture-only web; embedding disabled.", "Graded against predeclared live expectations, not oracle outputs.", "Cash cost is unknown; actual provider token usage is retained.", "No UI or production capacity claim."}
+	}
+	liveRequested := models.Screening != nil || models.Builder != nil
+	if suite.Live != liveRequested || (suite.Live && (models.Screening == nil || models.Builder == nil || models.MaxCalls <= 0)) {
+		return report, fmt.Errorf("live suite requires both real models and a positive shared call limit; replay requires offline suite")
 	}
 	if err := Prepare(ctx, dsn, suite.Catalog); err != nil {
 		return report, err
@@ -167,6 +175,10 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 		for _, step := range c.Steps {
 			stepStart := time.Now()
 			g.begin(step)
+			if e := g.journal(map[string]any{"event": "step_started", "case_id": c.ID, "step": len(cr.Steps) + 1, "kind": step.Kind, "text": step.Text}); e != nil {
+				_ = svc.Shutdown(ctx)
+				return report, e
+			}
 			before, err := svc.GetSession(ctx, owner, ws.ID)
 			if err != nil {
 				return report, err
@@ -199,7 +211,7 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 			case "refresh": // The following GetSession exercises the production read model.
 			}
 			if err == nil && started.Run.ID != "" {
-				err = waitRun(ctx, svc, owner, started.Run.ID)
+				err = waitRun(ctx, svc, owner, started.Run.ID, suite.Live)
 			}
 			record := g.snapshot()
 			record.DurationMS = time.Since(stepStart).Milliseconds()
@@ -238,6 +250,10 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 				cr.Pass = cr.Pass && check.Pass
 			}
 			cr.Steps = append(cr.Steps, record)
+			if e := g.journal(map[string]any{"event": "step_completed", "case_id": c.ID, "step": len(cr.Steps), "record": record}); e != nil {
+				_ = svc.Shutdown(ctx)
+				return report, e
+			}
 			if step.Kind == "message" || step.Kind == "confirm" {
 				lastStart, lastStep, lastRequest = started, step, requestID
 			}
@@ -301,8 +317,12 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 	report.DurationMS = time.Since(start).Milliseconds()
 	return report, nil
 }
-func waitRun(ctx context.Context, svc *product.Service, owner, id string) error {
-	timer := time.NewTimer(30 * time.Second)
+func waitRun(ctx context.Context, svc *product.Service, owner, id string, live bool) error {
+	limit := 30 * time.Second
+	if live {
+		limit = 11 * time.Minute // Product timeout is 10 minutes; observe its terminal state.
+	}
+	timer := time.NewTimer(limit)
 	defer timer.Stop()
 	ticker := time.NewTicker(5 * time.Millisecond)
 	defer ticker.Stop()

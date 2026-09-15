@@ -16,7 +16,9 @@ import (
 func main() {
 	suitePath := flag.String("suite", "internal/planningeval/testdata/v2.0.json", "frozen planning suite")
 	out := flag.String("out", "", "new output directory")
-	mode := flag.String("mode", "check", "check or replay; no live provider calls")
+	mode := flag.String("mode", "check", "check, replay, plan-live (zero calls), or live (explicit bounded provider calls)")
+	maxCalls := flag.Int("max-calls", 0, "required positive shared model request ceiling for live")
+	modelPin := flag.String("model-pin", "docs/eval/planning-v2/baseline-20260915.json", "pinned redacted model settings")
 	flag.Parse()
 	raw, err := os.ReadFile(*suitePath)
 	if err != nil {
@@ -37,8 +39,9 @@ func main() {
 		fmt.Printf("%s: %d cases, sha256=%s\n", suite.Version, len(suite.Cases), planningeval.Hash(raw))
 		return
 	}
-	if *mode != "replay" || *out == "" {
-		fail(fmt.Errorf("use -mode check, or -mode replay -out NEW_DIRECTORY"))
+	isLive := *mode == "live" || *mode == "plan-live"
+	if (*mode != "replay" && !isLive) || *out == "" || (isLive && (!suite.Live || *maxCalls <= 0)) || (!isLive && suite.Live) {
+		fail(fmt.Errorf("use a matching replay/live suite, new output directory and positive live max-calls"))
 	}
 	if _, err = os.Stat(*out); !os.IsNotExist(err) {
 		fail(fmt.Errorf("output directory must not exist"))
@@ -46,9 +49,56 @@ func main() {
 	if err = os.MkdirAll(*out, 0755); err != nil {
 		fail(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
 	defer cancel()
-	report, runErr := planningeval.Run(ctx, os.Getenv("PLANNING_EVAL_DSN"), suite, raw, planningeval.Models{})
+	models := planningeval.Models{}
+	if isLive {
+		configs, redacted, err := fixedConfigs(*modelPin)
+		if err != nil {
+			fail(err)
+		}
+		exe, err := os.Executable()
+		if err != nil {
+			fail(err)
+		}
+		binary, err := os.ReadFile(exe)
+		if err != nil {
+			fail(err)
+		}
+		catalog, _ := json.Marshal(suite.Catalog)
+		plan := map[string]any{"mode": *mode, "created_at": time.Now().UTC(), "suite_sha256": planningeval.Hash(raw), "catalog_sha256": planningeval.Hash(catalog), "models": redacted, "max_model_requests": *maxCalls, "external_requests_limit": 0, "embedding_requests_limit": 0, "binary_sha256": planningeval.Hash(binary)}
+		planRaw, _ := json.MarshalIndent(plan, "", "  ")
+		if err = os.WriteFile(filepath.Join(*out, "plan.json"), planRaw, 0600); err != nil {
+			fail(err)
+		}
+		if *mode == "plan-live" {
+			fmt.Println("Live plan saved; no model or database call.")
+			return
+		}
+		models, err = liveModels(ctx, configs, *maxCalls)
+		if err != nil {
+			fail(err)
+		}
+		journal, err := os.OpenFile(filepath.Join(*out, "events.jsonl"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if err != nil {
+			fail(err)
+		}
+		defer journal.Close()
+		models.Journal = func(value any) error {
+			if err := json.NewEncoder(journal).Encode(value); err != nil {
+				return err
+			}
+			return journal.Sync()
+		}
+	}
+	// Persist exact inputs before evaluation so an interrupted process is auditable.
+	if err = os.WriteFile(filepath.Join(*out, "suite.json"), raw, 0600); err != nil {
+		fail(err)
+	}
+	if err = os.WriteFile(filepath.Join(*out, "provenance.json"), provenance, 0600); err != nil {
+		fail(err)
+	}
+	report, runErr := planningeval.Run(ctx, os.Getenv("PLANNING_EVAL_DSN"), suite, raw, models)
 	data, _ := json.MarshalIndent(report, "", "  ")
 	if err = os.WriteFile(filepath.Join(*out, "report.json"), data, 0644); err != nil {
 		fail(err)

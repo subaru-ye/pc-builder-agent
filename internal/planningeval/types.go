@@ -11,6 +11,7 @@ import (
 )
 
 type Suite struct {
+	Live       bool              `json:"live,omitempty"`
 	Version    string            `json:"version"`
 	Provenance string            `json:"provenance"`
 	Catalog    CatalogFixture    `json:"catalog"`
@@ -50,6 +51,7 @@ type FieldExpect struct {
 	Kind     string          `json:"kind,omitempty"`
 }
 type Expect struct {
+	BudgetCeilingCNY   string                                `json:"budget_ceiling_cny,omitempty"`
 	Versions           int                                   `json:"versions"`
 	Fields             map[string]FieldExpect                `json:"fields,omitempty"`
 	Outcome            string                                `json:"outcome,omitempty"`
@@ -75,6 +77,8 @@ type Trace struct {
 	Response       *genai.Content  `json:"response"`
 	DurationMS     int64           `json:"duration_ms"`
 	Tokens         *int32          `json:"tokens"` // nil for offline oracle; not a billed zero.
+	InputTokens    *int32          `json:"input_tokens,omitempty"`
+	OutputTokens   *int32          `json:"output_tokens,omitempty"`
 	Error          string          `json:"error,omitempty"`
 }
 type Check struct {

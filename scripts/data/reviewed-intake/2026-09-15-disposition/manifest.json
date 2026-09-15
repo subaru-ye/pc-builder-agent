@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "reviewed_by": "Agent依据已保存采集与字段证据审查",
+  "remaining_candidates": 101,
+  "pending_evidence": 101,
+  "rejected_primary_bindings": 28,
+  "missing_original_buy_links": 31,
+  "category_counts": {
+    "cpu": 10,
+    "gpu": 25,
+    "motherboard": 21,
+    "memory": 6,
+    "ssd": 14,
+    "psu": 5,
+    "case": 11,
+    "cooler": 9
+  },
+  "decisions_sha256": "8ecc243da4be9197d9755871ca40bd079740598df7535991e9642f229c47e962",
+  "inputs": {
+    "scripts/data/catalog-candidates/2026-09-13/candidates.jsonl": "fc0fc0d197446b86b553f0427b0c316a8114be64218ecb4bc5c4b72214ac215c",
+    "scripts/data/catalog-candidates/2026-09-13/offers.jsonl": "1152debccc4a319932d9a9971493531bb5d5b89b9f9e895fb028f4160567b0b6",
+    "scripts/data/reviewed-intake/2026-09-14-amd/offers.json": "b67f8f6c037a80951808415a51bd76aa5bc93fb4a8d10e0d811d4ad5b36ddeb4",
+    "scripts/data/reviewed-intake/2026-09-14-ssd/offers.json": "e902f5d2738ac6eff25eac04d44940817e5e40e48e344b21cfae04a8bdddb9e1",
+    "scripts/data/reviewed-intake/2026-09-15-gpu/offers.json": "b095c67a5ab151dfd0a9317df8b0ec9d5a172d6dbf5312d2bc29087d8e8d5332",
+    "scripts/data/reviewed-intake/2026-09-15-memory-case/offers.json": "58f4b1e37ca8bff5179fc63c4a42a51bae8dc5f4690c12273301896e52ff8ede"
+  },
+  "new_network_requests": 0,
+  "database_modified": false,
+  "meaning": "全部暂缓发布，各自列出缺项；拒绝的是无法绑定的当前报价，不是断言该型号不存在。后续补证据后新建审查批次，不改本次记录。"
+}

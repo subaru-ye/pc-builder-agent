@@ -20,6 +20,13 @@ class SharedCoreTest(unittest.TestCase):
         self.assertFalse(self.check(case, selection={'gpu': 'alternative'})['locked_parts'])
         self.assertTrue(self.check(case, selection={'gpu': 'original'})['locked_parts'])
 
+    def test_empty_or_invalid_historical_amount_is_not_complete(self):
+        for value in ['', None, 'unknown', 'NaN', 'Infinity', '-1']:
+            with self.subTest(value=value):
+                result = self.check({'requirement': {'budget_cny': 8000}}, quote={'total_cny': value, 'missing_count': 0})
+                self.assertFalse(result['quote_complete'])
+                self.assertFalse(result['explicit_budget'])
+
     def test_purchase_total_and_exact_owned_model_both_required(self):
         case = {'requirement': {'budget_cny': 6000, 'budget_basis': 'new_purchase', 'owned_parts': [{'category': 'cpu', 'model': 'AMD Ryzen 5 7600'}]}}
         kwargs = {'selection': {'cpu': 'c'}, 'catalog': {'c': {'brand': 'AMD', 'model': 'Ryzen 5 7600'}}}

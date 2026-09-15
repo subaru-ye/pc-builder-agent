@@ -8,7 +8,7 @@ import argparse
 import hashlib
 import json
 from collections import defaultdict
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from build_legacy_screening import ROOT, canonical_hash
@@ -29,9 +29,14 @@ def common_checks(case, selection, catalog, validation, quote, accepted):
     amount, missing = quote.get('total_cny'), quote.get('missing_count')
     if req.get('budget_basis') == 'new_purchase' and req.get('owned_parts'):
         amount, missing = quote.get('purchase_total_cny'), quote.get('purchase_missing_count', 0)
-    checks['quote_complete'] = amount is not None and missing == 0
+    try:
+        number = Decimal(amount)
+        valid_amount = number.is_finite() and number >= 0
+    except (InvalidOperation, TypeError):
+        number, valid_amount = None, False
+    checks['quote_complete'] = valid_amount and missing == 0
     upper = Decimal(req['budget_cny']) * (1 + Decimal(str(req.get('budget_flex', 0))))
-    checks['explicit_budget'] = bool(checks['quote_complete'] and 0 < Decimal(amount) <= upper)
+    checks['explicit_budget'] = bool(checks['quote_complete'] and number <= upper)
     locked = set(case.get('locked', [])) | set(case.get('change', {}).get('locked_categories', []))
     checks['locked_parts'] = all(selection.get(c) == case['base_selection']['parts'][c] for c in locked) if locked else None
     brands = dict(req.get('brand_pref', {}))
@@ -103,6 +108,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--reports', type=Path, nargs='+', required=True)
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--all-legacy', action='store_true', help='Also regrade all 24 historical deliverable/adaptive cases; no extra current runs')
     args = parser.parse_args()
     original = ROOT / 'internal/evalsuite/testdata'
     cases = {}
@@ -113,6 +119,8 @@ def main():
         cases[case['id']] = case
     legacy_path = ROOT / 'artifacts/eval/20260909-134447-3770035618/results.jsonl'
     hashes = {str(legacy_path.relative_to(ROOT)): hashlib.sha256(legacy_path.read_bytes()).hexdigest()}
+    manifest_path = original / 'suites/v1.5.json'
+    hashes[str(manifest_path.relative_to(ROOT))] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
     records, selected = [], set()
     for path in args.reports:
         raw = path.read_bytes()
@@ -126,6 +134,8 @@ def main():
                 continue  # Retired refusal paths need a separate behavioral evaluation.
             selected.add(row['id'])
             records.append(current_record(row, case, path.parent.name))
+    if args.all_legacy:
+        selected.update(id for id, case in cases.items() if case.get('stage') != 'screening' and case['expect']['outcome'] in {'pass', 'budget_adaptive'})
     for line in legacy_path.read_text(encoding='utf-8').splitlines():
         row = json.loads(line)
         if row['case_id'] in selected:
@@ -148,7 +158,7 @@ def main():
         'Missing user-model, purchase accounting or validation evidence fails; no assumed pass from a stored verdict.',
         'Cash cost unknown; token and logical model request counts are not invoice costs.',
     ]
-    output = {'input_sha256': hashes, 'script_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+    output = {'input_sha256': hashes, 'script_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), 'all_legacy': args.all_legacy,
               'limitations': limitations, 'summary': summary, 'records': records}
     args.out.mkdir(parents=True, exist_ok=False)
     (args.out/'comparison.json').write_bytes((json.dumps(output, ensure_ascii=False, indent=2)+'\n').encode('utf-8'))

@@ -66,6 +66,39 @@ func contains(ss []string, s string) bool {
 	return false
 }
 
+// Each fragment group must occur in one saved reference. Reply, history and
+// field source quotes cannot substitute for actually retained reference content.
+// This is a literal retention audit, not a claim of semantic equivalence.
+func retainedReference(state schemas.RequirementState, fragments []string) bool {
+	if len(fragments) == 0 {
+		return false
+	}
+	matches := func(text string) bool {
+		for _, fragment := range fragments {
+			if fragment == "" || !strings.Contains(text, fragment) {
+				return false
+			}
+		}
+		return true
+	}
+	for name, field := range state.Fields {
+		if (name == "notes" || strings.HasPrefix(name, "free.")) && field.Status == "active" && field.Kind == "context" && matches(string(field.Value)) {
+			return true
+		}
+	}
+	for _, alternative := range state.Alternatives {
+		if matches(string(alternative.Value)) {
+			return true
+		}
+	}
+	for _, observation := range state.Observations {
+		if !observation.Resolved && matches(observation.Text) {
+			return true
+		}
+	}
+	return false
+}
+
 // Only correlated tool results prove retrieval. A batch request, initial
 // samples, pending queries and errors do not prove that any query ran.
 func localSearchResults(r StepRecord) (map[string]bool, bool, bool) {
@@ -216,6 +249,9 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 	}
 	if e.Alternatives != nil {
 		check("alternatives", len(r.State.Alternatives) == *e.Alternatives, len(r.State.Alternatives))
+	}
+	for i, fragments := range e.RetainedReferences {
+		check(fmt.Sprintf("retained_reference:%d", i+1), retainedReference(r.State, fragments), fragments)
 	}
 	if e.Outcome != "" {
 		check("final_outcome", r.Result != nil && r.Result.Outcome == e.Outcome, r.Result)

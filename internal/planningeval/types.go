@@ -85,6 +85,7 @@ type Expect struct {
 	PreserveOtherParts bool                                  `json:"preserve_other_parts,omitempty"`
 	MissingPrices      *int                                  `json:"missing_prices,omitempty"`
 	Alternatives       *int                                  `json:"alternatives,omitempty"`
+	RetainedReferences [][]string                            `json:"retained_references,omitempty"`
 	CandidateSpecs     map[string]map[string]json.RawMessage `json:"candidate_specs,omitempty"`
 	SearchCandidates   map[string]bool                       `json:"search_candidates,omitempty"`
 }

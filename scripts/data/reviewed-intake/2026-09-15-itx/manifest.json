@@ -1,0 +1,20 @@
+{
+  "source_type": "aggregator_secondary",
+  "review_basis": "Agent辅助逐行复核，手动发布",
+  "official_evidence_fields": 7,
+  "models": 1,
+  "files": {
+    "parts.jsonl": "b205762e82f84e3b6560b50e1cedddba547f8dbccd11b73dfec154a54569dbeb",
+    "evidence.jsonl": "be138c0624308ff89ce6ef6a46a24ab2c9c0f406e3aeb4b383b673e47ef7fc9f",
+    "offers.json": "1e73c9ff37f81cc860c0b97f8922aabf7e578d12b5ae876021038f63919741cf",
+    "publication.json": "90cd289bbf8c7bcff0321ddc017054eaba5d680c8c789683a87435add3e7a80d",
+    "reviewed-offers.jsonl": "986b013e7227edb43eea4851174adfb670ffbad5af369ae7bc526253ce7a0c43",
+    "detail-review.json": "056caa75057bebaccd048a689cafd54c445f4f42cb877a4e047be5ab7117e071"
+  },
+  "raw_html_directory": "artifacts\\data-intake-official-itx-20260915-r1",
+  "price_observed_dates": [
+    "2026-09-13"
+  ],
+  "price_precision": "day",
+  "inventory": "unknown"
+}

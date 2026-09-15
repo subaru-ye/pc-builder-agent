@@ -1,0 +1,14 @@
+{
+  "mode": "published",
+  "parts": 175,
+  "priced": 123,
+  "parts_release": "4a3da72c-e001-57dd-ad26-9838c90ade72",
+  "price_release": "6d8adcdf-729f-58f1-8446-1386aad8bc37",
+  "snapshot_id": 9,
+  "existing_parts_unchanged": true,
+  "history_unchanged": true,
+  "price_retry_idempotent": true,
+  "observation_date_precision": "day",
+  "model_calls": 0,
+  "external_search_calls": 0
+}

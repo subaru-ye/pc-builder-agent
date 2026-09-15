@@ -13,6 +13,7 @@ from pcdata.automation import _VisiblePolicyTextParser
 from pcdata.amd import parse_amd_cpu_html
 
 PAGES = {
+    "msi-b650i-edge-wifi":"https://www.msi.com/Motherboard/MPG-B650I-EDGE-WIFI/Specification",
     "lianli-lancool207":"https://lian-li.com/product/lancool-207/",
     "kingbank-xingren-black":"https://www.kingbank.com/zh-cn/MemoryProduct_zh-cn/2468.html",
     "adata-d300g":"https://xpg.adata.com.cn/cn/xpg/dram-modules-lancer-blade-rgb-ddr5",

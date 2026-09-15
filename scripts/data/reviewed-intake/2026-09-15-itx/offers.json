@@ -1,0 +1,29 @@
+[
+  {
+    "sku": "mb-msi-b650i-edge",
+    "original_model_id": "mb-msi-b650i-edge",
+    "packaging": "unknown",
+    "offer": {
+      "buy_url": "https://m.tb.cn/h.8r2S0NA",
+      "category": "motherboard",
+      "detail_source_file": "var/data/collections/2026-09-13-maishou-expansion-01/raw/detail/mb-msi-b650i-edge__6ef4311fbdde68cc__s1.yaml",
+      "detail_source_sha256": "55ceab99a425e0a673441f1e26cd9748ea83b23b0a444e73dadb73f23cb733b5",
+      "goodsId": "pyPWVPYsxt6DMma9k9FgMeCptm-okqpv4rSBZo9xGR5UJd",
+      "is_primary": true,
+      "model_id": "mb-msi-b650i-edge",
+      "month_sales": "1",
+      "original_offer_file_sha256": "1152debccc4a319932d9a9971493531bb5d5b89b9f9e895fb028f4160567b0b6",
+      "platform": "1",
+      "platform_src": "1",
+      "price_cny": 1450.0,
+      "row_key": "6ef4311fbdde68cc",
+      "shop": "齐鲁数码商城东岳店",
+      "title": "微星MPG B650I EDGE WIFI AM5刀锋主板支持7600 7800x3d 9950xcpu"
+    },
+    "observed_date": "2026-09-13",
+    "source_type": "aggregator_secondary",
+    "stock_status": "unknown",
+    "raw_source_file": "artifacts/data-intake-itx-20260915-r2/reviewed-offers.jsonl",
+    "raw_source_sha256": "986b013e7227edb43eea4851174adfb670ffbad5af369ae7bc526253ce7a0c43"
+  }
+]

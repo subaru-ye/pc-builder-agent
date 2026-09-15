@@ -599,7 +599,9 @@ func (x *execution) finalize() Result {
 				continue
 			}
 			a, ok := assessed[field]
-			supported := field == "budget_cny" // Budget is checked from the actual quote above.
+			// Amount, accounting basis and authorized flexibility are verified
+			// together from the quote. A hardware source cannot prove these values.
+			supported := field == "budget_cny" || field == "budget_basis" || field == "budget_flex"
 			for _, ref := range a.Evidence {
 				for _, c := range x.result.Candidates {
 					if ref == "local:"+c.ID && !c.External {

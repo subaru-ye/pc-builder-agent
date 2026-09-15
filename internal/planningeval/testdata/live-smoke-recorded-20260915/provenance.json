@@ -1,0 +1,9 @@
+{
+  "source": "artifacts\\planning-live-smoke-20260915-r1",
+  "source_suite_sha256": "99fc0269d1cdb277b9868ea42633e9bd99edea2909d4ed0db4c628f3794b3a4f",
+  "source_report_sha256": "d35a5ada594343496e5e00e959d6fab964adea15c3c26be1933bcc442b02c10b",
+  "suite_sha256": "bf1c7bd9a2c08e5b885fe03d7553cac5d8903b51937d13f912e64c21c03ddb60",
+  "expectations_changed": false,
+  "actual_model_requests": 0,
+  "external_requests": 0
+}

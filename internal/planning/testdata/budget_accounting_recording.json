@@ -1,0 +1,421 @@
+{
+  "source": "artifacts\\planning-live-smoke-20260915-r1\\report.json",
+  "sha256": "d35a5ada594343496e5e00e959d6fab964adea15c3c26be1933bcc442b02c10b",
+  "input": {
+    "schema_version": 2,
+    "requirement_state": {
+      "schema_version": 1,
+      "revision": 1,
+      "fields": {
+        "appearance": {
+          "status": "unknown"
+        },
+        "brand_pref.cpu": {
+          "value": "any",
+          "status": "active",
+          "kind": "constraint",
+          "evidence": "stated",
+          "strength": "prefer",
+          "scope": "session",
+          "source": {
+            "kind": "chat",
+            "message_id": "2780ccf2-c3d7-4464-a32a-2dd56f8b03c5",
+            "quote": "品牌和机箱尺寸不限"
+          }
+        },
+        "brand_pref.gpu": {
+          "value": "any",
+          "status": "active",
+          "kind": "constraint",
+          "evidence": "stated",
+          "strength": "prefer",
+          "scope": "session",
+          "source": {
+            "kind": "chat",
+            "message_id": "2780ccf2-c3d7-4464-a32a-2dd56f8b03c5",
+            "quote": "品牌和机箱尺寸不限"
+          }
+        },
+        "budget_basis": {
+          "value": "full_build",
+          "status": "active",
+          "kind": "constraint",
+          "evidence": "stated",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "chat",
+            "message_id": "2780ccf2-c3d7-4464-a32a-2dd56f8b03c5",
+            "quote": "全新主机，不含显示器和外设"
+          }
+        },
+        "budget_cny": {
+          "value": 8000,
+          "status": "active",
+          "kind": "constraint",
+          "evidence": "stated",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "chat",
+            "message_id": "2780ccf2-c3d7-4464-a32a-2dd56f8b03c5",
+            "quote": "预算最多8000元"
+          }
+        },
+        "budget_flex": {
+          "value": 0,
+          "status": "active",
+          "kind": "constraint",
+          "evidence": "stated",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "chat",
+            "message_id": "2780ccf2-c3d7-4464-a32a-2dd56f8b03c5",
+            "quote": "预算最多8000元"
+          }
+        },
+        "existing_parts": {
+          "status": "unknown"
+        },
+        "noise_pref": {
+          "status": "unknown"
+        },
+        "notes": {
+          "status": "unknown"
+        },
+        "owned_parts": {
+          "status": "unknown"
+        },
+        "priority": {
+          "status": "unknown"
+        },
+        "recipient": {
+          "status": "unknown"
+        },
+        "size_pref": {
+          "value": "any",
+          "status": "active",
+          "kind": "constraint",
+          "evidence": "stated",
+          "strength": "prefer",
+          "scope": "session",
+          "source": {
+            "kind": "chat",
+            "message_id": "2780ccf2-c3d7-4464-a32a-2dd56f8b03c5",
+            "quote": "品牌和机箱尺寸不限"
+          }
+        },
+        "use_case.fps_target": {
+          "status": "unknown"
+        },
+        "use_case.resolution": {
+          "value": "2K",
+          "status": "active",
+          "kind": "fact",
+          "evidence": "stated",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "chat",
+            "message_id": "2780ccf2-c3d7-4464-a32a-2dd56f8b03c5",
+            "quote": "主要2K玩黑神话悟空"
+          }
+        },
+        "use_case.titles": {
+          "value": [
+            "黑神话：悟空"
+          ],
+          "status": "active",
+          "kind": "fact",
+          "evidence": "stated",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "chat",
+            "message_id": "2780ccf2-c3d7-4464-a32a-2dd56f8b03c5",
+            "quote": "主要2K玩黑神话悟空"
+          }
+        },
+        "use_case.type": {
+          "value": "gaming",
+          "status": "active",
+          "kind": "fact",
+          "evidence": "stated",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "chat",
+            "message_id": "2780ccf2-c3d7-4464-a32a-2dd56f8b03c5",
+            "quote": "主要2K玩黑神话悟空"
+          }
+        }
+      },
+      "alternatives": [],
+      "changes": [],
+      "history": []
+    }
+  },
+  "result": {
+    "outcome": "proposal",
+    "reply": "已为你选配一套总价约 6513 元的 2K 黑神话悟空主机方案，远低于 8000 元预算上限。核心思路是把预算集中到显卡上：\n\n**配置亮点：**\n- **显卡 RTX 5060 8G（3028元）**：支持 DLSS4 帧生成技术，2K 分辨率下中高画质可流畅运行黑神话悟空，是这套配置的性能核心。\n- **CPU R5 5600 + B550M 主板**：AM4 平台性价比极高，6核12线程不拖显卡后腿，B550M PRO-VDH WIFI 自带 WiFi 且供电扎实。\n- **16GB DDR4-3200 双通道**：AM4 甜点频率，满足游戏需求。\n- **1TB NVMe SSD**：告别 SATA 瓶颈，游戏加载更快。\n- **650W 电源 + AP201 Mesh 机箱**：供电余量充足，机箱散热通透且体积紧凑。\n\n**预算说明：**\n当前总价 6513 元，剩余约 1487 元空间。如果你希望进一步提升体验，可以考虑将内存升级到 32GB（加约 400 元），或将 CPU 升级到 R7 5700X（加约 218 元）以获得更好的多任务和最低帧表现。需要我帮你调整吗？",
+    "draft": {
+      "schema_version": 1,
+      "requirement_ref": "current",
+      "build_ref": "proposal-v2-budget",
+      "selection": {
+        "cpu": "cpu-r5-5600",
+        "gpu": "gpu-gb-5060-windforce",
+        "motherboard": "mb-msi-b550m-pro-vdh-wifi",
+        "memory": "mem-crucial-ballistix-16-3200",
+        "ssd": [
+          {
+            "sku": "ssd-kingston-nv2-1tb",
+            "quantity": 1
+          }
+        ],
+        "psu": "psu-msi-mag-a650bn",
+        "case": "case-asus-prime-ap201",
+        "cooler": "cooler-deepcool-ag400"
+      },
+      "rationale": {
+        "cpu": "R5 5600 为 AM4 游戏性价比首选，6C12T 足以支撑 2K 黑神话悟空，价格 848 元远低于 AM5 平台。",
+        "gpu": "RTX 5060 8G TDP 145W，支持 DLSS4/帧生成，2K 黑神话悟空中高画质可达流畅体验；3028 元是预算内最佳选择。",
+        "motherboard": "B550M PRO-VDH WIFI 供电扎实、双 M.2、WiFi 内置，完美兼容 R5 5600，599 元性价比高。",
+        "memory": "DDR4-3200 CL16 16GB 双通道是 AM4 甜点配置，控制预算同时保证游戏流畅度。",
+        "ssd": "Kingston NV2 1TB NVMe PCIe4.0，提供充足游戏存储空间与快速加载。",
+        "psu": "MSI MAG A650BN 650W 铜牌，双 8pin 供电满足 RTX 5060 单 8pin 需求，269 元极致性价比。",
+        "case": "AP201 Mesh 支持 mATX，GPU 限长 338mm > 199mm，散热通透，412 元紧凑美观。",
+        "cooler": "AG400 解热 220W 覆盖 R5 5600 65W TDP，高度 150mm < AP201 限高 170mm。"
+      }
+    },
+    "assessments": [
+      {
+        "field": "budget_cny",
+        "status": "met",
+        "explanation": "总价 6513 元 ≤ 8000 元预算上限，符合要求。",
+        "evidence": [
+          "local:cpu-r5-5600",
+          "local:gpu-gb-5060-windforce",
+          "local:mb-msi-b550m-pro-vdh-wifi",
+          "local:mem-crucial-ballistix-16-3200",
+          "local:ssd-kingston-nv2-1tb",
+          "local:psu-msi-mag-a650bn",
+          "local:case-asus-prime-ap201",
+          "local:cooler-deepcool-ag400"
+        ]
+      },
+      {
+        "field": "budget_basis",
+        "status": "met",
+        "explanation": "全新主机全套配件，不含显示器和外设。",
+        "evidence": []
+      },
+      {
+        "field": "budget_flex",
+        "status": "met",
+        "explanation": "未超出预算，无超支。",
+        "evidence": []
+      },
+      {
+        "field": "use_case.type",
+        "status": "met",
+        "explanation": "以游戏为核心选配，显卡投入占比最大。",
+        "evidence": []
+      },
+      {
+        "field": "use_case.titles",
+        "status": "met",
+        "explanation": "RTX 5060 支持 DLSS4 帧生成，针对黑神话悟空等 UE5 大作有显著优化。",
+        "evidence": [
+          "local:gpu-gb-5060-windforce"
+        ]
+      },
+      {
+        "field": "use_case.resolution",
+        "status": "met",
+        "explanation": "RTX 5060 在 2K 分辨率配合 DLSS 可满足黑神话悟空流畅游玩需求。",
+        "evidence": [
+          "local:gpu-gb-5060-windforce"
+        ]
+      },
+      {
+        "field": "brand_pref.cpu",
+        "status": "met",
+        "explanation": "用户不限品牌，选用 AMD。",
+        "evidence": []
+      },
+      {
+        "field": "brand_pref.gpu",
+        "status": "met",
+        "explanation": "用户不限品牌，选用 Gigabyte。",
+        "evidence": []
+      },
+      {
+        "field": "size_pref",
+        "status": "met",
+        "explanation": "用户不限机箱尺寸，选用 mATX 紧凑型 AP201。",
+        "evidence": []
+      }
+    ],
+    "issues": [],
+    "assumptions": [
+      "假设用户对 FPS 目标无硬性要求，按中高画质+DLSS 60fps 以上体验选型",
+      "假设用户无已有可复用配件",
+      "内存暂选 16GB，若后续多任务需求增加可利用剩余预算升级至 32GB"
+    ]
+  },
+  "candidates": [
+    {
+      "id": "cpu-r5-5600",
+      "category": "cpu",
+      "brand": "AMD",
+      "model": "Ryzen 5 5600",
+      "specs": {
+        "tdp_w": 65,
+        "socket": "AM4",
+        "has_igpu": false,
+        "supported_chipsets": [
+          "A520",
+          "B450",
+          "B550",
+          "X470",
+          "X570"
+        ]
+      },
+      "price_cny": "848.00",
+      "evidence": [
+        "local:cpu-r5-5600"
+      ],
+      "external": false
+    },
+    {
+      "id": "gpu-gb-5060-windforce",
+      "category": "gpu",
+      "brand": "Gigabyte",
+      "model": "GeForce RTX 5060 WINDFORCE OC 8G",
+      "specs": {
+        "tdp_w": 145,
+        "length_mm": 199,
+        "power_connectors": [
+          "pcie_8pin"
+        ]
+      },
+      "price_cny": "3028.00",
+      "evidence": [
+        "local:gpu-gb-5060-windforce"
+      ],
+      "external": false
+    },
+    {
+      "id": "mb-msi-b550m-pro-vdh-wifi",
+      "category": "motherboard",
+      "brand": "MSI",
+      "model": "B550M PRO-VDH WIFI",
+      "specs": {
+        "socket": "AM4",
+        "chipset": "B550",
+        "m2_slots": 2,
+        "form_factor": "matx",
+        "memory_generation": "ddr4",
+        "memory_speed_max_mts": 4400
+      },
+      "price_cny": "599.00",
+      "evidence": [
+        "local:mb-msi-b550m-pro-vdh-wifi"
+      ],
+      "external": false
+    },
+    {
+      "id": "mem-crucial-ballistix-16-3200",
+      "category": "memory",
+      "brand": "Crucial",
+      "model": "Ballistix 16GB (2x8GB) DDR4-3200 CL16",
+      "specs": {
+        "speed_mts": 3200,
+        "generation": "ddr4"
+      },
+      "price_cny": "569.00",
+      "evidence": [
+        "local:mem-crucial-ballistix-16-3200"
+      ],
+      "external": false
+    },
+    {
+      "id": "ssd-kingston-nv2-1tb",
+      "category": "ssd",
+      "brand": "Kingston",
+      "model": "NV2 1TB NVMe M.2",
+      "specs": {
+        "form_factor": "m2"
+      },
+      "price_cny": "709.00",
+      "evidence": [
+        "local:ssd-kingston-nv2-1tb"
+      ],
+      "external": false
+    },
+    {
+      "id": "psu-msi-mag-a650bn",
+      "category": "psu",
+      "brand": "MSI",
+      "model": "MAG A650BN 650W 80+ Bronze",
+      "specs": {
+        "wattage_w": 650,
+        "power_connectors": [
+          "pcie_8pin",
+          "pcie_8pin"
+        ]
+      },
+      "price_cny": "269.00",
+      "evidence": [
+        "local:psu-msi-mag-a650bn"
+      ],
+      "external": false
+    },
+    {
+      "id": "case-asus-prime-ap201",
+      "category": "case",
+      "brand": "Asus",
+      "model": "Prime AP201 (Black, Mesh)",
+      "specs": {
+        "gpu_length_max_mm": 338,
+        "radiator_sizes_mm": [
+          120,
+          140,
+          240,
+          280,
+          360
+        ],
+        "cooler_height_max_mm": 170,
+        "supported_form_factors": [
+          "matx",
+          "itx"
+        ]
+      },
+      "price_cny": "412.00",
+      "evidence": [
+        "local:case-asus-prime-ap201"
+      ],
+      "external": false
+    },
+    {
+      "id": "cooler-deepcool-ag400",
+      "category": "cooler",
+      "brand": "Deepcool",
+      "model": "AG400",
+      "specs": {
+        "type": "air",
+        "height_mm": 150,
+        "radiator_size_mm": null,
+        "cooling_capacity_w": 220
+      },
+      "price_cny": "79.00",
+      "evidence": [
+        "local:cooler-deepcool-ag400"
+      ],
+      "external": false
+    }
+  ],
+  "observed_total": "6513.00"
+}

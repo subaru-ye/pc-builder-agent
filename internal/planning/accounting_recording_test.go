@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,9 +56,13 @@ func TestLiveBudgetAccountingDoesNotRequireHardwareCitations(t *testing.T) {
 }
 
 func TestLiveOwnedPurchaseDeliveryUsesTheVerifiedBudgetBasis(t *testing.T) {
-	for _, mode := range []string{"original", "whole_machine", "lower_budget", "unowned_memory", "wrong_owned_model", "missing_new_price"} {
+	for _, mode := range []string{"original", "whole_machine", "lower_budget", "unowned_memory", "wrong_owned_model", "missing_new_price", "missing_basis_assessment", "missing_basis_lower_budget", "missing_basis_new_price", "missing_basis_whole_machine"} {
 		t.Run(mode, func(t *testing.T) {
-			raw, err := os.ReadFile("testdata/owned_purchase_delivery_recording_20260915.json")
+			file, purchase := "testdata/owned_purchase_delivery_recording_20260915.json", "5925.00"
+			if strings.HasPrefix(mode, "missing_basis_") {
+				file, purchase = "testdata/budget_basis_assessment_recording_20260915.json", "5166.00"
+			}
+			raw, err := os.ReadFile(file)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -86,9 +91,9 @@ func TestLiveOwnedPurchaseDeliveryUsesTheVerifiedBudgetBasis(t *testing.T) {
 				f.Input.State.Fields[name] = v
 			}
 			switch mode {
-			case "whole_machine":
+			case "whole_machine", "missing_basis_whole_machine":
 				field("budget_basis", `"full_build"`)
-			case "lower_budget":
+			case "lower_budget", "missing_basis_lower_budget":
 				field("budget_cny", `5000`)
 			case "unowned_memory":
 				field("owned_parts", `[{"category":"cpu","model":"AMD Ryzen 5 7600","quantity":1}]`)
@@ -97,20 +102,20 @@ func TestLiveOwnedPurchaseDeliveryUsesTheVerifiedBudgetBasis(t *testing.T) {
 			}
 			catalog := recordedCatalog{store.CatalogSnapshot{Snapshot: store.Snapshot{SnapshotDate: time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)}}}
 			for _, c := range suite.Catalog.Candidates {
-				if mode == "missing_new_price" && c.ID == "gpu-gb-5060-windforce" {
+				if (mode == "missing_new_price" || mode == "missing_basis_new_price") && c.ID == "gpu-gb-5060-windforce" {
 					c.Price = nil
 				}
 				catalog.Candidates = append(catalog.Candidates, store.Candidate{SKU: c.ID, Category: c.Category, Brand: c.Brand, Model: c.Model, Specs: c.Specs, PriceCNY: c.Price})
 			}
 			m := &scriptedModel{respond: func(n int, _ *model.LLMRequest) *genai.Content { return f.Responses[n-1] }}
 			// The first complete model proposal is response 4. Later identical
-			// retries were caused by the erroneous full-machine price gate.
+			// retries were caused by duplicate full-machine/assessment gates.
 			got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 4}).Run(context.Background(), f.Input)
 			if err != nil || got.Quote == nil || got.ModelCalls != 4 || got.Validation.OverallStatus != schemas.OverallPass {
 				t.Fatalf("unexpected replay: %+v %v", got, err)
 			}
-			if mode == "original" {
-				if got.Outcome != "ready" || got.Delivery.Status != "eligible" || len(got.Issues) != 0 || got.Quote.MissingCount != 1 || got.Quote.PurchaseMissingCount != 0 || got.Quote.PurchaseTotalCNY == nil || *got.Quote.PurchaseTotalCNY != "5925.00" {
+			if mode == "original" || mode == "missing_basis_assessment" {
+				if got.Outcome != "ready" || got.Delivery.Status != "eligible" || len(got.Issues) != 0 || got.Quote.MissingCount != 1 || got.Quote.PurchaseMissingCount != 0 || got.Quote.PurchaseTotalCNY == nil || *got.Quote.PurchaseTotalCNY != purchase {
 					t.Fatalf("valid purchase quote rejected: outcome=%s quote=%+v issues=%v", got.Outcome, got.Quote, got.Issues)
 				}
 			} else if got.Outcome != "proposal" || len(got.Issues) == 0 {

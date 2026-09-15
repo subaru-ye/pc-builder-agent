@@ -1,0 +1,238 @@
+{
+  "source_report": "artifacts/planning-price-basis-live-20260915-r1/report.json",
+  "source_report_sha256": "f88383867ab1033f430ad881ec4bd7f0b6c8925891414f922f7b77b167c12c7d",
+  "case_id": "L4-206",
+  "source_code": "1418f90",
+  "catalog_file": "../planningeval/testdata/legacy-retrieval-recheck-20260915/suite.json",
+  "catalog_sha256": "7c5c11e40287d70f63b0085ed40715078fa3716b2d3db9ef00a2ea16c8bdf6bb",
+  "input": {
+    "schema_version": 2,
+    "requirement_state": {
+      "schema_version": 1,
+      "revision": 1,
+      "fields": {
+        "appearance": {
+          "status": "unknown"
+        },
+        "brand_pref.cpu": {
+          "status": "unknown"
+        },
+        "brand_pref.gpu": {
+          "status": "unknown"
+        },
+        "budget_basis": {
+          "value": "new_purchase",
+          "status": "active",
+          "kind": "constraint",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "b035fc4c-2d96-4c98-ad05-cab24ae6eccf",
+            "quote": "通过需求面板修改：预算改为6000（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；已有配件型号改为[\n                {\n                  \"category\": \"cpu\",\n                  \"model\": \"AMD Ryzen 5 7600\",\n                  \"quantity\": 1\n                },\n                {\n                  \"category\": \"memory\",\n                  \"model\": \"ADATA XPG LANCER 32GB (2x16GB) DDR5-5200 CL38\",\n                  \"quantity\": 1\n                }\n              ]（用途或已有事实）；已有配件改为[\n                \"cpu\",\n                \"memory\"\n              ]（用途或已有事实）；预算口径改为\"new_purchase\"（配置条件，必须满足）"
+          }
+        },
+        "budget_cny": {
+          "value": 6000,
+          "status": "active",
+          "kind": "constraint",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "b035fc4c-2d96-4c98-ad05-cab24ae6eccf",
+            "quote": "通过需求面板修改：预算改为6000（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；已有配件型号改为[\n                {\n                  \"category\": \"cpu\",\n                  \"model\": \"AMD Ryzen 5 7600\",\n                  \"quantity\": 1\n                },\n                {\n                  \"category\": \"memory\",\n                  \"model\": \"ADATA XPG LANCER 32GB (2x16GB) DDR5-5200 CL38\",\n                  \"quantity\": 1\n                }\n              ]（用途或已有事实）；已有配件改为[\n                \"cpu\",\n                \"memory\"\n              ]（用途或已有事实）；预算口径改为\"new_purchase\"（配置条件，必须满足）"
+          }
+        },
+        "budget_flex": {
+          "status": "unknown"
+        },
+        "existing_parts": {
+          "value": [
+            "cpu",
+            "memory"
+          ],
+          "status": "active",
+          "kind": "fact",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "b035fc4c-2d96-4c98-ad05-cab24ae6eccf",
+            "quote": "通过需求面板修改：预算改为6000（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；已有配件型号改为[\n                {\n                  \"category\": \"cpu\",\n                  \"model\": \"AMD Ryzen 5 7600\",\n                  \"quantity\": 1\n                },\n                {\n                  \"category\": \"memory\",\n                  \"model\": \"ADATA XPG LANCER 32GB (2x16GB) DDR5-5200 CL38\",\n                  \"quantity\": 1\n                }\n              ]（用途或已有事实）；已有配件改为[\n                \"cpu\",\n                \"memory\"\n              ]（用途或已有事实）；预算口径改为\"new_purchase\"（配置条件，必须满足）"
+          }
+        },
+        "noise_pref": {
+          "status": "unknown"
+        },
+        "notes": {
+          "status": "unknown"
+        },
+        "owned_parts": {
+          "value": [
+            {
+              "model": "AMD Ryzen 5 7600",
+              "category": "cpu",
+              "quantity": 1
+            },
+            {
+              "model": "ADATA XPG LANCER 32GB (2x16GB) DDR5-5200 CL38",
+              "category": "memory",
+              "quantity": 1
+            }
+          ],
+          "status": "active",
+          "kind": "fact",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "b035fc4c-2d96-4c98-ad05-cab24ae6eccf",
+            "quote": "通过需求面板修改：预算改为6000（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；已有配件型号改为[\n                {\n                  \"category\": \"cpu\",\n                  \"model\": \"AMD Ryzen 5 7600\",\n                  \"quantity\": 1\n                },\n                {\n                  \"category\": \"memory\",\n                  \"model\": \"ADATA XPG LANCER 32GB (2x16GB) DDR5-5200 CL38\",\n                  \"quantity\": 1\n                }\n              ]（用途或已有事实）；已有配件改为[\n                \"cpu\",\n                \"memory\"\n              ]（用途或已有事实）；预算口径改为\"new_purchase\"（配置条件，必须满足）"
+          }
+        },
+        "priority": {
+          "status": "unknown"
+        },
+        "recipient": {
+          "status": "unknown"
+        },
+        "size_pref": {
+          "status": "unknown"
+        },
+        "use_case.fps_target": {
+          "status": "unknown"
+        },
+        "use_case.resolution": {
+          "value": "2K",
+          "status": "active",
+          "kind": "fact",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "b035fc4c-2d96-4c98-ad05-cab24ae6eccf",
+            "quote": "通过需求面板修改：预算改为6000（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；已有配件型号改为[\n                {\n                  \"category\": \"cpu\",\n                  \"model\": \"AMD Ryzen 5 7600\",\n                  \"quantity\": 1\n                },\n                {\n                  \"category\": \"memory\",\n                  \"model\": \"ADATA XPG LANCER 32GB (2x16GB) DDR5-5200 CL38\",\n                  \"quantity\": 1\n                }\n              ]（用途或已有事实）；已有配件改为[\n                \"cpu\",\n                \"memory\"\n              ]（用途或已有事实）；预算口径改为\"new_purchase\"（配置条件，必须满足）"
+          }
+        },
+        "use_case.titles": {
+          "status": "unknown"
+        },
+        "use_case.type": {
+          "value": "gaming",
+          "status": "active",
+          "kind": "fact",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "b035fc4c-2d96-4c98-ad05-cab24ae6eccf",
+            "quote": "通过需求面板修改：预算改为6000（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；已有配件型号改为[\n                {\n                  \"category\": \"cpu\",\n                  \"model\": \"AMD Ryzen 5 7600\",\n                  \"quantity\": 1\n                },\n                {\n                  \"category\": \"memory\",\n                  \"model\": \"ADATA XPG LANCER 32GB (2x16GB) DDR5-5200 CL38\",\n                  \"quantity\": 1\n                }\n              ]（用途或已有事实）；已有配件改为[\n                \"cpu\",\n                \"memory\"\n              ]（用途或已有事实）；预算口径改为\"new_purchase\"（配置条件，必须满足）"
+          }
+        }
+      },
+      "alternatives": [],
+      "changes": [],
+      "history": []
+    }
+  },
+  "responses": [
+    {
+      "parts": [
+        {
+          "functionCall": {
+            "id": "call_54d189b641044fd79737b2fa",
+            "args": {
+              "action": "search_local_batch",
+              "payload": "{\"queries\":[{\"category\":\"motherboard\",\"query\":\"AM5 B650 DDR5\",\"limit\":8},{\"category\":\"gpu\",\"query\":\"RTX 4060 Ti RX 7700 XT\",\"order_by\":\"price_asc\",\"limit\":8},{\"category\":\"ssd\",\"query\":\"1TB NVMe PCIe 4.0\",\"order_by\":\"price_asc\",\"limit\":8},{\"category\":\"psu\",\"query\":\"650W 750W 80+ Bronze Gold\",\"order_by\":\"price_asc\",\"limit\":8},{\"category\":\"case\",\"query\":\"MATX ATX mesh\",\"order_by\":\"price_asc\",\"limit\":8},{\"category\":\"cooler\",\"query\":\"AM5 air tower\",\"order_by\":\"price_asc\",\"limit\":8}]}"
+            },
+            "name": "planning_action"
+          }
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "functionCall": {
+            "id": "call_08e93993634e434dbda94f0a",
+            "args": {
+              "action": "search_local",
+              "payload": "{\"category\":\"motherboard\",\"query\":\"B650M AM5 DDR5\",\"order_by\":\"price_asc\",\"limit\":8}"
+            },
+            "name": "planning_action"
+          }
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "functionCall": {
+            "id": "call_eb1adccbc1c54c1d8f4ef09b",
+            "args": {
+              "action": "evaluate",
+              "payload": "{\"draft\":{\"schema_version\":1,\"requirement_ref\":\"current\",\"build_ref\":\"proposal\",\"selection\":{\"cpu\":\"cpu-r5-7600\",\"gpu\":\"gpu-gb-5060-windforce\",\"motherboard\":\"mb-msi-pro-a620m-e\",\"memory\":\"mem-adata-lancer-32-5200\",\"ssd\":[{\"sku\":\"ssd-zhitai-ti600-1tb\",\"quantity\":1}],\"psu\":\"psu-msi-mag-a650bn\",\"case\":\"case-asus-prime-ap201\",\"cooler\":\"cooler-deepcool-ag400\"},\"rationale\":{\"cpu\":\"用户已有Ryzen 5 7600，AM5平台，TDP 65W，满足2K游戏需求\",\"gpu\":\"RTX 5060 WINDFORCE OC 8G，TDP 145W，长度199mm，单8pin供电，预算内适合2K入门\",\"motherboard\":\"MSI PRO A620M-E，AM5/DDR5/mATX，支持Ryzen 7600，价格较低以控制预算\",\"memory\":\"用户已有ADATA XPG LANCER 32GB DDR5-5200，与主板兼容\",\"ssd\":\"致态Ti600 1TB NVMe M.2，价格适中，满足游戏加载需求\",\"psu\":\"MSI MAG A650BN 650W铜牌，双8pin显卡供电，足够带动145W显卡+65W CPU\",\"case\":\"华硕AP201 mATX Mesh机箱，GPU限长338mm可容纳199mm显卡，散热良好\",\"cooler\":\"Deepcool AG400风冷，高度150mm兼容AP201（限高170mm），压制65W R5 7600足够\"}}}"
+            },
+            "name": "planning_action"
+          }
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "text": "{\n  \"outcome\": \"proposal\",\n  \"reply\": \"基于您已有的 Ryzen 5 7600 和 DDR5-5200 32GB 内存，为您搭配了一套总价约 5166 元（新购件）的 2K 游戏配置。核心选择 RTX 5060 8G 作为 2K 入门显卡，主板选用性价比高的 A620M 以控制预算，电源 650W 铜牌留有充足余量，机箱与散热均通过兼容性校验。已有内存暂无目录报价，不计入新购预算；整套新购金额在 6000 元以内。如需提升 2K 高画质表现，可考虑将显卡升级至 RTX 5060 Ti 或 RX 7700 XT（需增加约 200-300 元），或换用 B650M 主板以获得更好扩展性（差价约 400 元）。\",\n  \"draft\": {\n    \"schema_version\": 1,\n    \"requirement_ref\": \"current\",\n    \"build_ref\": \"proposal\",\n    \"selection\": {\n      \"cpu\": \"cpu-r5-7600\",\n      \"gpu\": \"gpu-gb-5060-windforce\",\n      \"motherboard\": \"mb-msi-pro-a620m-e\",\n      \"memory\": \"mem-adata-lancer-32-5200\",\n      \"ssd\": [\n        {\n          \"sku\": \"ssd-zhitai-ti600-1tb\",\n          \"quantity\": 1\n        }\n      ],\n      \"psu\": \"psu-msi-mag-a650bn\",\n      \"case\": \"case-asus-prime-ap201\",\n      \"cooler\": \"cooler-deepcool-ag400\"\n    },\n    \"rationale\": {\n      \"cpu\": \"用户已有 Ryzen 5 7600，AM5 平台 65W TDP，2K 游戏性能充足\",\n      \"gpu\": \"RTX 5060 WINDFORCE OC 8G，TDP 145W/单8pin/199mm，预算内 2K 入门首选\",\n      \"motherboard\": \"MSI PRO A620M-E，AM5+DDR5+mATX，支持 R5 7600，价格最低以控预算\",\n      \"memory\": \"用户已有 ADATA XPG LANCER 32GB DDR5-5200，与主板兼容\",\n      \"ssd\": \"致态 Ti600 1TB NVMe M.2，679 元性价比适中，满足游戏加载\",\n      \"psu\": \"MSI MAG A650BN 650W 铜牌，双 8pin 供电，负载 310W 余量超 1.3 倍\",\n      \"case\": \"华硕 AP201 mATX Mesh，GPU 限长 338mm/散热好，兼容当前显卡与散热器\",\n      \"cooler\": \"Deepcool AG400 风冷 150mm，解热 220W，压制 65W R5 7600 绰绰有余\"\n    }\n  },\n  \"assessments\": [\n    {\n      \"field\": \"budget_cny\",\n      \"status\": \"met\",\n      \"explanation\": \"新购件合计 5166 元，低于 6000 元预算上限；已有内存无目录报价但属用户自有件，不计入新购支出\",\n      \"evidence\": [\"local:gpu-gb-5060-windforce\", \"local:mb-msi-pro-a620m-e\", \"local:ssd-zhitai-ti600-1tb\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\"]\n    },\n    {\n      \"field\": \"use_case.resolution\",\n      \"status\": \"met\",\n      \"explanation\": \"RTX 5060 8G 定位 2K 入门游戏，配合 R5 7600 可在多数游戏中实现 2K 中高画质流畅体验；具体帧率因游戏而异，未作确定性承诺\",\n      \"evidence\": [\"local:gpu-gb-5060-windforce\", \"local:cpu-r5-7600\"]\n    },\n    {\n      \"field\": \"existing_parts\",\n      \"status\": \"met\",\n      \"explanation\": \"CPU 与内存均为用户已有件，已通过 owned_candidates 匹配并纳入配置，未重复购买\",\n      \"evidence\": [\"local:cpu-r5-7600\", \"local:mem-adata-lancer-32-5200\"]\n    },\n    {\n      \"field\": \"compatibility\",\n      \"status\": \"met\",\n      \"explanation\": \"所有兼容性校验通过：AM5 插槽匹配、DDR5 代际一致、显卡长度/散热器高度/电源功率/供电接口/M.2 槽位/板型均兼容\",\n      \"evidence\": [\"local:mb-msi-pro-a620m-e\", \"local:case-asus-prime-ap201\", \"local:psu-msi-mag-a650bn\", \"local:cooler-deepcool-ag400\"]\n    }\n  ],\n  \"issues\": [],\n  \"assumptions\": [\n    \"用户已有内存 ADATA XPG LANCER 32GB DDR5-5200 功能正常且无需更换\",\n    \"2K 游戏用途指主流 3A 及电竞游戏在中高画质下可接受帧率，非极致画质或专业渲染场景\",\n    \"A620M 主板虽不支持超频，但对 65W R5 7600 日常游戏使用无性能瓶颈\"\n  ]\n}"
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "text": "{\n  \"outcome\": \"proposal\",\n  \"reply\": \"已复核预算口径：您的需求明确为 new_purchase（仅新购件计入预算），当前新购件合计 5166 元，低于 6000 元上限，满足约束。已有内存虽无目录报价，但属用户自有件，按规则不纳入新购支出。所有兼容性校验均已通过，配置完整可交付。若后续希望提升 2K 游戏表现或主板扩展性，可在预算余量内升级显卡至 RTX 5060 Ti（+300 元）或主板至 B650M MORTAR WIFI（+400 元），但当前方案已满足全部必须条件。\",\n  \"draft\": {\n    \"schema_version\": 1,\n    \"requirement_ref\": \"current\",\n    \"build_ref\": \"proposal\",\n    \"selection\": {\n      \"cpu\": \"cpu-r5-7600\",\n      \"gpu\": \"gpu-gb-5060-windforce\",\n      \"motherboard\": \"mb-msi-pro-a620m-e\",\n      \"memory\": \"mem-adata-lancer-32-5200\",\n      \"ssd\": [\n        {\n          \"sku\": \"ssd-zhitai-ti600-1tb\",\n          \"quantity\": 1\n        }\n      ],\n      \"psu\": \"psu-msi-mag-a650bn\",\n      \"case\": \"case-asus-prime-ap201\",\n      \"cooler\": \"cooler-deepcool-ag400\"\n    },\n    \"rationale\": {\n      \"cpu\": \"用户已有 Ryzen 5 7600，AM5 平台 65W TDP，2K 游戏性能充足\",\n      \"gpu\": \"RTX 5060 WINDFORCE OC 8G，TDP 145W/单8pin/199mm，预算内 2K 入门首选\",\n      \"motherboard\": \"MSI PRO A620M-E，AM5+DDR5+mATX，支持 R5 7600，价格最低以控预算\",\n      \"memory\": \"用户已有 ADATA XPG LANCER 32GB DDR5-5200，与主板兼容\",\n      \"ssd\": \"致态 Ti600 1TB NVMe M.2，679 元性价比适中，满足游戏加载\",\n      \"psu\": \"MSI MAG A650BN 650W 铜牌，双 8pin 供电，负载 310W 余量超 1.3 倍\",\n      \"case\": \"华硕 AP201 mATX Mesh，GPU 限长 338mm/散热好，兼容当前显卡与散热器\",\n      \"cooler\": \"Deepcool AG400 风冷 150mm，解热 220W，压制 65W R5 7600 绰绰有余\"\n    }\n  },\n  \"assessments\": [\n    {\n      \"field\": \"budget_cny\",\n      \"status\": \"met\",\n      \"explanation\": \"预算口径为 new_purchase，仅新购件计入；新购合计 5166 元 ≤ 6000 元。已有内存无报价但属自有件，按规则不计入新购支出\",\n      \"evidence\": [\"local:gpu-gb-5060-windforce\", \"local:mb-msi-pro-a620m-e\", \"local:ssd-zhitai-ti600-1tb\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\"]\n    },\n    {\n      \"field\": \"use_case.resolution\",\n      \"status\": \"met\",\n      \"explanation\": \"RTX 5060 8G 定位 2K 入门游戏，配合 R5 7600 可在多数游戏中实现 2K 中高画质流畅体验；具体帧率因游戏而异，未作确定性承诺\",\n      \"evidence\": [\"local:gpu-gb-5060-windforce\", \"local:cpu-r5-7600\"]\n    },\n    {\n      \"field\": \"existing_parts\",\n      \"status\": \"met\",\n      \"explanation\": \"CPU 与内存均为用户已有件，已通过 owned_candidates 匹配并纳入配置，未重复购买\",\n      \"evidence\": [\"local:cpu-r5-7600\", \"local:mem-adata-lancer-32-5200\"]\n    },\n    {\n      \"field\": \"compatibility\",\n      \"status\": \"met\",\n      \"explanation\": \"所有兼容性校验通过：AM5 插槽匹配、DDR5 代际一致、显卡长度/散热器高度/电源功率/供电接口/M.2 槽位/板型均兼容\",\n      \"evidence\": [\"local:mb-msi-pro-a620m-e\", \"local:case-asus-prime-ap201\", \"local:psu-msi-mag-a650bn\", \"local:cooler-deepcool-ag400\"]\n    }\n  ],\n  \"issues\": [],\n  \"assumptions\": [\n    \"用户已有内存 ADATA XPG LANCER 32GB DDR5-5200 功能正常且无需更换\",\n    \"2K 游戏用途指主流 3A 及电竞游戏在中高画质下可接受帧率，非极致画质或专业渲染场景\",\n    \"A620M 主板虽不支持超频，但对 65W R5 7600 日常游戏使用无性能瓶颈\"\n  ]\n}"
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "text": "{\n  \"outcome\": \"proposal\",\n  \"reply\": \"预算口径已再次确认：您的需求明确为 new_purchase（仅新购件计入预算），当前新购件合计 5166 元，低于 6000 元上限。已有内存虽无目录报价，但按规则属用户自有件，不纳入新购支出计算。所有兼容性校验均通过，配置完整。若系统仍提示预算待确认，可能是因内存缺价导致总价字段不完整，但这不影响 new_purchase 口径下的预算合规性。当前方案已满足全部必须条件，可交付。\",\n  \"draft\": {\n    \"schema_version\": 1,\n    \"requirement_ref\": \"current\",\n    \"build_ref\": \"proposal\",\n    \"selection\": {\n      \"cpu\": \"cpu-r5-7600\",\n      \"gpu\": \"gpu-gb-5060-windforce\",\n      \"motherboard\": \"mb-msi-pro-a620m-e\",\n      \"memory\": \"mem-adata-lancer-32-5200\",\n      \"ssd\": [\n        {\n          \"sku\": \"ssd-zhitai-ti600-1tb\",\n          \"quantity\": 1\n        }\n      ],\n      \"psu\": \"psu-msi-mag-a650bn\",\n      \"case\": \"case-asus-prime-ap201\",\n      \"cooler\": \"cooler-deepcool-ag400\"\n    },\n    \"rationale\": {\n      \"cpu\": \"用户已有 Ryzen 5 7600，AM5 平台 65W TDP，2K 游戏性能充足\",\n      \"gpu\": \"RTX 5060 WINDFORCE OC 8G，TDP 145W/单8pin/199mm，预算内 2K 入门首选\",\n      \"motherboard\": \"MSI PRO A620M-E，AM5+DDR5+mATX，支持 R5 7600，价格最低以控预算\",\n      \"memory\": \"用户已有 ADATA XPG LANCER 32GB DDR5-5200，与主板兼容\",\n      \"ssd\": \"致态 Ti600 1TB NVMe M.2，679 元性价比适中，满足游戏加载\",\n      \"psu\": \"MSI MAG A650BN 650W 铜牌，双 8pin 供电，负载 310W 余量超 1.3 倍\",\n      \"case\": \"华硕 AP201 mATX Mesh，GPU 限长 338mm/散热好，兼容当前显卡与散热器\",\n      \"cooler\": \"Deepcool AG400 风冷 150mm，解热 220W，压制 65W R5 7600 绰绰有余\"\n    }\n  },\n  \"assessments\": [\n    {\n      \"field\": \"budget_cny\",\n      \"status\": \"met\",\n      \"explanation\": \"预算口径为 new_purchase，仅新购件计入；新购合计 5166 元 ≤ 6000 元。已有内存无报价但属自有件，按规则不计入新购支出\",\n      \"evidence\": [\"local:gpu-gb-5060-windforce\", \"local:mb-msi-pro-a620m-e\", \"local:ssd-zhitai-ti600-1tb\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\"]\n    },\n    {\n      \"field\": \"use_case.resolution\",\n      \"status\": \"met\",\n      \"explanation\": \"RTX 5060 8G 定位 2K 入门游戏，配合 R5 7600 可在多数游戏中实现 2K 中高画质流畅体验；具体帧率因游戏而异，未作确定性承诺\",\n      \"evidence\": [\"local:gpu-gb-5060-windforce\", \"local:cpu-r5-7600\"]\n    },\n    {\n      \"field\": \"existing_parts\",\n      \"status\": \"met\",\n      \"explanation\": \"CPU 与内存均为用户已有件，已通过 owned_candidates 匹配并纳入配置，未重复购买\",\n      \"evidence\": [\"local:cpu-r5-7600\", \"local:mem-adata-lancer-32-5200\"]\n    },\n    {\n      \"field\": \"compatibility\",\n      \"status\": \"met\",\n      \"explanation\": \"所有兼容性校验通过：AM5 插槽匹配、DDR5 代际一致、显卡长度/散热器高度/电源功率/供电接口/M.2 槽位/板型均兼容\",\n      \"evidence\": [\"local:mb-msi-pro-a620m-e\", \"local:case-asus-prime-ap201\", \"local:psu-msi-mag-a650bn\", \"local:cooler-deepcool-ag400\"]\n    }\n  ],\n  \"issues\": [],\n  \"assumptions\": [\n    \"用户已有内存 ADATA XPG LANCER 32GB DDR5-5200 功能正常且无需更换\",\n    \"2K 游戏用途指主流 3A 及电竞游戏在中高画质下可接受帧率，非极致画质或专业渲染场景\",\n    \"A620M 主板虽不支持超频，但对 65W R5 7600 日常游戏使用无性能瓶颈\"\n  ]\n}"
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "functionCall": {
+            "id": "call_54b82aa367f544798a020aff",
+            "args": {
+              "action": "search_local",
+              "payload": "{\"category\":\"memory\",\"query\":\"ADATA XPG LANCER 32GB DDR5-5200\",\"limit\":4}"
+            },
+            "name": "planning_action"
+          }
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "text": "{\n  \"outcome\": \"proposal\",\n  \"reply\": \"已尝试为已有内存 ADATA XPG LANCER 32GB DDR5-5200 检索目录报价，但该型号在本地目录中确无价格数据（price_cny: null），且规则禁止以外部搜索或记忆补价。按 new_purchase 口径，新购件合计 5166 元 ≤ 6000 元预算，约束已满足；但因内存缺价导致 total_cny 含 CPU 参考价后显示 6658.70 元，系统持续提示预算待确认。此为缺价引发的核验标记，非实际超预算。所有兼容性校验均通过，配置完整可交付。若需消除该提示，可在目录补充该内存报价后重新核验。\",\n  \"draft\": {\n    \"schema_version\": 1,\n    \"requirement_ref\": \"current\",\n    \"build_ref\": \"proposal\",\n    \"selection\": {\n      \"cpu\": \"cpu-r5-7600\",\n      \"gpu\": \"gpu-gb-5060-windforce\",\n      \"motherboard\": \"mb-msi-pro-a620m-e\",\n      \"memory\": \"mem-adata-lancer-32-5200\",\n      \"ssd\": [\n        {\n          \"sku\": \"ssd-zhitai-ti600-1tb\",\n          \"quantity\": 1\n        }\n      ],\n      \"psu\": \"psu-msi-mag-a650bn\",\n      \"case\": \"case-asus-prime-ap201\",\n      \"cooler\": \"cooler-deepcool-ag400\"\n    },\n    \"rationale\": {\n      \"cpu\": \"用户已有 Ryzen 5 7600，AM5 平台 65W TDP，2K 游戏性能充足\",\n      \"gpu\": \"RTX 5060 WINDFORCE OC 8G，TDP 145W/单8pin/199mm，预算内 2K 入门首选\",\n      \"motherboard\": \"MSI PRO A620M-E，AM5+DDR5+mATX，支持 R5 7600，价格最低以控预算\",\n      \"memory\": \"用户已有 ADATA XPG LANCER 32GB DDR5-5200，与主板兼容，目录无报价但属自有件不计入新购\",\n      \"ssd\": \"致态 Ti600 1TB NVMe M.2，679 元性价比适中，满足游戏加载\",\n      \"psu\": \"MSI MAG A650BN 650W 铜牌，双 8pin 供电，负载 310W 余量超 1.3 倍\",\n      \"case\": \"华硕 AP201 mATX Mesh，GPU 限长 338mm/散热好，兼容当前显卡与散热器\",\n      \"cooler\": \"Deepcool AG400 风冷 150mm，解热 220W，压制 65W R5 7600 绰绰有余\"\n    }\n  },\n  \"assessments\": [\n    {\n      \"field\": \"budget_cny\",\n      \"status\": \"met\",\n      \"explanation\": \"预算口径 new_purchase，仅新购件计入：GPU 3028 + 主板 699 + SSD 679 + 电源 269 + 机箱 412 + 散热 79 = 5166 元 ≤ 6000 元。已有内存目录无报价（price_cny: null），按规则不编造价格，且属自有件不计入新购支出。系统因缺价项导致 total_cny 不完整而持续提示，但 new_purchase 口径下预算约束实际已满足\",\n      \"evidence\": [\"local:gpu-gb-5060-windforce\", \"local:mb-msi-pro-a620m-e\", \"local:ssd-zhitai-ti600-1tb\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:mem-adata-lancer-32-5200\"]\n    },\n    {\n      \"field\": \"use_case.resolution\",\n      \"status\": \"met\",\n      \"explanation\": \"RTX 5060 8G 定位 2K 入门游戏，配合 R5 7600 可在多数游戏中实现 2K 中高画质流畅体验；具体帧率因游戏而异，未作确定性承诺\",\n      \"evidence\": [\"local:gpu-gb-5060-windforce\", \"local:cpu-r5-7600\"]\n    },\n    {\n      \"field\": \"existing_parts\",\n      \"status\": \"met\",\n      \"explanation\": \"CPU 与内存均为用户已有件，已通过 owned_candidates 匹配并纳入配置，未重复购买\",\n      \"evidence\": [\"local:cpu-r5-7600\", \"local:mem-adata-lancer-32-5200\"]\n    },\n    {\n      \"field\": \"compatibility\",\n      \"status\": \"met\",\n      \"explanation\": \"全部 12 项兼容性校验通过：AM5 插槽匹配、A620 芯片组支持 R5 7600、DDR5 代际一致、内存 5200MT/s 未超主板 6800 上限、显卡 199mm 在机箱 338mm 限长内、散热 150mm 在机箱 170mm 限高内、650W 电源对 310W 估算负载余量 ≥1.3、mATX 板型兼容机箱、1 块 M.2 SSD 未超主板 1 槽位、电源双 8pin 满足显卡单 8pin 需求、有独显具备显示输出、散热 220W 解热能力覆盖 CPU 65W TDP\",\n      \"evidence\": [\"local:mb-msi-pro-a620m-e\", \"local:case-asus-prime-ap201\", \"local:psu-msi-mag-a650bn\", \"local:cooler-deepcool-ag400\", \"local:gpu-gb-5060-windforce\", \"local:cpu-r5-7600\", \"local:mem-adata-lancer-32-5200\", \"local:ssd-zhitai-ti600-1tb\"]\n    }\n  ],\n  \"issues\": [],\n  \"assumptions\": [\n    \"用户已有内存 ADATA XPG LANCER 32GB DDR5-5200 功能正常且无需更换\",\n    \"2K 游戏用途指主流 3A 及电竞游戏在中高画质下可接受帧率，非极致画质或专业渲染场景\",\n    \"A620M 主板虽不支持超频，但对 65W R5 7600 日常游戏使用无性能瓶颈\",\n    \"内存目录缺价为快照数据限制，不代表市场无此型号或无法购买\"\n  ]\n}"
+        }
+      ],
+      "role": "model"
+    }
+  ],
+  "original_outcome": "proposal",
+  "original_issues": [
+    "预算口径仍待确认是否满足"
+  ],
+  "note": "Original successful model responses; deterministic budget checks must not require a duplicate model assessment."
+}

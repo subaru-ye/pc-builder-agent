@@ -730,10 +730,14 @@ func (x *execution) finalize() Result {
 			if v.Status != "active" || v.Strength != "must" || v.Kind == "fact" || v.Kind == "context" {
 				continue
 			}
-			a, ok := assessed[field]
 			// Amount, accounting basis and authorized flexibility are verified
-			// together from the quote. A hardware source cannot prove these values.
-			supported := field == "budget_cny" || field == "budget_basis" || field == "budget_flex"
+			// together by deliveryIssues from the quote and stated requirements.
+			// A second model assessment must neither veto nor override that math.
+			if field == "budget_cny" || field == "budget_basis" || field == "budget_flex" {
+				continue
+			}
+			a, ok := assessed[field]
+			supported := false
 			for _, ref := range a.Evidence {
 				for _, c := range x.result.Candidates {
 					if ref == "local:"+c.ID && !c.External {

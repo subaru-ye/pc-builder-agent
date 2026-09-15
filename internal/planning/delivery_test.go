@@ -70,7 +70,7 @@ func TestDeliveryHonorsProblemsButNotUnstatedPreferences(t *testing.T) {
 		{"must-noise", func(i *schemas.PlanningInput, _ *Result, _ *recordedCatalog) {
 			i.State.Fields["noise_pref"] = schemas.RequirementField{Status: "active", Kind: "constraint", Strength: "must", Value: json.RawMessage(`"silent"`)}
 		}, "proposal"},
-		{"missing-assessment", func(_ *schemas.PlanningInput, r *Result, _ *recordedCatalog) { r.Assessments = nil }, "proposal"},
+		{"budget-verified-without-model-assessment", func(_ *schemas.PlanningInput, r *Result, _ *recordedCatalog) { r.Assessments = nil }, "ready"},
 		{"missing-price", func(_ *schemas.PlanningInput, _ *Result, c *recordedCatalog) { c.Candidates[0].PriceCNY = nil }, "proposal"},
 		{"compatibility-conflict", func(_ *schemas.PlanningInput, _ *Result, c *recordedCatalog) {
 			for n := range c.Candidates {
@@ -104,11 +104,14 @@ func TestDeliveryHonorsProblemsButNotUnstatedPreferences(t *testing.T) {
 
 func TestEmptyProposalFeedbackCanFillAssessment(t *testing.T) {
 	input, record, catalog := completeRecording(t)
+	// Non-accounting must conditions still need a supported assessment.
+	input.State.Fields["brand_pref.gpu"] = schemas.RequirementField{Status: "active", Kind: "constraint", Strength: "must", Value: json.RawMessage(`"amd"`)}
+	record.Assessments = append(record.Assessments, Assessment{Field: "brand_pref.gpu", Status: "met", Evidence: []string{"local:gpu-sapphire-6600-pulse"}})
 	m := &scriptedModel{respond: func(n int, r *model.LLMRequest) *genai.Content {
 		copy := record
 		if n == 1 {
 			copy.Assessments = nil
-		} else if !strings.Contains(r.Contents[len(r.Contents)-1].Parts[0].Text, "预算仍待确认") {
+		} else if !strings.Contains(r.Contents[len(r.Contents)-1].Parts[0].Text, "显卡品牌仍待确认") {
 			t.Fatal("missing assessment was not returned as feedback")
 		}
 		raw, _ := json.Marshal(copy)

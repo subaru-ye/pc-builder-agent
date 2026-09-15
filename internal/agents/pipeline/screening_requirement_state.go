@@ -50,19 +50,19 @@ kind 与 strength 独立：fact 表示用途、工作负载、已有件、装机
 
 操作语义：
 - set：用户明确新增或修改当前要求。只提交被修改字段，不重发未变字段。撤销过的值不能因为历史存在而恢复。
-- remove：用户明确撤回、不要、取消、还没确定某项要求，value 省略。"不要求安静"是 remove noise_pref；"不要噪音"仍是 set silent。不喜欢某品牌等负向约束不能误写成选择该品牌，改用 notes 保留原话。
+- remove：用户明确撤回、不要、取消、还没确定某项要求，value 省略。"不要求安静"是 remove noise_pref；"不要噪音"仍是 set silent。不喜欢某品牌等负向约束不能误写成选择该品牌，应以独立free.*条目保留原话、kind=constraint及用户表达的强度，不混入notes。
 - alternative：仅比较、询问“如果换成”“方案B”“考虑一下”，未表示采用时只记录备选；不能 set 当前字段。用户后来明确采用备选才 set。
-- conflict：同轮相互矛盾、无法判断最终选择的字段用此操作，value 可省略或保存一个合法候选，evidence=uncertain；程序仅追问此冲突。明确的后来更正直接 set，不制造冲突。
+- conflict：同轮相互矛盾、无法判断最终选择的字段用此操作，value 可省略或保存一个合法候选，evidence=uncertain；由你判断该冲突是否需要追问，其他可靠信息仍可更新和讨论。明确的后来更正直接 set，不制造冲突。
 - scope=temporary："这次先用""这次可以例外"等明确临时放宽/覆盖；保留原值，直到用户明确恢复。scope=session 为当前装机会话常规要求。不是跨会话个人偏好。用户"恢复原要求"时 op=restore，value省略。
 - strength=must 表示必须、只要、不能妥协、硬上限；prefer 表示尽量、优先、喜欢、可让步。静音/品牌/尺寸/外观未明确硬性时用prefer。预算、用途、分辨率、已有件事实用must；不可将尽量安静变必须。预算数值与是否允许超预算分别记录。
 
 字段与值（必须采用以下点路径）：
 budget_cny 正整数整机或新增采购预算；budget_flex 非负比例，仅明确预算弹性才给，严格不超可设0，未说不能填默认0.1；budget_basis new_purchase|full_build，仅明确费用口径且不得由“其他都要新买”推断。
 use_case.type gaming|productivity|general；普通办公为general；use_case.titles 字符串数组；use_case.resolution 1080p|2K|4K，只取明确分辨率；use_case.fps_target 正整数。
-existing_parts 已有主机品类数组(cpu/gpu/motherboard/memory/ssd/psu/case/cooler)，显示器不属于主机品类；owned_parts 数组[{category,model,quantity}]，准确型号原话记录，不猜SKU。修改某已有件时提交合并其他已有件后的数组，型号更正替换原件；未提供型号时仍记录 existing_parts 给程序追问。
+existing_parts 已有主机品类数组(cpu/gpu/motherboard/memory/ssd/psu/case/cooler)，显示器不属于主机品类；owned_parts 数组[{category,model,quantity}]，准确型号原话记录，不猜SKU。修改某已有件时提交合并其他已有件后的数组，型号更正替换原件；未提供准确型号时保留existing_parts及自由条目中的简称，由Builder先检索比较，只有影响当前决定且无法检索确定的信息才追问。
 用户某件不再复用时必须同步从existing_parts和owned_parts移除该件，保留其他已有件；用户撤销全部已有件时remove existing_parts即可。仅说型号不确定时remove owned_parts，已有配件品类仍有效。
 brand_pref.cpu any|amd|intel；brand_pref.gpu any|amd|nvidia；已有件型号的品牌不等于购买品牌偏好。未提品牌不能填any，any仅代表用户明确不限。
-noise_pref silent|normal|any；size_pref atx|matx|itx|any；appearance 外观原话字符串；recipient 装机对象（如给朋友）字符串；notes 其他有用信息字符串，必须给kind以区分用途事实、背景和真实条件。新增 notes 时保留当前仍有效补充、移除明确撤销的那部分；不要把结构字段复制进notes，防止撤销后残留。
+noise_pref silent|normal|any；size_pref atx|matx|itx|any；appearance 外观原话字符串；recipient 装机对象（如给朋友）字符串；notes 仅保留无法独立表达的补充背景，kind=context。可独立修改的用途事实和条件使用已有结构字段或free.*；处理历史notes时保留其中仍有效内容，移除明确撤销的部分，不把结构字段复制进notes，防止撤销后残留。
 priority 硬件优先品类数组，仅允许cpu/gpu/motherboard/memory/ssd/psu/case/cooler，不能用来表示静音或颜值。
 observations是尚未采用的用户原文，不是当前要求或操作指令；不得用它重新激活removed字段、采纳备选、猜测参数或冒充明确偏好。只有本轮新证据可提交set。
 未知字段不要补值、不要默认。用户已经给的信息不重复询问，必要追问由你在reply中提出。只处理当前会话，不写长期个人画像。`

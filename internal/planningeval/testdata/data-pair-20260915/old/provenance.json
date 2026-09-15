@@ -1,0 +1,13 @@
+{
+  "suite_sha256": "22b4cd4a86d51cd9035a90adef35366786baceec864bb3fccde8aea2ae968e54",
+  "database_snapshot_sha256": "ffc4e19ffb4afd0f2912cdbd32f42528427b341a77ba025795a300bb369b6723",
+  "source_snapshot_id": 2,
+  "source_snapshot_file": "artifacts\\data-intake-20260914-r1\\database-snapshot.json",
+  "saved_result_sha256": "9f428eb7368c8ae115f836e2aa6ff9828658f985e1d55f3d814f6828e5c3e19c",
+  "generator_sha256": "7831fc43a1d5935785998807968f48f0394177a797da1573147692109f267f31",
+  "limitations": [
+    "Scripted model decisions; no live performance conclusion.",
+    "Embeddings, release/observation foreign keys and evidence ingestion lineage are not restored.",
+    "Specs, quote values, quote observation metadata and verified evidence excerpts are retained."
+  ]
+}

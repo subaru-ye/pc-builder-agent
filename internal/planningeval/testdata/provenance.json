@@ -1,0 +1,13 @@
+{
+  "sources": {
+    "internal/planning/testdata/complete_proposal_recording.json": "9f428eb7368c8ae115f836e2aa6ff9828658f985e1d55f3d814f6828e5c3e19c",
+    "internal/producthttp/testdata/cpu_upgrade_recording.json": "027d2c235cc642e63a234dd6360578e19e49a3255a7fa7f989fa62de0bd97ba5",
+    "internal/planning/testdata/5900x_registration_recording.json": "e087feb5e1fa602c99b3a5b5f9a2aa959653503410e6406bf6de4d52e65bd50a"
+  },
+  "suite_sha256": "a05770dc7c3032b127c361813e7a6f1f658bd1acc90e34b6979a07a83dc3fd34",
+  "synthetic_changes": [
+    "eval-only-am5-board socket mutation",
+    "fixture URL and HTML wrapper",
+    "all Screening incremental operations and tool trajectories except saved final P2-005"
+  ]
+}

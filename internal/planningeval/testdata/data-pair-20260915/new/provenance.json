@@ -1,0 +1,13 @@
+{
+  "suite_sha256": "a69a5cb75daf64d4143b2298ffd4c11ea0c96e2f6e9c665f9147b8a447cc14bd",
+  "database_snapshot_sha256": "1caf923b7a0a01a8126766f63dace0a009b143bc5a7c938b2294ac2ef39487d7",
+  "source_snapshot_id": 7,
+  "source_snapshot_file": "artifacts\\data-intake-after-gpu-20260915-r1\\database-snapshot.json",
+  "saved_result_sha256": "9f428eb7368c8ae115f836e2aa6ff9828658f985e1d55f3d814f6828e5c3e19c",
+  "generator_sha256": "7831fc43a1d5935785998807968f48f0394177a797da1573147692109f267f31",
+  "limitations": [
+    "Scripted model decisions; no live performance conclusion.",
+    "Embeddings, release/observation foreign keys and evidence ingestion lineage are not restored.",
+    "Specs, quote values, quote observation metadata and verified evidence excerpts are retained."
+  ]
+}

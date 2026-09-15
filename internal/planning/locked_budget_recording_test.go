@@ -2,8 +2,11 @@ package planning
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +15,104 @@ import (
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 )
+
+func TestRecordedBudgetClarificationGetsOneReview(t *testing.T) {
+	for _, mode := range []string{"keep_question", "repair", "no_remaining_turns"} {
+		t.Run(mode, func(t *testing.T) {
+			raw, err := os.ReadFile("testdata/budget_clarification_recording_20260915.json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var f struct {
+				Input       schemas.PlanningInput
+				Responses   []*genai.Content
+				CatalogFile string `json:"catalog_file"`
+				CatalogSHA  string `json:"catalog_sha256"`
+			}
+			if err = json.Unmarshal(raw, &f); err != nil {
+				t.Fatal(err)
+			}
+			if len(f.Responses) != 4 {
+				t.Fatal("original recording changed")
+			}
+			catalogRaw, err := os.ReadFile(f.CatalogFile)
+			if err != nil || fmt.Sprintf("%x", sha256.Sum256(catalogRaw)) != f.CatalogSHA {
+				t.Fatal("catalog changed", err)
+			}
+			var suite struct {
+				Catalog struct{ Candidates []Candidate }
+			}
+			if err = json.Unmarshal(catalogRaw, &suite); err != nil {
+				t.Fatal(err)
+			}
+			catalog := recordedCatalog{store.CatalogSnapshot{Snapshot: store.Snapshot{SnapshotDate: time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)}}}
+			for _, c := range suite.Catalog.Candidates {
+				catalog.Candidates = append(catalog.Candidates, store.Candidate{SKU: c.ID, Category: c.Category, Brand: c.Brand, Model: c.Model, Specs: c.Specs, PriceCNY: c.Price})
+			}
+			witnessRaw, err := os.ReadFile("testdata/locked_budget_witness_20260915.json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var witness struct{ Draft json.RawMessage }
+			if err = json.Unmarshal(witnessRaw, &witness); err != nil {
+				t.Fatal(err)
+			}
+			before, _ := json.Marshal(f.Input)
+			m := &scriptedModel{respond: func(n int, req *model.LLMRequest) *genai.Content {
+				if n <= 4 {
+					return f.Responses[n-1]
+				}
+				if n == 5 {
+					feedback := req.Contents[len(req.Contents)-1].Parts[0].Text
+					if !strings.Contains(feedback, "交付核验反馈") || !strings.Contains(feedback, "软偏好不等于额外授权门槛") || !strings.Contains(feedback, "9428.70") || len(req.Config.Tools) == 0 {
+						t.Fatalf("missing review or remaining tools: %s", feedback)
+					}
+				}
+				if mode == "keep_question" {
+					return f.Responses[3]
+				}
+				// Authored continuation: proves tools can resume, not that the real
+				// model found the witness. The first four responses stay untouched.
+				if n == 5 {
+					return function("search_local_batch", `{"queries":[{"category":"cpu","order_by":"price_asc"},{"category":"motherboard","order_by":"price_asc"},{"category":"memory","order_by":"price_asc"}]}`)
+				}
+				if n == 6 {
+					return function("evaluate", `{"draft":`+string(witness.Draft)+`}`)
+				}
+				return genai.NewContentFromText(`{"outcome":"ready","draft":`+string(witness.Draft)+`,"reply":"已核对预算内替代，显卡保持不变，其他部件存在取舍。","issues":[],"assessments":[{"field":"free.locked_parts","status":"met","evidence":["local:gpu-sapphire-7700xt-pulse"]}]}`, genai.RoleModel)
+			}}
+			maxTurns, wantCalls := 8, 5
+			if mode == "no_remaining_turns" {
+				maxTurns, wantCalls = 4, 4
+			}
+			if mode == "repair" {
+				wantCalls = 7
+			}
+			got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: maxTurns}).Run(context.Background(), f.Input)
+			if err != nil || got.ModelCalls != wantCalls {
+				t.Fatalf("calls=%d outcome=%s err=%v", got.ModelCalls, got.Outcome, err)
+			}
+			after, _ := json.Marshal(f.Input)
+			if string(before) != string(after) {
+				t.Fatal("user requirements or base changed")
+			}
+			if mode != "repair" {
+				if got.Outcome != "clarify" || len(got.Issues) == 0 || got.Quote.TotalCNY != "9428.70" {
+					t.Fatalf("question lost: outcome=%s issues=%v", got.Outcome, got.Issues)
+				}
+				return
+			}
+			if got.Outcome != "ready" || got.Quote.TotalCNY != "7114.00" || got.ToolCalls != 13 || got.Validation.OverallStatus != schemas.OverallPass {
+				t.Fatalf("repair failed: outcome=%s quote=%+v tools=%d issues=%v", got.Outcome, got.Quote, got.ToolCalls, got.Issues)
+			}
+			base, _ := schemas.DecodeBuildDraft(f.Input.BaseDraft)
+			chosen, _ := schemas.DecodeBuildDraft(got.Draft)
+			if base.Selection.GPU == nil || chosen.Selection.GPU == nil || *base.Selection.GPU != *chosen.Selection.GPU {
+				t.Fatal("locked GPU changed")
+			}
+		})
+	}
+}
 
 // A different real run found this exact selection. Re-evaluate it under the
 // failed modification's actual state to distinguish planning failure from a

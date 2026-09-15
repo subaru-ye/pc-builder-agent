@@ -21,7 +21,7 @@ const instruction = `你是装机顾问，可以自主调用工具检索、比�
 request是本轮已授权执行的用户原话，base_draft是本会话已有正式配置，previous_proposal是上次选配进展。升级/改单时基于它们检索和比较，不要再次索要已有型号或重复确认执行方向。用户让你自行选更好的处理器时，根据用途、原CPU、剩余整机预算和兼容性自主检索候选；不要把找型号退回给用户。“其他配件尽量不动”是软偏好，先尝试兼容升级，确需联动再说明原因；预算充足不代表允许超出既定预算。正式配置中的配件不代表用户已购，不擅自设为已有件。纯讨论备选不能覆盖当前要求。
 不要要求用户命中固定词语或填齐固定字段。缺少信息时判断是否真的影响下一步；可给方向、候选或提出必要问题。不要声称目录无结果等于市场无解。价格、规格及兼容性来自工具，不凭记忆编造；缺数据可以继续检索和出待解决方案。程序没有默认预算下限、加价授权或游戏必须独显要求。比较方案可以讨论不满足要求的替代项，但必须标明偏差，不能作为用户已接受的方案。
 使用 planning_action 工具，参数 action 和 payload（JSON字符串）：
-search_local: {query?:相关性排序词,category?:品类,offset?:0,limit?:16}，query不排除其他路径；category是你指定的过滤条件，可翻页或调整查询。缺少噪声等参数时可先比较现有候选，不能声称目录没有这类商品。
+search_local: {query?:相关性排序词,category?:品类,offset?:0,limit?:16}，query不排除其他路径；category是你指定的过滤条件，可翻页或调整查询。sources按候选编号返回字段来源索引，需原文或链接时用read_evidence按id读取；索引不代表你已经阅读全文。缺少噪声等参数时可先比较现有候选，不能声称目录没有这类商品。
 search_semantic: {query:自然语言需求,category?:品类}，复用本地语义检索；语义命中只表示相关，不能当作规格核验。
 联网范围：仅用于装机相关的公开型号规格、兼容性/BIOS支持、安装排障指南、配件知识和性能资料，优先厂商官网与官方文档。不得联网查询具体价格、优惠、库存或商家购买信息；用户询价时使用本地价格快照并说明观察日期，缺价明确未知，不以搜索摘要、网页标价、首发价或模型记忆补价。不要因为缺价反复调用联网工具；仍可查询规格并保存待解决方案。目录已有准确型号时使用本地候选编号及其报价，不要另建外部候选替代已有报价。
 search_web: {query:搜索词}，搜索上述装机技术资料和官网链接，不用于查价；返回来源编号。
@@ -106,10 +106,7 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 		brief := previous
 		brief.Evidence = append([]Evidence(nil), previous.Evidence...)
 		for i := range brief.Evidence {
-			text := []rune(brief.Evidence[i].Text)
-			if len(text) > 240 {
-				brief.Evidence[i].Text = string(text[:240]) + " [可用read_evidence展开]"
-			}
+			brief.Evidence[i] = evidencePreview(brief.Evidence[i])
 		}
 		modelInput.PreviousProposal, _ = json.Marshal(brief)
 	}
@@ -286,7 +283,7 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		for _, c := range found[p.Offset:end] {
 			x.seen[c.ID] = true
 		}
-		sources := []Evidence{}
+		sources := map[string][]map[string]string{}
 		if source, ok := x.runner.Catalog.(interface {
 			CandidateEvidence(context.Context, []string) ([]store.CandidateEvidence, error)
 		}); ok {
@@ -298,7 +295,9 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 			if err == nil {
 				for _, row := range rows {
 					e := Evidence{ID: "catalog-" + row.ID, CandidateID: row.SKU, Field: row.Field, URL: row.URL, Title: row.SKU + " · " + row.Field + " · " + row.Status, Text: row.Text, CapturedAt: row.CapturedAt.UTC().Format(time.RFC3339), Kind: "catalog"}
-					sources = append(sources, e)
+					// Catalog queries expose field references, not repeated URLs,
+					// titles and excerpts for every field on the same product page.
+					sources[row.SKU] = append(sources[row.SKU], map[string]string{"id": e.ID, "field": row.Field, "status": row.Status})
 					seen := false
 					for _, old := range x.evidence {
 						if old.ID == e.ID {

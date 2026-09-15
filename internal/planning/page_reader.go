@@ -263,19 +263,22 @@ func evidenceWindow(e Evidence, query string, offset, limit int) map[string]any 
 				end++
 			}
 			line, score := strings.ToLower(string(text[pos:end])), 0
+			first := len(line)
 			for _, term := range terms {
-				if strings.Contains(line, term) {
+				if at := strings.Index(line, term); at >= 0 {
 					score++
+					first = min(first, at)
 				}
 			}
 			if score > best {
-				best, position = score, pos
+				// A long paragraph may start far before its matching fact.
+				best, position = score, pos+len([]rune(line[:first]))
 			}
 			pos = end + 1
 		}
 		if best > 0 {
 			matched = true
-			offset = max(0, position-1000)
+			offset = max(0, position-min(1000, limit/4))
 		}
 	}
 	if offset > len(text) {

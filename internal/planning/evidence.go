@@ -9,6 +9,15 @@ import (
 
 var quotedNumber = regexp.MustCompile(`\d+(?:\.\d+)?`)
 
+// The preview is a copy. read_evidence retains the complete original excerpt.
+func evidencePreview(e Evidence) Evidence {
+	text := []rune(e.Text)
+	if len(text) > 240 {
+		e.Text = string(text[:240]) + " [正文未完整展示，可用read_evidence展开]"
+	}
+	return e
+}
+
 // Numeric facts must occur in their cited excerpt. This checks provenance, not
 // whether a user's request is feasible. Unit conversion should cite both values
 // or keep the field unknown; the model can still discuss the candidate.

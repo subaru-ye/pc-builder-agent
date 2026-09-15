@@ -1,0 +1,342 @@
+{
+  "provenance": {
+    "source_reports_sha256": {
+      "artifacts\\planning-legacy-builder-smoke-20260915-r1\\report.json": "3c15772155c606c2bf55e269e984c34e36d18b4d6114c03a27e0aad33ff42133",
+      "artifacts\\planning-legacy-base-context-live-20260915-r1\\report.json": "8fb8a5e236a5988206137acf409e8abc0249c9738464fbe27390a47afaa57184"
+    },
+    "scope": "Feasibility witness: exact successful real selection tested against failed locked-GPU requirements. No claim that the failing model found it."
+  },
+  "input": {
+    "schema_version": 2,
+    "requirement_state": {
+      "schema_version": 1,
+      "revision": 1,
+      "fields": {
+        "appearance": {
+          "status": "unknown"
+        },
+        "brand_pref.cpu": {
+          "status": "unknown"
+        },
+        "brand_pref.gpu": {
+          "status": "unknown"
+        },
+        "budget_basis": {
+          "status": "unknown"
+        },
+        "budget_cny": {
+          "value": 7500,
+          "status": "active",
+          "kind": "constraint",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "cd4833d7-6e68-48e3-a0af-e6c98c65712b",
+            "quote": "通过需求面板修改：预算改为7500（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；游戏或软件改为[\n                \"黑神话:悟空\"\n              ]（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；补充要求改为\"{\\\"schema_version\\\":1,\\\"base_build_ref\\\":\\\"base_a\\\",\\\"intent\\\":\\\"adjust_budget\\\",\\\"budget_delta_cny\\\":-500,\\\"locked_categories\\\":[\\\"gpu\\\"]}\"（补充说明）；补充要求改为\"必须保留原方案配件：gpu\"（配置条件，必须满足）"
+          }
+        },
+        "budget_flex": {
+          "status": "unknown"
+        },
+        "existing_parts": {
+          "status": "unknown"
+        },
+        "free.historical_change": {
+          "value": "{\"schema_version\":1,\"base_build_ref\":\"base_a\",\"intent\":\"adjust_budget\",\"budget_delta_cny\":-500,\"locked_categories\":[\"gpu\"]}",
+          "status": "active",
+          "kind": "context",
+          "strength": "prefer",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "cd4833d7-6e68-48e3-a0af-e6c98c65712b",
+            "quote": "通过需求面板修改：预算改为7500（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；游戏或软件改为[\n                \"黑神话:悟空\"\n              ]（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；补充要求改为\"{\\\"schema_version\\\":1,\\\"base_build_ref\\\":\\\"base_a\\\",\\\"intent\\\":\\\"adjust_budget\\\",\\\"budget_delta_cny\\\":-500,\\\"locked_categories\\\":[\\\"gpu\\\"]}\"（补充说明）；补充要求改为\"必须保留原方案配件：gpu\"（配置条件，必须满足）"
+          }
+        },
+        "free.locked_parts": {
+          "value": "必须保留原方案配件：gpu",
+          "status": "active",
+          "kind": "constraint",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "cd4833d7-6e68-48e3-a0af-e6c98c65712b",
+            "quote": "通过需求面板修改：预算改为7500（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；游戏或软件改为[\n                \"黑神话:悟空\"\n              ]（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；补充要求改为\"{\\\"schema_version\\\":1,\\\"base_build_ref\\\":\\\"base_a\\\",\\\"intent\\\":\\\"adjust_budget\\\",\\\"budget_delta_cny\\\":-500,\\\"locked_categories\\\":[\\\"gpu\\\"]}\"（补充说明）；补充要求改为\"必须保留原方案配件：gpu\"（配置条件，必须满足）"
+          }
+        },
+        "noise_pref": {
+          "status": "unknown"
+        },
+        "notes": {
+          "status": "unknown"
+        },
+        "owned_parts": {
+          "status": "unknown"
+        },
+        "priority": {
+          "status": "unknown"
+        },
+        "recipient": {
+          "status": "unknown"
+        },
+        "size_pref": {
+          "status": "unknown"
+        },
+        "use_case.fps_target": {
+          "status": "unknown"
+        },
+        "use_case.resolution": {
+          "value": "2K",
+          "status": "active",
+          "kind": "fact",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "cd4833d7-6e68-48e3-a0af-e6c98c65712b",
+            "quote": "通过需求面板修改：预算改为7500（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；游戏或软件改为[\n                \"黑神话:悟空\"\n              ]（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；补充要求改为\"{\\\"schema_version\\\":1,\\\"base_build_ref\\\":\\\"base_a\\\",\\\"intent\\\":\\\"adjust_budget\\\",\\\"budget_delta_cny\\\":-500,\\\"locked_categories\\\":[\\\"gpu\\\"]}\"（补充说明）；补充要求改为\"必须保留原方案配件：gpu\"（配置条件，必须满足）"
+          }
+        },
+        "use_case.titles": {
+          "value": [
+            "黑神话:悟空"
+          ],
+          "status": "active",
+          "kind": "fact",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "cd4833d7-6e68-48e3-a0af-e6c98c65712b",
+            "quote": "通过需求面板修改：预算改为7500（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；游戏或软件改为[\n                \"黑神话:悟空\"\n              ]（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；补充要求改为\"{\\\"schema_version\\\":1,\\\"base_build_ref\\\":\\\"base_a\\\",\\\"intent\\\":\\\"adjust_budget\\\",\\\"budget_delta_cny\\\":-500,\\\"locked_categories\\\":[\\\"gpu\\\"]}\"（补充说明）；补充要求改为\"必须保留原方案配件：gpu\"（配置条件，必须满足）"
+          }
+        },
+        "use_case.type": {
+          "value": "gaming",
+          "status": "active",
+          "kind": "fact",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "cd4833d7-6e68-48e3-a0af-e6c98c65712b",
+            "quote": "通过需求面板修改：预算改为7500（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；游戏或软件改为[\n                \"黑神话:悟空\"\n              ]（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；补充要求改为\"{\\\"schema_version\\\":1,\\\"base_build_ref\\\":\\\"base_a\\\",\\\"intent\\\":\\\"adjust_budget\\\",\\\"budget_delta_cny\\\":-500,\\\"locked_categories\\\":[\\\"gpu\\\"]}\"（补充说明）；补充要求改为\"必须保留原方案配件：gpu\"（配置条件，必须满足）"
+          }
+        }
+      },
+      "alternatives": [],
+      "changes": [],
+      "history": []
+    },
+    "base_draft": {
+      "build_ref": "base_a",
+      "selection": {
+        "cpu": "cpu-r5-7600",
+        "gpu": "gpu-sapphire-7700xt-pulse",
+        "psu": "psu-msi-mag-a650bn",
+        "ssd": [
+          {
+            "sku": "ssd-adata-legend800-1tb",
+            "quantity": 1
+          }
+        ],
+        "case": "case-montech-air-903-max",
+        "cooler": "cooler-deepcool-ak620",
+        "memory": "mem-team-delta-32-6000-white",
+        "motherboard": "mb-msi-pro-a620m-e"
+      },
+      "schema_version": 1,
+      "requirement_ref": "historical-fixture"
+    }
+  },
+  "draft": {
+    "build_ref": "proposal",
+    "rationale": {
+      "cpu": "Ryzen 5 5600为AM4平台游戏性价比优选，满足黑神话悟空CPU需求且预算友好",
+      "gpu": "RX 7700 XT 12GB在2K分辨率下可应对黑神话悟空高画质，显存充足避免8GB瓶颈",
+      "psu": "750W金牌电源为7700 XT（245W）+5600组合留足余量，双8pin接口匹配",
+      "ssd": "NVMe 1TB提供足够容量与速度，优于SATA方案",
+      "case": "AP201支持MATX主板与280mm显卡长度，散热兼容AG400",
+      "cooler": "AG400四热管压制65W TDP的5600绰绰有余，高度150mm适配机箱",
+      "memory": "DDR4-3200双通道16GB满足当前游戏需求，价格适中",
+      "motherboard": "B550M PRO-VDH WIFI支持PCIe 4.0与WiFi，供电足够带动5600+7700XT组合"
+    },
+    "selection": {
+      "cpu": "cpu-r5-5600",
+      "gpu": "gpu-sapphire-7700xt-pulse",
+      "psu": "psu-tt-gf3-750",
+      "ssd": [
+        {
+          "sku": "ssd-kingston-nv2-1tb",
+          "quantity": 1
+        }
+      ],
+      "case": "case-asus-prime-ap201",
+      "cooler": "cooler-deepcool-ag400",
+      "memory": "mem-crucial-ballistix-16-3200",
+      "motherboard": "mb-msi-b550m-pro-vdh-wifi"
+    },
+    "schema_version": 1,
+    "requirement_ref": "current"
+  },
+  "snapshot_date": "2026-09-15",
+  "candidates": [
+    {
+      "id": "cpu-r5-5600",
+      "category": "cpu",
+      "brand": "AMD",
+      "model": "Ryzen 5 5600",
+      "specs": {
+        "tdp_w": 65,
+        "socket": "AM4",
+        "has_igpu": false,
+        "supported_chipsets": [
+          "A520",
+          "B450",
+          "B550",
+          "X470",
+          "X570"
+        ]
+      },
+      "price_cny": "848.00",
+      "evidence": [
+        "local:cpu-r5-5600"
+      ],
+      "external": false
+    },
+    {
+      "id": "gpu-sapphire-7700xt-pulse",
+      "category": "gpu",
+      "brand": "Sapphire",
+      "model": "PULSE Radeon RX 7700 XT 12GB",
+      "specs": {
+        "tdp_w": 245,
+        "length_mm": 280,
+        "power_connectors": [
+          "pcie_8pin",
+          "pcie_8pin"
+        ]
+      },
+      "price_cny": "3299.00",
+      "evidence": [
+        "local:gpu-sapphire-7700xt-pulse"
+      ],
+      "external": false
+    },
+    {
+      "id": "mb-msi-b550m-pro-vdh-wifi",
+      "category": "motherboard",
+      "brand": "MSI",
+      "model": "B550M PRO-VDH WIFI",
+      "specs": {
+        "socket": "AM4",
+        "chipset": "B550",
+        "m2_slots": 2,
+        "form_factor": "matx",
+        "memory_generation": "ddr4",
+        "memory_speed_max_mts": 4400
+      },
+      "price_cny": "599.00",
+      "evidence": [
+        "local:mb-msi-b550m-pro-vdh-wifi"
+      ],
+      "external": false
+    },
+    {
+      "id": "mem-crucial-ballistix-16-3200",
+      "category": "memory",
+      "brand": "Crucial",
+      "model": "Ballistix 16GB (2x8GB) DDR4-3200 CL16",
+      "specs": {
+        "speed_mts": 3200,
+        "generation": "ddr4"
+      },
+      "price_cny": "569.00",
+      "evidence": [
+        "local:mem-crucial-ballistix-16-3200"
+      ],
+      "external": false
+    },
+    {
+      "id": "ssd-kingston-nv2-1tb",
+      "category": "ssd",
+      "brand": "Kingston",
+      "model": "NV2 1TB NVMe M.2",
+      "specs": {
+        "form_factor": "m2"
+      },
+      "price_cny": "709.00",
+      "evidence": [
+        "local:ssd-kingston-nv2-1tb"
+      ],
+      "external": false
+    },
+    {
+      "id": "psu-tt-gf3-750",
+      "category": "psu",
+      "brand": "Thermaltake",
+      "model": "Toughpower GF3 750W TT Premium 80+ Gold",
+      "specs": {
+        "wattage_w": 750,
+        "power_connectors": [
+          "pcie_8pin",
+          "pcie_8pin",
+          "pcie_8pin",
+          "pcie_8pin",
+          "pcie_16pin"
+        ]
+      },
+      "price_cny": "599.00",
+      "evidence": [
+        "local:psu-tt-gf3-750"
+      ],
+      "external": false
+    },
+    {
+      "id": "case-asus-prime-ap201",
+      "category": "case",
+      "brand": "Asus",
+      "model": "Prime AP201 (Black, Mesh)",
+      "specs": {
+        "gpu_length_max_mm": 338,
+        "radiator_sizes_mm": [
+          120,
+          140,
+          240,
+          280,
+          360
+        ],
+        "cooler_height_max_mm": 170,
+        "supported_form_factors": [
+          "matx",
+          "itx"
+        ]
+      },
+      "price_cny": "412.00",
+      "evidence": [
+        "local:case-asus-prime-ap201"
+      ],
+      "external": false
+    },
+    {
+      "id": "cooler-deepcool-ag400",
+      "category": "cooler",
+      "brand": "Deepcool",
+      "model": "AG400",
+      "specs": {
+        "type": "air",
+        "height_mm": 150,
+        "radiator_size_mm": null,
+        "cooling_capacity_w": 220
+      },
+      "price_cny": "79.00",
+      "evidence": [
+        "local:cooler-deepcool-ag400"
+      ],
+      "external": false
+    }
+  ],
+  "expected_total_cny": "7114.00"
+}

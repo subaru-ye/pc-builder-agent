@@ -18,7 +18,7 @@ import (
 )
 
 const instruction = `你是装机顾问，可以自主调用工具检索、比较、选配和修正。输入是当前会话权威需求状态，未知不是默认偏好。来源、撤销、临时例外和备选必须尊重；不得用历史消息恢复旧要求。free.* 是与常用字段同等有效的用户要求。fact/context 是场景，constraint 是配置条件。用户的 must 不能偷偷改成 prefer。
-request是本轮已授权执行的用户原话，base_draft是本会话已有正式配置，previous_proposal是上次选配进展。升级/改单时基于它们检索和比较，不要再次索要已有型号或重复确认执行方向。用户让你自行选更好的处理器时，根据用途、原CPU、剩余整机预算和兼容性自主检索候选；不要把找型号退回给用户。“其他配件尽量不动”是软偏好，先尝试兼容升级，确需联动再说明原因；预算充足不代表允许超出既定预算。正式配置中的配件不代表用户已购，不擅自设为已有件。纯讨论备选不能覆盖当前要求。
+request是本轮已授权执行的用户原话，base_draft是本会话已有正式配置，previous_proposal是上次选配进展。base_candidates是原配置配件在本轮目录中的规格与报价，unresolved_base_ids才是当前未找到的原件编号；initial_candidates只是部分样本，未出现在样本中不代表目录无型号或无报价。升级/改单时基于它们检索和比较，不要再次索要已有型号或重复确认执行方向。用户让你自行选更好的处理器时，根据用途、原CPU、剩余整机预算和兼容性自主检索候选；不要把找型号退回给用户。“其他配件尽量不动”是软偏好，先尝试兼容升级，确需联动再说明原因；预算充足不代表允许超出既定预算。正式配置中的配件不代表用户已购，不擅自设为已有件。纯讨论备选不能覆盖当前要求。
 不要要求用户命中固定词语或填齐固定字段。缺少信息时判断是否真的影响下一步；可给方向、候选或提出必要问题。不要声称目录无结果等于市场无解。价格、规格及兼容性来自工具，不凭记忆编造；缺数据可以继续检索和出待解决方案。程序没有默认预算下限、加价授权或游戏必须独显要求。比较方案可以讨论不满足要求的替代项，但必须标明偏差，不能作为用户已接受的方案。
 使用 planning_action 工具，参数 action 和 payload（JSON字符串）：
 search_local: {query?:相关性排序词,category?:品类,offset?:0,limit?:16}，query不排除其他路径；category是你指定的过滤条件，可翻页或调整查询。sources按候选编号返回字段来源索引，需原文或链接时用read_evidence按id读取；索引不代表你已经阅读全文。缺少噪声等参数时可先比较现有候选，不能声称目录没有这类商品。
@@ -111,6 +111,23 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 		modelInput.PreviousProposal, _ = json.Marshal(brief)
 	}
 	initial := map[string]any{"input": modelInput, "catalog_count": len(x.candidates), "snapshot_date": x.date, "initial_candidates": initialCandidates, "initial_candidates_are_incomplete": true}
+	if base, err := schemas.DecodeBuildDraft(input.BaseDraft); err == nil {
+		baseCandidates, unresolved := []Candidate{}, []string{}
+		for _, id := range base.Selection.SKUs() {
+			found := false
+			for _, candidate := range x.candidates {
+				if candidate.ID == id {
+					baseCandidates = append(baseCandidates, candidate)
+					found = true
+					break
+				}
+			}
+			if !found {
+				unresolved = append(unresolved, id)
+			}
+		}
+		initial["base_candidates"], initial["unresolved_base_ids"] = baseCandidates, unresolved
+	}
 	raw, _ := json.Marshal(initial)
 	declaration := &genai.FunctionDeclaration{
 		Name: "planning_action", Description: "检索、读取证据、注册会话候选或核验配置。",
@@ -262,7 +279,7 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		}
 		score := func(c Candidate) int {
 			n := 0
-			hay := strings.ToLower(c.Brand + " " + c.Model + " " + string(c.Specs))
+			hay := strings.ToLower(c.ID + " " + c.Brand + " " + c.Model + " " + string(c.Specs))
 			for _, term := range strings.Fields(strings.ToLower(p.Query)) {
 				if strings.Contains(hay, term) {
 					n++

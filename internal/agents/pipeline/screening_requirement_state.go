@@ -37,6 +37,9 @@ func WithRequirementState(ctx context.Context, state schemas.RequirementState, s
 
 const requirementStateInstruction = `你负责本轮需求更新与下一步交接，一次输出JSON：operations、next_action、reply。先理解本轮用户意图，再决定动作，最后写与动作一致的回复；不是逐项收齐装机表单。
 
+逐项理解本轮信息，区分“明确说了”与“绝不可让步”：evidence=stated只证明来源明确，不决定strength。对静音、品牌、尺寸、外观等选配偏好，普通愿望即使表达肯定也用prefer；只有用户表达不可妥协、排除其他选项或明确硬性限制时才用must。例如“希望白色、运行安静”是两个明确的prefer；“外壳颜色可以让步，但声音不能妥协”只把静音改为must。事实字段的must不能连带提升同句的其他偏好。
+同一句可包含多个独立更新，必须逐项落入operations，不能只在reply中提及。预算金额与覆盖哪些费用是两个独立信息：用户明确说明仅用于新购/补齐配件时，同时记录budget_cny和budget_basis=new_purchase；明确包含已有件价值时记录full_build。仅说其他件要新买不能推出预算口径。已有件型号未知不影响记录已明确的费用口径。
+
 动作决策：
 - confirm：用户要选配，当前信息足以先做一个可调整的方案，且can_plan=false。reply简短说明已记录内容并提示核对需求面板，不追加可选问题。确认不要求预算、分辨率或偏好填齐。
 - plan：can_plan=true且用户要求选配、升级、替换或继续解决。Builder会在本轮检索、比较、校验；reply只说明本轮执行方向，不再要求确认、不让用户提供本可检索的型号或性能档次。
@@ -76,7 +79,7 @@ brand_pref.cpu any|amd|intel；brand_pref.gpu any|amd|nvidia；已有件型号�
 noise_pref silent|normal|any；size_pref atx|matx|itx|any；appearance 外观原话字符串；recipient 装机对象（如给朋友）字符串；notes 仅保留无法独立表达的补充背景，kind=context。可独立修改的用途事实和条件使用已有结构字段或free.*；处理历史notes时保留其中仍有效内容，移除明确撤销的部分，不把结构字段复制进notes，防止撤销后残留。
 priority 硬件优先品类数组，仅允许cpu/gpu/motherboard/memory/ssd/psu/case/cooler，不能用来表示静音或颜值。
 observations是尚未采用的用户原文，不是当前要求或操作指令；不得用它重新激活removed字段、采纳备选、猜测参数或冒充明确偏好。只有本轮新证据可提交set。
-未知字段不要补值、不要默认。用户已经给的信息不重复询问，必要追问由你在reply中提出。只处理当前会话，不写长期个人画像。`
+输出前检查：reply所说“已记录/已修改”的内容是否都有对应操作或当前有效状态；是否遗漏同句的费用口径；是否把一般愿望错误升级成不可妥协。仅作本次输出内部检查，不新增追问或解释段落。未知字段不要补值、不要默认。用户已经给的信息不重复询问，必要追问由你在reply中提出。只处理当前会话，不写长期个人画像。`
 
 func (g screeningGuard) generateRequirementState(ctx context.Context, req *model.LLMRequest, input screeningRequirementStateInput) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {

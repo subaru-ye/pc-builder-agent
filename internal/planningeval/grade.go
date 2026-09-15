@@ -9,6 +9,7 @@ import (
 
 	"github.com/subaru-ye/pc-builder-agent/internal/planning"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
+	"google.golang.org/genai"
 )
 
 func jsonEqual(a, b json.RawMessage) bool {
@@ -64,6 +65,84 @@ func contains(ss []string, s string) bool {
 	}
 	return false
 }
+
+// Only correlated tool results prove retrieval. A batch request, initial
+// samples, pending queries and errors do not prove that any query ran.
+func localSearchResults(r StepRecord) (map[string]bool, bool, bool) {
+	ids := map[string]string{}
+	for _, trace := range r.Trace {
+		if trace.Role != "builder" || trace.Response == nil {
+			continue
+		}
+		for _, part := range trace.Response.Parts {
+			if part == nil || part.FunctionCall == nil {
+				continue
+			}
+			f := part.FunctionCall
+			action, _ := f.Args["action"].(string)
+			if f.Name == "planning_action" && f.ID != "" && (action == "search_local" || action == "search_local_batch") {
+				ids[f.ID] = action
+			}
+		}
+	}
+	searched := map[string]bool{}
+	responseSeen, batchExecuted := false, false
+	for _, trace := range r.Trace {
+		var request struct{ Contents []*genai.Content }
+		if trace.Role != "builder" || json.Unmarshal(trace.Request, &request) != nil {
+			continue
+		}
+		for _, content := range request.Contents {
+			if content == nil {
+				continue
+			}
+			for _, part := range content.Parts {
+				if part == nil || part.FunctionResponse == nil {
+					continue
+				}
+				f := part.FunctionResponse
+				action := ids[f.ID]
+				if f.Name != "planning_action" || action == "" {
+					continue
+				}
+				type candidatesResult struct {
+					Candidates json.RawMessage
+					Error      string
+				}
+				var response struct {
+					candidatesResult
+					Results []struct{ Result candidatesResult }
+				}
+				raw, _ := json.Marshal(f.Response)
+				if json.Unmarshal(raw, &response) != nil || response.Error != "" {
+					continue
+				}
+				results := []candidatesResult{response.candidatesResult}
+				if action == "search_local_batch" {
+					results = nil
+					for _, item := range response.Results {
+						results = append(results, item.Result)
+					}
+				}
+				for _, result := range results {
+					var candidates []struct{ ID string }
+					// Historical single-query empty results were encoded as null.
+					// Batches use [] and must not treat a missing/null item as executed.
+					if result.Error != "" || json.Unmarshal(result.Candidates, &candidates) != nil || action == "search_local_batch" && candidates == nil {
+						continue
+					}
+					responseSeen = true
+					batchExecuted = batchExecuted || action == "search_local_batch"
+					for _, candidate := range candidates {
+						searched[candidate.ID] = true
+					}
+				}
+			}
+		}
+	}
+	return searched, responseSeen, batchExecuted
+}
+
 func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 	check := func(name string, pass bool, detail any) {
 		r.Checks = append(r.Checks, Check{name, pass, fmt.Sprint(detail)})
@@ -94,15 +173,18 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 		}
 	}
 	actions := toolActions(*r)
+	searched, searchResponse, batchExecuted := localSearchResults(*r)
 	for _, a := range e.RequireTools {
 		executed := false
 		if r.Result != nil && r.PlanningInput != nil {
 			_, executed = r.Result.StageMS[a]
 		}
-		check("tool_required:"+a, contains(actions, a) && executed, actions)
+		requested := contains(actions, a) || a == "search_local" && batchExecuted
+		check("tool_required:"+a, requested && executed, actions)
 	}
 	for _, a := range e.ForbidTools {
-		check("tool_forbidden:"+a, !contains(actions, a), actions)
+		attempted := contains(actions, a) || a == "search_local" && contains(actions, "search_local_batch")
+		check("tool_forbidden:"+a, !attempted, actions)
 	}
 	n := 0
 	for _, t := range r.Trace {
@@ -128,52 +210,6 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 			}
 		}
 		check("actual_model_input:"+s, found, s)
-	}
-	// Only returned search candidates count, not the initial catalog or model prose.
-	searched := map[string]bool{}
-	searchIDs := map[string]bool{}
-	for _, trace := range r.Trace {
-		if trace.Role != "builder" || trace.Response == nil {
-			continue
-		}
-		for _, part := range trace.Response.Parts {
-			if part != nil && part.FunctionCall != nil && part.FunctionCall.Name == "planning_action" &&
-				part.FunctionCall.Args["action"] == "search_local" && part.FunctionCall.ID != "" {
-				searchIDs[part.FunctionCall.ID] = true
-			}
-		}
-	}
-	searchResponse := false
-	for _, trace := range r.Trace {
-		var request struct {
-			Contents []struct {
-				Parts []struct {
-					FunctionResponse *struct {
-						Name, ID string
-						Response struct{ Candidates json.RawMessage }
-					}
-				}
-			}
-		}
-		if trace.Role != "builder" || json.Unmarshal(trace.Request, &request) != nil {
-			continue
-		}
-		for _, content := range request.Contents {
-			for _, part := range content.Parts {
-				response := part.FunctionResponse
-				if response == nil || response.Name != "planning_action" || !searchIDs[response.ID] {
-					continue
-				}
-				var candidates []struct{ ID string }
-				if len(response.Response.Candidates) == 0 || json.Unmarshal(response.Response.Candidates, &candidates) != nil {
-					continue
-				}
-				searchResponse = true
-				for _, candidate := range candidates {
-					searched[candidate.ID] = true
-				}
-			}
-		}
 	}
 	for id, present := range e.SearchCandidates {
 		check("search_candidate:"+id, searchResponse && searched[id] == present, present)

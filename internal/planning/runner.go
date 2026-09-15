@@ -23,6 +23,8 @@ request是本轮已授权执行的用户原话，base_draft是本会话已有正
 改单时只有用户明确锁定或必须保留的配件不能自行更换，base_draft中的其他配件不自动变成锁定要求。已授权降低预算时，可以自主检索更便宜的内存、CPU和主板等，并进行必要的平台联动，说明容量或性能取舍；不要因为原方案某件昂贵就先要求用户批准更换未锁定的配件。先检索并核验可行替代，确有无法自行决定的用户取舍再追问。
 使用 planning_action 工具，参数 action 和 payload（JSON字符串）：
 search_local: {query?:相关性排序词,category?:品类,offset?:0,limit?:16}，query不排除其他路径；category是你指定的过滤条件，可翻页或调整查询。sources按候选编号返回字段来源索引，需原文或链接时用read_evidence按id读取；索引不代表你已经阅读全文。缺少噪声等参数时可先比较现有候选，不能声称目录没有这类商品。
+search_local_batch: {queries:[上述search_local参数,...]}，一次提交最多8个独立本地查询，每个子查询仍占1次工具额度。可一起比较CPU/主板/内存或多个平台，为evaluate和修正保留往返。按顺序返回results，未执行项列在pending_queries。new_count是本次首次检索到的候选数，seen_in_scope是该品类此前及本次检索已返回的总数；它们不包括初始样本。重复查询不会自动排除旧结果；已遍历整个品类时，应比较现有候选或调整路径，不反复改关键词查同一页。
+owned_candidates逐项对应用户当前明确提供的已有件，matches只按品类和完整型号匹配（可含品牌前缀），附当前规格及报价。空matches表示尚未准确对应，不表示市场无此型号；多个matches需比较变体，不能擅自认定唯一SKU。已有件简称仍可自主检索，不能从初始样本推断用户型号。缺价不等于缺型号，已有件采购金额仍由evaluate核对数量后计算。
 search_semantic: {query:自然语言需求,category?:品类}，复用本地语义检索；语义命中只表示相关，不能当作规格核验。
 联网范围：仅用于装机相关的公开型号规格、兼容性/BIOS支持、安装排障指南、配件知识和性能资料，优先厂商官网与官方文档。不得联网查询具体价格、优惠、库存或商家购买信息；用户询价时使用本地价格快照并说明观察日期，缺价明确未知，不以搜索摘要、网页标价、首发价或模型记忆补价。不要因为缺价反复调用联网工具；仍可查询规格并保存待解决方案。目录已有准确型号时使用本地候选编号及其报价，不要另建外部候选替代已有报价。
 search_web: {query:搜索词}，搜索上述装机技术资料和官网链接，不用于查价；返回来源编号。
@@ -58,6 +60,13 @@ type execution struct {
 	evidence   []Evidence
 	date       string
 	seen       map[string]bool
+}
+
+type localSearchQuery struct {
+	Query    string `json:"query,omitempty"`
+	Category string `json:"category,omitempty"`
+	Offset   int    `json:"offset,omitempty"`
+	Limit    int    `json:"limit,omitempty"`
 }
 
 func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Result, err error) {
@@ -112,6 +121,17 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 		modelInput.PreviousProposal, _ = json.Marshal(brief)
 	}
 	initial := map[string]any{"input": modelInput, "catalog_count": len(x.candidates), "snapshot_date": x.date, "initial_candidates": initialCandidates, "initial_candidates_are_incomplete": true}
+	ownedCandidates := []map[string]any{}
+	for _, owned := range x.accountingSpec().OwnedParts {
+		matches := []Candidate{}
+		for _, candidate := range x.candidates {
+			if matchesOwnedPart(candidate, owned) {
+				matches = append(matches, candidate)
+			}
+		}
+		ownedCandidates = append(ownedCandidates, map[string]any{"owned_part": owned, "matches": matches})
+	}
+	initial["owned_candidates"] = ownedCandidates
 	if base, err := schemas.DecodeBuildDraft(input.BaseDraft); err == nil {
 		baseCandidates, unresolved := []Candidate{}, []string{}
 		for _, id := range base.Selection.SKUs() {
@@ -250,19 +270,46 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 	action, _ := args["action"].(string)
 	payload, _ := args["payload"].(string)
 	var p struct {
-		Query    string          `json:"query"`
-		Category string          `json:"category"`
-		Offset   int             `json:"offset"`
-		Limit    int             `json:"limit"`
-		URL      string          `json:"url"`
-		Method   string          `json:"method"`
-		ID       string          `json:"id"`
-		Draft    json.RawMessage `json:"draft"`
+		Query    string              `json:"query"`
+		Category string              `json:"category"`
+		Offset   int                 `json:"offset"`
+		Limit    int                 `json:"limit"`
+		URL      string              `json:"url"`
+		Method   string              `json:"method"`
+		ID       string              `json:"id"`
+		Draft    json.RawMessage     `json:"draft"`
+		Queries  []*localSearchQuery `json:"queries"`
 	}
 	if json.Unmarshal([]byte(payload), &p) != nil {
 		return map[string]any{"error": "payload须为JSON对象字符串"}
 	}
 	switch action {
+	case "search_local_batch":
+		if len(p.Queries) == 0 || len(p.Queries) > 8 {
+			return map[string]any{"error": "queries须含1至8个本地查询"}
+		}
+		for _, query := range p.Queries {
+			if query == nil {
+				return map[string]any{"error": "每个本地查询须为JSON对象"}
+			}
+		}
+		results := []map[string]any{}
+		for i, query := range p.Queries {
+			// Run reserves the first tool execution before dispatch. Each further
+			// local query consumes another slot; batching never expands the cap.
+			if i > 0 {
+				if x.result.ToolCalls >= 24 {
+					break
+				}
+				x.result.ToolCalls++
+			}
+			raw, _ := json.Marshal(query)
+			started := time.Now()
+			result := x.call(ctx, map[string]any{"action": "search_local", "payload": string(raw)})
+			x.result.StageMS["search_local"] += time.Since(started).Milliseconds()
+			results = append(results, map[string]any{"index": i, "query": query, "result": result})
+		}
+		return map[string]any{"results": results, "executed_queries": len(results), "pending_queries": p.Queries[len(results):]}
 	case "read_evidence":
 		for _, e := range x.evidence {
 			if e.ID == p.ID {
@@ -271,7 +318,7 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		}
 		return map[string]any{"error": "没有找到该来源编号"}
 	case "search_local":
-		var found []Candidate
+		found := []Candidate{}
 		for _, c := range x.candidates {
 			if p.Category != "" && string(c.Category) != p.Category {
 				continue
@@ -305,8 +352,18 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 			p.Offset = len(found)
 		}
 		end := min(p.Offset+p.Limit, len(found))
+		newCount := 0
 		for _, c := range found[p.Offset:end] {
+			if !x.seen[c.ID] {
+				newCount++
+			}
 			x.seen[c.ID] = true
+		}
+		seenInScope := 0
+		for _, c := range found {
+			if x.seen[c.ID] {
+				seenInScope++
+			}
 		}
 		sources := map[string][]map[string]string{}
 		if source, ok := x.runner.Catalog.(interface {
@@ -336,7 +393,8 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 				}
 			}
 		}
-		return map[string]any{"candidates": found[p.Offset:end], "sources": sources, "total": len(found), "next_offset": end, "truncated": len(found) - end, "snapshot_date": x.date}
+		return map[string]any{"candidates": found[p.Offset:end], "sources": sources, "total": len(found), "next_offset": end, "truncated": len(found) - end, "snapshot_date": x.date,
+			"new_count": newCount, "previously_returned_count": end - p.Offset - newCount, "seen_in_scope": seenInScope, "scope_category": p.Category, "query_is_ranking_only": true}
 	case "search_semantic":
 		source, ok := x.runner.Catalog.(interface {
 			SemanticCandidates(context.Context, store.SemanticQuery) (store.SemanticResult, error)

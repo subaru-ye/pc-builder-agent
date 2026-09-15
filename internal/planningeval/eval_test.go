@@ -244,6 +244,11 @@ func TestSearchGraderRequiresActualCorrelatedToolResult(t *testing.T) {
 		{"search error cannot prove absent", "search_local", `{"contents":[{"parts":[{"functionResponse":{"id":"lookup","name":"planning_action","response":{"error":"unavailable"}}}]}]}`, false, false},
 		{"different tool cannot prove search", "register_candidate", `{"contents":[{"parts":[{"functionResponse":{"id":"lookup","name":"planning_action","response":{"candidates":[{"id":"new-cpu"}]}}}]}]}`, true, false},
 		{"unmatched response", "search_local", `{"contents":[{"parts":[{"functionResponse":{"id":"other","name":"planning_action","response":{"candidates":[{"id":"new-cpu"}]}}}]}]}`, true, false},
+		{"batch returned candidate", "search_local_batch", `{"contents":[{"parts":[{"functionResponse":{"id":"lookup","name":"planning_action","response":{"results":[{"index":0,"result":{"candidates":[{"id":"new-cpu"}]}}]}}}]}]}`, true, true},
+		{"batch pending is not executed", "search_local_batch", `{"contents":[{"parts":[{"functionResponse":{"id":"lookup","name":"planning_action","response":{"results":[],"pending_queries":[{"query":"new-cpu"}]}}}]}]}`, false, false},
+		{"batch inner failure", "search_local_batch", `{"contents":[{"parts":[{"functionResponse":{"id":"lookup","name":"planning_action","response":{"results":[{"index":0,"result":{"error":"unavailable"}}]}}}]}]}`, false, false},
+		{"batch null is not an empty result", "search_local_batch", `{"contents":[{"parts":[{"functionResponse":{"id":"lookup","name":"planning_action","response":{"results":[{"index":0,"result":{"candidates":null}}]}}}]}]}`, false, false},
+		{"batch empty successful result", "search_local_batch", `{"contents":[{"parts":[{"functionResponse":{"id":"lookup","name":"planning_action","response":{"results":[{"index":0,"result":{"candidates":[]}}]}}}]}]}`, false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := StepRecord{Trace: []Trace{
@@ -261,5 +266,26 @@ func TestSearchGraderRequiresActualCorrelatedToolResult(t *testing.T) {
 			}
 			t.Fatal("search assertion was not evaluated")
 		})
+	}
+}
+
+func TestBatchGradingRequiresExecutionAndStillHonorsForbiddenLocalSearch(t *testing.T) {
+	for _, completed := range []bool{false, true} {
+		r := StepRecord{
+			PlanningInput: &schemas.PlanningInput{}, Result: &planning.Result{StageMS: map[string]int64{"search_local": 0}},
+			Trace: []Trace{{Role: "builder", Response: &genai.Content{Parts: []*genai.Part{{FunctionCall: &genai.FunctionCall{ID: "batch", Name: "planning_action", Args: map[string]any{"action": "search_local_batch"}}}}}}},
+		}
+		if completed {
+			r.Trace = append(r.Trace, Trace{Role: "builder", Request: json.RawMessage(`{"contents":[{"parts":[{"functionResponse":{"id":"batch","name":"planning_action","response":{"results":[{"index":0,"result":{"candidates":[]}}]}}}]}]}`)})
+		}
+		Grade(&r, Expect{RequireTools: []string{"search_local"}, ForbidTools: []string{"search_local"}}, nil)
+		for _, check := range r.Checks {
+			if check.Name == "tool_required:search_local" && check.Pass != completed {
+				t.Fatalf("batch attempt alone satisfied required execution: %+v", check)
+			}
+			if check.Name == "tool_forbidden:search_local" && check.Pass {
+				t.Fatal("batch evaded forbidden local search")
+			}
+		}
 	}
 }

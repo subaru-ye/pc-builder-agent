@@ -10,6 +10,11 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
 
+func matchesOwnedPart(c Candidate, p schemas.OwnedPart) bool {
+	return p.Model != "" && c.Category == p.Category &&
+		(strings.EqualFold(p.Model, c.Model) || strings.EqualFold(p.Model, c.Brand+" "+c.Model))
+}
+
 // Accounting uses only stated values, never a default budget or spend floor.
 func (x *execution) accountingSpec() schemas.RequirementSpec {
 	var spec schemas.RequirementSpec
@@ -69,7 +74,7 @@ func (x *execution) deliveryIssues() []string {
 	for _, p := range spec.OwnedParts {
 		matched := false
 		for _, c := range x.result.Candidates {
-			if c.Category == p.Category && (strings.EqualFold(p.Model, c.Model) || strings.EqualFold(p.Model, c.Brand+" "+c.Model)) {
+			if matchesOwnedPart(c, p) {
 				matched = true
 			}
 		}
@@ -92,7 +97,7 @@ func (x *execution) verifiedOwnership(draft schemas.BuildDraft) schemas.Requirem
 					continue
 				}
 				total++
-				matched = strings.EqualFold(p.Model, c.Model) || strings.EqualFold(p.Model, c.Brand+" "+c.Model)
+				matched = matchesOwnedPart(c, p)
 			}
 		}
 		quantity := max(1, p.Quantity)

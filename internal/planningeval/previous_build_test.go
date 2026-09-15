@@ -9,7 +9,7 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
 
-func TestHistoricalBaseProductFlow(t *testing.T) {
+func TestHistoricalBaseAndBatchProductFlow(t *testing.T) {
 	dsn := os.Getenv("PLANNING_EVAL_DSN")
 	if dsn == "" {
 		t.Skip("isolated planning evaluation database required")
@@ -37,10 +37,27 @@ func TestHistoricalBaseProductFlow(t *testing.T) {
 	for i := range c.Steps {
 		c.Steps[i].Expect.Versions++
 	}
-	suite.Cases = []Case{c}
+	// Reuse the saved CPU-upgrade protocol oracle with batched retrieval; keep
+	// its selection, grading, refresh and idempotency assertions unchanged.
+	batch := suite.Cases[0]
+	batch.ID = "batch-cpu-upgrade"
+	for i := range batch.Steps {
+		step := &batch.Steps[i]
+		if len(step.Builder) == 0 {
+			continue
+		}
+		f := step.Builder[0].Parts[0].FunctionCall
+		if f == nil || f.Args["action"] != "search_local" {
+			t.Fatal("source fixture no longer begins with local lookup")
+		}
+		f.Args["action"] = "search_local_batch"
+		f.Args["payload"] = `{"queries":[{"category":"cpu"},{"category":"motherboard"}]}`
+		step.Expect.SearchCandidates = map[string]bool{"cpu-r7-5700x": true}
+	}
+	suite.Cases = []Case{c, batch}
 	raw, _ := json.Marshal(suite)
 	report, err := Run(context.Background(), dsn, suite, raw, Models{})
-	if err != nil || report.Passed != 1 {
+	if err != nil || report.Passed != 2 {
 		for _, c := range report.Cases {
 			for _, s := range c.Steps {
 				for _, check := range s.Checks {
@@ -52,8 +69,8 @@ func TestHistoricalBaseProductFlow(t *testing.T) {
 		}
 		t.Fatalf("historical base replay: passed=%d error=%v", report.Passed, err)
 	}
-	if report.ScreeningCalls != 0 || report.ActualModelRequests != 0 {
-		t.Fatal("typed fixture must not call Screening or real providers")
+	if report.ScreeningCalls != 2 || report.ActualModelRequests != 0 {
+		t.Fatal("only the two batch chat messages should use the offline Screening oracle; no real providers")
 	}
 	for _, step := range report.Cases[0].Steps {
 		found := false
@@ -62,6 +79,13 @@ func TestHistoricalBaseProductFlow(t *testing.T) {
 		}
 		if !found {
 			t.Fatal("historical precondition was not checked for immutability")
+		}
+	}
+	for _, step := range report.Cases[1].Steps {
+		if step.Kind == "confirm" || step.Kind == "message" && step.Result != nil {
+			if step.Result == nil || step.Result.ToolCalls != 3 || step.Result.ModelCalls != 3 {
+				t.Fatalf("batch execution cost not persisted: %+v", step.Result)
+			}
 		}
 	}
 }

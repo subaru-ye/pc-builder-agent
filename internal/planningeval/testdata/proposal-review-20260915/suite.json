@@ -1,0 +1,1964 @@
+{
+  "version": "planning-v2.1-proposal-review-offline",
+  "provenance": "Saved user inputs/products/pages plus explicit hand-authored model oracles. Not live model accuracy; not representative catalog completion rate.",
+  "catalog": {
+    "date": "2026-07-28",
+    "candidates": [
+      {
+        "id": "cpu-r5-5600",
+        "brand": "AMD",
+        "model": "Ryzen 5 5600",
+        "specs": {
+          "tdp_w": 65,
+          "socket": "AM4",
+          "has_igpu": false,
+          "supported_chipsets": [
+            "A520",
+            "B450",
+            "B550",
+            "X470",
+            "X570"
+          ]
+        },
+        "category": "cpu",
+        "evidence": [
+          "local:cpu-r5-5600"
+        ],
+        "external": false,
+        "price_cny": "629.00"
+      },
+      {
+        "id": "gpu-sapphire-6600-pulse",
+        "brand": "Sapphire",
+        "model": "PULSE Radeon RX 6600 8GB",
+        "specs": {
+          "tdp_w": 132,
+          "length_mm": 193,
+          "power_connectors": [
+            "pcie_8pin"
+          ]
+        },
+        "category": "gpu",
+        "evidence": [
+          "local:gpu-sapphire-6600-pulse"
+        ],
+        "external": false,
+        "price_cny": "1799.00"
+      },
+      {
+        "id": "mb-msi-b550m-pro-vdh-wifi",
+        "brand": "MSI",
+        "model": "B550M PRO-VDH WIFI",
+        "specs": {
+          "socket": "AM4",
+          "chipset": "B550",
+          "m2_slots": 2,
+          "form_factor": "matx",
+          "memory_generation": "ddr4",
+          "memory_speed_max_mts": 4400
+        },
+        "category": "motherboard",
+        "evidence": [
+          "local:mb-msi-b550m-pro-vdh-wifi"
+        ],
+        "external": false,
+        "price_cny": "699.00"
+      },
+      {
+        "id": "mem-gskill-ripjawsv-32-3200",
+        "brand": "G.Skill",
+        "model": "Ripjaws V 32GB (2x16GB) DDR4-3200 CL16",
+        "specs": {
+          "speed_mts": 3200,
+          "generation": "ddr4"
+        },
+        "category": "memory",
+        "evidence": [
+          "local:mem-gskill-ripjawsv-32-3200"
+        ],
+        "external": false,
+        "price_cny": "399.00"
+      },
+      {
+        "id": "ssd-crucial-p3plus-1tb",
+        "brand": "Crucial",
+        "model": "P3 Plus 1TB NVMe M.2",
+        "specs": {
+          "form_factor": "m2"
+        },
+        "category": "ssd",
+        "evidence": [
+          "local:ssd-crucial-p3plus-1tb"
+        ],
+        "external": false,
+        "price_cny": "379.00"
+      },
+      {
+        "id": "psu-msi-mag-a650bn",
+        "brand": "MSI",
+        "model": "MAG A650BN 650W 80+ Bronze",
+        "specs": {
+          "wattage_w": 650,
+          "power_connectors": [
+            "pcie_8pin",
+            "pcie_8pin"
+          ]
+        },
+        "category": "psu",
+        "evidence": [
+          "local:psu-msi-mag-a650bn"
+        ],
+        "external": false,
+        "price_cny": "259.00"
+      },
+      {
+        "id": "case-montech-air-903-max",
+        "brand": "Montech",
+        "model": "AIR 903 MAX (Black)",
+        "specs": {
+          "gpu_length_max_mm": 400,
+          "radiator_sizes_mm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "cooler_height_max_mm": 180,
+          "supported_form_factors": [
+            "atx",
+            "matx",
+            "itx"
+          ]
+        },
+        "category": "case",
+        "evidence": [
+          "local:case-montech-air-903-max"
+        ],
+        "external": false,
+        "price_cny": "349.00"
+      },
+      {
+        "id": "cooler-deepcool-ag400",
+        "brand": "Deepcool",
+        "model": "AG400",
+        "specs": {
+          "type": "air",
+          "height_mm": 150,
+          "radiator_size_mm": null,
+          "cooling_capacity_w": 220
+        },
+        "category": "cooler",
+        "evidence": [
+          "local:cooler-deepcool-ag400"
+        ],
+        "external": false,
+        "price_cny": "66.90"
+      },
+      {
+        "id": "cpu-r7-5700x",
+        "category": "cpu",
+        "brand": "AMD",
+        "model": "Ryzen 7 5700X",
+        "specs": {
+          "tdp_w": 65,
+          "socket": "AM4",
+          "has_igpu": false,
+          "supported_chipsets": [
+            "A520",
+            "B450",
+            "B550",
+            "X470",
+            "X570"
+          ]
+        },
+        "price_cny": "979.00"
+      },
+      {
+        "id": "eval-only-am5-board",
+        "brand": "MSI",
+        "model": "Synthetic AM5 socket conflict fixture",
+        "specs": {
+          "socket": "AM5",
+          "chipset": "B550",
+          "m2_slots": 2,
+          "form_factor": "matx",
+          "memory_generation": "ddr4",
+          "memory_speed_max_mts": 4400
+        },
+        "category": "motherboard",
+        "evidence": [
+          "local:mb-msi-b550m-pro-vdh-wifi"
+        ],
+        "external": false,
+        "price_cny": "699.00"
+      }
+    ],
+    "evidence": [
+      {
+        "id": "catalog-d990f601768d0930392f77b4d774a537d00cdcb005682e9171ba83b07a7d6394",
+        "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-5000-series/amd-ryzen-5-5600.html",
+        "kind": "catalog",
+        "text": "Default TDP: 65W",
+        "title": "cpu-r5-5600 · specs.tdp_w · verified",
+        "captured_at": "2026-08-31T01:10:14Z"
+      },
+      {
+        "id": "catalog-fb7dd7a7418553d1f2c8ab588b75f20645f7794c1235e3c6839dd2136c12a311",
+        "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-5000-series/amd-ryzen-5-5600.html",
+        "kind": "catalog",
+        "text": "Graphics Model: Discrete Graphics Card Required",
+        "title": "cpu-r5-5600 · specs.has_igpu · verified",
+        "captured_at": "2026-08-31T01:10:14Z"
+      },
+      {
+        "id": "catalog-2a4b94e95499abec88482dab164825a3e24139e4146feb7944b8bbcf04b46c6b",
+        "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-5000-series/amd-ryzen-5-5600.html",
+        "kind": "catalog",
+        "text": "Name: AMD Ryzen™ 5 5600",
+        "title": "cpu-r5-5600 · model · verified",
+        "captured_at": "2026-08-31T01:10:14Z"
+      },
+      {
+        "id": "catalog-caa4470db2b0c62e5fb5550691589ded639952cc5b6468183f0f4a22cddad3c5",
+        "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-5000-series/amd-ryzen-5-5600.html",
+        "kind": "catalog",
+        "text": "CPU Socket: AM4",
+        "title": "cpu-r5-5600 · specs.socket · verified",
+        "captured_at": "2026-08-31T01:10:14Z"
+      },
+      {
+        "id": "catalog-388bddf92325e226fc08d66891d33e767a9033f32049a3a87a2d967029333639",
+        "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-5000-series/amd-ryzen-5-5600.html",
+        "kind": "catalog",
+        "text": "Supporting Chipsets: X570 , X470 , X370 , B550 , B450 , B350 , A520",
+        "title": "cpu-r5-5600 · specs.supported_chipsets · verified",
+        "captured_at": "2026-08-31T01:10:14Z"
+      },
+      {
+        "id": "catalog-4a293e2794aedc99222830b8da40c4b817d4d3a74972d8eb4aa6a3c8279b9e85",
+        "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-5000-series/amd-ryzen-5-5600.html",
+        "kind": "catalog",
+        "text": "Name: AMD Ryzen™ 5 5600",
+        "title": "cpu-r5-5600 · model · verified",
+        "captured_at": "2026-08-23T18:09:50Z"
+      },
+      {
+        "id": "catalog-214487b87d8c292f18e1e3e76f38feace9ca7809039324cd15243f2791e6b986",
+        "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-5000-series/amd-ryzen-5-5600.html",
+        "kind": "catalog",
+        "text": "Default TDP: 65W",
+        "title": "cpu-r5-5600 · specs.tdp_w · verified",
+        "captured_at": "2026-08-23T18:09:50Z"
+      },
+      {
+        "id": "catalog-cb34d695a69af7269eb05eadd8478642a545db7f29f7985ce015f114481154a0",
+        "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-5000-series/amd-ryzen-5-5600.html",
+        "kind": "catalog",
+        "text": "Supporting Chipsets: X570 , X470 , X370 , B550 , B450 , B350 , A520",
+        "title": "cpu-r5-5600 · specs.supported_chipsets · verified",
+        "captured_at": "2026-08-23T18:09:50Z"
+      },
+      {
+        "id": "catalog-ec61d4f117e66f7aeea3f4f191174fe944fa55e452c403dd1da8fa3da7062fdf",
+        "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-5000-series/amd-ryzen-5-5600.html",
+        "kind": "catalog",
+        "text": "CPU Socket: AM4",
+        "title": "cpu-r5-5600 · specs.socket · verified",
+        "captured_at": "2026-08-23T18:09:50Z"
+      },
+      {
+        "id": "catalog-af6f1ab1ea977702907d07f25cd6cc037ea7ff7da94710f79c0614e526d61214",
+        "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-5000-series/amd-ryzen-5-5600.html",
+        "kind": "catalog",
+        "text": "Graphics Model: Discrete Graphics Card Required",
+        "title": "cpu-r5-5600 · specs.has_igpu · verified",
+        "captured_at": "2026-08-23T18:09:50Z"
+      }
+    ]
+  },
+  "pages": {
+    "https://hardware.eval.invalid/5900x": "<html><body><pre>AMD 锐龙 R9 5900X CPU 3.7GHz 12核24线程 【报价 价格 评测 怎么样】-什么值得买 打开App 搜索 热门搜索 白酒 月饼 西凤酒 饼干 轩妈 金九月饼 金典 美心 抽纸 天猫超市 榴芒一刻 牙膏 花生油 大米 菜籽油 猫砂 依视路 面包 镜片 得宝 首页 国内好价 海淘好价 全部好价 社区 商品百科 优惠券 白菜党 投资者关系 关于我们 分类 商品 简介 推荐 AMD 锐龙 R9 5900X CPU 3.7GHz 12核24线程 ¥ 979 总销量259 规格参数 锐龙 R9 处理器(AMD) 3.7GHz 主频 105W 功率 12核 核心数量 24线程 线程数 不支持核显 是否集成显卡 全网内容 共收录全网内容101篇 5月装机攻略—CPU（二手共119款）排行榜 AMD Ryzen 9 5900X最佳搭档：选对主板让性能飞升 AMD Ryzen 9 5900X处理器参数详解：性能强悍的旗舰选择 AMD Ryzen 9 5900X深度解析：性能怪兽的参数全揭秘 近期为了黑神话悟空买的装备 捡垃圾，捡到191万跑分 产品介绍 有赖于全新的 Zen3 架构加持，AMD在本世代的CPU产品上对intel展开围攻。基于 7nm+ 工艺的锐龙5000系列 CPU 对比现有的 Zen2 架构产品在IPC方面提升了19%，且拥有2倍大的L3缓存，效率更是 i9-10900K 的2.8倍。AMD 锐龙 9 5900X 采用全新的 Zen3 架构，基于 7nm+ 工艺，AM4接口，拥有12核心和24线程，默频3.7GHz，最高可加速至4.8GHz，支持PCIe 4.0，L2+L3总共缓存为70MB，TDP 105W。最高支持双通道 DDR4-3200MHz 内存速度，支持X570平台，提供三年质保。 更多推荐 AMD Ryzen R3 3200G R5 3400G CPU处理器 ¥ 350 AMD 9950X3D2 AM5接口 CPU处理器 盒装 ¥ 6699 AMD RX9070XT 16G显存 独立显卡 ¥ 6999 AMD 双X3D缓存 CPU处理器 ¥ 6699 查看更多</pre></body></html>",
+    "search:Ryzen 9 5900X 官方规格 AM4": "{\"organic_results\": [{\"title\": \"保存的5900X规格资料\", \"link\": \"https://hardware.eval.invalid/5900x\", \"snippet\": \"AM4 / 105W；正文来源见fixture provenance\"}]}"
+  },
+  "cases": [
+    {
+      "id": "P2-001",
+      "title": "升级直接执行、其他配件保留、刷新和幂等",
+      "source": "用户真实反馈场景；模型操作/工具轨迹为人工 oracle，配件取保存快照",
+      "steps": [
+        {
+          "kind": "message",
+          "text": "预算7000，用于视频剪辑",
+          "screen_oracle": {
+            "next_action": "confirm",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 7000,
+                "strength": "must",
+                "quote": "预算7000，用于视频剪辑"
+              },
+              {
+                "op": "set",
+                "field": "use_case.type",
+                "value": "productivity",
+                "strength": "must",
+                "kind": "fact",
+                "quote": "预算7000，用于视频剪辑"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "builder_calls": 0,
+            "fields": {
+              "budget_cny": {
+                "status": "active",
+                "value": 7000
+              }
+            }
+          }
+        },
+        {
+          "kind": "confirm",
+          "builder_oracle": [
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-search_local",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "search_local",
+                      "payload": "{\"category\": \"cpu\"}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-evaluate",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "evaluate",
+                      "payload": "{\"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "{\"outcome\": \"proposal\", \"reply\": \"已比较候选，具体取舍见方案。\", \"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}, \"issues\": [], \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"以工具实际报价核对预算\", \"evidence\": []}], \"assumptions\": []}"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "versions": 1,
+            "outcome": "ready",
+            "validation": "pass",
+            "require_tools": [
+              "search_local",
+              "evaluate"
+            ]
+          }
+        },
+        {
+          "kind": "message",
+          "text": "把处理器换更好的，预算还很充足啊，其他配件尽量不动",
+          "screen_oracle": {
+            "next_action": "plan",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "priority",
+                "value": [
+                  "cpu"
+                ],
+                "strength": "must",
+                "quote": "把处理器换更好的，预算还很充足啊，其他配件尽量不动"
+              },
+              {
+                "op": "set",
+                "field": "free.preserve_other_parts",
+                "value": "其他配件尽量不动",
+                "strength": "prefer",
+                "kind": "constraint",
+                "quote": "把处理器换更好的，预算还很充足啊，其他配件尽量不动"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 2,
+            "outcome": "ready",
+            "cpu": "cpu-r7-5700x",
+            "preserve_other_parts": true,
+            "require_tools": [
+              "search_local",
+              "evaluate"
+            ],
+            "builder_calls": 3,
+            "model_input_contains": [
+              "base_draft",
+              "cpu-r5-5600",
+              "previous_proposal"
+            ],
+            "fields": {
+              "budget_cny": {
+                "status": "active",
+                "value": 7000
+              },
+              "free.preserve_other_parts": {
+                "status": "active",
+                "value": "其他配件尽量不动",
+                "strength": "prefer"
+              }
+            },
+            "reply_forbidden": [
+              "你的预算是多少",
+              "现有CPU型号是什么"
+            ]
+          },
+          "builder_oracle": [
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-search_local",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "search_local",
+                      "payload": "{\"category\": \"cpu\"}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-evaluate",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "evaluate",
+                      "payload": "{\"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"离线回放：优先升级处理器，其他配件保持不变。\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r7-5700x\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "{\"outcome\": \"proposal\", \"reply\": \"已比较候选，具体取舍见方案。\", \"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"离线回放：优先升级处理器，其他配件保持不变。\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r7-5700x\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}, \"issues\": [], \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"报价在预算内\", \"evidence\": []}, {\"field\": \"priority\", \"status\": \"met\", \"explanation\": \"优先更换处理器\", \"evidence\": [\"local:cpu-r7-5700x\"]}, {\"field\": \"free.preserve_other_parts\", \"status\": \"met\", \"explanation\": \"其他配件保持\", \"evidence\": [\"local:cpu-r7-5700x\"]}], \"assumptions\": []}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "refresh",
+          "expect": {
+            "versions": 2,
+            "builder_calls": 0
+          }
+        },
+        {
+          "kind": "retry",
+          "expect": {
+            "versions": 2,
+            "builder_calls": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "P2-002",
+      "title": "预算修改保留偏好、撤销不复活、备选和临时例外",
+      "source": "用户真实反馈场景；模型操作/工具轨迹为人工 oracle，配件取保存快照",
+      "steps": [
+        {
+          "kind": "message",
+          "text": "帮朋友装机，预算8000，2K游戏，尽量安静，显卡优先英伟达",
+          "screen_oracle": {
+            "next_action": "confirm",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "recipient",
+                "value": "朋友",
+                "strength": "must",
+                "kind": "context",
+                "quote": "帮朋友装机，预算8000，2K游戏，尽量安静，显卡优先英伟达"
+              },
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 8000,
+                "strength": "must",
+                "quote": "帮朋友装机，预算8000，2K游戏，尽量安静，显卡优先英伟达"
+              },
+              {
+                "op": "set",
+                "field": "use_case.type",
+                "value": "gaming",
+                "strength": "must",
+                "kind": "fact",
+                "quote": "帮朋友装机，预算8000，2K游戏，尽量安静，显卡优先英伟达"
+              },
+              {
+                "op": "set",
+                "field": "use_case.resolution",
+                "value": "2K",
+                "strength": "must",
+                "kind": "fact",
+                "quote": "帮朋友装机，预算8000，2K游戏，尽量安静，显卡优先英伟达"
+              },
+              {
+                "op": "set",
+                "field": "noise_pref",
+                "value": "silent",
+                "strength": "prefer",
+                "quote": "帮朋友装机，预算8000，2K游戏，尽量安静，显卡优先英伟达"
+              },
+              {
+                "op": "set",
+                "field": "brand_pref.gpu",
+                "value": "nvidia",
+                "strength": "prefer",
+                "quote": "帮朋友装机，预算8000，2K游戏，尽量安静，显卡优先英伟达"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "builder_calls": 0
+          }
+        },
+        {
+          "kind": "message",
+          "text": "预算改6000",
+          "screen_oracle": {
+            "next_action": "collect",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 6000,
+                "strength": "must",
+                "quote": "预算改6000"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "fields": {
+              "budget_cny": {
+                "status": "active",
+                "value": 6000
+              },
+              "noise_pref": {
+                "status": "active",
+                "value": "silent",
+                "strength": "prefer"
+              },
+              "brand_pref.gpu": {
+                "status": "active",
+                "value": "nvidia"
+              },
+              "recipient": {
+                "status": "active",
+                "value": "朋友"
+              }
+            }
+          }
+        },
+        {
+          "kind": "message",
+          "text": "取消显卡品牌偏好",
+          "screen_oracle": {
+            "next_action": "collect",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "remove",
+                "field": "brand_pref.gpu",
+                "quote": "取消显卡品牌偏好"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "fields": {
+              "brand_pref.gpu": {
+                "status": "removed"
+              }
+            }
+          }
+        },
+        {
+          "kind": "message",
+          "text": "如果换4K会怎样，先不改",
+          "screen_oracle": {
+            "next_action": "collect",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "alternative",
+                "field": "use_case.resolution",
+                "value": "4K",
+                "strength": "must",
+                "quote": "如果换4K会怎样，先不改"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "alternatives": 1,
+            "fields": {
+              "use_case.resolution": {
+                "status": "active",
+                "value": "2K"
+              },
+              "brand_pref.gpu": {
+                "status": "removed"
+              }
+            }
+          }
+        },
+        {
+          "kind": "message",
+          "text": "这次临时用AMD显卡",
+          "screen_oracle": {
+            "next_action": "collect",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "brand_pref.gpu",
+                "value": "amd",
+                "strength": "prefer",
+                "scope": "temporary",
+                "quote": "这次临时用AMD显卡"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "fields": {
+              "brand_pref.gpu": {
+                "status": "active",
+                "value": "amd"
+              }
+            }
+          }
+        },
+        {
+          "kind": "message",
+          "text": "恢复之前的显卡要求",
+          "screen_oracle": {
+            "next_action": "collect",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "restore",
+                "field": "brand_pref.gpu",
+                "quote": "恢复之前的显卡要求"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "fields": {
+              "brand_pref.gpu": {
+                "status": "removed"
+              },
+              "noise_pref": {
+                "status": "active",
+                "value": "silent"
+              }
+            }
+          }
+        },
+        {
+          "kind": "refresh",
+          "expect": {
+            "versions": 0,
+            "builder_calls": 0,
+            "fields": {
+              "brand_pref.gpu": {
+                "status": "removed"
+              },
+              "recipient": {
+                "status": "active",
+                "value": "朋友"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "P2-003",
+      "title": "素材2K改1080p，清理重复notes，不写入显示分辨率",
+      "source": "用户真实反馈场景；模型操作/工具轨迹为人工 oracle，配件取保存快照",
+      "steps": [
+        {
+          "kind": "message",
+          "text": "预算7000，主要剪2K视频",
+          "screen_oracle": {
+            "next_action": "confirm",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 7000,
+                "strength": "must",
+                "quote": "预算7000，主要剪2K视频"
+              },
+              {
+                "op": "set",
+                "field": "use_case.type",
+                "value": "productivity",
+                "strength": "must",
+                "kind": "fact",
+                "quote": "预算7000，主要剪2K视频"
+              },
+              {
+                "op": "set",
+                "field": "free.workload_resolution",
+                "value": "2K素材",
+                "strength": "must",
+                "kind": "fact",
+                "quote": "预算7000，主要剪2K视频"
+              },
+              {
+                "op": "set",
+                "field": "notes",
+                "value": "2K视频素材",
+                "strength": "must",
+                "kind": "context",
+                "quote": "预算7000，主要剪2K视频"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "fields": {
+              "free.workload_resolution": {
+                "status": "active",
+                "value": "2K素材"
+              }
+            }
+          }
+        },
+        {
+          "kind": "message",
+          "text": "素材大约1080p，之前2K不算",
+          "screen_oracle": {
+            "next_action": "collect",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "free.workload_resolution",
+                "value": "1080p素材",
+                "strength": "must",
+                "kind": "fact",
+                "quote": "素材大约1080p，之前2K不算"
+              },
+              {
+                "op": "remove",
+                "field": "notes",
+                "quote": "素材大约1080p，之前2K不算"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "fields": {
+              "free.workload_resolution": {
+                "status": "active",
+                "value": "1080p素材"
+              },
+              "notes": {
+                "status": "removed"
+              },
+              "budget_cny": {
+                "status": "active",
+                "value": 7000
+              },
+              "use_case.resolution": {
+                "status": "unknown"
+              }
+            }
+          }
+        },
+        {
+          "kind": "refresh",
+          "expect": {
+            "versions": 0,
+            "fields": {
+              "free.workload_resolution": {
+                "status": "active",
+                "value": "1080p素材"
+              },
+              "notes": {
+                "status": "removed"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "P2-004",
+      "title": "必须静音进入规划，证据不足保存方案，放宽后交付",
+      "source": "用户真实反馈场景；模型操作/工具轨迹为人工 oracle，配件取保存快照",
+      "steps": [
+        {
+          "kind": "message",
+          "text": "预算6000，剪4K视频，必须静音",
+          "screen_oracle": {
+            "next_action": "confirm",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 6000,
+                "strength": "must",
+                "quote": "预算6000，剪4K视频，必须静音"
+              },
+              {
+                "op": "set",
+                "field": "free.workload_resolution",
+                "value": "4K素材",
+                "strength": "must",
+                "kind": "fact",
+                "quote": "预算6000，剪4K视频，必须静音"
+              },
+              {
+                "op": "set",
+                "field": "noise_pref",
+                "value": "silent",
+                "strength": "must",
+                "quote": "预算6000，剪4K视频，必须静音"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "fields": {
+              "noise_pref": {
+                "status": "active",
+                "value": "silent",
+                "strength": "must"
+              }
+            }
+          }
+        },
+        {
+          "kind": "confirm",
+          "builder_oracle": [
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-search_local",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "search_local",
+                      "payload": "{\"category\": \"cpu\"}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-evaluate",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "evaluate",
+                      "payload": "{\"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "{\"outcome\": \"proposal\", \"reply\": \"已比较候选，具体取舍见方案。\", \"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}, \"issues\": [\"整机噪声缺少实测\"], \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"报价在预算内\", \"evidence\": []}, {\"field\": \"noise_pref\", \"status\": \"unknown\", \"explanation\": \"没有整机噪声实测\", \"evidence\": []}], \"assumptions\": []}"
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "{\"outcome\": \"proposal\", \"reply\": \"已比较候选，具体取舍见方案。\", \"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}, \"issues\": [\"整机噪声缺少实测\"], \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"报价在预算内\", \"evidence\": []}, {\"field\": \"noise_pref\", \"status\": \"unknown\", \"explanation\": \"没有整机噪声实测\", \"evidence\": []}], \"assumptions\": []}"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "versions": 0,
+            "outcome": "proposal",
+            "validation": "pass",
+            "require_tools": [
+              "search_local",
+              "evaluate"
+            ],
+            "issues_contain": [
+              "整机噪声"
+            ],
+            "fields": {
+              "noise_pref": {
+                "status": "active",
+                "value": "silent",
+                "strength": "must"
+              }
+            },
+            "model_input_contains": [
+              "noise_pref",
+              "must"
+            ]
+          }
+        },
+        {
+          "kind": "message",
+          "text": "静音尽量满足即可，继续选配",
+          "screen_oracle": {
+            "next_action": "plan",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "noise_pref",
+                "value": "silent",
+                "strength": "prefer",
+                "quote": "静音尽量满足即可，继续选配"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 1,
+            "outcome": "ready",
+            "validation": "pass",
+            "require_tools": [
+              "evaluate"
+            ],
+            "fields": {
+              "noise_pref": {
+                "status": "active",
+                "value": "silent",
+                "strength": "prefer"
+              }
+            }
+          },
+          "builder_oracle": [
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-search_local",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "search_local",
+                      "payload": "{\"category\": \"cpu\"}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-evaluate",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "evaluate",
+                      "payload": "{\"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "{\"outcome\": \"proposal\", \"reply\": \"已比较候选，具体取舍见方案。\", \"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}, \"issues\": [], \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"报价在预算内\", \"evidence\": []}, {\"field\": \"noise_pref\", \"status\": \"unknown\", \"explanation\": \"没有整机噪声实测\", \"evidence\": []}], \"assumptions\": []}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "refresh",
+          "expect": {
+            "versions": 1,
+            "outcome": "ready",
+            "builder_calls": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "P2-005",
+      "title": "真实proposal空问题列表自动交付",
+      "source": "internal/planning/testdata/complete_proposal_recording.json；末次模型输出原样复用，其前工具调用为人工 oracle",
+      "steps": [
+        {
+          "kind": "message",
+          "text": "预算7000，用于视频剪辑",
+          "screen_oracle": {
+            "next_action": "confirm",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 7000,
+                "strength": "must",
+                "quote": "预算7000，用于视频剪辑"
+              },
+              {
+                "op": "set",
+                "field": "use_case.type",
+                "value": "productivity",
+                "strength": "must",
+                "kind": "fact",
+                "quote": "预算7000，用于视频剪辑"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "builder_calls": 0,
+            "fields": {
+              "budget_cny": {
+                "status": "active",
+                "value": 7000
+              }
+            }
+          }
+        },
+        {
+          "kind": "confirm",
+          "builder_oracle": [
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-search_local",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "search_local",
+                      "payload": "{\"category\": \"cpu\"}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-evaluate",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "evaluate",
+                      "payload": "{\"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "{\"outcome\": \"proposal\", \"reply\": \"已为您搭配一套约4580元的AM4生产力方案，远低于7000元预算上限。核心选择R5 5600+RX 6600+32GB DDR4，兼顾1080p/2K视频剪辑、Adobe全家桶与LOL流畅运行；B550M主板带WiFi和双M.2，650W电源留有升级余量，机箱散热风道优秀。所有硬件兼容性已通过校验。若您对静音有明确要求或希望将剩余预算用于升级SSD容量/内存频率，请告知以便调整。\", \"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}, \"issues\": [], \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"evidence\": [\"local:cpu-r5-5600\", \"local:gpu-sapphire-6600-pulse\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-gskill-ripjawsv-32-3200\", \"local:ssd-crucial-p3plus-1tb\", \"local:psu-msi-mag-a650bn\", \"local:case-montech-air-903-max\", \"local:cooler-deepcool-ag400\"], \"explanation\": \"整机总价4579.90元，低于用户must约束的7000元预算上限\"}, {\"field\": \"free.workload_resolution\", \"status\": \"met\", \"evidence\": [\"local:cpu-r5-5600\", \"local:mem-gskill-ripjawsv-32-3200\", \"local:gpu-sapphire-6600-pulse\"], \"explanation\": \"R5 5600六核+32GB内存+RX 6600 GPU加速可满足2K清晰度视频素材剪辑与预览需求\"}, {\"field\": \"notes\", \"status\": \"met\", \"evidence\": [\"local:gpu-sapphire-6600-pulse\", \"local:cpu-r5-5600\"], \"explanation\": \"1080p素材剪辑与LOL低要求游戏均被当前配置覆盖，RX 6600在1080p下远超LOL帧率需求\"}, {\"field\": \"use_case.titles\", \"status\": \"met\", \"evidence\": [\"local:cpu-r5-5600\", \"local:mem-gskill-ripjawsv-32-3200\", \"local:gpu-sapphire-6600-pulse\"], \"explanation\": \"Adobe PS/Codex依赖CPU多核与内存容量，视频剪辑需GPU加速，LOL为轻负载游戏，本配置全面覆盖\"}, {\"field\": \"use_case.type\", \"status\": \"met\", \"evidence\": [\"local:cpu-r5-5600\", \"local:gpu-sapphire-6600-pulse\", \"local:mem-gskill-ripjawsv-32-3200\"], \"explanation\": \"以生产力为主、游戏为辅的使用场景已通过CPU/GPU/内存组合满足\"}, {\"field\": \"size_pref\", \"status\": \"met\", \"evidence\": [\"local:case-montech-air-903-max\"], \"explanation\": \"用户表示机箱无所谓，所选Montech AIR 903 MAX为MATX兼容中塔，符合prefer级尺寸偏好\"}, {\"field\": \"noise_pref\", \"status\": \"unknown\", \"evidence\": [], \"explanation\": \"用户未提出静音要求，AG400与AIR 903 MAX风扇噪声属主流水平，无法保证主观静音体验\"}], \"assumptions\": [\"用户未指定品牌偏好，默认按性价比与兼容性选型\", \"未提及现有配件，假设全部新购\", \"2K视频剪辑以预览与基础编辑为主，非专业调色/特效重度负载\", \"LOL无需高帧率电竞级性能，RX 6600已远超需求\"]}"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "versions": 1,
+            "outcome": "ready",
+            "validation": "pass",
+            "require_tools": [
+              "search_local",
+              "evaluate"
+            ]
+          }
+        },
+        {
+          "kind": "retry",
+          "expect": {
+            "versions": 1,
+            "builder_calls": 0
+          }
+        },
+        {
+          "kind": "refresh",
+          "expect": {
+            "versions": 1,
+            "builder_calls": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "P2-006",
+      "title": "外部规格来源入候选，偶然网页价格不能进入报价",
+      "source": "internal/planning/testdata/5900x_registration_recording.json；规格摘录为已保存原文，操作为重建 oracle；网页包装为离线夹具",
+      "steps": [
+        {
+          "kind": "message",
+          "text": "预算7000，用于视频剪辑",
+          "screen_oracle": {
+            "next_action": "confirm",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 7000,
+                "strength": "must",
+                "quote": "预算7000，用于视频剪辑"
+              },
+              {
+                "op": "set",
+                "field": "use_case.type",
+                "value": "productivity",
+                "strength": "must",
+                "kind": "fact",
+                "quote": "预算7000，用于视频剪辑"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "builder_calls": 0,
+            "fields": {
+              "budget_cny": {
+                "status": "active",
+                "value": 7000
+              }
+            }
+          }
+        },
+        {
+          "kind": "confirm",
+          "builder_oracle": [
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-search_web",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "search_web",
+                      "payload": "{\"query\": \"Ryzen 9 5900X 官方规格 AM4\"}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-read_page",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "read_page",
+                      "payload": "{\"url\": \"https://hardware.eval.invalid/5900x\"}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-register_candidate",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "register_candidate",
+                      "payload": "{\"id\": \"ext-cpu-r9-5900x\", \"brand\": \"AMD\", \"model\": \"Ryzen 9 5900X\", \"specs\": {\"socket\": \"AM4\", \"tdp_w\": 105, \"has_igpu\": false}, \"unknown\": [], \"category\": \"cpu\", \"currency\": \"CNY\", \"evidence\": [\"source-2\"], \"external\": true, \"merchant\": \"什么值得买收录价\", \"price_cny\": \"979.00\", \"field_quotes\": {\"model\": \"Ryzen 9 5900X\", \"specs.socket\": \"AM4接口\", \"specs.tdp_w\": \"105W 功率\", \"specs.has_igpu\": \"不支持核显\", \"price_cny\": \"AMD 锐龙 R9 5900X CPU 3.7GHz 12核24线程 【报价 价格 评测 怎么样】-什么值得买 打开App 搜索 热门搜索 白酒 月饼 西凤酒 饼干 轩妈 金九月饼 金典 美心 抽纸 天猫超市 榴芒一刻 牙膏 花生油 大米 菜籽油 猫砂 依视路 面包 镜片 得宝 首页 国内好价 海淘好价 全部好价 社区 商品百科 优惠券 白菜党 投资者关系 关于我们 分类 商品 简介 推荐 AMD 锐龙 R9 5900X CPU 3.7GHz 12核24线程 ¥ 979 总销量259 规格参数 锐龙 R9 处理器(AMD) 3.7GHz 主频 105W 功率 12核 核心数量 24线程 线程数 不支持核显 是否集成显卡 全网内容 共收录全网内容101篇 5月装机攻略—CPU（二手共119款）排行榜 AMD Ryzen 9 5900X最佳搭档：选对主板让性能飞升 AMD Ryzen 9 5900X处理器参数详解：性能强悍的旗舰选择 AMD Ryzen 9 5900X深度解析：性能怪兽的参数全揭秘 近期为了黑神话悟空买的装备 捡垃圾，捡到191万跑分 产品介绍 有赖于全新的 Zen3 架构加持，AMD在本世代的CPU产品上对intel展开围攻。基于 7nm+ 工艺的锐龙5000系列 CPU 对比现有的 Zen2 架构产品在IPC方面提升了19%，且拥有2倍大的L3缓存，效率更是 i9-10900K 的2.8倍。AMD 锐龙 9 5900X 采用全新的 Zen3 架构，基于 7nm+ 工艺，AM4接口，拥有12核心和24线程，默频3.7GHz，最高可加速至4.8GHz，支持PCIe 4.0，L2+L3总共缓存为70MB，TDP 105W。最高支持双通道 DDR4-3200MHz 内存速度，支持X570平台，提供三年质保。 更多推荐 AMD Ryzen R3 3200G R5 3400G CPU处理器 ¥ 350 AMD 9950X3D2 AM5接口 CPU处理器 盒装 ¥ 6699 AMD RX9070XT 16G显存 独立显卡 ¥ 6999 AMD 双X3D缓存 CPU处理器 ¥ 6699 查看更多\"}, \"field_evidence\": {\"model\": \"source-2\", \"specs.socket\": \"source-2\", \"specs.tdp_w\": \"source-2\", \"specs.has_igpu\": \"source-2\", \"price_cny\": \"source-2\"}, \"price_observed_at\": \"2026-09-13\"}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-evaluate",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "evaluate",
+                      "payload": "{\"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"ext-cpu-r9-5900x\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "{\"outcome\": \"proposal\", \"reply\": \"已比较候选，具体取舍见方案。\", \"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"ext-cpu-r9-5900x\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}, \"issues\": [\"外部候选缺价格和芯片组支持证据\"], \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"以工具实际报价核对预算\", \"evidence\": []}], \"assumptions\": []}"
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "{\"outcome\": \"proposal\", \"reply\": \"已比较候选，具体取舍见方案。\", \"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"ext-cpu-r9-5900x\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}, \"issues\": [\"外部候选缺价格和芯片组支持证据\"], \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"以工具实际报价核对预算\", \"evidence\": []}], \"assumptions\": []}"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "versions": 0,
+            "outcome": "proposal",
+            "validation": "",
+            "require_tools": [
+              "search_web",
+              "read_page",
+              "register_candidate",
+              "evaluate"
+            ],
+            "issues_contain": [
+              "外部候选缺价格"
+            ],
+            "missing_prices": 1,
+            "candidate_specs": {
+              "ext-cpu-r9-5900x": {
+                "socket": "AM4",
+                "tdp_w": 105,
+                "has_igpu": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "P2-007",
+      "title": "明确询价只用本地快照，不联网查价",
+      "source": "用户真实反馈场景；模型操作/工具轨迹为人工 oracle，配件取保存快照",
+      "steps": [
+        {
+          "kind": "message",
+          "text": "预算7000，用于视频剪辑",
+          "screen_oracle": {
+            "next_action": "confirm",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 7000,
+                "strength": "must",
+                "quote": "预算7000，用于视频剪辑"
+              },
+              {
+                "op": "set",
+                "field": "use_case.type",
+                "value": "productivity",
+                "strength": "must",
+                "kind": "fact",
+                "quote": "预算7000，用于视频剪辑"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "builder_calls": 0,
+            "fields": {
+              "budget_cny": {
+                "status": "active",
+                "value": 7000
+              }
+            }
+          }
+        },
+        {
+          "kind": "confirm",
+          "builder_oracle": [
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-search_local",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "search_local",
+                      "payload": "{\"category\": \"cpu\"}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-evaluate",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "evaluate",
+                      "payload": "{\"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "{\"outcome\": \"proposal\", \"reply\": \"已比较候选，具体取舍见方案。\", \"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}, \"issues\": [], \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"以工具实际报价核对预算\", \"evidence\": []}], \"assumptions\": []}"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "versions": 1,
+            "outcome": "ready",
+            "validation": "pass",
+            "require_tools": [
+              "search_local",
+              "evaluate"
+            ]
+          }
+        },
+        {
+          "kind": "message",
+          "text": "看看现在价格，按已有参考价继续给方案",
+          "screen_oracle": {
+            "next_action": "plan",
+            "reply": "已记录本轮有效需求。",
+            "operations": []
+          },
+          "expect": {
+            "versions": 2,
+            "outcome": "ready",
+            "forbid_tools": [
+              "search_web",
+              "read_page"
+            ],
+            "require_tools": [
+              "search_local",
+              "evaluate"
+            ]
+          },
+          "builder_oracle": [
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-search_local",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "search_local",
+                      "payload": "{\"category\": \"cpu\"}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-evaluate",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "evaluate",
+                      "payload": "{\"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "{\"outcome\": \"proposal\", \"reply\": \"已比较候选，具体取舍见方案。\", \"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}, \"issues\": [], \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"以工具实际报价核对预算\", \"evidence\": []}], \"assumptions\": []}"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "P2-008",
+      "title": "预算和游戏分辨率未知仍可讨论，不编造",
+      "source": "用户真实反馈场景；模型操作/工具轨迹为人工 oracle，配件取保存快照",
+      "steps": [
+        {
+          "kind": "message",
+          "text": "想玩游戏，预算还没定，先说说选择方向",
+          "screen_oracle": {
+            "next_action": "collect",
+            "reply": "可以先比较游戏类型与升级方向。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "use_case.type",
+                "value": "gaming",
+                "strength": "must",
+                "kind": "fact",
+                "quote": "想玩游戏，预算还没定，先说说选择方向"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "builder_calls": 0,
+            "fields": {
+              "budget_cny": {
+                "status": "unknown"
+              },
+              "use_case.resolution": {
+                "status": "unknown"
+              }
+            }
+          }
+        },
+        {
+          "kind": "refresh",
+          "expect": {
+            "versions": 0,
+            "fields": {
+              "budget_cny": {
+                "status": "unknown"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "P2-009",
+      "title": "面板编辑与聊天同样保留其他状态",
+      "source": "用户真实反馈场景；模型操作/工具轨迹为人工 oracle，配件取保存快照",
+      "steps": [
+        {
+          "kind": "message",
+          "text": "预算8000，尽量安静",
+          "screen_oracle": {
+            "next_action": "confirm",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 8000,
+                "strength": "must",
+                "quote": "预算8000，尽量安静"
+              },
+              {
+                "op": "set",
+                "field": "noise_pref",
+                "value": "silent",
+                "strength": "prefer",
+                "quote": "预算8000，尽量安静"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0
+          }
+        },
+        {
+          "kind": "edit",
+          "edit": [
+            {
+              "op": "set",
+              "field": "budget_cny",
+              "value": 6000,
+              "strength": "must"
+            }
+          ],
+          "expect": {
+            "versions": 0,
+            "builder_calls": 0,
+            "fields": {
+              "budget_cny": {
+                "status": "active",
+                "value": 6000
+              },
+              "noise_pref": {
+                "status": "active",
+                "value": "silent",
+                "strength": "prefer"
+              }
+            }
+          }
+        },
+        {
+          "kind": "message",
+          "text": "预算改7000",
+          "screen_oracle": {
+            "next_action": "collect",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 7000,
+                "strength": "must",
+                "quote": "预算改7000"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "builder_calls": 0,
+            "fields": {
+              "budget_cny": {
+                "status": "active",
+                "value": 7000
+              },
+              "noise_pref": {
+                "status": "active",
+                "value": "silent",
+                "strength": "prefer"
+              }
+            }
+          }
+        },
+        {
+          "kind": "refresh",
+          "expect": {
+            "versions": 0,
+            "fields": {
+              "budget_cny": {
+                "status": "active",
+                "value": 7000
+              },
+              "noise_pref": {
+                "status": "active",
+                "value": "silent",
+                "strength": "prefer"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "P2-010",
+      "title": "已有配置中的备选讨论不执行、不替换当前要求",
+      "source": "用户真实反馈场景；模型操作/工具轨迹为人工 oracle，配件取保存快照",
+      "steps": [
+        {
+          "kind": "message",
+          "text": "预算7000，用于视频剪辑",
+          "screen_oracle": {
+            "next_action": "confirm",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 7000,
+                "strength": "must",
+                "quote": "预算7000，用于视频剪辑"
+              },
+              {
+                "op": "set",
+                "field": "use_case.type",
+                "value": "productivity",
+                "strength": "must",
+                "kind": "fact",
+                "quote": "预算7000，用于视频剪辑"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "builder_calls": 0,
+            "fields": {
+              "budget_cny": {
+                "status": "active",
+                "value": 7000
+              }
+            }
+          }
+        },
+        {
+          "kind": "confirm",
+          "builder_oracle": [
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-search_local",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "search_local",
+                      "payload": "{\"category\": \"cpu\"}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-evaluate",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "evaluate",
+                      "payload": "{\"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "{\"outcome\": \"proposal\", \"reply\": \"已比较候选，具体取舍见方案。\", \"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}, \"issues\": [], \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"以工具实际报价核对预算\", \"evidence\": []}], \"assumptions\": []}"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "versions": 1,
+            "outcome": "ready",
+            "validation": "pass",
+            "require_tools": [
+              "search_local",
+              "evaluate"
+            ]
+          }
+        },
+        {
+          "kind": "message",
+          "text": "如果换更好的CPU会怎样，先别执行",
+          "screen_oracle": {
+            "next_action": "collect",
+            "reply": "可以比较升级方向，当前方案保持不变。",
+            "operations": [
+              {
+                "op": "alternative",
+                "field": "priority",
+                "value": [
+                  "cpu"
+                ],
+                "strength": "must",
+                "quote": "如果换更好的CPU会怎样，先别执行"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 1,
+            "builder_calls": 0,
+            "alternatives": 1,
+            "fields": {
+              "priority": {
+                "status": "unknown"
+              }
+            }
+          }
+        },
+        {
+          "kind": "refresh",
+          "expect": {
+            "versions": 1,
+            "builder_calls": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "P2-011",
+      "title": "模型错误ready不能掩盖真实插槽冲突",
+      "source": "用户真实反馈场景；模型操作/工具轨迹为人工 oracle，配件取保存快照",
+      "steps": [
+        {
+          "kind": "message",
+          "text": "预算7000，用于视频剪辑",
+          "screen_oracle": {
+            "next_action": "confirm",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 7000,
+                "strength": "must",
+                "quote": "预算7000，用于视频剪辑"
+              },
+              {
+                "op": "set",
+                "field": "use_case.type",
+                "value": "productivity",
+                "strength": "must",
+                "kind": "fact",
+                "quote": "预算7000，用于视频剪辑"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "builder_calls": 0,
+            "fields": {
+              "budget_cny": {
+                "status": "active",
+                "value": 7000
+              }
+            }
+          }
+        },
+        {
+          "kind": "confirm",
+          "builder_oracle": [
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-search_local",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "search_local",
+                      "payload": "{\"category\": \"motherboard\"}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-evaluate",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "evaluate",
+                      "payload": "{\"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"eval-only-am5-board\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "{\"outcome\": \"ready\", \"reply\": \"已比较候选，具体取舍见方案。\", \"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"eval-only-am5-board\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}, \"issues\": [], \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"以工具实际报价核对预算\", \"evidence\": []}], \"assumptions\": []}"
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "{\"outcome\": \"proposal\", \"reply\": \"已比较候选，具体取舍见方案。\", \"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"eval-only-am5-board\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}, \"issues\": [\"CPU和主板插槽不兼容\"], \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"以工具实际报价核对预算\", \"evidence\": []}], \"assumptions\": []}"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "versions": 0,
+            "outcome": "proposal",
+            "validation": "fail",
+            "require_tools": [
+              "evaluate"
+            ],
+            "issues_contain": [
+              "插槽"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "P2-012",
+      "title": "实际校验失败后工具循环修正并交付",
+      "source": "用户真实反馈场景；模型操作/工具轨迹为人工 oracle，配件取保存快照",
+      "steps": [
+        {
+          "kind": "message",
+          "text": "预算7000，用于视频剪辑",
+          "screen_oracle": {
+            "next_action": "confirm",
+            "reply": "已记录本轮有效需求。",
+            "operations": [
+              {
+                "op": "set",
+                "field": "budget_cny",
+                "value": 7000,
+                "strength": "must",
+                "quote": "预算7000，用于视频剪辑"
+              },
+              {
+                "op": "set",
+                "field": "use_case.type",
+                "value": "productivity",
+                "strength": "must",
+                "kind": "fact",
+                "quote": "预算7000，用于视频剪辑"
+              }
+            ]
+          },
+          "expect": {
+            "versions": 0,
+            "builder_calls": 0,
+            "fields": {
+              "budget_cny": {
+                "status": "active",
+                "value": 7000
+              }
+            }
+          }
+        },
+        {
+          "kind": "confirm",
+          "builder_oracle": [
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-search_local",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "search_local",
+                      "payload": "{\"category\": \"motherboard\"}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-evaluate",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "evaluate",
+                      "payload": "{\"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"eval-only-am5-board\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-search_local",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "search_local",
+                      "payload": "{\"category\": \"motherboard\"}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "id": "oracle-evaluate",
+                    "name": "planning_action",
+                    "args": {
+                      "action": "evaluate",
+                      "payload": "{\"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "{\"outcome\": \"proposal\", \"reply\": \"已比较候选，具体取舍见方案。\", \"draft\": {\"build_ref\": \"proposal-am4-productivity-2k\", \"rationale\": {\"cpu\": \"R5 5600 6核12线程，满足1080p/2K视频剪辑与PS多任务，性价比高于5500且保留AM4低成本优势\", \"gpu\": \"RX 6600 8GB可流畅运行LOL并支持2K素材预览与GPU加速，功耗低适配650W电源\", \"psu\": \"650W铜牌足额支撑R5 5600+RX 6600（峰值约300W），预留升级空间且价格合理\", \"ssd\": \"Crucial P3 Plus 1TB NVMe读写速度适中，容量满足素材与软件存储，性价比优于LEGEND 800\", \"case\": \"Montech AIR 903 MAX散热风道优秀，兼容MATX主板与长显卡，机箱尺寸不限时优先散热性能\", \"cooler\": \"AG400四热管压制65W R5 5600绰绰有余，高度150mm兼容机箱，静音表现优于Hyper 212\", \"memory\": \"32GB DDR4-3200保障Adobe全家桶与2K剪辑的多任务流畅度，较16GB显著减少卡顿\", \"motherboard\": \"B550M PRO-VDH WIFI提供双M.2、WiFi与DDR4支持，兼容R5 5600且扩展性满足生产力需求\"}, \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-sapphire-6600-pulse\", \"psu\": \"psu-msi-mag-a650bn\", \"ssd\": [{\"sku\": \"ssd-crucial-p3plus-1tb\", \"quantity\": 1}], \"case\": \"case-montech-air-903-max\", \"cooler\": \"cooler-deepcool-ag400\", \"memory\": \"mem-gskill-ripjawsv-32-3200\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\"}, \"schema_version\": 1, \"requirement_ref\": \"current\"}, \"issues\": [], \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"以工具实际报价核对预算\", \"evidence\": []}], \"assumptions\": []}"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "versions": 1,
+            "outcome": "ready",
+            "validation": "pass",
+            "require_tools": [
+              "search_local",
+              "evaluate"
+            ],
+            "model_input_contains": [
+              "SOCKET_MATCH",
+              "fail"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

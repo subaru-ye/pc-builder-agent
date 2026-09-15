@@ -1,0 +1,19 @@
+{
+  "source_suite_sha256": "a05770dc7c3032b127c361813e7a6f1f658bd1acc90e34b6979a07a83dc3fd34",
+  "suite_sha256": "ac926760781cfbaeee597b486c9e7889521dd71ca609c78629ee6c8bad26ca44",
+  "generator_sha256": "f241d7b9eeeeb460d89a1c471b567fd5d5175f81e9eff1b60bc22064f334af04",
+  "changes": [
+    {
+      "case": "P2-004",
+      "step": 1,
+      "change": "Repeat final unresolved proposal once as an authored review response"
+    },
+    {
+      "case": "P2-006",
+      "step": 1,
+      "change": "Repeat final unresolved proposal once as an authored review response"
+    }
+  ],
+  "grading_changes": "Only expected oracle call counts; state, evidence, version and delivery assertions unchanged",
+  "actual_model_requests": 0
+}

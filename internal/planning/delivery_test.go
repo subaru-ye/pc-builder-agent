@@ -3,7 +3,9 @@ package planning
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -115,6 +117,71 @@ func TestEmptyProposalFeedbackCanFillAssessment(t *testing.T) {
 	got, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), input)
 	if err != nil || got.Outcome != "ready" || got.ModelCalls != 2 || len(got.Issues) != 0 {
 		t.Fatalf("stale issues survived repair: %+v %v", got, err)
+	}
+}
+
+func TestNonemptyProposalCanSearchAndRepairAfterDeliveryFeedback(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	var expensiveSKU string
+	for _, c := range catalog.Candidates {
+		if c.Category == schemas.CategoryCPU {
+			c.SKU = "cpu-test-expensive"
+			price := "20000"
+			c.PriceCNY = &price
+			catalog.Candidates = append(catalog.Candidates, c)
+			expensiveSKU = c.SKU
+			break
+		}
+	}
+	var bad map[string]any
+	if err := json.Unmarshal(record.Draft, &bad); err != nil {
+		t.Fatal(err)
+	}
+	bad["selection"].(map[string]any)["cpu"] = expensiveSKU
+	m := &scriptedModel{respond: func(n int, req *model.LLMRequest) *genai.Content {
+		copy := record
+		switch n {
+		case 1:
+			copy.Draft, _ = json.Marshal(bad)
+			copy.Issues = []string{"当前候选超预算"}
+		case 2:
+			feedback := req.Contents[len(req.Contents)-1].Parts[0].Text
+			if !strings.Contains(feedback, "候选价格超过已表达的预算范围") || len(req.Config.Tools) == 0 {
+				t.Fatalf("proposal ended without actual budget feedback and repair tools: %s", feedback)
+			}
+			return function("search_local", `{"category":"cpu"}`)
+		case 3:
+			return function("evaluate", `{"draft":`+string(record.Draft)+`}`)
+		}
+		raw, _ := json.Marshal(copy)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), input)
+	if err != nil || got.Outcome != "ready" || got.Quote.TotalCNY != "4579.90" || got.ModelCalls != 4 || got.ToolCalls != 2 || len(got.Issues) != 0 {
+		t.Fatalf("proposal was not repaired: outcome=%s calls=%d issues=%v error=%v", got.Outcome, got.ModelCalls, got.Issues, err)
+	}
+}
+
+func TestUnresolvedProposalReviewIsBoundedAndDoesNotRelaxMust(t *testing.T) {
+	for _, turns := range []int{1, 2, 3, 8} {
+		t.Run(fmt.Sprint(turns), func(t *testing.T) {
+			input, record, catalog := completeRecording(t)
+			input.State.Fields["noise_pref"] = schemas.RequirementField{Status: "active", Kind: "constraint", Strength: "must", Value: json.RawMessage(`"silent"`)}
+			record.Issues = []string{"整机噪声缺少实测"}
+			record.Assessments = append(record.Assessments, Assessment{Field: "noise_pref", Status: "unknown"})
+			m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+				raw, _ := json.Marshal(record)
+				return genai.NewContentFromText(string(raw), genai.RoleModel)
+			}}
+			got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: turns}).Run(context.Background(), input)
+			wantCalls := 1
+			if turns >= 3 {
+				wantCalls = 2
+			}
+			if err != nil || got.ModelCalls != wantCalls || got.Outcome != "proposal" || !slices.Contains(got.Issues, "整机噪声缺少实测") || input.State.Fields["noise_pref"].Strength != "must" {
+				t.Fatalf("review loop lost bounds or facts: calls=%d issues=%v error=%v", got.ModelCalls, got.Issues, err)
+			}
+		})
 	}
 }
 

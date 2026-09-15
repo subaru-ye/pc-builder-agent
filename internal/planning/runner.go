@@ -130,6 +130,7 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 	if turns <= 0 || turns > 8 {
 		turns = 8
 	}
+	proposalReviewed := false
 	for turn := 0; turn < turns; turn++ {
 		if turn == turns-1 {
 			request.Config.Tools = nil
@@ -210,9 +211,15 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 			x.evaluate(ctx, final.Draft)
 		}
 		finished := x.finish()
-		if (final.Outcome == "ready" || (final.Outcome == "proposal" && len(final.Issues) == 0)) && finished.Outcome != "ready" && turn < turns-1 {
+		// Give an unresolved proposal one review while tools are still available.
+		// A nonempty model-authored issue list is not evidence that repair was tried.
+		// Repeating the proposal after this review ends normally, without forcing
+		// all eight turns or weakening its requirements and unresolved findings.
+		reviewProposal := final.Outcome == "proposal" && !proposalReviewed && turn < turns-2 && x.result.ToolCalls < 24
+		if (final.Outcome == "ready" || (final.Outcome == "proposal" && len(final.Issues) == 0) || reviewProposal) && finished.Outcome != "ready" && turn < turns-1 {
+			proposalReviewed = true
 			feedback, _ := json.Marshal(map[string]any{"validation": finished.Validation, "quote": finished.Quote, "issues": finished.Issues})
-			request.Contents = append(request.Contents, genai.NewContentFromText("交付核验发现以下事实，请自主修正或说明取舍后保存proposal，不要把未知改为已通过："+string(feedback), genai.RoleUser))
+			request.Contents = append(request.Contents, genai.NewContentFromText("交付核验反馈："+string(feedback)+"\n请复核是否还能用剩余额度检索或修正，例如比较其他有报价的候选解决超预算；由你决定取舍，不预设替换型号。issues只保留用户有效条件或交付事实的缺项，未要求具体性能实测时可把选型局限写进说明。若仍不能解决，可直接保持proposal并说明已尝试的路径；真正需用户决定用clarify。不得编造证据、放宽必须条件或把未知改为已通过。", genai.RoleUser))
 			continue
 		}
 		return finished, nil

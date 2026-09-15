@@ -90,7 +90,7 @@ func TestMandatorySilenceReachesToolsAndSavesProposal(t *testing.T) {
 		}
 	}}
 	result, e := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), schemas.PlanningInput{SchemaVersion: 2, State: state})
-	if e != nil || result.Outcome != "proposal" || m.calls != 3 || result.ToolCalls != 2 || result.Validation == nil || len(result.Candidates) == 0 {
+	if e != nil || result.Outcome != "proposal" || m.calls != 4 || result.ToolCalls != 2 || result.Validation == nil || len(result.Candidates) == 0 {
 		t.Fatalf("result=%+v error=%v", result, e)
 	}
 	if state.Fields["noise_pref"].Strength != "must" {
@@ -270,7 +270,7 @@ func TestOpenRequirementsReachPlanningAndTools(t *testing.T) {
 				return genai.NewContentFromText(`{"outcome":"proposal","reply":"先保留候选并继续检索","draft":`+string(draft)+`,"issues":["要求仍需比较核实"],"assessments":[],"assumptions":[]}`, genai.RoleModel)
 			}}
 			result, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), schemas.PlanningInput{SchemaVersion: 2, State: state})
-			if err != nil || result.ModelCalls != 2 || result.ToolCalls != 1 || len(result.Candidates) == 0 || result.Validation == nil || state.Fields[tc.key].Strength != "must" {
+			if err != nil || result.ModelCalls != 3 || result.ToolCalls != 1 || len(result.Candidates) == 0 || result.Validation == nil || state.Fields[tc.key].Strength != "must" {
 				t.Fatalf("flow blocked or state weakened: %+v %v", result, err)
 			}
 		})

@@ -16,9 +16,9 @@ import (
 	"google.golang.org/genai"
 )
 
-func thermalRecording(t *testing.T) (schemas.PlanningInput, json.RawMessage, []*genai.Content, recordedCatalog) {
+func thermalRecording(t *testing.T, file string) (schemas.PlanningInput, json.RawMessage, []*genai.Content, recordedCatalog) {
 	t.Helper()
-	raw, err := os.ReadFile("testdata/thermal_repeated_evaluation_20260915.json")
+	raw, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func thermalRecording(t *testing.T) (schemas.PlanningInput, json.RawMessage, []*
 }
 
 func TestRecordedThermalFailureGetsProgressFeedbackWithoutChangingVerdict(t *testing.T) {
-	input, _, responses, catalog := thermalRecording(t)
+	input, _, responses, catalog := thermalRecording(t, "testdata/thermal_repeated_evaluation_20260915.json")
 	seen := false
 	m := &scriptedModel{respond: func(n int, request *model.LLMRequest) *genai.Content {
 		for _, content := range request.Contents {
@@ -74,7 +74,7 @@ func TestRecordedThermalFailureGetsProgressFeedbackWithoutChangingVerdict(t *tes
 }
 
 func TestEvaluationComparisonUsesSelectionAndFreshFacts(t *testing.T) {
-	input, raw, _, catalog := thermalRecording(t)
+	input, raw, _, catalog := thermalRecording(t, "testdata/thermal_repeated_evaluation_20260915.json")
 	for _, change := range []string{"narrative", "cooler", "quantity", "specification", "price"} {
 		t.Run(change, func(t *testing.T) {
 			x := execution{input: input, date: "2026-09-15"}

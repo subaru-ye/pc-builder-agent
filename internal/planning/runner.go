@@ -30,7 +30,7 @@ search_semantic: {query:自然语言需求,category?:品类}，复用本地语�
 联网范围：仅用于装机相关的公开型号规格、兼容性/BIOS支持、安装排障指南、配件知识和性能资料，优先厂商官网与官方文档。不得联网查询具体价格、优惠、库存或商家购买信息；用户询价时使用本地价格快照并说明观察日期，缺价明确未知，不以搜索摘要、网页标价、首发价或模型记忆补价。不要因为缺价反复调用联网工具；仍可查询规格并保存待解决方案。目录已有准确型号时使用本地候选编号及其报价，不要另建外部候选替代已有报价。
 search_web: {query:搜索词}，搜索上述装机技术资料和官网链接，不用于查价；返回来源编号。
 read_page: {url:链接,method?:auto|http|browser,query?:要定位的词,offset?:0,limit?:16000}，默认普通HTTP优先，仅动态空壳自动尝试浏览器。正文缺少动态表格时可主动选择browser，不必反复搜索；登录、验证码、限流时不要重试绕过。搜索摘要只能作为线索，规格优先用厂商，噪声要区分单件/整机及测试工况。
-read_evidence: {id:来源编号,query?:要定位的词,offset?:0,limit?:16000}，读取服务端保存的正文窗口，不发起网络请求。query优先定位相关段落（空格分隔多个词），next_offset可继续向后读取，offset=0且不带query从头读取。truncated表示仅展示部分，不代表服务端丢失剩余正文；窗口不能证明未展示内容不存在。
+read_evidence: {id:来源编号,query?:要定位的词,offset?:0,limit?:16000}，读取服务端保存的正文窗口，不发起网络请求。local:候选id返回本地商品快照及字段来源索引，不能当作已阅读全文或补齐未知规格；正文按返回的来源编号读取。query优先定位相关段落（空格分隔多个词），next_offset可继续向后读取，offset=0且不带query从头读取。truncated表示仅展示部分，不代表服务端丢失剩余正文；窗口不能证明未展示内容不存在。
 register_candidate: {id:ext-唯一编号,category:cpu|gpu|motherboard|memory|ssd|psu|case|cooler,brand:品牌,model:完整型号,specs:{规范字段:值},price_cny:null,evidence:[来源编号],field_evidence:{model:来源编号,每个specs键:来源编号},unknown:[缺失或冲突说明]}。只能提取已读取正文的规格事实；不明确的参数省略，不猜测。注册到会话候选，不是全局目录发布，网页价格不进入报价。
 注册时同时提供field_quotes:{字段:支持该值的逐字正文摘录}。非兼容性字段（接口数量、噪声等）可放specs，会另存为attributes供推理。多来源冲突放unknown；不能只附链接却编造数值。
 规格来源字段推荐使用完整路径，例如field_evidence:{"specs.socket":"source-1"}及field_quotes:{"specs.socket":"AM4接口"}；工具也兼容socket这样的短键。注册结果会返回实际保留的candidate及unknown；registered不表示所有参数已核实。收到缺项应优先补查厂商规格再更新候选，不要沿用被剔除的数据宣称兼容。可以在同一回复调用多个独立工具；注意每次反馈中的剩余往返额度，尽早检查规格与兼容性，为必要修复留出往返。
@@ -315,6 +315,22 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		}
 		return map[string]any{"results": results, "executed_queries": len(results), "pending_queries": p.Queries[len(results):]}
 	case "read_evidence":
+		if strings.HasPrefix(p.ID, "local:") {
+			for _, candidate := range x.candidates {
+				if candidate.External || p.ID != "local:"+candidate.ID {
+					continue
+				}
+				x.captureSelectedEvidence(ctx, []string{candidate.ID})
+				sources := []map[string]string{}
+				for _, e := range x.evidence {
+					if e.CandidateID == candidate.ID && e.Kind == "catalog" {
+						sources = append(sources, map[string]string{"id": e.ID, "field": e.Field, "kind": e.Kind})
+					}
+				}
+				return map[string]any{"id": p.ID, "kind": "local_snapshot", "candidate": candidate, "snapshot_date": x.date, "sources": sources,
+					"instruction": "这是本轮本地目录快照，未发起联网或读取额外正文；缺失字段仍未知。sources为已载入的字段资料索引，可按来源编号继续read_evidence。"}
+			}
+		}
 		for _, e := range x.evidence {
 			if e.ID == p.ID {
 				return evidenceWindow(e, p.Query, p.Offset, p.Limit)

@@ -1,6 +1,6 @@
 # 装机配置单 Agent
 
-> 对话式 DIY 装机助手:说清预算和用途,得到**保证兼容**、**带日期化报价**、**可多轮修改**的装机配置单。
+> 对话式 DIY 装机助手：说清预算和用途，得到**逐项兼容核验**、**带日期化报价**、**可多轮修改**的候选方案；缺项保留待解决，满足交付条件后保存正式版本。
 >
 > 个人学习向项目,目标技术栈:多 Agent 流水线 + A2A 协议 + 记忆基座。当前状态:MVP P0–P6 已封板,P7–P9 已完成;P10 Harness v2 机器复验已完成,仅待 3 人真人盲评;P11 已完成,P12B 暂停;Agent Harness 2.0 与本地 Supabase Auth 已实现。
 
@@ -30,7 +30,7 @@
                                           + pgvector(语义选件)+ Redis(会话热上下文)
 ```
 
-校验不通过时在服务内自动换件重试(有上限),LLM 只把机器可读的报告翻译成人话。
+默认 planning 模式由模型在有限额度内检索、补充资料和调整方案；规则引擎决定兼容性和报价结果。未解决时保存候选与具体问题，允许继续对话。
 
 ## 技术栈
 
@@ -66,7 +66,7 @@ docker compose up -d        # PG → localhost:15432,Redis → localhost:16379(�
 go run ./cmd/migrate up     # 应用 PostgreSQL 编号迁移
 ```
 
-复制 `.env.example` 为 `.env`。screening、builder、embedding 可独立配置 `PROVIDER/MODEL/API_KEY/BASE_URL`;未设置 provider 时兼容旧配置并默认百炼。当前示例固定 Builder `qwen3.8-max-0902`、Screening `deepseek-v4-flash-0731` 并清空切换链；显式配置 `*_MODEL_CHAIN` 才启用链内额度切换，不跨供应商回退。MiMo 当前只用于 chat，builder 须关闭思考；embedding 继续使用百炼。`BUILD_HARNESS_MODE` 默认 `v2`，使用确定性候选和最多三次无工具选配；可显式设为 `legacy` 诊断旧链，失败不会自动回退。显式连通性检查使用 `go run ./cmd/modelcheck -role screening|builder|embedding`。分享功能还要求独立的 `SHARE_TOKEN_SECRET`,生成方法见[本地运行手册](docs/ops/本地运行与部署.md)。账号功能默认关闭；需要本地账号时运行 `go run ./cmd/authsetup`，再用 `docker-compose.auth.yml` 启动独立 GoTrue。
+复制 `.env.example` 为 `.env`。screening、builder、embedding 可独立配置 `PROVIDER/MODEL/API_KEY/BASE_URL`;未设置 provider 时兼容旧配置并默认百炼。当前示例固定 Builder `qwen3.8-max-0902`、Screening `deepseek-v4-flash-0731` 并清空切换链；显式配置 `*_MODEL_CHAIN` 才启用链内额度切换，不跨供应商回退。MiMo 当前只用于 chat，builder 须关闭思考；embedding 继续使用百炼。`BUILD_HARNESS_MODE` 默认 `planning`，由模型在最多 8 次往返内检索、补充资料并调用客观校验；`v2` 和 `legacy` 仅用于显式历史诊断，失败不自动回退。显式连通性检查使用 `go run ./cmd/modelcheck -role screening|builder|embedding`。分享功能还要求独立的 `SHARE_TOKEN_SECRET`,生成方法见[本地运行手册](docs/ops/本地运行与部署.md)。账号功能默认关闭；需要本地账号时运行 `go run ./cmd/authsetup`，再用 `docker-compose.auth.yml` 启动独立 GoTrue。
 
 ```bash
 go run ./cmd/authsetup
@@ -109,9 +109,9 @@ powershell -ExecutionPolicy Bypass -File scripts/data/ops/install-tasks.ps1 -Ski
 
 ## 当前能力
 
-Web 工作台支持需求确认、配置生成、规则校验、增量改单、版本对比、分享和导出；默认 Harness v2，具备本地可选账号与数据安全发布管道。人工价格维护可用，自动价格来源保持禁用。
+Web 工作台支持需求确认、配置生成、规则校验、增量改单、版本对比、分享和导出；默认 planning，具备本地可选账号与数据安全发布管道。本地缺规格可用已读取正文补充到会话快照，保留本地报价及历史版本。人工价格维护可用，自动价格来源保持禁用。
 
-真人评审、固定模型回归和数据扩容等未完成事项统一见[路线图](docs/product/路线图.md)。历史质量结果保存在[评估目录](docs/eval/README.md)，不作为当前版本自动通过验收的声明。
+本次交付范围与限制见[业务收尾有限验收](docs/eval/planning-v2/业务收尾有限验收-20260915.md)。历史质量结果保存在[评估目录](docs/eval/README.md)，不作为当前版本自动通过验收的声明；不要求当前版本追平历史分数。
 
 ## 免责声明
 

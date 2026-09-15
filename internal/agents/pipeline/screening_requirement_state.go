@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -51,7 +52,7 @@ const requirementStateInstruction = `你负责本轮需求更新与下一步交�
 同一语义的后续更正必须复用已有free.*编号。例如free.workload_resolution原为2K，本轮说“素材大概1080p吧”，应set原字段为1080p，其他游戏等信息另行记录。不要新增notes并让旧值同时有效。多个字段或notes已重复记录同一信息时，同轮更新权威条目并remove被替代的重复条目；notes含其他有效内容则set保留这些内容。取代关系由本轮用户原话决定，不能将讨论备选误当更正。不要擅自把软件简称扩写为用户没有表达的厂商产品名。
 
 kind 与 strength 独立：fact 表示用途、工作负载、已有件、装机对象等事实；context 表示补充背景；constraint 表示要求配置满足的条件。自由文本必须条件逐项使用 free.<稳定编号> kind=constraint strength=must，不能为了生成降为context或prefer。混合说明拆成独立条目。用途事实的must不代表每个字都要目录证明。
-每项 evidence 必填：stated 表示本轮明确表达，允许忠实语义归类和数值换算；inferred 表示模型推断或默认，不能作为用户要求；uncertain 表示字段有歧义。无法安全结构化时输出 observations:[{"field":"size_pref","quote":"方便我搬来搬去","reason":"尚未指定板型，保留便携诉求"}]，field可省略。不要把小巧猜成ITX、已有AMD型号猜成品牌偏好、素材分辨率猜成显示目标。可靠字段继续set，必要的歧义字段用conflict（value可省略），可选背景保留observations，不因一项不确定拒绝整轮。
+每项 evidence 必填：stated 表示本轮明确表达，允许忠实语义归类和数值换算；inferred 表示模型推断或默认，不能作为用户要求；uncertain 表示字段有歧义。无法安全结构化时输出 observations:[{"field":"size_pref","quote":"方便我搬来搬去","reason":"尚未指定板型，保留便携诉求"}]，field可省略。不要把小巧猜成ITX、已有AMD型号猜成品牌偏好、素材分辨率猜成显示目标。未知不等于冲突：尚未提供值时保留unknown，不输出set null或conflict；只有确有相互矛盾的表达或当前有效值正在被不明确地纠正时用conflict。可靠字段继续set，可选背景保留observations，不因一项不确定拒绝整轮。
 
 输出契约（每个操作必须有op和field，不能省略op；evidence是字符串，quote与它同级，不是嵌套对象）：
 用户说“预算8000，主要玩游戏”时的完整示例：{"operations":[{"op":"set","field":"budget_cny","value":8000,"kind":"constraint","strength":"must","scope":"session","evidence":"stated","quote":"预算8000"},{"op":"set","field":"use_case.type","value":"gaming","kind":"fact","strength":"must","scope":"session","evidence":"stated","quote":"主要玩游戏"}],"next_action":"confirm","reply":"已记录预算和游戏用途，请核对需求面板后开始选配。"}
@@ -183,6 +184,14 @@ func prepareRequirementUpdate(state schemas.RequirementState, update schemas.Req
 			observe(op.Field, op.Quote, "模型推断尚未作为用户要求采用")
 			continue
 		}
+		// An absent value cannot conflict with a field that has no current claim.
+		// Preserve the source without inventing a preference or reviving removal.
+		// A correction to an active/conflicting value still follows the guard below.
+		before := working.Fields[op.Field]
+		if op.Op == "set" && before.Status != "active" && before.Status != "conflict" && missingRequirementValue(op) {
+			observe(op.Field, op.Quote, "尚未提供可用值，保留未知信息原文")
+			continue
+		}
 		if op.Evidence == "uncertain" && op.Op == "set" {
 			if requiresConfirmation(op) {
 				op.Op, op.Value = "conflict", nil
@@ -213,6 +222,26 @@ func prepareRequirementUpdate(state schemas.RequirementState, update schemas.Req
 		observe(observation.Field, observation.Quote, observation.Reason)
 	}
 	return out
+}
+
+func missingRequirementValue(op schemas.RequirementOperation) bool {
+	value := bytes.TrimSpace(op.Value)
+	if len(value) == 0 || bytes.Equal(value, []byte("null")) {
+		return true
+	}
+	if op.Field != "owned_parts" {
+		return false
+	}
+	var owned []schemas.OwnedPart
+	if json.Unmarshal(value, &owned) != nil || len(owned) == 0 {
+		return false // [] is an explicit empty list, not an unknown model.
+	}
+	for _, part := range owned {
+		if strings.TrimSpace(part.Model) != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func knownStateField(field string) bool {

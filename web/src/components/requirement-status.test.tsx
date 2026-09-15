@@ -26,6 +26,14 @@ const session = {
 } satisfies Session;
 
 describe("RequirementStatus", () => {
+  it("preserves recipient background when explicitly editing it", async () => {
+    const update = vi.fn().mockResolvedValue(true);
+    render(<RequirementStatus session={{ ...session, requirement_state: { ...state, fields: { recipient: { status: "active", value: "朋友", kind: "context", strength: "must", scope: "session", source } } } }} busy={false} onUpdate={update} onConfirm={vi.fn()} onSource={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: "修改装机对象" }));
+    await userEvent.click(screen.getByRole("button", { name: "保存需求" }));
+    expect(update).toHaveBeenCalledWith([{ op: "set", field: "recipient", value: "朋友", kind: "context", strength: "must", scope: "session" }]);
+  });
+
   it("explicitly corrects a legacy background value when editing the budget", async () => {
     const update = vi.fn().mockResolvedValue(true);
     const legacy = { ...state, fields: { budget_cny: { status: "active" as const, value: 3000, kind: "context" as const, strength: "must" as const, scope: "session" as const, source } } };

@@ -15,7 +15,7 @@ const RequirementStateSchemaVersion = 1
 
 // ErrRequirementContextField distinguishes background from executable fields.
 // Callers may retain the original text without adopting an incompatible value.
-var ErrRequirementContextField = errors.New("补充背景请使用 notes 或独立 free.* 条目，不能作为固定需求字段")
+var ErrRequirementContextField = errors.New("补充背景请使用 notes、recipient 或独立 free.* 条目，不能作为固定执行字段")
 
 var RequirementFieldKeys = []string{
 	"budget_cny", "budget_flex", "budget_basis", "use_case.type", "use_case.titles",
@@ -225,7 +225,7 @@ func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, so
 		if scope != "session" && scope != "temporary" {
 			return state, fmt.Errorf("requirement update: scope 仅允许 session 或 temporary")
 		}
-		if kind == "context" && op.Field != "notes" && !FreeField(op.Field) && (op.Op == "set" || op.Op == "alternative" || op.Op == "conflict") {
+		if kind == "context" && op.Field != "notes" && op.Field != "recipient" && !FreeField(op.Field) && (op.Op == "set" || op.Op == "alternative" || op.Op == "conflict") {
 			return state, fmt.Errorf("%w: %s", ErrRequirementContextField, op.Field)
 		}
 		if op.Op == "set" || op.Op == "alternative" || (op.Op == "conflict" && len(op.Value) > 0) {
@@ -250,7 +250,7 @@ func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, so
 				return state, fmt.Errorf("requirement update: %s 没有可恢复的临时覆盖", op.Field)
 			}
 			after = *before.Previous
-			if after.Kind == "context" && op.Field != "notes" && !FreeField(op.Field) {
+			if after.Kind == "context" && op.Field != "notes" && op.Field != "recipient" && !FreeField(op.Field) {
 				return state, fmt.Errorf("%w: %s", ErrRequirementContextField, op.Field)
 			}
 			after.Source = &evidence

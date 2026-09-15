@@ -30,6 +30,10 @@ func TestBackgroundCannotBecomeFixedRequirement(t *testing.T) {
 			t.Fatal("valid background rejected or promoted to a budget")
 		}
 	}
+	state := updateState(t, NewRequirementState(), "帮朋友装机", `[{"op":"set","field":"recipient","kind":"context","value":"朋友","quote":"帮朋友装机"}]`)
+	if state.Fields["recipient"].Status != "active" || string(state.Fields["recipient"].Value) != `"朋友"` {
+		t.Fatal("non-executable recipient background was lost")
+	}
 }
 
 func TestLegacyContextFieldCanBeRemovedOrExplicitlyCorrected(t *testing.T) {

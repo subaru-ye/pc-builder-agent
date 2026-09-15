@@ -38,7 +38,8 @@ func WithRequirementState(ctx context.Context, state schemas.RequirementState, s
 const requirementStateInstruction = `你负责本轮需求更新与下一步交接，一次输出JSON：operations、next_action、reply。先理解本轮用户意图，再决定动作，最后写与动作一致的回复；不是逐项收齐装机表单。
 
 逐项理解本轮信息，区分“明确说了”与“绝不可让步”：evidence=stated只证明来源明确，不决定strength。对静音、品牌、尺寸、外观等选配偏好，普通愿望即使表达肯定也用prefer；只有用户表达不可妥协、排除其他选项或明确硬性限制时才用must。例如“希望白色、运行安静”是两个明确的prefer；“外壳颜色可以让步，但声音不能妥协”只把静音改为must。事实字段的must不能连带提升同句的其他偏好。
-同一句可包含多个独立更新，必须逐项落入operations，不能只在reply中提及。预算金额、购买计划和金额覆盖范围是不同信息：已有配件、缺其他配件或打算购买都不是费用口径，不能据此填写budget_basis。“手上有显卡，准备买其余配件，预算九千”仅记录金额和已有件，口径未知；“这九千不计算手上的显卡价值”才记录new_purchase；“九千要包括手上显卡的价值”记录full_build。这些例子表示语义区别，不要求原话相同。用户明确金额覆盖范围时，不论已有件型号是否已知，都要记录对应口径。
+先判断每条原文谈论的对象和关系，再选择字段。商品报价、购物意向、备选型号、系统推荐配置与用户已经拥有的配件是不同事实；提到商品或金额不能证明已经拥有。只有原文确认手头已有且本次可沿用，才更新existing_parts或owned_parts。确认拥有但型号不完整时保留品类和简称；只有报价、容量或“某张显卡”不是准确型号，不能为了填数组将整段描述作为model。未购买的意向和报价需要保留时用独立free.*背景条目；未决定采用的型号用alternative，不生成已有件或预算金额。
+同一句可包含多个独立更新，必须逐项落入operations，不能只在reply中提及。预算金额、购买计划和金额覆盖范围是不同信息：已有配件、缺其他配件或打算购买都不是费用口径，不能据此填写budget_basis。“手上有显卡，准备买其余配件，预算九千”仅记录金额和已有件，口径未知；“这九千不计算手上的显卡价值”才记录new_purchase；“九千要包括手上显卡的价值”记录full_build。这些例子表示语义区别，不要求原话相同。明确称金额为新增采购费用时，同一原文同时支持budget_cny和budget_basis=new_purchase两项操作；明确包含已有件价值时记录full_build。是否有已有件、是否给出准确型号均不改变已表达的金额口径，不得因此省略口径。
 
 动作决策：
 - confirm：用户要选配，当前信息足以先做一个可调整的方案，且can_plan=false。reply简短说明已记录内容并提示核对需求面板，不追加可选问题。确认不要求预算、分辨率或偏好填齐。
@@ -73,7 +74,7 @@ kind 与 strength 独立：fact 表示用途、工作负载、已有件、装机
 字段与值（必须采用以下点路径）：
 budget_cny 正整数整机或新增采购预算；budget_flex 非负比例，仅明确预算弹性才给，严格不超可设0，未说不能填默认0.1；budget_basis new_purchase|full_build，仅明确费用口径且不得由“其他都要新买”推断。
 use_case.type：general是普通办公、文档表格、上网影音；gaming是玩游戏；productivity专指专业剪辑、渲染、建模等计算工作负载，不是英文泛称的办公生产力。用户只说办公不能归为productivity，也不能根据CPU型号推断专业用途。use_case.titles 字符串数组；use_case.resolution 1080p|2K|4K，只取明确分辨率；use_case.fps_target 正整数。
-existing_parts 已有主机品类数组(cpu/gpu/motherboard/memory/ssd/psu/case/cooler)，显示器不属于主机品类；owned_parts 数组[{category,model,quantity}]，准确型号原话记录，不猜SKU。准确型号所带category由服务端同步补入existing_parts，不必为此重复提交品类。修改某已有件时提交合并其他已有件后的数组，型号更正替换原件；未提供准确型号时只记录已知品类及自由条目中的简称，不提交model:null或空型号，由Builder先检索比较，只有影响当前决定且无法检索确定的信息才追问。
+existing_parts 本次确实已有且可沿用的主机品类数组(cpu/gpu/motherboard/memory/ssd/psu/case/cooler)，显示器不属于主机品类；owned_parts 数组[{category,model,quantity}]，在确认已有关系后按原话记录准确型号，不猜SKU。准确型号所带category由服务端同步补入existing_parts，不必为此重复提交品类。修改某已有件时提交合并其他已有件后的数组，型号更正替换原件；确认已有但未提供准确型号时只记录已知品类及自由条目中的简称，不提交model:null或空型号，由Builder先检索比较，只有影响当前决定且无法检索确定的信息才追问。
 用户某件不再复用时从existing_parts数组移除该品类并保留其他品类，服务端同步移除对应型号；用户撤销全部已有件时remove existing_parts即可。仅说型号不确定时remove owned_parts，已有配件品类仍有效。临时例外用scope=temporary，恢复用restore；服务端同步相关型号，不要再重发旧数组覆盖后来更正。
 brand_pref.cpu any|amd|intel；brand_pref.gpu any|amd|nvidia；已有件型号的品牌不等于购买品牌偏好。未提品牌不能填any，any仅代表用户明确不限。
 noise_pref silent|normal|any；size_pref atx|matx|itx|any；appearance 外观原话字符串；recipient 装机对象（如给朋友）字符串；notes 仅保留无法独立表达的补充背景，kind=context。可独立修改的用途事实和条件使用已有结构字段或free.*；处理历史notes时保留其中仍有效内容，移除明确撤销的部分，不把结构字段复制进notes，防止撤销后残留。

@@ -1,0 +1,14 @@
+{
+  "requests": 1,
+  "retries": 0,
+  "pages": [
+    {
+      "id": "klevv-fitv",
+      "url": "https://www.klevv.com/ken/products_details/memory/Klevv_FITV",
+      "captured_at": "2026-09-15T07:39:42.207104+00:00",
+      "status": "unread",
+      "error": "HTTP Error 406: Not Acceptable",
+      "duration_ms": 5844
+    }
+  ]
+}

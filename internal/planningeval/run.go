@@ -44,6 +44,11 @@ func Load(raw []byte) (Suite, error) {
 			return s, fmt.Errorf("invalid or duplicate case %q", c.ID)
 		}
 		seen[c.ID] = true
+		if c.PreviousBuild != nil {
+			if err := validatePreviousBuild(*c.PreviousBuild); err != nil {
+				return s, fmt.Errorf("%s previous build: %w", c.ID, err)
+			}
+		}
 		for _, step := range c.Steps {
 			if s.Live && (len(step.Screen) != 0 || len(step.Builder) != 0) {
 				return s, fmt.Errorf("live suite must not contain model oracles")
@@ -169,6 +174,16 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 		if err != nil {
 			return report, err
 		}
+		if c.PreviousBuild != nil {
+			base, e := seedPreviousBuild(ctx, st, ws.ID, *c.PreviousBuild)
+			if e == nil {
+				e = g.journal(map[string]any{"event": "historical_precondition", "case_id": c.ID, "source": c.PreviousBuild.Source, "build": base})
+			}
+			if e != nil {
+				_ = svc.Shutdown(ctx)
+				return report, e
+			}
+		}
 		var lastStart product.StartResult
 		var lastStep Step
 		var lastRequest string
@@ -234,6 +249,14 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 			for v, b := range history {
 				now, e := st.BuildByVersion(ctx, ws.ID, v)
 				record.Checks = append(record.Checks, Check{fmt.Sprintf("immutable_version:%d", v), e == nil && reflect.DeepEqual(now, b), "historical build, evidence, requirement and quote snapshot"})
+			}
+			if record.PlanningInput != nil && before.Session.VersionCount > 0 {
+				base := history[before.Session.VersionCount]
+				record.Checks = append(record.Checks, Check{"builder_received_base", jsonEqual(record.PlanningInput.BaseDraft, base.Draft), "actual Builder input must retain the latest formal configuration"})
+				if record.Versions == before.Session.VersionCount+1 {
+					now, e := st.BuildByVersion(ctx, ws.ID, record.Versions)
+					record.Checks = append(record.Checks, Check{"formal_parent_link", e == nil && now.ParentID != nil && *now.ParentID == base.ID, "new formal version must link its actual prior build"})
+				}
 			}
 			if step.Kind == "retry" {
 				record.Checks = append(record.Checks, Check{"idempotent_run", started.Duplicate && started.Run.ID == lastStart.Run.ID, "retry must not create another run"})

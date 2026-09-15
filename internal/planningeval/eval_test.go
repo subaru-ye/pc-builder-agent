@@ -8,6 +8,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/subaru-ye/pc-builder-agent/internal/agents/validate"
 	"github.com/subaru-ye/pc-builder-agent/internal/planning"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"google.golang.org/adk/v2/model"
@@ -86,6 +87,67 @@ func TestGraderRejectsFalseSuccess(t *testing.T) {
 				t.Fatalf("false success: %+v", tc.record)
 			}
 		})
+	}
+}
+
+func TestOwnedQuantityGradingPreservesRealDifferences(t *testing.T) {
+	want := json.RawMessage(`[{"category":"ssd","model":"Samsung 990 PRO","quantity":1}]`)
+	for _, tc := range []struct {
+		name, actual string
+		pass         bool
+	}{
+		{"omitted", `[{"category":"ssd","model":"Samsung 990 PRO"}]`, true},
+		{"zero default", `[{"category":"ssd","model":"Samsung 990 PRO","quantity":0}]`, true},
+		{"two drives", `[{"category":"ssd","model":"Samsung 990 PRO","quantity":2}]`, false},
+		{"wrong model", `[{"category":"ssd","model":"Samsung 980 PRO","quantity":1}]`, false},
+		{"extra field", `[{"category":"ssd","model":"Samsung 990 PRO","quantity":1,"inferred":true}]`, false},
+		{"duplicate", `[{"category":"ssd","model":"Samsung 990 PRO"},{"category":"ssd","model":"Samsung 990 PRO"}]`, false},
+		{"null item", `[null]`, false},
+		{"null quantity", `[{"category":"ssd","model":"Samsung 990 PRO","quantity":null}]`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := requirementValueEqual("owned_parts", json.RawMessage(tc.actual), want); got != tc.pass {
+				t.Fatalf("comparison = %v, want %v", got, tc.pass)
+			}
+		})
+	}
+}
+
+func TestPurchaseBudgetGradeRequiresVerifiedProcurementQuote(t *testing.T) {
+	amount := "5000.00"
+	for _, tc := range []struct {
+		name  string
+		quote validate.Quote
+		pass  bool
+	}{
+		{"owned price excluded", validate.Quote{TotalCNY: "8000.00", MissingCount: 1, PurchaseTotalCNY: &amount}, true},
+		{"purchase total absent", validate.Quote{TotalCNY: "5000.00"}, false},
+		{"missing purchase price", validate.Quote{TotalCNY: "8000.00", PurchaseTotalCNY: &amount, PurchaseMissingCount: 1}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := StepRecord{Result: &planning.Result{Quote: &tc.quote}}
+			Grade(&r, Expect{BudgetCeilingCNY: "6000", PurchaseBudget: true}, nil)
+			for _, check := range r.Checks {
+				if check.Name == "budget_ceiling" && check.Pass != tc.pass {
+					t.Fatalf("%+v", check)
+				}
+			}
+		})
+	}
+}
+
+func TestHistoricalGradeRejectsUnsupportedPendingAndWrongSelection(t *testing.T) {
+	draft := json.RawMessage(`{"schema_version":1,"requirement_ref":"current","build_ref":"test","selection":{"cpu":"cpu-a","gpu":"gpu-a","motherboard":"mb-a","memory":"mem-a","ssd":[{"sku":"ssd-a","quantity":1}],"psu":"psu-a","case":"case-a","cooler":"cooler-a"}}`)
+	r := StepRecord{PlanningInput: &schemas.PlanningInput{}, Result: &planning.Result{Outcome: "proposal", Draft: draft, Issues: []string{"缺少噪声测试"}, Candidates: []planning.Candidate{{ID: "cpu-a", Category: schemas.CategoryCPU, Brand: "AMD"}}}}
+	Grade(&r, Expect{OutcomeOneOf: []string{"proposal", "clarify"}, IssuesAny: []string{"预算"}, SelectedParts: map[string]string{"cpu": "cpu-b"}, SelectedBrands: map[string]string{"cpu": "Intel"}, SelectedOptions: map[string][]string{"cpu": {"cpu-b", "cpu-c"}}}, nil)
+	for _, name := range []string{"specific_issue_any", "selected_part:cpu", "selected_brand:cpu", "selected_option:cpu"} {
+		found := false
+		for _, check := range r.Checks {
+			found = found || check.Name == name && !check.Pass
+		}
+		if !found {
+			t.Fatalf("unsupported result accepted: %s", name)
+		}
 	}
 }
 

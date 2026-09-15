@@ -7,12 +7,39 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/subaru-ye/pc-builder-agent/internal/planning"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
 
 func jsonEqual(a, b json.RawMessage) bool {
 	var x, y any
 	return json.Unmarshal(a, &x) == nil && json.Unmarshal(b, &y) == nil && reflect.DeepEqual(x, y)
+}
+
+func requirementValueEqual(field string, a, b json.RawMessage) bool {
+	if field != "owned_parts" {
+		return jsonEqual(a, b)
+	}
+	// Normalize only the documented quantity default. Keep model spelling,
+	// category, extra keys and actual quantities in the comparison.
+	normalize := func(raw json.RawMessage) ([]map[string]any, error) {
+		var parts []map[string]any
+		if err := json.Unmarshal(raw, &parts); err != nil {
+			return nil, err
+		}
+		for _, part := range parts {
+			if part == nil {
+				continue
+			}
+			if q, exists := part["quantity"]; !exists || q == float64(0) {
+				part["quantity"] = float64(1)
+			}
+		}
+		return parts, nil
+	}
+	x, ex := normalize(a)
+	y, ey := normalize(b)
+	return ex == nil && ey == nil && reflect.DeepEqual(x, y)
 }
 func toolActions(r StepRecord) []string {
 	var actions []string
@@ -52,7 +79,7 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 			check("state:"+name, !ok, got)
 			continue
 		}
-		match := ok && (want.Status == "" || got.Status == want.Status) && (want.Strength == "" || got.Strength == want.Strength) && (want.Kind == "" || got.Kind == want.Kind) && (len(want.Value) == 0 || jsonEqual(got.Value, want.Value))
+		match := ok && (want.Status == "" || got.Status == want.Status) && (want.Strength == "" || got.Strength == want.Strength) && (want.Kind == "" || got.Kind == want.Kind) && (len(want.Value) == 0 || requirementValueEqual(name, got.Value, want.Value))
 		check("state:"+name, match, got)
 		if ok && got.Status == "active" {
 			check("source:"+name, got.Source != nil && got.Source.MessageID != "", got.Source)
@@ -157,6 +184,20 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 	if e.Outcome != "" {
 		check("final_outcome", r.Result != nil && r.Result.Outcome == e.Outcome, r.Result)
 	}
+	if len(e.OutcomeOneOf) > 0 {
+		check("allowed_outcome", r.Result != nil && contains(e.OutcomeOneOf, r.Result.Outcome), e.OutcomeOneOf)
+	}
+	if len(e.IssuesAny) > 0 {
+		found := false
+		if r.Result != nil {
+			for _, issue := range r.Result.Issues {
+				for _, expected := range e.IssuesAny {
+					found = found || strings.Contains(issue, expected)
+				}
+			}
+		}
+		check("specific_issue_any", found, e.IssuesAny)
+	}
 	if e.Validation != "" {
 		check("validation", r.Result != nil && r.Result.Validation != nil && string(r.Result.Validation.OverallStatus) == e.Validation, e.Validation)
 	}
@@ -166,11 +207,49 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 	if e.BudgetCeilingCNY != "" {
 		within := false
 		ceiling, valid := new(big.Rat).SetString(e.BudgetCeilingCNY)
-		if valid && ceiling.Sign() > 0 && r.Result != nil && r.Result.Quote != nil && r.Result.Quote.MissingCount == 0 {
-			total, ok := new(big.Rat).SetString(r.Result.Quote.TotalCNY)
-			within = ok && total.Sign() > 0 && total.Cmp(ceiling) <= 0
+		if valid && ceiling.Sign() > 0 && r.Result != nil && r.Result.Quote != nil {
+			quote := r.Result.Quote
+			amount, missing := quote.TotalCNY, quote.MissingCount
+			if e.PurchaseBudget && quote.PurchaseTotalCNY != nil {
+				amount, missing = *quote.PurchaseTotalCNY, quote.PurchaseMissingCount
+			}
+			total, ok := new(big.Rat).SetString(amount)
+			within = missing == 0 && ok && total.Sign() > 0 && total.Cmp(ceiling) <= 0
+			if e.PurchaseBudget && quote.PurchaseTotalCNY == nil {
+				within = false
+			}
 		}
 		check("budget_ceiling", within, e.BudgetCeilingCNY)
+	}
+	// Selection facts are read from the chosen candidate, not its rationale or
+	// the model's self-assessment. Locked parts also compare exact IDs.
+	selected := map[string]planning.Candidate{}
+	if r.Result != nil {
+		if draft, err := schemas.DecodeBuildDraft(r.Result.Draft); err == nil {
+			for _, id := range draft.Selection.SKUs() {
+				for _, candidate := range r.Result.Candidates {
+					if candidate.ID == id {
+						selected[string(candidate.Category)] = candidate
+					}
+				}
+			}
+		}
+	}
+	for category, id := range e.SelectedParts {
+		check("selected_part:"+category, selected[category].ID == id, selected[category].ID)
+	}
+	for category, ids := range e.SelectedOptions {
+		check("selected_option:"+category, contains(ids, selected[category].ID), selected[category].ID)
+	}
+	for category, brand := range e.SelectedBrands {
+		check("selected_brand:"+category, strings.EqualFold(selected[category].Brand, brand), selected[category].Brand)
+	}
+	for category, specs := range e.SelectedSpecs {
+		var actual map[string]json.RawMessage
+		_ = json.Unmarshal(selected[category].Specs, &actual)
+		for key, value := range specs {
+			check("selected_spec:"+category+":"+key, jsonEqual(actual[key], value), string(actual[key]))
+		}
 	}
 	for _, s := range e.IssuesContain {
 		found := false
@@ -243,7 +322,7 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 			r.Classification = "clarification"
 		case "proposal":
 			r.Classification = "stalled"
-			if len(r.Result.Issues) > 0 && len(r.Result.Candidates) > 0 && len(e.IssuesContain) > 0 {
+			if len(r.Result.Issues) > 0 && len(r.Result.Candidates) > 0 && (len(e.IssuesContain) > 0 || len(e.IssuesAny) > 0) {
 				r.Classification = "pending_with_evidence"
 			}
 		}

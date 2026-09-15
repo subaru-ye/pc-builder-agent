@@ -1,0 +1,25 @@
+{
+  "suite_sha256": "0c23f0e0cfcf644974f9623e04ee2043b459faaa72351946983261b3fa9c90bb",
+  "original_cases": {
+    "L1-001": "b6daa7b81dcb146c2839b2813e2713836aa94aed8b07ed5a40f0422e1fd1f2a6",
+    "L1-007": "231c3d7ddc7621cfe3a37ac1cb0b4470fc8a4812b5126dfff0061bcb0a824f1d",
+    "L2-104": "f4cd9e37a507ac96a55cc35bd66c965bec1348b53685ee7ee8edea5feb176133"
+  },
+  "original_suite_sha256": "1d4c104712b98a51e7b4d10e4b82b7b170f90429bb86b9a0c3ab114dd84b7422",
+  "catalog_source_sha256": "99fc0269d1cdb277b9868ea42633e9bd99edea2909d4ed0db4c628f3794b3a4f",
+  "generator_sha256": "d02eb0dbe1081d0023bb3ec441b3076dbfcc20f649b68ceff66d7573f4c95168",
+  "scope": "Product edit, requirement confirmation, actual Builder tools, persistence and refresh; no natural-language Screening",
+  "comparison_limits": [
+    "Historical explicit typed facts only; omitted defaults remain unknown",
+    "Budget/brand/size/locks retained; noise, appearance and priority are soft preferences, semantic fulfillment needs separate review",
+    "FPS/use-case performance are goals, not measured guarantees; compatibility passing is insufficient to prove them",
+    "Original modification bases retained; their quote and validation are recomputed for this catalog and journaled, not counted as new delivery",
+    "Known-model/missing-budget-basis cases accept evidenced clarification or proposal, not retired deterministic rejection",
+    "L4-215 budget-adaptive case uses strict delivery as automated trial; independently justified non-delivery requires separate review",
+    "GPU vendor grade uses frozen Radeon/GeForce model identities, not board manufacturer; ITX requires an ITX board plus Terra/NR200P case",
+    "No exact FPS or performance-nonregression claim without evidence review; automated pass alone is not full historical parity"
+  ],
+  "max_builder_requests_per_case": 8,
+  "external_requests_limit": 0,
+  "embedding_requests_limit": 0
+}

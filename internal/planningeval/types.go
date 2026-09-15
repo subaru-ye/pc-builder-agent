@@ -31,10 +31,20 @@ type PriceFixture struct {
 	AvailabilityBasis string  `json:"availability_basis"`
 }
 type Case struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	Source string `json:"source"`
-	Steps  []Step `json:"steps"`
+	ID            string                `json:"id"`
+	Title         string                `json:"title"`
+	Source        string                `json:"source"`
+	Steps         []Step                `json:"steps"`
+	PreviousBuild *PreviousBuildFixture `json:"previous_build,omitempty"`
+}
+
+// PreviousBuildFixture preserves a historical modification precondition. It is
+// inserted only into the launcher's empty evaluation database, never generated
+// by a model or counted as a delivered evaluation result.
+type PreviousBuildFixture struct {
+	Selection   json.RawMessage `json:"selection"`
+	Requirement json.RawMessage `json:"requirement"`
+	Source      string          `json:"source"`
 }
 type Step struct {
 	Kind    string                         `json:"kind"`
@@ -51,6 +61,13 @@ type FieldExpect struct {
 	Kind     string          `json:"kind,omitempty"`
 }
 type Expect struct {
+	OutcomeOneOf       []string                              `json:"outcome_one_of,omitempty"`
+	IssuesAny          []string                              `json:"issues_any,omitempty"`
+	SelectedParts      map[string]string                     `json:"selected_parts,omitempty"`
+	SelectedOptions    map[string][]string                   `json:"selected_options,omitempty"`
+	SelectedBrands     map[string]string                     `json:"selected_brands,omitempty"`
+	SelectedSpecs      map[string]map[string]json.RawMessage `json:"selected_specs,omitempty"`
+	PurchaseBudget     bool                                  `json:"purchase_budget,omitempty"`
 	NextAction         string                                `json:"next_action,omitempty"`
 	CPUChanged         bool                                  `json:"cpu_changed,omitempty"`
 	BudgetCeilingCNY   string                                `json:"budget_ceiling_cny,omitempty"`

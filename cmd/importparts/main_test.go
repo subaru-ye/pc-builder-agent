@@ -219,7 +219,7 @@ func countParts(t *testing.T, conn *pgx.Conn) int {
 	return n
 }
 
-// TestImportRealCatalog 导入仓库真实产物:160 行、每类 20 行、重跑幂等。
+// TestImportRealCatalog 导入仓库当前产物，核对逐类数量及重跑幂等。
 func TestImportRealCatalog(t *testing.T) {
 	conn := setupConn(t)
 	ctx := context.Background()
@@ -228,14 +228,20 @@ func TestImportRealCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadParts 失败: %v", err)
 	}
-	if len(parts) != 160 {
-		t.Fatalf("产物应为 160 条,得到 %d", len(parts))
+	wantByCategory := map[schemas.Category]int{}
+	for _, part := range parts {
+		wantByCategory[part.Category]++
+	}
+	for _, cat := range schemas.AllCategories {
+		if wantByCategory[cat] == 0 {
+			t.Fatalf("当前产物缺少类目 %s", cat)
+		}
 	}
 	if err := importParts(ctx, conn, parts); err != nil {
 		t.Fatalf("importParts 失败: %v", err)
 	}
-	if n := countParts(t, conn); n != 160 {
-		t.Fatalf("导入后应为 160 行,得到 %d", n)
+	if n := countParts(t, conn); n != len(parts) {
+		t.Fatalf("导入后应为 %d 行,得到 %d", len(parts), n)
 	}
 	var perCat int
 	for _, cat := range schemas.AllCategories {
@@ -243,8 +249,8 @@ func TestImportRealCatalog(t *testing.T) {
 			"SELECT count(*) FROM parts WHERE category = $1", string(cat)).Scan(&perCat); err != nil {
 			t.Fatalf("统计 %s 行数失败: %v", cat, err)
 		}
-		if perCat != 20 {
-			t.Errorf("类目 %s 应为 20 行,得到 %d", cat, perCat)
+		if perCat != wantByCategory[cat] {
+			t.Errorf("类目 %s 应为 %d 行,得到 %d", cat, wantByCategory[cat], perCat)
 		}
 	}
 
@@ -252,16 +258,16 @@ func TestImportRealCatalog(t *testing.T) {
 	if err := importParts(ctx, conn, parts); err != nil {
 		t.Fatalf("重跑 importParts 失败: %v", err)
 	}
-	if n := countParts(t, conn); n != 160 {
-		t.Fatalf("重跑后应仍为 160 行,得到 %d", n)
+	if n := countParts(t, conn); n != len(parts) {
+		t.Fatalf("重跑后应仍为 %d 行,得到 %d", len(parts), n)
 	}
 	var distinct int
 	if err := conn.QueryRow(ctx,
 		"SELECT count(DISTINCT sku) FROM parts").Scan(&distinct); err != nil {
 		t.Fatalf("统计去重 SKU 失败: %v", err)
 	}
-	if distinct != 160 {
-		t.Fatalf("重跑后去重 SKU 应为 160,得到 %d", distinct)
+	if distinct != len(parts) {
+		t.Fatalf("重跑后去重 SKU 应为 %d,得到 %d", len(parts), distinct)
 	}
 }
 
@@ -278,7 +284,7 @@ func TestImportRealCatalogWithP11Release(t *testing.T) {
 		RunID:          "7ef69660-9c17-5c60-b184-51c034db59db",
 		Decision:       "bootstrap",
 		InputSHA256:    strings.Repeat("a", 64),
-		Stats:          []byte(`{"total_skus":160}`),
+		Stats:          []byte(fmt.Sprintf(`{"total_skus":%d}`, len(parts))),
 		ManifestSHA256: strings.Repeat("b", 64),
 	}
 	if err := importPartsWithRelease(ctx, conn, parts, release); err != nil {
@@ -292,7 +298,7 @@ func TestImportRealCatalogWithP11Release(t *testing.T) {
 		FROM parts`).Scan(&activeCore, &fingerprinted); err != nil {
 		t.Fatal(err)
 	}
-	if activeCore != 160 || fingerprinted != 160 {
+	if activeCore != len(parts) || fingerprinted != len(parts) {
 		t.Fatalf("P11 目录状态/指纹不完整: active_core=%d fingerprinted=%d", activeCore, fingerprinted)
 	}
 	if err := conn.QueryRow(ctx, "SELECT count(*) FROM data_publications").Scan(&publications); err != nil {
@@ -325,7 +331,7 @@ func TestImportV2CatalogStateEvidenceAtomic(t *testing.T) {
 	release := &releaseManifest{
 		SchemaVersion: 2, ReleaseID: "55101c4f-2291-5d51-9a2d-1f5d8ef0fa02",
 		RunID: "8ef69660-9c17-5c60-b184-51c034db59dc", Decision: "auto",
-		InputSHA256: strings.Repeat("a", 64), Stats: []byte(`{"total_skus":160}`),
+		InputSHA256: strings.Repeat("a", 64), Stats: []byte(fmt.Sprintf(`{"total_skus":%d}`, len(parts))),
 		ManifestSHA256: strings.Repeat("b", 64),
 	}
 	evidence := testEvidence(t, parts[2].SKU)
@@ -402,7 +408,7 @@ func TestLegacyImportDoesNotRetireMissingSKU(t *testing.T) {
 	if !active || state != "active_core" {
 		t.Fatalf("普通导入不得通过文件缺失退休 SKU: active=%v state=%s", active, state)
 	}
-	if n := countParts(t, conn); n != 160 {
+	if n := countParts(t, conn); n != len(parts) {
 		t.Fatalf("退休不应物理删除,得到 %d 行", n)
 	}
 }

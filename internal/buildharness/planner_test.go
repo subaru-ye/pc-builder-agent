@@ -2,13 +2,19 @@ package buildharness
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
+	migrations "github.com/subaru-ye/pc-builder-agent/db"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
@@ -231,7 +237,55 @@ func TestTrimBundleRemovesSemanticBeforeCore(t *testing.T) {
 func TestPlannerPostgreSQLCatalogIntegration(t *testing.T) {
 	dsn := os.Getenv("PG_TEST_DSN")
 	if dsn == "" {
-		t.Skip("PG_TEST_DSN 未设置，跳过真实目录只读集成测试")
+		t.Skip("PG_TEST_DSN 未设置，跳过 PostgreSQL 目录集成测试")
+	}
+	// PG_TEST_DSN only supplies the server; never depend on or modify its catalog.
+	ctx := context.Background()
+	admin, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = admin.Close(context.Background()) })
+	dbName := fmt.Sprintf("planner_test_%d", time.Now().UnixNano())
+	if _, err := admin.Exec(ctx, "CREATE DATABASE "+dbName); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := admin.Exec(context.Background(), "DROP DATABASE "+dbName+" WITH (FORCE)"); err != nil {
+			t.Errorf("清理测试数据库: %v", err)
+		}
+	})
+	u, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.Path = "/" + dbName
+	dsn = u.String()
+	conn, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	goose.SetBaseFS(migrations.Migrations)
+	goose.SetLogger(goose.NopLogger())
+	if err := goose.SetDialect("postgres"); err != nil {
+		t.Fatal(err)
+	}
+	if err := goose.Up(conn, "migrations"); err != nil {
+		t.Fatal(err)
+	}
+	catalog := fixtureCatalog()
+	var snapshotID int64
+	if err := conn.QueryRowContext(ctx, "INSERT INTO price_snapshots (snapshot_date, file_sha256) VALUES ($1, $2) RETURNING id", catalog.Snapshot.SnapshotDate, "planner-fixture").Scan(&snapshotID); err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range catalog.Candidates {
+		if _, err := conn.ExecContext(ctx, "INSERT INTO parts (sku, category, brand, model, specs) VALUES ($1,$2,$3,$4,$5)", candidate.SKU, candidate.Category, candidate.Brand, candidate.Model, string(candidate.Specs)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := conn.ExecContext(ctx, "INSERT INTO prices (snapshot_id, sku, price_cny, source) VALUES ($1,$2,$3,$4)", snapshotID, candidate.SKU, candidate.PriceCNY, "offline-fixture"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	data, err := store.New(context.Background(), dsn)
 	if err != nil {

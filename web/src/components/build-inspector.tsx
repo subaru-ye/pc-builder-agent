@@ -10,7 +10,6 @@ import type { BuildSummary, BuildView, PartCategory } from "@/lib/api/types";
 import { categories, categoryLabels, ruleLabels, ruleOrder, statusLabel } from "@/lib/domain";
 import { useUIStore } from "@/stores/ui";
 import { Button } from "./ui/button";
-import { freshnessLabel, PriceFreshnessNotice } from "./price-freshness";
 import { PriceAvailabilityNotice } from "./price-availability";
 
 const tabs = [
@@ -55,7 +54,7 @@ export function BuildInspector({ sessionID, builds, build, latestVersion, canCha
         <div className="text-right"><div className="tabular text-xl font-semibold">¥{build.quote.budget_basis === "new_purchase" ? build.quote.purchase_total_cny ?? build.quote.total_cny : build.quote.total_cny}</div>{build.quote.purchase_total_cny != null && <div className="text-xs text-[var(--ink-muted)]">新增购买 ¥{build.quote.purchase_total_cny} · 整机参考 ¥{build.quote.total_cny}</div>}<div className="text-xs text-[var(--ink-muted)]">{build.quote.budget_known === false ? "预算未说明" : `预算差 ¥${build.quote.budget_delta_cny}`}</div></div>
       </div>
       <dl className="mt-4 grid grid-cols-3 gap-3 text-xs"><Meta label="父版本" value={build.summary.parent_version ? `v${build.summary.parent_version}` : "—"} /><Meta label="价格快照" value={build.quote.snapshot_date} /><Meta label="缺价项" value={String(build.quote.missing_count)} /></dl>
-      <div className="mt-4"><PriceFreshnessNotice value={build.quote.price_freshness} compact /></div>
+      <p className="mt-3 text-xs text-[var(--ink-subtle)]">金额为该版本的参考价，购买前请核对实际售价。</p>
     </div>
     <div className="flex min-h-11 shrink-0 overflow-x-auto border-b px-2" role="tablist" aria-label="检查器页面">
       {tabs.map(([key, label]) => <button key={key} role="tab" aria-selected={activeTab === key} className={`min-h-11 shrink-0 border-b-2 px-4 text-sm ${activeTab === key ? "border-b-[var(--primary)] text-[var(--ink)]" : "border-b-transparent text-[var(--ink-muted)]"}`} onClick={() => setTab(key)}>{label}</button>)}
@@ -77,7 +76,7 @@ function Parts({ build, allowReplace, onReplace }: { build: BuildView; allowRepl
   return <div>
     {categories.map((category) => { const part = byCategory.get(category); return <div key={category} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 border-b px-4 py-4">
       <div className="text-xs font-medium text-[var(--ink-subtle)]">{categoryLabels[category]}</div>
-      <div className="col-span-2 row-start-2 min-w-0 break-words"><div className="font-medium">{part?.name ?? "未选择"}</div>{part?.rationale && <p className="mt-1 text-xs text-[var(--ink-muted)]">{part.rationale}</p>}{part?.price_observed_date && <p className={`mt-1 text-xs ${part.price_freshness === "stale" ? "status-fail" : part.price_freshness === "aging" || part.price_freshness === "unknown" ? "status-review" : "text-[var(--ink-subtle)]"}`}>观察于 {part.price_observed_date} · {freshnessLabel(part.price_freshness)}</p>}<PriceAvailabilityNotice value={part?.price_availability_basis} />{part?.quantity && part.quantity > 1 ? <span className="text-xs text-[var(--ink-subtle)]">数量 × {part.quantity}</span> : null}</div>
+      <div className="col-span-2 row-start-2 min-w-0 break-words"><div className="font-medium">{part?.name ?? "未选择"}</div>{part?.rationale && <p className="mt-1 text-xs text-[var(--ink-muted)]">{part.rationale}</p>}{part?.price_observed_date && <p className="mt-1 text-xs text-[var(--ink-subtle)]">参考价观察于 {part.price_observed_date}</p>}<PriceAvailabilityNotice value={part?.price_availability_basis} />{part?.quantity && part.quantity > 1 ? <span className="text-xs text-[var(--ink-subtle)]">数量 × {part.quantity}</span> : null}</div>
       <div className="col-start-2 row-start-1 text-right"><div className="tabular text-sm">{part?.subtotal_cny ? `¥${part.subtotal_cny}` : <span className="status-review">缺价，未计入合计</span>}</div>{part?.owned && <div className="text-xs text-[var(--ink-muted)]">用户已有，无需购买</div>}{allowReplace && !part?.owned && <Button variant="ghost" size="sm" className="mt-1" onClick={() => onReplace(category)}>更换此件</Button>}</div>
     </div>; })}
     {build.candidate_snapshot?.reply && <details className="border-b px-4 py-3 text-sm"><summary className="cursor-pointer">本版本选型说明与取舍</summary><p className="mt-3 whitespace-pre-wrap leading-6">{build.candidate_snapshot.reply}</p>{(build.candidate_snapshot.assumptions ?? []).length > 0 && <><p className="mt-3 text-xs text-[var(--ink-muted)]">以下为选配假设，不是用户已表达的要求：</p><ul className="mt-2 list-disc space-y-2 pl-4 text-xs">{build.candidate_snapshot.assumptions?.map((a, i) => <li key={i}>{a}</li>)}</ul></>}</details>}

@@ -6,7 +6,6 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/subaru-ye/pc-builder-agent/internal/agents/validate"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
 
@@ -48,9 +47,8 @@ func (x *execution) deliveryIssues() []string {
 		return append(issues, "报价尚未核验")
 	}
 	spec := x.accountingSpec()
-	quote := validate.BudgetQuote(spec, *x.result.Quote)
 	// Ownership has already been matched by exact model and quantity at evaluate.
-	quote = *x.result.Quote
+	quote := *x.result.Quote
 	if spec.BudgetBasis == "new_purchase" && quote.PurchaseTotalCNY != nil {
 		quote.TotalCNY, quote.MissingCount = *quote.PurchaseTotalCNY, quote.PurchaseMissingCount
 	}

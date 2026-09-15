@@ -667,7 +667,10 @@ func (x *execution) finalize() Result {
 		x.result.Issues = append(x.result.Issues, x.deliveryIssues()...)
 	}
 	if x.result.Outcome == "ready" {
-		if x.result.Validation == nil || x.result.Validation.OverallStatus != schemas.OverallPass || x.result.Quote == nil || x.result.Quote.MissingCount > 0 || len(x.result.Issues) > 0 {
+		// deliveryIssues checks missing prices using the user's budget basis
+		// after exact ownership verification. Full-machine missing prices must
+		// not veto a complete new-purchase quote for already-owned hardware.
+		if x.result.Validation == nil || x.result.Validation.OverallStatus != schemas.OverallPass || x.result.Quote == nil || len(x.result.Issues) > 0 {
 			x.result.Outcome = "proposal"
 		}
 		assessed := map[string]Assessment{}

@@ -2,7 +2,9 @@ package planning
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -47,6 +49,72 @@ func TestLiveBudgetAccountingDoesNotRequireHardwareCitations(t *testing.T) {
 			got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), f.Input)
 			if err != nil || got.Outcome != tc.outcome || got.Quote == nil || got.Quote.TotalCNY != "6513.00" || got.Validation.OverallStatus != schemas.OverallPass {
 				t.Fatalf("wrong accounting: outcome=%s quote=%+v issues=%v err=%v", got.Outcome, got.Quote, got.Issues, err)
+			}
+		})
+	}
+}
+
+func TestLiveOwnedPurchaseDeliveryUsesTheVerifiedBudgetBasis(t *testing.T) {
+	for _, mode := range []string{"original", "whole_machine", "lower_budget", "unowned_memory", "wrong_owned_model", "missing_new_price"} {
+		t.Run(mode, func(t *testing.T) {
+			raw, err := os.ReadFile("testdata/owned_purchase_delivery_recording_20260915.json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var f struct {
+				Input       schemas.PlanningInput
+				Responses   []*genai.Content
+				CatalogFile string `json:"catalog_file"`
+				CatalogSHA  string `json:"catalog_sha256"`
+			}
+			if err = json.Unmarshal(raw, &f); err != nil {
+				t.Fatal(err)
+			}
+			catalogRaw, err := os.ReadFile(f.CatalogFile)
+			if err != nil || fmt.Sprintf("%x", sha256.Sum256(catalogRaw)) != f.CatalogSHA {
+				t.Fatal("catalog recording changed", err)
+			}
+			var suite struct {
+				Catalog struct{ Candidates []Candidate }
+			}
+			if err = json.Unmarshal(catalogRaw, &suite); err != nil {
+				t.Fatal(err)
+			}
+			field := func(name, value string) {
+				v := f.Input.State.Fields[name]
+				v.Value = json.RawMessage(value)
+				f.Input.State.Fields[name] = v
+			}
+			switch mode {
+			case "whole_machine":
+				field("budget_basis", `"full_build"`)
+			case "lower_budget":
+				field("budget_cny", `5000`)
+			case "unowned_memory":
+				field("owned_parts", `[{"category":"cpu","model":"AMD Ryzen 5 7600","quantity":1}]`)
+			case "wrong_owned_model":
+				field("owned_parts", `[{"category":"cpu","model":"AMD Ryzen 5 7600","quantity":1},{"category":"memory","model":"different memory","quantity":1}]`)
+			}
+			catalog := recordedCatalog{store.CatalogSnapshot{Snapshot: store.Snapshot{SnapshotDate: time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)}}}
+			for _, c := range suite.Catalog.Candidates {
+				if mode == "missing_new_price" && c.ID == "gpu-gb-5060-windforce" {
+					c.Price = nil
+				}
+				catalog.Candidates = append(catalog.Candidates, store.Candidate{SKU: c.ID, Category: c.Category, Brand: c.Brand, Model: c.Model, Specs: c.Specs, PriceCNY: c.Price})
+			}
+			m := &scriptedModel{respond: func(n int, _ *model.LLMRequest) *genai.Content { return f.Responses[n-1] }}
+			// The first complete model proposal is response 4. Later identical
+			// retries were caused by the erroneous full-machine price gate.
+			got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 4}).Run(context.Background(), f.Input)
+			if err != nil || got.Quote == nil || got.ModelCalls != 4 || got.Validation.OverallStatus != schemas.OverallPass {
+				t.Fatalf("unexpected replay: %+v %v", got, err)
+			}
+			if mode == "original" {
+				if got.Outcome != "ready" || got.Delivery.Status != "eligible" || len(got.Issues) != 0 || got.Quote.MissingCount != 1 || got.Quote.PurchaseMissingCount != 0 || got.Quote.PurchaseTotalCNY == nil || *got.Quote.PurchaseTotalCNY != "5925.00" {
+					t.Fatalf("valid purchase quote rejected: outcome=%s quote=%+v issues=%v", got.Outcome, got.Quote, got.Issues)
+				}
+			} else if got.Outcome != "proposal" || len(got.Issues) == 0 {
+				t.Fatalf("unverified price/ownership or overbudget accepted: %+v", got)
 			}
 		})
 	}

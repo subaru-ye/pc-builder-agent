@@ -1,0 +1,229 @@
+{
+  "source_report": "artifacts\\planning-legacy-retrieval-live-20260915-r1\\report.json",
+  "source_report_sha256": "1c1b081d5c1ce02fcec04a62e470adbeb168f7c04aee21a388190ee19a4e5f6c",
+  "case_id": "L4-206",
+  "source_code": "c3f4163",
+  "catalog_file": "../planningeval/testdata/legacy-retrieval-recheck-20260915/suite.json",
+  "catalog_sha256": "7c5c11e40287d70f63b0085ed40715078fa3716b2d3db9ef00a2ea16c8bdf6bb",
+  "input": {
+    "schema_version": 2,
+    "requirement_state": {
+      "schema_version": 1,
+      "revision": 1,
+      "fields": {
+        "appearance": {
+          "status": "unknown"
+        },
+        "brand_pref.cpu": {
+          "status": "unknown"
+        },
+        "brand_pref.gpu": {
+          "status": "unknown"
+        },
+        "budget_basis": {
+          "value": "new_purchase",
+          "status": "active",
+          "kind": "constraint",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "f00704a9-5968-4334-a25a-27df8e01aaea",
+            "quote": "通过需求面板修改：预算改为6000（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；已有配件型号改为[\n                {\n                  \"category\": \"cpu\",\n                  \"model\": \"AMD Ryzen 5 7600\",\n                  \"quantity\": 1\n                },\n                {\n                  \"category\": \"memory\",\n                  \"model\": \"ADATA XPG LANCER 32GB (2x16GB) DDR5-5200 CL38\",\n                  \"quantity\": 1\n                }\n              ]（用途或已有事实）；已有配件改为[\n                \"cpu\",\n                \"memory\"\n              ]（用途或已有事实）；预算口径改为\"new_purchase\"（配置条件，必须满足）"
+          }
+        },
+        "budget_cny": {
+          "value": 6000,
+          "status": "active",
+          "kind": "constraint",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "f00704a9-5968-4334-a25a-27df8e01aaea",
+            "quote": "通过需求面板修改：预算改为6000（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；已有配件型号改为[\n                {\n                  \"category\": \"cpu\",\n                  \"model\": \"AMD Ryzen 5 7600\",\n                  \"quantity\": 1\n                },\n                {\n                  \"category\": \"memory\",\n                  \"model\": \"ADATA XPG LANCER 32GB (2x16GB) DDR5-5200 CL38\",\n                  \"quantity\": 1\n                }\n              ]（用途或已有事实）；已有配件改为[\n                \"cpu\",\n                \"memory\"\n              ]（用途或已有事实）；预算口径改为\"new_purchase\"（配置条件，必须满足）"
+          }
+        },
+        "budget_flex": {
+          "status": "unknown"
+        },
+        "existing_parts": {
+          "value": [
+            "cpu",
+            "memory"
+          ],
+          "status": "active",
+          "kind": "fact",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "f00704a9-5968-4334-a25a-27df8e01aaea",
+            "quote": "通过需求面板修改：预算改为6000（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；已有配件型号改为[\n                {\n                  \"category\": \"cpu\",\n                  \"model\": \"AMD Ryzen 5 7600\",\n                  \"quantity\": 1\n                },\n                {\n                  \"category\": \"memory\",\n                  \"model\": \"ADATA XPG LANCER 32GB (2x16GB) DDR5-5200 CL38\",\n                  \"quantity\": 1\n                }\n              ]（用途或已有事实）；已有配件改为[\n                \"cpu\",\n                \"memory\"\n              ]（用途或已有事实）；预算口径改为\"new_purchase\"（配置条件，必须满足）"
+          }
+        },
+        "noise_pref": {
+          "status": "unknown"
+        },
+        "notes": {
+          "status": "unknown"
+        },
+        "owned_parts": {
+          "value": [
+            {
+              "model": "AMD Ryzen 5 7600",
+              "category": "cpu",
+              "quantity": 1
+            },
+            {
+              "model": "ADATA XPG LANCER 32GB (2x16GB) DDR5-5200 CL38",
+              "category": "memory",
+              "quantity": 1
+            }
+          ],
+          "status": "active",
+          "kind": "fact",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "f00704a9-5968-4334-a25a-27df8e01aaea",
+            "quote": "通过需求面板修改：预算改为6000（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；已有配件型号改为[\n                {\n                  \"category\": \"cpu\",\n                  \"model\": \"AMD Ryzen 5 7600\",\n                  \"quantity\": 1\n                },\n                {\n                  \"category\": \"memory\",\n                  \"model\": \"ADATA XPG LANCER 32GB (2x16GB) DDR5-5200 CL38\",\n                  \"quantity\": 1\n                }\n              ]（用途或已有事实）；已有配件改为[\n                \"cpu\",\n                \"memory\"\n              ]（用途或已有事实）；预算口径改为\"new_purchase\"（配置条件，必须满足）"
+          }
+        },
+        "priority": {
+          "status": "unknown"
+        },
+        "recipient": {
+          "status": "unknown"
+        },
+        "size_pref": {
+          "status": "unknown"
+        },
+        "use_case.fps_target": {
+          "status": "unknown"
+        },
+        "use_case.resolution": {
+          "value": "2K",
+          "status": "active",
+          "kind": "fact",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "f00704a9-5968-4334-a25a-27df8e01aaea",
+            "quote": "通过需求面板修改：预算改为6000（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；已有配件型号改为[\n                {\n                  \"category\": \"cpu\",\n                  \"model\": \"AMD Ryzen 5 7600\",\n                  \"quantity\": 1\n                },\n                {\n                  \"category\": \"memory\",\n                  \"model\": \"ADATA XPG LANCER 32GB (2x16GB) DDR5-5200 CL38\",\n                  \"quantity\": 1\n                }\n              ]（用途或已有事实）；已有配件改为[\n                \"cpu\",\n                \"memory\"\n              ]（用途或已有事实）；预算口径改为\"new_purchase\"（配置条件，必须满足）"
+          }
+        },
+        "use_case.titles": {
+          "status": "unknown"
+        },
+        "use_case.type": {
+          "value": "gaming",
+          "status": "active",
+          "kind": "fact",
+          "strength": "must",
+          "scope": "session",
+          "source": {
+            "kind": "edit",
+            "message_id": "f00704a9-5968-4334-a25a-27df8e01aaea",
+            "quote": "通过需求面板修改：预算改为6000（配置条件，必须满足）；用途改为\"gaming\"（用途或已有事实）；分辨率改为\"2K\"（用途或已有事实）；已有配件型号改为[\n                {\n                  \"category\": \"cpu\",\n                  \"model\": \"AMD Ryzen 5 7600\",\n                  \"quantity\": 1\n                },\n                {\n                  \"category\": \"memory\",\n                  \"model\": \"ADATA XPG LANCER 32GB (2x16GB) DDR5-5200 CL38\",\n                  \"quantity\": 1\n                }\n              ]（用途或已有事实）；已有配件改为[\n                \"cpu\",\n                \"memory\"\n              ]（用途或已有事实）；预算口径改为\"new_purchase\"（配置条件，必须满足）"
+          }
+        }
+      },
+      "alternatives": [],
+      "changes": [],
+      "history": []
+    }
+  },
+  "responses": [
+    {
+      "parts": [
+        {
+          "functionCall": {
+            "id": "call_abba734cde6042bd9287ce03",
+            "args": {
+              "action": "search_local_batch",
+              "payload": "{\"queries\":[{\"category\":\"motherboard\",\"query\":\"AM5 B650 DDR5\",\"limit\":8},{\"category\":\"gpu\",\"query\":\"RTX 4060 Ti RX 7700 XT 2K gaming\",\"limit\":8},{\"category\":\"ssd\",\"query\":\"1TB NVMe PCIe 4.0\",\"limit\":8},{\"category\":\"psu\",\"query\":\"650W 750W 金牌\",\"limit\":8},{\"category\":\"case\",\"query\":\"MATX 散热 显卡长\",\"limit\":8},{\"category\":\"cooler\",\"query\":\"AM5 风冷 塔式\",\"limit\":8}]}"
+            },
+            "name": "planning_action"
+          }
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "functionCall": {
+            "id": "call_301bb915da954373a49ce2d5",
+            "args": {
+              "action": "search_local_batch",
+              "payload": "{\"queries\":[{\"category\":\"gpu\",\"query\":\"RTX 4060 Ti 8G\",\"limit\":8},{\"category\":\"motherboard\",\"query\":\"B650M MATX 价格\",\"limit\":8},{\"category\":\"ssd\",\"query\":\"1TB NVMe 便宜\",\"limit\":8}]}"
+            },
+            "name": "planning_action"
+          }
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "functionCall": {
+            "id": "call_db5a26440af34c0cbe5664ee",
+            "args": {
+              "action": "evaluate",
+              "payload": "{\"draft\":{\"schema_version\":1,\"requirement_ref\":\"current\",\"build_ref\":\"proposal\",\"selection\":{\"cpu\":\"cpu-r5-7600\",\"gpu\":\"gpu-gb-5060-windforce\",\"motherboard\":\"mb-msi-b650m-mortar-wifi\",\"memory\":\"mem-adata-lancer-32-5200\",\"ssd\":[{\"sku\":\"ssd-kingston-nv2-1tb\",\"quantity\":1}],\"psu\":\"psu-tt-gf3-750\",\"case\":\"case-asus-prime-ap201\",\"cooler\":\"cooler-deepcool-ag400\"},\"rationale\":{\"cpu\":\"用户已有Ryzen 5 7600，AM5平台游戏够用\",\"gpu\":\"RTX 5060 8G功耗低、长度短，预算内兼顾2K入门与DLSS支持\",\"motherboard\":\"MSI B650M MORTAR WIFI为AM5 MATX主流板，DDR5兼容已有内存\",\"memory\":\"用户已有ADATA XPG LANCER 32GB DDR5-5200\",\"ssd\":\"Kingston NV2 1TB NVMe价格适中满足游戏加载\",\"psu\":\"Toughpower GF3 750W金牌ATX3.0，冗余充足且带16pin线材\",\"case\":\"AP201 MATX紧凑散热好，显卡限长338mm兼容所选GPU\",\"cooler\":\"AG400风冷压7600足够，高度150mm兼容机箱\"}}}"
+            },
+            "name": "planning_action"
+          }
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "text": "{\n  \"outcome\": \"proposal\",\n  \"reply\": \"基于已有Ryzen 5 7600和DDR5-5200 32GB内存，新购件控制在约5925元（内存不计入新购预算）。主板选MSI B650M MORTAR WIFI（AM5 MATX、DDR5），显卡用RTX 5060 8G兼顾2K入门与DLSS，电源750W金牌ATX3.0留足余量，机箱AP201紧凑散热好，散热器AG400压7600足够。所有兼容性与预算校验通过；2K游戏表现取决于具体标题与画质设置，建议后续按需微调GPU或存储。\",\n  \"draft\": {\n    \"schema_version\": 1,\n    \"requirement_ref\": \"current\",\n    \"build_ref\": \"proposal\",\n    \"selection\": {\n      \"cpu\": \"cpu-r5-7600\",\n      \"gpu\": \"gpu-gb-5060-windforce\",\n      \"motherboard\": \"mb-msi-b650m-mortar-wifi\",\n      \"memory\": \"mem-adata-lancer-32-5200\",\n      \"ssd\": [\n        {\n          \"sku\": \"ssd-kingston-nv2-1tb\",\n          \"quantity\": 1\n        }\n      ],\n      \"psu\": \"psu-tt-gf3-750\",\n      \"case\": \"case-asus-prime-ap201\",\n      \"cooler\": \"cooler-deepcool-ag400\"\n    },\n    \"rationale\": {\n      \"cpu\": \"用户已有Ryzen 5 7600，AM5平台游戏够用\",\n      \"gpu\": \"RTX 5060 8G功耗低、长度短，预算内兼顾2K入门与DLSS支持\",\n      \"motherboard\": \"MSI B650M MORTAR WIFI为AM5 MATX主流板，DDR5兼容已有内存\",\n      \"memory\": \"用户已有ADATA XPG LANCER 32GB DDR5-5200\",\n      \"ssd\": \"Kingston NV2 1TB NVMe价格适中满足游戏加载\",\n      \"psu\": \"Toughpower GF3 750W金牌ATX3.0，冗余充足且带16pin线材\",\n      \"case\": \"AP201 MATX紧凑散热好，显卡限长338mm兼容所选GPU\",\n      \"cooler\": \"AG400风冷压7600足够，高度150mm兼容机箱\"\n    }\n  },\n  \"assessments\": [\n    {\n      \"field\": \"budget_cny\",\n      \"status\": \"met\",\n      \"explanation\": \"新购件合计约5925元，低于6000元预算；已有CPU与内存不计入新购支出\",\n      \"evidence\": [\n        \"local:gpu-gb-5060-windforce\",\n        \"local:mb-msi-b650m-mortar-wifi\",\n        \"local:ssd-kingston-nv2-1tb\",\n        \"local:psu-tt-gf3-750\",\n        \"local:case-asus-prime-ap201\",\n        \"local:cooler-deepcool-ag400\"\n      ]\n    },\n    {\n      \"field\": \"existing_parts\",\n      \"status\": \"met\",\n      \"explanation\": \"配置保留用户提供的Ryzen 5 7600与ADATA DDR5-5200 32GB内存\",\n      \"evidence\": [\n        \"local:cpu-r5-7600\",\n        \"local:mem-adata-lancer-32-5200\"\n      ]\n    },\n    {\n      \"field\": \"use_case.type\",\n      \"status\": \"met\",\n      \"explanation\": \"RTX 5060 + R5 7600组合面向2K游戏，支持DLSS提升帧率；具体帧率依游戏与设置而定\",\n      \"evidence\": [\n        \"local:gpu-gb-5060-windforce\",\n        \"local:cpu-r5-7600\"\n      ]\n    },\n    {\n      \"field\": \"use_case.resolution\",\n      \"status\": \"met\",\n      \"explanation\": \"所选GPU定位2K入门至中阶，搭配DLSS可在多数 titles 实现可玩帧率；高负载场景需验证\",\n      \"evidence\": [\n        \"local:gpu-gb-5060-windforce\"\n      ]\n    },\n    {\n      \"field\": \"budget_basis\",\n      \"status\": \"met\",\n      \"explanation\": \"按new_purchase口径计算新购件总价，未将已有件计入支出\",\n      \"evidence\": []\n    }\n  ],\n  \"issues\": [],\n  \"assumptions\": [\n    \"用户已有内存条可正常点亮并与B650M MORTAR WIFI兼容，无需额外购买\",\n    \"2K游戏目标为可玩帧率而非极致画质，具体表现依标题与设置变化\",\n    \"机箱与散热器尺寸限制已核对，安装无冲突\"\n  ]\n}"
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "text": "{\n  \"outcome\": \"ready\",\n  \"reply\": \"配置已通过全部兼容性与预算校验，新购件约5925元，未超6000元预算。已有Ryzen 5 7600与DDR5-5200 32GB内存保留使用，RTX 5060 8G搭配B650M MORTAR WIFI、750W金牌电源及AP201机箱，满足2K游戏定位。所有must条件已解决，无需进一步替换或用户确认。\",\n  \"draft\": {\n    \"schema_version\": 1,\n    \"requirement_ref\": \"current\",\n    \"build_ref\": \"proposal\",\n    \"selection\": {\n      \"cpu\": \"cpu-r5-7600\",\n      \"gpu\": \"gpu-gb-5060-windforce\",\n      \"motherboard\": \"mb-msi-b650m-mortar-wifi\",\n      \"memory\": \"mem-adata-lancer-32-5200\",\n      \"ssd\": [\n        {\n          \"sku\": \"ssd-kingston-nv2-1tb\",\n          \"quantity\": 1\n        }\n      ],\n      \"psu\": \"psu-tt-gf3-750\",\n      \"case\": \"case-asus-prime-ap201\",\n      \"cooler\": \"cooler-deepcool-ag400\"\n    },\n    \"rationale\": {\n      \"cpu\": \"用户已有Ryzen 5 7600，AM5平台游戏够用\",\n      \"gpu\": \"RTX 5060 8G功耗低、长度短，预算内兼顾2K入门与DLSS支持\",\n      \"motherboard\": \"MSI B650M MORTAR WIFI为AM5 MATX主流板，DDR5兼容已有内存\",\n      \"memory\": \"用户已有ADATA XPG LANCER 32GB DDR5-5200\",\n      \"ssd\": \"Kingston NV2 1TB NVMe价格适中满足游戏加载\",\n      \"psu\": \"Toughpower GF3 750W金牌ATX3.0，冗余充足且带16pin线材\",\n      \"case\": \"AP201 MATX紧凑散热好，显卡限长338mm兼容所选GPU\",\n      \"cooler\": \"AG400风冷压7600足够，高度150mm兼容机箱\"\n    }\n  },\n  \"assessments\": [\n    {\n      \"field\": \"budget_cny\",\n      \"status\": \"met\",\n      \"explanation\": \"新购件合计5925元，低于6000元必须预算；已有CPU与内存不计入新购支出\",\n      \"evidence\": [\n        \"local:gpu-gb-5060-windforce\",\n        \"local:mb-msi-b650m-mortar-wifi\",\n        \"local:ssd-kingston-nv2-1tb\",\n        \"local:psu-tt-gf3-750\",\n        \"local:case-asus-prime-ap201\",\n        \"local:cooler-deepcool-ag400\"\n      ]\n    },\n    {\n      \"field\": \"existing_parts\",\n      \"status\": \"met\",\n      \"explanation\": \"配置保留用户提供的Ryzen 5 7600与ADATA DDR5-5200 32GB内存，未替换或遗漏\",\n      \"evidence\": [\n        \"local:cpu-r5-7600\",\n        \"local:mem-adata-lancer-32-5200\"\n      ]\n    },\n    {\n      \"field\": \"use_case.type\",\n      \"status\": \"met\",\n      \"explanation\": \"RTX 5060 + R5 7600组合面向2K游戏，支持DLSS提升帧率；具体帧率依游戏与设置而定，选型方向符合gaming用途\",\n      \"evidence\": [\n        \"local:gpu-gb-5060-windforce\",\n        \"local:cpu-r5-7600\"\n      ]\n    },\n    {\n      \"field\": \"use_case.resolution\",\n      \"status\": \"met\",\n      \"explanation\": \"所选GPU定位2K入门至中阶，搭配DLSS可在多数titles实现可玩帧率；高负载场景需实际验证，但选型满足分辨率目标\",\n      \"evidence\": [\n        \"local:gpu-gb-5060-windforce\"\n      ]\n    },\n    {\n      \"field\": \"budget_basis\",\n      \"status\": \"met\",\n      \"explanation\": \"按new_purchase口径计算新购件总价5925元，未将已有件计入支出，符合必须约束\",\n      \"evidence\": []\n    }\n  ],\n  \"issues\": [],\n  \"assumptions\": [\n    \"用户已有内存条可正常点亮并与B650M MORTAR WIFI兼容，无需额外购买\",\n    \"2K游戏目标为可玩帧率而非极致画质，具体表现依标题与设置变化\",\n    \"机箱与散热器尺寸限制已核对，安装无冲突\"\n  ]\n}"
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "text": "{\n  \"outcome\": \"ready\",\n  \"reply\": \"配置已通过全部兼容性与预算校验，新购件5925元未超6000元必须预算。已有Ryzen 5 7600与DDR5-5200 32GB内存保留，RTX 5060 8G搭配B650M MORTAR WIFI、750W金牌电源及AP201机箱，满足2K游戏定位。所有must条件已解决，无待解决问题，无需用户进一步确认。\",\n  \"draft\": {\n    \"schema_version\": 1,\n    \"requirement_ref\": \"current\",\n    \"build_ref\": \"proposal\",\n    \"selection\": {\n      \"cpu\": \"cpu-r5-7600\",\n      \"gpu\": \"gpu-gb-5060-windforce\",\n      \"motherboard\": \"mb-msi-b650m-mortar-wifi\",\n      \"memory\": \"mem-adata-lancer-32-5200\",\n      \"ssd\": [\n        {\n          \"sku\": \"ssd-kingston-nv2-1tb\",\n          \"quantity\": 1\n        }\n      ],\n      \"psu\": \"psu-tt-gf3-750\",\n      \"case\": \"case-asus-prime-ap201\",\n      \"cooler\": \"cooler-deepcool-ag400\"\n    },\n    \"rationale\": {\n      \"cpu\": \"用户已有Ryzen 5 7600，AM5平台游戏够用\",\n      \"gpu\": \"RTX 5060 8G功耗低、长度短，预算内兼顾2K入门与DLSS支持\",\n      \"motherboard\": \"MSI B650M MORTAR WIFI为AM5 MATX主流板，DDR5兼容已有内存\",\n      \"memory\": \"用户已有ADATA XPG LANCER 32GB DDR5-5200\",\n      \"ssd\": \"Kingston NV2 1TB NVMe价格适中满足游戏加载\",\n      \"psu\": \"Toughpower GF3 750W金牌ATX3.0，冗余充足且带16pin线材\",\n      \"case\": \"AP201 MATX紧凑散热好，显卡限长338mm兼容所选GPU\",\n      \"cooler\": \"AG400风冷压7600足够，高度150mm兼容机箱\"\n    }\n  },\n  \"assessments\": [\n    {\n      \"field\": \"budget_cny\",\n      \"status\": \"met\",\n      \"explanation\": \"新购件合计5925元，低于6000元必须预算；已有CPU与内存不计入新购支出\",\n      \"evidence\": [\n        \"local:gpu-gb-5060-windforce\",\n        \"local:mb-msi-b650m-mortar-wifi\",\n        \"local:ssd-kingston-nv2-1tb\",\n        \"local:psu-tt-gf3-750\",\n        \"local:case-asus-prime-ap201\",\n        \"local:cooler-deepcool-ag400\"\n      ]\n    },\n    {\n      \"field\": \"existing_parts\",\n      \"status\": \"met\",\n      \"explanation\": \"配置保留用户提供的Ryzen 5 7600与ADATA DDR5-5200 32GB内存，未替换或遗漏\",\n      \"evidence\": [\n        \"local:cpu-r5-7600\",\n        \"local:mem-adata-lancer-32-5200\"\n      ]\n    },\n    {\n      \"field\": \"use_case.type\",\n      \"status\": \"met\",\n      \"explanation\": \"RTX 5060 + R5 7600组合面向2K游戏，支持DLSS提升帧率；具体帧率依游戏与设置而定，选型方向符合gaming用途\",\n      \"evidence\": [\n        \"local:gpu-gb-5060-windforce\",\n        \"local:cpu-r5-7600\"\n      ]\n    },\n    {\n      \"field\": \"use_case.resolution\",\n      \"status\": \"met\",\n      \"explanation\": \"所选GPU定位2K入门至中阶，搭配DLSS可在多数titles实现可玩帧率；高负载场景需实际验证，但选型满足分辨率目标\",\n      \"evidence\": [\n        \"local:gpu-gb-5060-windforce\"\n      ]\n    },\n    {\n      \"field\": \"budget_basis\",\n      \"status\": \"met\",\n      \"explanation\": \"按new_purchase口径计算新购件总价5925元，未将已有件计入支出，符合必须约束\",\n      \"evidence\": []\n    }\n  ],\n  \"issues\": [],\n  \"assumptions\": [\n    \"用户已有内存条可正常点亮并与B650M MORTAR WIFI兼容，无需额外购买\",\n    \"2K游戏目标为可玩帧率而非极致画质，具体表现依标题与设置变化\",\n    \"机箱与散热器尺寸限制已核对，安装无冲突\"\n  ]\n}"
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "text": "{\n  \"outcome\": \"ready\",\n  \"reply\": \"配置已通过全部兼容性与预算校验，新购件5925元未超6000元必须预算。已有Ryzen 5 7600与DDR5-5200 32GB内存保留，RTX 5060 8G搭配B650M MORTAR WIFI、750W金牌电源及AP201机箱，满足2K游戏定位。所有must条件已解决，无待解决问题，无需用户进一步确认。\",\n  \"draft\": {\n    \"schema_version\": 1,\n    \"requirement_ref\": \"current\",\n    \"build_ref\": \"proposal\",\n    \"selection\": {\n      \"cpu\": \"cpu-r5-7600\",\n      \"gpu\": \"gpu-gb-5060-windforce\",\n      \"motherboard\": \"mb-msi-b650m-mortar-wifi\",\n      \"memory\": \"mem-adata-lancer-32-5200\",\n      \"ssd\": [\n        {\n          \"sku\": \"ssd-kingston-nv2-1tb\",\n          \"quantity\": 1\n        }\n      ],\n      \"psu\": \"psu-tt-gf3-750\",\n      \"case\": \"case-asus-prime-ap201\",\n      \"cooler\": \"cooler-deepcool-ag400\"\n    },\n    \"rationale\": {\n      \"cpu\": \"用户已有Ryzen 5 7600，AM5平台游戏够用\",\n      \"gpu\": \"RTX 5060 8G功耗低、长度短，预算内兼顾2K入门与DLSS支持\",\n      \"motherboard\": \"MSI B650M MORTAR WIFI为AM5 MATX主流板，DDR5兼容已有内存\",\n      \"memory\": \"用户已有ADATA XPG LANCER 32GB DDR5-5200\",\n      \"ssd\": \"Kingston NV2 1TB NVMe价格适中满足游戏加载\",\n      \"psu\": \"Toughpower GF3 750W金牌ATX3.0，冗余充足且带16pin线材\",\n      \"case\": \"AP201 MATX紧凑散热好，显卡限长338mm兼容所选GPU\",\n      \"cooler\": \"AG400风冷压7600足够，高度150mm兼容机箱\"\n    }\n  },\n  \"assessments\": [\n    {\n      \"field\": \"budget_cny\",\n      \"status\": \"met\",\n      \"explanation\": \"新购件合计5925元，低于6000元必须预算；已有CPU与内存不计入新购支出\",\n      \"evidence\": [\n        \"local:gpu-gb-5060-windforce\",\n        \"local:mb-msi-b650m-mortar-wifi\",\n        \"local:ssd-kingston-nv2-1tb\",\n        \"local:psu-tt-gf3-750\",\n        \"local:case-asus-prime-ap201\",\n        \"local:cooler-deepcool-ag400\"\n      ]\n    },\n    {\n      \"field\": \"existing_parts\",\n      \"status\": \"met\",\n      \"explanation\": \"配置保留用户提供的Ryzen 5 7600与ADATA DDR5-5200 32GB内存，未替换或遗漏\",\n      \"evidence\": [\n        \"local:cpu-r5-7600\",\n        \"local:mem-adata-lancer-32-5200\"\n      ]\n    },\n    {\n      \"field\": \"use_case.type\",\n      \"status\": \"met\",\n      \"explanation\": \"RTX 5060 + R5 7600组合面向2K游戏，支持DLSS提升帧率；具体帧率依游戏与设置而定，选型方向符合gaming用途\",\n      \"evidence\": [\n        \"local:gpu-gb-5060-windforce\",\n        \"local:cpu-r5-7600\"\n      ]\n    },\n    {\n      \"field\": \"use_case.resolution\",\n      \"status\": \"met\",\n      \"explanation\": \"所选GPU定位2K入门至中阶，搭配DLSS可在多数titles实现可玩帧率；高负载场景需实际验证，但选型满足分辨率目标\",\n      \"evidence\": [\n        \"local:gpu-gb-5060-windforce\"\n      ]\n    },\n    {\n      \"field\": \"budget_basis\",\n      \"status\": \"met\",\n      \"explanation\": \"按new_purchase口径计算新购件总价5925元，未将已有件计入支出，符合必须约束\",\n      \"evidence\": []\n    }\n  ],\n  \"issues\": [],\n  \"assumptions\": [\n    \"用户已有内存条可正常点亮并与B650M MORTAR WIFI兼容，无需额外购买\",\n    \"2K游戏目标为可玩帧率而非极致画质，具体表现依标题与设置变化\",\n    \"机箱与散热器尺寸限制已核对，安装无冲突\"\n  ]\n}"
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "text": "{\n  \"outcome\": \"ready\",\n  \"reply\": \"配置已通过全部兼容性与预算校验，新购件5925元未超6000元必须预算。已有Ryzen 5 7600与DDR5-5200 32GB内存保留，RTX 5060 8G搭配B650M MORTAR WIFI、750W金牌电源及AP201机箱，满足2K游戏定位。所有must条件已解决，无待解决问题。\",\n  \"draft\": {\n    \"schema_version\": 1,\n    \"requirement_ref\": \"current\",\n    \"build_ref\": \"proposal\",\n    \"selection\": {\n      \"cpu\": \"cpu-r5-7600\",\n      \"gpu\": \"gpu-gb-5060-windforce\",\n      \"motherboard\": \"mb-msi-b650m-mortar-wifi\",\n      \"memory\": \"mem-adata-lancer-32-5200\",\n      \"ssd\": [\n        {\n          \"sku\": \"ssd-kingston-nv2-1tb\",\n          \"quantity\": 1\n        }\n      ],\n      \"psu\": \"psu-tt-gf3-750\",\n      \"case\": \"case-asus-prime-ap201\",\n      \"cooler\": \"cooler-deepcool-ag400\"\n    },\n    \"rationale\": {\n      \"cpu\": \"用户已有Ryzen 5 7600，AM5平台游戏够用\",\n      \"gpu\": \"RTX 5060 8G功耗低、长度短，预算内兼顾2K入门与DLSS支持\",\n      \"motherboard\": \"MSI B650M MORTAR WIFI为AM5 MATX主流板，DDR5兼容已有内存\",\n      \"memory\": \"用户已有ADATA XPG LANCER 32GB DDR5-5200\",\n      \"ssd\": \"Kingston NV2 1TB NVMe价格适中满足游戏加载\",\n      \"psu\": \"Toughpower GF3 750W金牌ATX3.0，冗余充足且带16pin线材\",\n      \"case\": \"AP201 MATX紧凑散热好，显卡限长338mm兼容所选GPU\",\n      \"cooler\": \"AG400风冷压7600足够，高度150mm兼容机箱\"\n    }\n  },\n  \"assessments\": [\n    {\n      \"field\": \"budget_cny\",\n      \"status\": \"met\",\n      \"explanation\": \"新购件合计5925元，低于6000元必须预算；已有CPU与内存不计入新购支出\",\n      \"evidence\": [\n        \"local:gpu-gb-5060-windforce\",\n        \"local:mb-msi-b650m-mortar-wifi\",\n        \"local:ssd-kingston-nv2-1tb\",\n        \"local:psu-tt-gf3-750\",\n        \"local:case-asus-prime-ap201\",\n        \"local:cooler-deepcool-ag400\"\n      ]\n    },\n    {\n      \"field\": \"existing_parts\",\n      \"status\": \"met\",\n      \"explanation\": \"配置保留用户提供的Ryzen 5 7600与ADATA DDR5-5200 32GB内存，未替换或遗漏\",\n      \"evidence\": [\n        \"local:cpu-r5-7600\",\n        \"local:mem-adata-lancer-32-5200\"\n      ]\n    },\n    {\n      \"field\": \"use_case.type\",\n      \"status\": \"met\",\n      \"explanation\": \"RTX 5060 + R5 7600组合面向2K游戏，支持DLSS提升帧率；具体帧率依游戏与设置而定，选型方向符合gaming用途\",\n      \"evidence\": [\n        \"local:gpu-gb-5060-windforce\",\n        \"local:cpu-r5-7600\"\n      ]\n    },\n    {\n      \"field\": \"use_case.resolution\",\n      \"status\": \"met\",\n      \"explanation\": \"所选GPU定位2K入门至中阶，搭配DLSS可在多数titles实现可玩帧率；高负载场景需实际验证，但选型满足分辨率目标\",\n      \"evidence\": [\n        \"local:gpu-gb-5060-windforce\"\n      ]\n    },\n    {\n      \"field\": \"budget_basis\",\n      \"status\": \"met\",\n      \"explanation\": \"按new_purchase口径计算新购件总价5925元，未将已有件计入支出，符合必须约束\",\n      \"evidence\": []\n    }\n  ],\n  \"issues\": [],\n  \"assumptions\": [\n    \"用户已有内存条可正常点亮并与B650M MORTAR WIFI兼容，无需额外购买\",\n    \"2K游戏目标为可玩帧率而非极致画质，具体表现依标题与设置变化\",\n    \"机箱与散热器尺寸限制已核对，安装无冲突\"\n  ]\n}"
+        }
+      ],
+      "role": "model"
+    }
+  ],
+  "original_outcome": "proposal",
+  "original_issues": [],
+  "note": "Raw successful provider responses, no rewritten selection/assessment; replay is not a new real model pass."
+}

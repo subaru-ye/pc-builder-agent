@@ -1,0 +1,16 @@
+{
+  "source_type": "aggregator_secondary",
+  "review_basis": "Agent辅助逐行复核，手动发布",
+  "official_evidence_fields": 4,
+  "models": 1,
+  "files": {
+    "parts.jsonl": "734797421d677f8e1a768ca01d72cf9c2c77d1ae3b23af1aeb6b1da5db2ce889",
+    "evidence.jsonl": "36d30af0b499696d6f0152a54119fd1a43261fbada4581b149646357c6969b14",
+    "offers.json": "b095c67a5ab151dfd0a9317df8b0ec9d5a172d6dbf5312d2bc29087d8e8d5332",
+    "publication.json": "0b8db5fe608a1816f21a7fa29ede3c98163c4f6a547dc040d017087078bbf5cf"
+  },
+  "raw_html_directory": "artifacts\\data-intake-official-20260915-msi-5060ti-8g-ventus3x-oc",
+  "price_observed_date": "2026-09-13",
+  "price_precision": "day",
+  "inventory": "unknown"
+}

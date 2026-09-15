@@ -242,7 +242,7 @@ def test_bootstrap幂等并建立last_known_good(paths):
     assert first["release_id"] == second["release_id"]
     assert len(imported) == 1
     release = paths.releases / first["release_id"]
-    assert len(_load_parts(release / "parts")) == 160
+    assert _load_parts(release / "parts") == _load_parts(paths.seed_parts)
     assert health_report(paths)["healthy"]
 
 

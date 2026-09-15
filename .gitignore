@@ -24,6 +24,8 @@ scripts/data/upstream/
 # P11 本机自动数据管道:原始响应、隔离项、不可变 release 与调度状态
 scripts/data/work/
 var/data/
+# 本地服务启动脚本、进程日志与运行产物
+var/run/
 
 # 覆盖率脚本生成产物
 scripts/data/_cov.json

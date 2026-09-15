@@ -1,0 +1,26 @@
+[
+  {
+    "sku": "gpu-rtx5060ti8g-msi",
+    "original_model_id": "gpu-rtx5060ti8g-msi",
+    "packaging": "unknown",
+    "offer": {
+      "model_id": "gpu-rtx5060ti8g-msi",
+      "category": "gpu",
+      "row_key": "cc759574e5866235",
+      "platform_src": "1",
+      "platform": "1",
+      "goodsId": "dnmyO78iZt3wADpWnAIDpdCet3-dOAR94wU0jdZ3ROjcWR",
+      "title": "微星万图师 GeForce RTX 5060 Ti 8G VENTUS 3X OC电竞游戏独立显",
+      "price_cny": 3099.0,
+      "shop": "渝超电脑配件",
+      "month_sales": "0",
+      "is_primary": true,
+      "buy_url": "https://m.tb.cn/h.8IS8GUm"
+    },
+    "observed_date": "2026-09-13",
+    "source_type": "aggregator_secondary",
+    "stock_status": "unknown",
+    "raw_source_file": "scripts/data/catalog-candidates/2026-09-13/offers.jsonl",
+    "raw_source_sha256": "1152debccc4a319932d9a9971493531bb5d5b89b9f9e895fb028f4160567b0b6"
+  }
+]

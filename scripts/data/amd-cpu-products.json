@@ -13,6 +13,14 @@
     {"sku": "cpu-r5-9600x", "expected_name": "AMD Ryzen 5 9600X", "url": "https://www.amd.com/en/products/processors/desktops/ryzen/9000-series/amd-ryzen-5-9600x.html"},
     {"sku": "cpu-r7-9700x", "expected_name": "AMD Ryzen 7 9700X", "url": "https://www.amd.com/en/products/processors/desktops/ryzen/9000-series/amd-ryzen-7-9700x.html"},
     {"sku": "cpu-r7-9800x3d", "expected_name": "AMD Ryzen 7 9800X3D", "url": "https://www.amd.com/en/products/processors/desktops/ryzen/9000-series/amd-ryzen-7-9800x3d.html"},
-    {"sku": "cpu-r9-9900x", "expected_name": "AMD Ryzen 9 9900X", "url": "https://www.amd.com/en/products/processors/desktops/ryzen/9000-series/amd-ryzen-9-9900x.html"}
+    {"sku": "cpu-r9-9900x", "expected_name": "AMD Ryzen 9 9900X", "url": "https://www.amd.com/en/products/processors/desktops/ryzen/9000-series/amd-ryzen-9-9900x.html"},
+    {"sku": "cpu-r5-4500", "expected_name": "AMD Ryzen 5 4500", "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-4000-series/amd-ryzen-5-4500.html"},
+    {"sku": "cpu-r7-5700x3d", "expected_name": "AMD Ryzen 7 5700X3D", "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-5000-series/amd-ryzen-7-5700x3d.html"},
+    {"sku": "cpu-r7-5800x3d", "expected_name": "AMD Ryzen 7 5800X3D", "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-5000-series/amd-ryzen-7-5800x3d.html"},
+    {"sku": "cpu-r5-8400f", "expected_name": "AMD Ryzen 5 8400F", "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-8000-series/amd-ryzen-5-8400f.html"},
+    {"sku": "cpu-r7-8700f", "expected_name": "AMD Ryzen 7 8700F", "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-8000-series/amd-ryzen-7-8700f.html"},
+    {"sku": "cpu-r7-8700g", "expected_name": "AMD Ryzen 7 8700G", "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-8000-series/amd-ryzen-7-8700g.html"},
+    {"sku": "cpu-r9-7900x", "expected_name": "AMD Ryzen 9 7900X", "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-7000-series/amd-ryzen-9-7900x.html"},
+    {"sku": "cpu-r9-9950x3d", "expected_name": "AMD Ryzen 9 9950X3D", "url": "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-9000-series/amd-ryzen-9-9950x3d.html"}
   ]
 }

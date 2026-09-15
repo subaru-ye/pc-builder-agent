@@ -38,6 +38,12 @@ func TestIndependentGraderRejectsForgedDeliveries(t *testing.T) {
 		mutate          func(*CaseRecord)
 	}{
 		{"real delivery", "", func(*CaseRecord) {}},
+		{"matching immutable snapshot", "", func(r *CaseRecord) {
+			r.Result.Result.Quote.SnapshotID = r.Snapshot.Catalog.Snapshot.ID
+		}},
+		{"wrong immutable snapshot", "A7", func(r *CaseRecord) {
+			r.Result.Result.Quote.SnapshotID = r.Snapshot.Catalog.Snapshot.ID + 1
+		}},
 		{"catalog membership is insufficient", "A6", func(r *CaseRecord) { r.Candidates.Groups = nil }},
 		{"wrong candidate category", "A6", func(r *CaseRecord) {
 			for i := range r.Candidates.Groups {

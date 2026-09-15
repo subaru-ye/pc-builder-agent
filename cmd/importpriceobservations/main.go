@@ -238,11 +238,18 @@ func validateObservation(row observation) error {
 	if row.CollectorID == "" && row.PriceType == "listing" {
 		return fmt.Errorf("listing 缺少 collector_id")
 	}
+	if row.CollectorID == "maishou_reviewed" && (row.PriceType != "listing" || row.StockStatus != "unknown" || row.AvailabilityBasis != "unknown" || row.VariantMatch != "exact") {
+		return fmt.Errorf("已复核聚合报价必须为精确变体参考价，库存仍未知")
+	}
 	if row.AvailabilityBasis != "" && row.AvailabilityBasis != "confirmed_stock" && row.AvailabilityBasis != "search_listing" && row.AvailabilityBasis != "unknown" {
 		return fmt.Errorf("observation availability_basis 非法")
 	}
-	if row.PriceType == "listing" && (row.CollectorID != "serpapi_baidu" || row.AvailabilityBasis != "search_listing" || row.StockStatus != "unknown") {
-		return fmt.Errorf("listing 必须来自 serpapi_baidu 且只能表达搜索报价")
+	if row.PriceType == "listing" {
+		search := row.CollectorID == "serpapi_baidu" && row.AvailabilityBasis == "search_listing"
+		reviewed := row.CollectorID == "maishou_reviewed" && row.AvailabilityBasis == "unknown" && row.VariantMatch == "exact"
+		if (!search && !reviewed) || row.StockStatus != "unknown" {
+			return fmt.Errorf("listing 必须来自已登记采集器且不得冒充库存证据")
+		}
 	}
 	if !strings.HasPrefix(row.SourceURL, "https://") || strings.Contains(row.SourceURL, "@") {
 		return fmt.Errorf("source_url 非法")
@@ -276,11 +283,23 @@ func validateSelection(row selection) error {
 }
 
 func importRelease(ctx context.Context, conn *pgx.Conn, releaseDir string, manifest priceManifest, observations []observation, selections []selection) (bool, error) {
+	modelUsed := false
+	for _, row := range observations {
+		if row.CollectorID == "maishou_reviewed" {
+			if manifest.Policy != "manual" {
+				return false, fmt.Errorf("已复核聚合报价只能人工发布")
+			}
+			modelUsed = true
+		}
+	}
 	tx, err := conn.Begin(ctx)
 	if err != nil {
 		return false, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(73491018)`); err != nil {
+		return false, err
+	}
 	var existingRelease *string
 	if err := tx.QueryRow(ctx, `SELECT release_id::text FROM price_snapshots WHERE manifest_sha256=$1`, manifest.ManifestSHA256).Scan(&existingRelease); err == nil {
 		if existingRelease == nil || *existingRelease != manifest.ReleaseID {
@@ -294,8 +313,8 @@ func importRelease(ctx context.Context, conn *pgx.Conn, releaseDir string, manif
 	createdAt, _ := time.Parse(time.RFC3339, manifest.CreatedAt)
 	_, err = tx.Exec(ctx, `INSERT INTO data_job_runs
 		(run_id, profile, trigger_kind, scheduled_for, status, model_used, manifest_sha256, summary, started_at, finished_at)
-		VALUES ($1, 'weekly', 'manual', $2, 'published', false, $3, $4, $2, $2)
-		ON CONFLICT (run_id) DO NOTHING`, manifest.RunID, createdAt, manifest.ManifestSHA256, manifest.Stats)
+		VALUES ($1, 'weekly', 'manual', $2, 'published', $5, $3, $4, $2, $2)
+		ON CONFLICT (run_id) DO NOTHING`, manifest.RunID, createdAt, manifest.ManifestSHA256, manifest.Stats, modelUsed)
 	if err != nil {
 		return false, fmt.Errorf("写入价格 run 失败: %w", err)
 	}
@@ -348,7 +367,7 @@ func importRelease(ctx context.Context, conn *pgx.Conn, releaseDir string, manif
 		previousID = &value
 	} else {
 		var value int64
-		if err := tx.QueryRow(ctx, `SELECT id FROM price_snapshots ORDER BY snapshot_date DESC LIMIT 1`).Scan(&value); err == nil {
+		if err := tx.QueryRow(ctx, `SELECT id FROM price_snapshots ORDER BY snapshot_date DESC, id DESC LIMIT 1`).Scan(&value); err == nil {
 			previousID = &value
 		} else if err != pgx.ErrNoRows {
 			return false, fmt.Errorf("查询历史价格快照失败: %w", err)
@@ -360,7 +379,7 @@ func importRelease(ctx context.Context, conn *pgx.Conn, releaseDir string, manif
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, manifest.SnapshotDate, manifest.InputSHA256,
 		manifest.ReleaseID, previousID, manifest.RunID, manifest.ManifestSHA256, manifest.Policy, manifest.Stats).Scan(&snapshotID)
 	if err != nil {
-		return false, fmt.Errorf("创建价格快照失败（同日不同 manifest 会被拒绝）: %w", err)
+		return false, fmt.Errorf("创建不可变价格快照失败: %w", err)
 	}
 	for _, row := range selections {
 		if row.AvailabilityBasis == "" {
@@ -369,7 +388,7 @@ func importRelease(ctx context.Context, conn *pgx.Conn, releaseDir string, manif
 		sourceSnapshotID := snapshotID
 		if row.CarriedForward {
 			if row.SourceSnapshotDate != nil {
-				if err := tx.QueryRow(ctx, `SELECT id FROM price_snapshots WHERE snapshot_date=$1::date`, *row.SourceSnapshotDate).Scan(&sourceSnapshotID); err != nil {
+				if err := tx.QueryRow(ctx, `SELECT p.snapshot_id FROM prices p JOIN price_snapshots s ON s.id=p.snapshot_id WHERE s.snapshot_date=$1::date AND p.sku=$2 AND p.price_cny=$3 AND p.observed_at=$4 ORDER BY s.id DESC LIMIT 1`, *row.SourceSnapshotDate, row.SKU, row.PriceCNY, row.ObservedAt).Scan(&sourceSnapshotID); err != nil {
 					return false, fmt.Errorf("SKU %s 的 source snapshot 不存在: %w", row.SKU, err)
 				}
 			} else if previousID != nil {

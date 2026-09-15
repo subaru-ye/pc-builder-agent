@@ -97,6 +97,24 @@
       "failure_mode": "isolate_source"
     },
     {
+      "id": "maishou_reviewed",
+      "kind": "manual",
+      "adapter": "manual",
+      "base_url": null,
+      "purpose": ["price"],
+      "trust_tier": "D",
+      "license_or_terms_url": null,
+      "attribution": "买手 maishou88 聚合快照；本地学习/评测人工复核",
+      "requires_credentials": false,
+      "automated_access": "local_only",
+      "robots_policy": "not_applicable",
+      "rate_limit_policy": "not_applicable",
+      "schedule": "manual",
+      "enabled": true,
+      "terms_reviewed_at": null,
+      "failure_mode": "isolate_source"
+    },
+    {
       "id": "zol_price_candidate",
       "kind": "public_retail",
       "adapter": "http_snapshot",

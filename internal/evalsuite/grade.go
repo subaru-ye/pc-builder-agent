@@ -85,6 +85,11 @@ func GradeBuild(c Case, r CaseRecord, version string) (Verdict, error) {
 		add("A10", "兼容报告与事实不符", "保存的规则结果与冻结目录独立重算不一致", true)
 	}
 	actual.Quote = validate.WithOwnership(actual.Quote, c.Requirement)
+	// Historical records predate snapshot_id. Recompute against their frozen
+	// catalog, but compare the ID whenever the saved quote explicitly carries it.
+	if r.Result.Result.Quote.SnapshotID == 0 {
+		actual.Quote.SnapshotID = 0
+	}
 	if !sameJSON(actual.Quote, r.Result.Result.Quote) {
 		add("A7", "报价与实际选件不符", "保存的分项、单价、数量、已有件标记或合计与冻结目录重算不一致", false)
 	}

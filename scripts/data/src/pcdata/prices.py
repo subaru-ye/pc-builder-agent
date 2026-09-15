@@ -293,7 +293,7 @@ def import_price_observations(
     run_id: str | None = None,
     source_file_sha256: str | None = None,
 ) -> dict[str, Any]:
-    """保存已获准自动适配器产出的规范观察，不把搜索结果提升为库存证据。"""
+    """保存搜索或逐行复核的规范观察；聚合报价不构成库存证据。"""
     _ensure(paths)
     run_id = run_id or str(uuid.uuid4())
     try:
@@ -305,7 +305,10 @@ def import_price_observations(
     for row in observations:
         if row.get("schema_version") != 1 or row.get("sku") not in active_skus:
             raise PipelineError("invalid_price_observation", "自动观察必须属于 active_core 且 schema_version=1")
-        if row.get("collector_id") != "serpapi_baidu" or row.get("availability_basis") != "search_listing":
+        reviewed = row.get("collector_id") == "maishou_reviewed" and row.get("availability_basis") == "unknown"
+        if reviewed and (not source_file_sha256 or row.get("raw_sha256") != source_file_sha256 or row.get("variant_match") != "exact"):
+            raise PipelineError("invalid_price_observation", "人工聚合报价必须关联已审核的原始文件及精确变体")
+        if not reviewed and (row.get("collector_id") != "serpapi_baidu" or row.get("availability_basis") != "search_listing"):
             raise PipelineError("invalid_price_observation", "自动搜索报价缺少采集器或报价依据")
         if row.get("price_type") != "listing" or row.get("stock_status") != "unknown":
             raise PipelineError("invalid_price_observation", "搜索报价不得表述为确认库存或成交价")
@@ -318,7 +321,7 @@ def import_price_observations(
         "schema_version": 1,
         "run_id": run_id,
         "status": "imported",
-        "model_used": False,
+        "model_used": any(row.get("collector_id") == "maishou_reviewed" for row in observations),
         "source_file_sha256": source_file_sha256,
         "observations_sha256": sha256_file(target),
         "stats": {
@@ -385,6 +388,12 @@ def _priority(item: dict[str, Any]) -> tuple[Any, ...]:
 
 
 def _select_candidate(items: list[dict[str, Any]]) -> dict[str, Any]:
+    reviewed = [item for item in items if item.get("collector_id") == "maishou_reviewed"]
+    if reviewed:
+        # One explicitly reviewed offer, not a minimum across product variants.
+        if len(items) != 1:
+            raise PipelineError("ambiguous_reviewed_offer", "人工聚合报价每个SKU必须明确选择唯一报价行")
+        return reviewed[0]
     sources = {str(item["source_id"]) for item in items}
     if any(item.get("price_type") == "listing" for item in items):
         if len(sources) < 2:
@@ -484,7 +493,7 @@ def create_price_review(paths: DataPaths, run_id: str) -> dict[str, Any]:
         "quarantined": quarantined,
         "systemic_threshold": systemic_threshold,
         "systemic_quarantine": systemic,
-        "model_used": False,
+        "model_used": any(item.get("collector_id") == "maishou_reviewed" for item in observations),
     }
     _atomic_json(run_dir / "review.json", review)
     return review
@@ -556,6 +565,8 @@ def publish_price_review(paths: DataPaths, run_id: str, *, policy: str) -> dict[
             review = json.loads(review_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise PipelineError("price_review_missing", "价格 review 不存在或已损坏") from exc
+        if review.get("model_used") and policy != "manual":
+            raise PipelineError("manual_review_required", "Agent辅助复核的聚合报价只能人工发布")
         if review.get("decision") == "quarantine":
             raise PipelineError("price_quarantined", "价格批次达到系统性异常阈值")
         if review.get("decision") == "no_change":

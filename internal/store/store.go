@@ -178,12 +178,13 @@ type PriceMetadata struct {
 	AvailabilityBasis string
 }
 
-// SnapshotByDate 按快照日期(YYYY-MM-DD,仅日期部分参与匹配)取批次。
+// SnapshotByDate 保留旧日期契约：取当日首个批次。新执行使用 LatestSnapshot
+// 并持久化其 ID，不能用日期重新解析同日修订。
 func (s *Store) SnapshotByDate(ctx context.Context, date time.Time) (Snapshot, error) {
 	var snap Snapshot
 	err := s.pool.QueryRow(ctx,
 		`SELECT id, snapshot_date, file_sha256, imported_at
-		   FROM price_snapshots WHERE snapshot_date = $1`, date).
+		   FROM price_snapshots WHERE snapshot_date = $1 ORDER BY id ASC LIMIT 1`, date).
 		Scan(&snap.ID, &snap.SnapshotDate, &snap.FileSHA256, &snap.ImportedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Snapshot{}, fmt.Errorf("store: 日期 %s 无快照: %w",
@@ -200,7 +201,7 @@ func (s *Store) LatestSnapshot(ctx context.Context) (Snapshot, error) {
 	var snap Snapshot
 	err := s.pool.QueryRow(ctx,
 		`SELECT id, snapshot_date, file_sha256, imported_at
-		   FROM price_snapshots ORDER BY snapshot_date DESC LIMIT 1`).
+		   FROM price_snapshots ORDER BY snapshot_date DESC, id DESC LIMIT 1`).
 		Scan(&snap.ID, &snap.SnapshotDate, &snap.FileSHA256, &snap.ImportedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Snapshot{}, fmt.Errorf("store: 库内无价格快照: %w", ErrSnapshotNotFound)
@@ -240,12 +241,28 @@ func (s *Store) PriceMetadataBySnapshotDate(ctx context.Context, snapshotDate st
 	if snapshotDate == "" || len(skus) == 0 {
 		return map[string]PriceMetadata{}, nil
 	}
+	date, err := time.Parse("2006-01-02", snapshotDate)
+	if err != nil {
+		return nil, fmt.Errorf("store: 非法快照日期: %w", err)
+	}
+	snap, err := s.SnapshotByDate(ctx, date)
+	if errors.Is(err, ErrSnapshotNotFound) {
+		return map[string]PriceMetadata{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return s.PriceMetadataBySnapshotID(ctx, snap.ID, skus)
+}
+
+// PriceMetadataBySnapshotID reads the immutable quote batch, including revisions.
+func (s *Store) PriceMetadataBySnapshotID(ctx context.Context, snapshotID int64, skus []string) (map[string]PriceMetadata, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT p.sku, p.observed_at, p.price_type, p.observation_id,
 		       COALESCE(p.availability_basis, 'unknown')
 		FROM price_snapshots s
 		JOIN prices p ON p.snapshot_id = s.id
-		WHERE s.snapshot_date = $1::date AND p.sku = ANY($2)`, snapshotDate, skus)
+		WHERE s.id = $1 AND p.sku = ANY($2)`, snapshotID, skus)
 	if err != nil {
 		return nil, fmt.Errorf("store: 查询价格观察元数据失败: %w", err)
 	}

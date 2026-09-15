@@ -4,7 +4,7 @@
 // 文件 SHA256 写入 price_snapshots,行写 prices,旧观察日期不会被刷新。
 //
 // 幂等语义:同 SHA256 的文件重跑直接跳过(exit 0);同日期不同内容视为冲突报错,
-// 需先人工删除旧批次。任一行 SKU 不存在于 parts 表(FK)或数值非法,整批回滚。
+// 显式 -revision 可新增同日批次，保留旧快照。任一行 SKU 不存在或数值非法,整批回滚。
 //
 // 运行方式(从仓库根,PG_DSN 来自 .env 或环境变量):
 //
@@ -40,9 +40,10 @@ type priceRow struct {
 
 // priceBatch 一次导入批次:快照日期 + 文件哈希 + 全部价格行。
 type priceBatch struct {
-	SnapshotDate time.Time
-	FileSHA256   string
-	Rows         []priceRow
+	AllowRevision bool
+	SnapshotDate  time.Time
+	FileSHA256    string
+	Rows          []priceRow
 }
 
 var expectedHeader = []string{"sku", "price_cny", "source", "captured_at"}
@@ -136,6 +137,9 @@ func importPrices(ctx context.Context, conn *pgx.Conn, batch priceBatch) (skippe
 		return false, fmt.Errorf("开启事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }() // 提交成功后 Rollback 为空操作
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(73491018)`); err != nil {
+		return false, err
+	}
 
 	// 同 SHA256 已导入:幂等跳过,不比对行内容(哈希即内容标识)。
 	var existingDate time.Time
@@ -152,6 +156,15 @@ func importPrices(ctx context.Context, conn *pgx.Conn, batch priceBatch) (skippe
 	}
 
 	var snapshotID int64
+	if !batch.AllowRevision {
+		var exists bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM price_snapshots WHERE snapshot_date=$1)`, batch.SnapshotDate).Scan(&exists); err != nil {
+			return false, err
+		}
+		if exists {
+			return false, errors.New("同日已有不同批次；使用 -revision 新建不可变修订，不覆盖旧批次")
+		}
+	}
 	err = tx.QueryRow(ctx,
 		`INSERT INTO price_snapshots (snapshot_date, file_sha256) VALUES ($1, $2) RETURNING id`,
 		batch.SnapshotDate, batch.FileSHA256).Scan(&snapshotID)
@@ -166,7 +179,7 @@ func importPrices(ctx context.Context, conn *pgx.Conn, batch priceBatch) (skippe
 			if err := tx.QueryRow(ctx, `SELECT COALESCE(p.source_snapshot_id, p.snapshot_id)
 				FROM prices p JOIN price_snapshots s ON s.id = p.snapshot_id
 				WHERE p.sku=$1 AND p.price_cny=$2 AND p.source=$3 AND p.observed_at=$4
-				AND s.snapshot_date < $5 ORDER BY s.snapshot_date DESC LIMIT 1`,
+				AND s.snapshot_date <= $5 ORDER BY s.snapshot_date DESC, s.id DESC LIMIT 1`,
 				row.SKU, row.PriceCNY, row.Source, row.ObservedAt, batch.SnapshotDate).Scan(&sourceSnapshotID); err != nil {
 				return false, fmt.Errorf("沿用 SKU %q 缺少同价同源同采集日的历史记录: %w", row.SKU, err)
 			}
@@ -188,6 +201,7 @@ func importPrices(ctx context.Context, conn *pgx.Conn, batch priceBatch) (skippe
 func main() {
 	file := flag.String("file", "", "价格 CSV 路径(表头 sku,price_cny,source,captured_at)")
 	snapshotDate := flag.String("snapshot-date", "", "批次日期 YYYY-MM-DD;混合采集日期时必填,旧日期须有匹配历史价格")
+	revision := flag.Bool("revision", false, "允许同日新增不可变批次；旧快照保持不变")
 	flag.Parse()
 	if *file == "" {
 		log.Fatal("必须用 -file 指定价格 CSV")
@@ -203,6 +217,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("加载价格 CSV 失败: %v", err)
 	}
+	batch.AllowRevision = *revision
 
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)

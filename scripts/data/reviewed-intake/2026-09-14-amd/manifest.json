@@ -1,0 +1,16 @@
+{
+  "source_type": "aggregator_secondary",
+  "review_basis": "Agent辅助逐行复核，手动发布",
+  "official_evidence_fields": 40,
+  "models": 8,
+  "files": {
+    "parts.jsonl": "fb8bc7f795d3222b57157e22aa9e10aa902f3f07061609732d5956588be90eb7",
+    "evidence.jsonl": "c6f8a71bb26aac2e32a9a4ec52986893c765c030708204e824c23470437c038d",
+    "offers.json": "b67f8f6c037a80951808415a51bd76aa5bc93fb4a8d10e0d811d4ad5b36ddeb4",
+    "publication.json": "8e3c8ca86578f502e3be39437edc232e24f32746d868173ba2833c41a80a4bc6"
+  },
+  "raw_html_directory": "artifacts/data-intake-official-20260914-r1 and r2",
+  "price_observed_date": "2026-09-13",
+  "price_precision": "day",
+  "inventory": "unknown"
+}

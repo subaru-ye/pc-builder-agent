@@ -37,6 +37,7 @@ type QuoteLine struct {
 // Quote 报价块(P2 流水线设计 §4.2):快照日期 + 合计 + 缺价计数。
 // 金额一律精确十进制文本(内部按「分」整数运算,不用浮点)。
 type Quote struct {
+	SnapshotID           int64       `json:"snapshot_id,omitempty"`
 	PurchaseTotalCNY     *string     `json:"purchase_total_cny,omitempty"`
 	PurchaseMissingCount int         `json:"purchase_missing_count,omitempty"`
 	SnapshotDate         string      `json:"snapshot_date"` // YYYY-MM-DD;库内无快照时为空
@@ -99,7 +100,9 @@ func (n *Node) quote(ctx context.Context, sel schemas.BuildSelection) (Quote, er
 	for _, p := range prices {
 		byS[p.SKU] = p.PriceCNY
 	}
-	return computeQuote(sel, snap.SnapshotDate.Format("2006-01-02"), byS), nil
+	quote := computeQuote(sel, snap.SnapshotDate.Format("2006-01-02"), byS)
+	quote.SnapshotID = snap.ID
+	return quote, nil
 }
 
 // computeQuote 按「分」整数合计已知价部分;缺价件进 MissingSKUs(去重、排序)不入合计。

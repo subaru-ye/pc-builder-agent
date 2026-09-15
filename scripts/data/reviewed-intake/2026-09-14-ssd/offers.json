@@ -1,0 +1,74 @@
+[
+  {
+    "sku": "ssd-zhitai-ti600-1tb",
+    "original_model_id": "ssd-zhitai-ti600-1tb",
+    "packaging": "unknown",
+    "offer": {
+      "model_id": "ssd-zhitai-ti600-1tb",
+      "category": "ssd",
+      "row_key": "8ff6e159e9c63838",
+      "platform_src": "1",
+      "platform": "1",
+      "goodsId": "4YWz24XFgtN5v4o2xzcQz2HNtg-565D3ZeS6vvOZGDXS6",
+      "title": "致态Ti600固态硬盘1TB SSD NVMeM.2台式机笔记本长江存储7000MB/s",
+      "price_cny": 679.0,
+      "shop": "致态和创专卖店",
+      "month_sales": "100+",
+      "is_primary": true,
+      "buy_url": "https://m.tb.cn/h.8JckDDT"
+    },
+    "observed_date": "2026-09-13",
+    "source_type": "aggregator_secondary",
+    "stock_status": "unknown",
+    "raw_source_file": "scripts/data/catalog-candidates/2026-09-13/offers.jsonl",
+    "raw_source_sha256": "1152debccc4a319932d9a9971493531bb5d5b89b9f9e895fb028f4160567b0b6"
+  },
+  {
+    "sku": "ssd-zhitai-ti600-2tb",
+    "original_model_id": "ssd-zhitai-ti600-2tb",
+    "packaging": "unknown",
+    "offer": {
+      "model_id": "ssd-zhitai-ti600-2tb",
+      "category": "ssd",
+      "row_key": "e6c460848a24ad71",
+      "platform_src": "2",
+      "platform": "2",
+      "goodsId": "eu8BjNgYMADN1Uqn5qJaN1Uqn5qJa8_385VjwmBzzNTSCASiv",
+      "title": "致态（ZhiTai）长江存储 2TB SSD固态硬盘 NVMe M.2接口 Ti600系列 (PCIe 4.0 产品) Ti600 Gen4 发轫之作 【2TB】",
+      "price_cny": 1779.0,
+      "shop": "指数交易-同款价更低",
+      "month_sales": "0",
+      "is_primary": true,
+      "buy_url": "https://u.jd.com/x1HEDoK"
+    },
+    "observed_date": "2026-09-13",
+    "source_type": "aggregator_secondary",
+    "stock_status": "unknown",
+    "raw_source_file": "scripts/data/catalog-candidates/2026-09-13/offers.jsonl",
+    "raw_source_sha256": "1152debccc4a319932d9a9971493531bb5d5b89b9f9e895fb028f4160567b0b6"
+  },
+  {
+    "sku": "ssd-wd-sn7100-500g",
+    "original_model_id": "ssd-wd-sn7100-500g",
+    "packaging": "unknown",
+    "offer": {
+      "model_id": "ssd-wd-sn7100-500g",
+      "category": "ssd",
+      "row_key": "352d20fac7ebec3a",
+      "platform_src": "2",
+      "platform": "2",
+      "goodsId": "BWQ93VUdt0HZ8WBlbi6wZ8WBlbi6wQ_3rtcvlyjeKVGRSP5Ck",
+      "title": "西部数据（WD） ssd固态硬盘m.2 SN770黑盘 NVME协议 PCIe4.0电脑高速游戏硬盘 SN7100  500G【全新旗舰款】",
+      "price_cny": 859.0,
+      "shop": "瑞达中腾官方旗舰店",
+      "month_sales": "0",
+      "is_primary": true,
+      "buy_url": "https://u.jd.com/xgHET1s"
+    },
+    "observed_date": "2026-09-13",
+    "source_type": "aggregator_secondary",
+    "stock_status": "unknown",
+    "raw_source_file": "scripts/data/catalog-candidates/2026-09-13/offers.jsonl",
+    "raw_source_sha256": "1152debccc4a319932d9a9971493531bb5d5b89b9f9e895fb028f4160567b0b6"
+  }
+]

@@ -1,6 +1,7 @@
 """AMD 官方 CPU 固定映射、确定性解析、政策门禁和字段 evidence。"""
 
 import hashlib
+import json
 from email.message import Message
 from pathlib import Path
 
@@ -46,10 +47,12 @@ class _Response:
         return None
 
 
-def test_固定映射精确覆盖13个amd_cpu():
+def test_固定映射精确覆盖当前amd_cpu():
     products = load_amd_products(DATA_ROOT / "amd-cpu-products.json")
-    assert len(products) == 13
-    assert len({item["sku"] for item in products}) == 13
+    cpus = [json.loads(line) for line in (DATA_ROOT / "parts/cpu.jsonl").read_text(encoding="utf-8").splitlines()]
+    expected = {row["sku"] for row in cpus if row["brand"] == "AMD"}
+    assert {item["sku"] for item in products} == expected
+    assert len(products) == len(expected)
     assert all(item["url"].startswith("https://www.amd.com/") for item in products)
 
 

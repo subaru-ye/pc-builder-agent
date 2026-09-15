@@ -1,0 +1,18 @@
+{
+  "source_type": "aggregator_secondary",
+  "review_basis": "Agent辅助逐行复核，手动发布",
+  "official_evidence_fields": 8,
+  "models": 2,
+  "files": {
+    "parts.jsonl": "963ac00d2730b9eddce92f6cd088ea5ef127c9d41409f47fd5e368ce22a64989",
+    "evidence.jsonl": "15c2ea08211c4596dd12c7fed44695bf35c50a8eb39e65b09f974a730a67b143",
+    "offers.json": "58f4b1e37ca8bff5179fc63c4a42a51bae8dc5f4690c12273301896e52ff8ede",
+    "publication.json": "cfd28b0e02d7b34e8c3f9e42d692e14e873785ef6c3211b2a5491e8c43add3fb"
+  },
+  "raw_html_directory": "artifacts\\data-intake-official-memory-case-20260915-r1",
+  "price_observed_dates": [
+    "2026-09-15"
+  ],
+  "price_precision": "day",
+  "inventory": "unknown"
+}

@@ -22,6 +22,10 @@ type priceMetadataReader interface {
 	PriceMetadataBySnapshotDate(context.Context, string, []string) (map[string]store.PriceMetadata, error)
 }
 
+type priceMetadataIDReader interface {
+	PriceMetadataBySnapshotID(context.Context, int64, []string) (map[string]store.PriceMetadata, error)
+}
+
 type Service struct {
 	reader Reader
 	now    func() time.Time
@@ -79,6 +83,7 @@ type PartLine struct {
 }
 
 type QuoteView struct {
+	SnapshotID       int64                 `json:"snapshot_id,omitempty"`
 	PurchaseTotalCNY *string               `json:"purchase_total_cny,omitempty"`
 	BudgetBasis      string                `json:"budget_basis,omitempty"`
 	SnapshotDate     string                `json:"snapshot_date"`
@@ -236,7 +241,7 @@ func (s *Service) Build(ctx context.Context, sessionID string, version int) (Bui
 	}
 	return BuildView{
 		CandidateSnapshot: row.CandidateSnapshot, SchemaVersion: 1, Summary: summary(row, versions), Requirement: row.Spec, Parts: parts,
-		Quote: QuoteView{BudgetKnown: budgetFen > 0, PurchaseTotalCNY: row.Quote.PurchaseTotalCNY, BudgetBasis: basis, SnapshotDate: row.Quote.SnapshotDate, TotalCNY: FormatFen(totalFen), BudgetCNY: FormatFen(budgetFen),
+		Quote: QuoteView{SnapshotID: row.Quote.SnapshotID, BudgetKnown: budgetFen > 0, PurchaseTotalCNY: row.Quote.PurchaseTotalCNY, BudgetBasis: basis, SnapshotDate: row.Quote.SnapshotDate, TotalCNY: FormatFen(totalFen), BudgetCNY: FormatFen(budgetFen),
 			BudgetDeltaCNY: FormatFen(budgetFen - budgetTotal), MissingCount: row.Quote.MissingCount, MissingSKUs: missing,
 			PriceFreshness: freshness},
 		Validation:  ValidationView{OverallStatus: row.Report.OverallStatus, Checks: row.Report.Checks},
@@ -277,6 +282,9 @@ func (s *Service) Diff(ctx context.Context, sessionID string, fromVersion, toVer
 	if from.Quote.SnapshotDate != to.Quote.SnapshotDate {
 		warning = fmt.Sprintf("两版本报价快照不同（%s vs %s），差额受快照影响。", from.Quote.SnapshotDate, to.Quote.SnapshotDate)
 	}
+	if from.Quote.SnapshotDate == to.Quote.SnapshotDate && from.Quote.SnapshotID > 0 && to.Quote.SnapshotID > 0 && from.Quote.SnapshotID != to.Quote.SnapshotID {
+		warning = "两版本报价快照不同（同日不同批次），差额包含价格变化。"
+	}
 	return BuildDiff{SchemaVersion: 1, FromVersion: fromVersion, ToVersion: toVersion, Lines: lines,
 		TotalDeltaCNY: FormatFen(toTotal - fromTotal), BudgetDeltaCNY: FormatFen((to.BudgetCNY() - from.BudgetCNY()) * 100),
 		SnapshotWarning: warning}, nil
@@ -305,7 +313,13 @@ func (s *Service) Markdown(ctx context.Context, sessionID string, version int) (
 
 func (s *Service) priceInfo(ctx context.Context, row BuildRow) (PriceFreshnessSummary, map[string]store.PriceMetadata, error) {
 	metadata := map[string]store.PriceMetadata{}
-	if reader, ok := s.reader.(priceMetadataReader); ok {
+	if reader, ok := s.reader.(priceMetadataIDReader); ok && row.Quote.SnapshotID > 0 {
+		loaded, err := reader.PriceMetadataBySnapshotID(ctx, row.Quote.SnapshotID, row.SKUs())
+		if err != nil {
+			return PriceFreshnessSummary{}, nil, err
+		}
+		metadata = loaded
+	} else if reader, ok := s.reader.(priceMetadataReader); ok {
 		loaded, err := reader.PriceMetadataBySnapshotDate(ctx, row.Quote.SnapshotDate, row.SKUs())
 		if err != nil {
 			return PriceFreshnessSummary{}, nil, err

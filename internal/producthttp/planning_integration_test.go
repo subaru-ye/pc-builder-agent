@@ -265,7 +265,7 @@ func TestPlanningProposalPersistentWorkflow(t *testing.T) {
 	}
 	var proposal struct{ Result planning.Result }
 	_ = json.Unmarshal(second.Proposal, &proposal)
-	if proposal.Result.Outcome != "proposal" || proposal.Result.ModelCalls != 3 || proposal.Result.ToolCalls != 2 || len(proposal.Result.Candidates) == 0 {
+	if proposal.Result.Outcome != "proposal" || proposal.Result.ModelCalls != 4 || proposal.Result.ToolCalls != 2 || len(proposal.Result.Candidates) == 0 {
 		t.Fatalf("not a tool-backed proposal: %s", second.Proposal)
 	}
 	read, e := service.GetSession(ctx, owner, ws.ID)

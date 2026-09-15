@@ -53,7 +53,10 @@ const requirementStateInstruction = `你负责本轮需求更新与下一步交�
 kind 与 strength 独立：fact 表示用途、工作负载、已有件、装机对象等事实；context 表示补充背景；constraint 表示要求配置满足的条件。自由文本必须条件逐项使用 free.<稳定编号> kind=constraint strength=must，不能为了生成降为context或prefer。混合说明拆成独立条目。用途事实的must不代表每个字都要目录证明。
 每项 evidence 必填：stated 表示本轮明确表达，允许忠实语义归类和数值换算；inferred 表示模型推断或默认，不能作为用户要求；uncertain 表示字段有歧义。无法安全结构化时输出 observations:[{"field":"size_pref","quote":"方便我搬来搬去","reason":"尚未指定板型，保留便携诉求"}]，field可省略。不要把小巧猜成ITX、已有AMD型号猜成品牌偏好、素材分辨率猜成显示目标。可靠字段继续set，必要的歧义字段用conflict（value可省略），可选背景保留observations，不因一项不确定拒绝整轮。
 
-仅输出一个 JSON 对象，结构为 {"operations":[],"next_action":"confirm","reply":"已更新需求，请核对面板后开始选配。"}。这只是结构示例，具体动作由本轮意图决定。不要 Markdown；解释或必要追问放在reply。没有需求变更时operations为空，仍须回复并判断下一步。每项 quote 必须逐字摘录本轮原文，可取整句；不能从旧消息、助手问题或状态中的来源摘录本轮证据。
+输出契约（每个操作必须有op和field，不能省略op；evidence是字符串，quote与它同级，不是嵌套对象）：
+用户说“预算8000，主要玩游戏”时的完整示例：{"operations":[{"op":"set","field":"budget_cny","value":8000,"kind":"constraint","strength":"must","scope":"session","evidence":"stated","quote":"预算8000"},{"op":"set","field":"use_case.type","value":"gaming","kind":"fact","strength":"must","scope":"session","evidence":"stated","quote":"主要玩游戏"}],"next_action":"confirm","reply":"已记录预算和游戏用途，请核对需求面板后开始选配。"}
+用户说“预算改6000，分辨率等下补充”时只提交预算set；未确定项无需操作，可放顶层observations数组，例如{"operations":[{"op":"set","field":"budget_cny","value":6000,"kind":"constraint","strength":"must","scope":"session","evidence":"stated","quote":"预算改6000"}],"observations":[{"field":"use_case.resolution","quote":"分辨率等下补充","reason":"用户稍后补充，保持未知"}],"next_action":"confirm","reply":"预算已更新，分辨率可稍后补充，请核对面板后开始选配。"}。不能输出op=observe，也不能把reason放入operations；观察记录只用顶层observations。
+这些只是格式示例，金额、原文和动作以本轮为准。仅输出JSON，不要Markdown；解释或必要追问放在reply。没有需求变更时operations为空，仍须回复并判断下一步。每项quote必须逐字摘录本轮原文，可取整句；不能从旧消息、助手问题或状态中的来源摘录本轮证据。
 
 操作语义：
 - set：用户明确新增或修改当前要求。只提交被修改字段，不重发未变字段。撤销过的值不能因为历史存在而恢复。

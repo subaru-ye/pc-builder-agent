@@ -1,0 +1,17 @@
+{
+  "source_suite_sha256": "2858ffbddd98fb6a47d057aca1c00cc83e3ccd2d83a14830d8a3f6d438e017d7",
+  "suite_sha256": "32e0c23f5c6d28f2980283a0da7b4965522a5c0290a41b7f65594270c21d92a4",
+  "max_model_requests": 9,
+  "external_requests": 0,
+  "embedding_requests": 0,
+  "selected_cases": [
+    "L3-103",
+    "L3-104",
+    "L5-301",
+    "L5-306",
+    "L5-308"
+  ],
+  "grades_changed": false,
+  "known_grader_limitation": "Omitted owned_parts.quantity defaults to one in business code but original exact JSON grade rejects it; retain and report separately",
+  "generator_sha256": "7ab1a373965b8d2ca84583def775e8632a39281ddcc12e265ec0ca2877fc2152"
+}

@@ -211,15 +211,21 @@ func prepareRequirementUpdate(state schemas.RequirementState, update schemas.Req
 			observe("notes", op.Quote, "工作负载参数原文，未作为显示器目标采用")
 			continue
 		}
+		next, err := schemas.ApplyRequirementUpdate(working, schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{op}}, source)
+		if err != nil {
+			if errors.Is(err, schemas.ErrRequirementContextField) {
+				// Keep the source as background, not as a disputed budget/preference.
+				// Associate it with notes so updating the real field cannot erase it.
+				observe("notes", op.Quote, "这段信息被标记为补充背景，未作为"+schemas.RequirementFieldLabel(op.Field)+"采用")
+				continue
+			}
+			markConflict(op)
+			observe(op.Field, op.Quote, "该字段尚未安全结构化，原文已保留")
+			continue
+		}
 		if err := guardRequirementUpdateEvidence(working, schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{op}}); err != nil {
 			markConflict(op)
 			observe(op.Field, op.Quote, "该字段未通过来源或准确型号校验，原文已保留")
-			continue
-		}
-		next, err := schemas.ApplyRequirementUpdate(working, schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{op}}, source)
-		if err != nil {
-			markConflict(op)
-			observe(op.Field, op.Quote, "该字段尚未安全结构化，原文已保留")
 			continue
 		}
 		out.Operations = append(out.Operations, op)

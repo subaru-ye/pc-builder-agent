@@ -721,7 +721,10 @@ export interface components {
             /** @enum {string} */
             scope?: "session" | "temporary";
             quote?: string;
-            /** @enum {string} */
+            /**
+             * @description 新增或替换的 context 背景信息仅允许写入 notes 或 free.*，不能作为预算等固定执行字段；历史读取保持兼容。
+             * @enum {string}
+             */
             kind?: "fact" | "context" | "constraint";
             /** @enum {string} */
             evidence?: "stated" | "uncertain" | "inferred";

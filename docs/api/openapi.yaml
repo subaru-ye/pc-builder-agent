@@ -951,7 +951,10 @@ components:
         strength: {type: string, enum: [must, prefer]}
         scope: {type: string, enum: [session, temporary]}
         quote: {type: string}
-        kind: {type: string, enum: [fact, context, constraint]}
+        kind:
+          type: string
+          enum: [fact, context, constraint]
+          description: 新增或替换的 context 背景信息仅允许写入 notes 或 free.*，不能作为预算等固定执行字段；历史读取保持兼容。
         evidence: {type: string, enum: [stated, uncertain, inferred]}
     RequirementAlternative:
       type: object

@@ -152,7 +152,11 @@ function FieldEditor({ name, field, busy, onSave, onCancel }: { name: string; fi
   const [value, setValue] = useState<unknown>(currentValue ?? "");
   const [strength, setStrength] = useState<"must" | "prefer">(field.strength ?? "must");
   const [scope, setScope] = useState<"session" | "temporary">(field.scope ?? "session");
-  const [kind, setKind] = useState<NonNullable<Field["kind"]> | "">(field.kind ?? "");
+  // Editing a fixed field explicitly corrects a legacy background misbinding.
+  const initialKind = field.kind === "context" && name !== "notes" && !name.startsWith("free.")
+    ? (name.startsWith("use_case.") || ["recipient", "owned_parts", "existing_parts"].includes(name) ? "fact" : "constraint")
+    : field.kind;
+  const [kind, setKind] = useState<NonNullable<Field["kind"]> | "">(initialKind ?? "");
   const [error, setError] = useState("");
   const label = requirementLabel(name);
   const save = async () => {

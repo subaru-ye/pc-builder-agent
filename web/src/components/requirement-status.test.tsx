@@ -26,6 +26,17 @@ const session = {
 } satisfies Session;
 
 describe("RequirementStatus", () => {
+  it("explicitly corrects a legacy background value when editing the budget", async () => {
+    const update = vi.fn().mockResolvedValue(true);
+    const legacy = { ...state, fields: { budget_cny: { status: "active" as const, value: 3000, kind: "context" as const, strength: "must" as const, scope: "session" as const, source } } };
+    render(<RequirementStatus session={{ ...session, requirement_state: legacy }} busy={false} onUpdate={update} onConfirm={vi.fn()} onSource={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: "修改预算" }));
+    // Even an unchanged number must replace the old, incompatible context kind.
+    await userEvent.click(screen.getByRole("button", { name: "保存需求" }));
+    expect(update).toHaveBeenCalledWith([{ op: "set", field: "budget_cny", value: 3000, kind: "constraint", strength: "must", scope: "session" }]);
+    expect(legacy.fields.budget_cny.kind).toBe("context");
+  });
+
   it("does not classify legacy facts or repeat the context field label", () => {
     render(<RequirementStatus session={{ ...session, requirement_state: { ...state, fields: { "use_case.type": { status: "active", value: "productivity", strength: "must", source }, notes: { status: "active", value: "剪4K视频", kind: "context", strength: "must", source } } } }} busy={false} onUpdate={vi.fn()} onConfirm={vi.fn()} onSource={vi.fn()} />);
     expect(screen.getByText("生产力")).toBeVisible();

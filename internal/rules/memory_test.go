@@ -8,6 +8,19 @@ import (
 )
 
 func TestMemoryGeneration(t *testing.T) {
+	t.Run("发布规格大小写不影响代际但保留原观察值", func(t *testing.T) {
+		b := validBuild()
+		b.Motherboard.MemoryGeneration = sp("DDR5")
+		b.Memory.Generation = sp("ddr5")
+		got := memoryGenerationRule{}.Check(b)
+		if got.Outcome != schemas.OutcomePass || got.Observed["motherboard_memory_generation"] != "DDR5" {
+			t.Fatalf("等价代际未通过或来源被改写: %+v", got)
+		}
+		b.Memory.Generation = sp("ddr4")
+		if got = (memoryGenerationRule{}).Check(b); got.Outcome != schemas.OutcomeFail {
+			t.Fatal("真实代际冲突不得通过")
+		}
+	})
 	t.Run("pass", func(t *testing.T) {
 		got := memoryGenerationRule{}.Check(validBuild())
 		if got.Outcome != schemas.OutcomePass {

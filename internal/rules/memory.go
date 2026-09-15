@@ -2,6 +2,7 @@ package rules
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
@@ -27,7 +28,7 @@ func (memoryGenerationRule) Check(b schemas.ResolvedBuild) schemas.CheckResult {
 	if len(missing) > 0 {
 		return unknown(schemas.RuleMemoryGeneration, observed, missing, "内存代际字段缺失,无法判定")
 	}
-	if *b.Memory.Generation == *b.Motherboard.MemoryGeneration {
+	if strings.EqualFold(*b.Memory.Generation, *b.Motherboard.MemoryGeneration) {
 		return pass(schemas.RuleMemoryGeneration, observed, "内存代际与主板一致")
 	}
 	return fail(schemas.RuleMemoryGeneration, schemas.SeverityError, observed,

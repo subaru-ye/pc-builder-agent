@@ -28,6 +28,30 @@ import (
 //
 // 每次运行都会新建独立临时库、从空库执行全部迁移、灌入夹具,结束后 DROP。
 
+func TestMemoryGenerationFilterPreservesPublishedCasing(t *testing.T) {
+	s := setupStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, `UPDATE parts SET specs=jsonb_set(specs,'{generation}','"DDR5"') WHERE sku='ram-ddr5-6000'`); err != nil {
+		t.Fatal(err)
+	}
+	for _, category := range []schemas.Category{schemas.CategoryMemory, schemas.CategoryMotherboard} {
+		for _, generation := range []string{"DDR5", "ddr5"} {
+			result, err := s.Candidates(ctx, CandidateQuery{Category: category, MemoryGeneration: generation, TopN: 24})
+			if err != nil || len(result.Candidates) == 0 {
+				t.Fatalf("%s/%s not found: %v", category, generation, err)
+			}
+		}
+	}
+	result, err := s.Candidates(ctx, CandidateQuery{Category: schemas.CategoryMemory, MemoryGeneration: "DDR%", TopN: 24})
+	if err != nil || len(result.Candidates) != 0 {
+		t.Fatal("generation filtering must remain exact, not a pattern match")
+	}
+	var value string
+	if err := s.pool.QueryRow(ctx, `SELECT specs->>'generation' FROM parts WHERE sku='ram-ddr5-6000'`).Scan(&value); err != nil || value != "DDR5" {
+		t.Fatal("read-only filtering changed published facts", err)
+	}
+}
+
 // setupStore 建临时库 + 全量迁移 + 夹具,返回可用 Store。
 func setupStore(t *testing.T) *Store {
 	t.Helper()

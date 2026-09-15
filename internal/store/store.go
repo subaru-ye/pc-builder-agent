@@ -419,9 +419,9 @@ func (s *Store) Candidates(ctx context.Context, q CandidateQuery) (CandidateResu
 	}
 	if q.MemoryGeneration != "" {
 		if q.Category == schemas.CategoryMotherboard {
-			conds = append(conds, "p.specs->>'memory_generation' = "+ph(q.MemoryGeneration))
+			conds = append(conds, "lower(p.specs->>'memory_generation') = lower("+ph(q.MemoryGeneration)+")")
 		} else {
-			conds = append(conds, "p.specs->>'generation' = "+ph(q.MemoryGeneration))
+			conds = append(conds, "lower(p.specs->>'generation') = lower("+ph(q.MemoryGeneration)+")")
 		}
 	}
 	if q.PriceMinCNY != nil {

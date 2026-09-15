@@ -1,0 +1,40 @@
+{
+  "original_suite_sha256": "1d4c104712b98a51e7b4d10e4b82b7b170f90429bb86b9a0c3ab114dd84b7422",
+  "original_cases": {
+    "L3-101": "05b8a2a1f1f889fd152862284153c9077c44fc120eb6a61858555c06367e220a",
+    "L3-102": "052ba6e396bc622f565885443c4afc4517a33e3ca2e5e3a0b9690c88f9c78e2b",
+    "L3-103": "cc343567320f16a04cce9d673f9d8ae1cad399c894613f976945a8be6135ce3b",
+    "L3-104": "3a4cf626aeb76eb0877db90f9f9e946dd770af46c1a302415728fef83a99280c",
+    "L3-105": "147d53d9487305a62357d487bb6027f4f73d8cc146c6dc8410200d5a44ae56ce",
+    "L4-211": "9059a7ca04ebd0f5d637bb5a8f226905612bbd24ed95f87c19a1f9ab26a7ccec",
+    "L4-212": "fb24179fcafd5babcb7f7b6c914b751b6a2ec82d9a36a1852f5cbf4526a5e5f1",
+    "L4-213": "7be52e53eaafdd003dc8bd2027f70d06bb4d28d19f51019f62b2a136d7c46f6e",
+    "L4-214": "f82b490d41682d2ec4c21979ec94dfa98a7252b5663669d10f3ca11d1c8bfdce",
+    "L5-301": "48b31497e650a20f0271002f07ac9031ec78211d70421002f4276057f2148032",
+    "L5-302": "8a6c21f82b850dbc4fe34d01dfbcb7e70427b3534b1ae4fe525228ae6a3416b1",
+    "L5-303": "bd05165a10380a9d6f25695e329f6b0ef23d47765881996426e296b046a40c69",
+    "L5-304": "fb8d4a08b02bdd24838b15befd46dd8b93668be1235eea7ce8634ea0d5d6dc26",
+    "L5-305": "5b4fbc4e53fc1f460afbce8a85cdd0e8a19364cb6efe8a642d90a69e53bf8cee",
+    "L5-306": "93854cc001814940de41bd4100e2ca8b95111fb1b46e3d3584dea694ad2d844d",
+    "L5-307": "37173122cd0f137b46d04a10feb2d2e0a8e2e85ee81e357acd2bcdef97f17367",
+    "L5-308": "b198cd78b01d80818651a70a276f0a05c152b3c146fd39903dbb1c6457843f8c",
+    "L5-309": "33465f1e248b8d25d0ebb2e40f8296b85c0ed528f8b710adfa3a7d1ecea6fc11",
+    "L5-310": "ae6d384f7620db7b1c0b6f0413d74ae6e89a0cee112d2bb91f72768dc07f741b"
+  },
+  "generated_suite_sha256": {
+    "offline": "a06ceff1781de51d0677b3013d7e82201d9370ee7523fd877b4bcb4e2b8fda9d",
+    "live": "2858ffbddd98fb6a47d057aca1c00cc83e3ccd2d83a14830d8a3f6d438e017d7"
+  },
+  "catalog_source_sha256": "99fc0269d1cdb277b9868ea42633e9bd99edea2909d4ed0db4c628f3794b3a4f",
+  "generator_sha256": "74f9718a334f04d8bd166a04afcc0d721d0cf80d618e7c2daa2630fcef49c42f",
+  "screening_requests_per_repeat": 32,
+  "comparison_limits": [
+    "Historical default any becomes unknown when not stated",
+    "Fixed mandatory clarification outcomes retired; actionable final turns require confirm",
+    "No Builder execution: this subset measures state and dispatch, not build quality",
+    "Manual review must separately check optional questions and correct interpretation; fixed-field grades are not a semantic judge",
+    "Old single-Spec outputs cannot prove historical provenance/removal statuses; compare only representable values separately"
+  ],
+  "offline_oracles": "Authored per-turn operations; never used in live model requests",
+  "suite_sha256": "2858ffbddd98fb6a47d057aca1c00cc83e3ccd2d83a14830d8a3f6d438e017d7"
+}

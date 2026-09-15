@@ -1,4 +1,6 @@
-# Crawl4AI 0.9.3 HTTP service; no provider keys or LLM extraction.
+# Legacy upstream /crawl settings, retained only for the original A/B replay.
+# Current Compose runs reader.py; these queue/browser values are NOT applied to
+# /read. Its effective limits/configuration live in reader.py and /metrics.
 app:
   title: "PC Builder page reader"
   version: "1.0.0"

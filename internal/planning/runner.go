@@ -23,11 +23,12 @@ request是本轮已授权执行的用户原话，base_draft是本会话已有正
 使用 planning_action 工具，参数 action 和 payload（JSON字符串）：
 search_local: {query?:相关性排序词,category?:品类,offset?:0,limit?:16}，query不排除其他路径；category是你指定的过滤条件，可翻页或调整查询。缺少噪声等参数时可先比较现有候选，不能声称目录没有这类商品。
 search_semantic: {query:自然语言需求,category?:品类}，复用本地语义检索；语义命中只表示相关，不能当作规格核验。
-search_web: {query:搜索词}，用于目录外型号、规格、价格与实测；返回来源编号。
-read_page: {url:链接}，读取资料正文。搜索摘要只能作为线索，规格优先用厂商，噪声要区分单件/整机及测试工况。
-read_evidence: {id:来源编号}，展开此前已保存的完整摘录，不发起网络请求。
-register_candidate: {id:ext-唯一编号,category:cpu|gpu|motherboard|memory|ssd|psu|case|cooler,brand:品牌,model:完整型号,specs:{规范字段:值},price_cny:价格字符串或null,evidence:[来源编号],field_evidence:{model:来源编号,每个specs键:来源编号,price_cny:来源编号},unknown:[缺失或冲突说明]}。只能提取已读取正文的事实；不明确的参数省略，不猜测。注册到会话候选，不是全局目录发布。
-注册时同时提供field_quotes:{字段:支持该值的逐字正文摘录}，价格还须带merchant、currency=CNY和price_observed_at日期。非兼容性字段（接口数量、噪声等）可放specs，会另存为attributes供推理。多来源冲突放unknown；不能只附链接却编造数值。
+联网范围：仅用于装机相关的公开型号规格、兼容性/BIOS支持、安装排障指南、配件知识和性能资料，优先厂商官网与官方文档。不得联网查询具体价格、优惠、库存或商家购买信息；用户询价时使用本地价格快照并说明观察日期，缺价明确未知，不以搜索摘要、网页标价、首发价或模型记忆补价。不要因为缺价反复调用联网工具；仍可查询规格并保存待解决方案。目录已有准确型号时使用本地候选编号及其报价，不要另建外部候选替代已有报价。
+search_web: {query:搜索词}，搜索上述装机技术资料和官网链接，不用于查价；返回来源编号。
+read_page: {url:链接,method?:auto|http|browser,query?:要定位的词,offset?:0,limit?:16000}，默认普通HTTP优先，仅动态空壳自动尝试浏览器。正文缺少动态表格时可主动选择browser，不必反复搜索；登录、验证码、限流时不要重试绕过。搜索摘要只能作为线索，规格优先用厂商，噪声要区分单件/整机及测试工况。
+read_evidence: {id:来源编号,query?:要定位的词,offset?:0,limit?:16000}，读取服务端保存的正文窗口，不发起网络请求。query优先定位相关段落（空格分隔多个词），next_offset可继续向后读取，offset=0且不带query从头读取。truncated表示仅展示部分，不代表服务端丢失剩余正文；窗口不能证明未展示内容不存在。
+register_candidate: {id:ext-唯一编号,category:cpu|gpu|motherboard|memory|ssd|psu|case|cooler,brand:品牌,model:完整型号,specs:{规范字段:值},price_cny:null,evidence:[来源编号],field_evidence:{model:来源编号,每个specs键:来源编号},unknown:[缺失或冲突说明]}。只能提取已读取正文的规格事实；不明确的参数省略，不猜测。注册到会话候选，不是全局目录发布，网页价格不进入报价。
+注册时同时提供field_quotes:{字段:支持该值的逐字正文摘录}。非兼容性字段（接口数量、噪声等）可放specs，会另存为attributes供推理。多来源冲突放unknown；不能只附链接却编造数值。
 规格来源字段推荐使用完整路径，例如field_evidence:{"specs.socket":"source-1"}及field_quotes:{"specs.socket":"AM4接口"}；工具也兼容socket这样的短键。注册结果会返回实际保留的candidate及unknown；registered不表示所有参数已核实。收到缺项应优先补查厂商规格再更新候选，不要沿用被剔除的数据宣称兼容。可以在同一回复调用多个独立工具；注意每次反馈中的剩余往返额度，尽早检查规格与兼容性，为必要修复留出往返。
 evaluate: {draft:{schema_version:1,requirement_ref:current,build_ref:proposal,selection:{cpu:候选id,gpu:候选id或null,motherboard:候选id,memory:候选id,ssd:[{sku:候选id,quantity:1}],psu:候选id,case:候选id,cooler:候选id},rationale:{品类:简短选型理由}}}，兼容性和报价反馈供你继续修复，不自动终止对话。
 最终只输出JSON：{outcome:collect|clarify|proposal|ready,reply:简短中文回复,draft:完整draft或null,assessments:[{field:需求字段,status:met|unmet|unknown,explanation:依据和取舍,evidence:[来源编号或local:候选id]}],issues:[待解决问题],assumptions:[与用户要求区分的执行假设]}。
@@ -47,6 +48,7 @@ type Runner struct {
 }
 
 type execution struct {
+	snapshotID int64
 	runner     Runner
 	input      schemas.PlanningInput
 	result     Result
@@ -64,6 +66,7 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 	if r.Web != nil {
 		web := *r.Web
 		web.OnSearchRequest = func() { x.result.SearchRequests++ }
+		web.OnReadAttempt = func(attempt ReadAttempt) { x.result.ReadAttempts = append(x.result.ReadAttempts, attempt) }
 		x.runner.Web = &web
 	}
 	catalog, e := r.Catalog.ActiveCatalogSnapshot(ctx)
@@ -72,6 +75,7 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 	}
 	x.result.StageMS["catalog"] = time.Since(started).Milliseconds()
 	x.date = catalog.Snapshot.SnapshotDate.Format("2006-01-02")
+	x.snapshotID = catalog.Snapshot.ID
 	for _, c := range catalog.Candidates {
 		x.candidates = append(x.candidates, Candidate{ID: c.SKU, Category: c.Category, Brand: c.Brand, Model: c.Model, Specs: c.Specs, Price: c.PriceCNY, Evidence: []string{"local:" + c.SKU}})
 	}
@@ -228,6 +232,7 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		Offset   int             `json:"offset"`
 		Limit    int             `json:"limit"`
 		URL      string          `json:"url"`
+		Method   string          `json:"method"`
 		ID       string          `json:"id"`
 		Draft    json.RawMessage `json:"draft"`
 	}
@@ -238,7 +243,7 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 	case "read_evidence":
 		for _, e := range x.evidence {
 			if e.ID == p.ID {
-				return map[string]any{"source": e}
+				return evidenceWindow(e, p.Query, p.Offset, p.Limit)
 			}
 		}
 		return map[string]any{"error": "没有找到该来源编号"}
@@ -347,11 +352,16 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 			return map[string]any{"unavailable": "本轮网页读取额度已用完"}
 		}
 		x.result.PageCalls++
-		row, e := x.runner.Web.Read(ctx, p.URL)
+		row, e := x.runner.Web.ReadPage(ctx, p.URL, p.Method)
 		if e != nil {
 			return map[string]any{"unavailable": e.Error()}
 		}
-		return x.addEvidence([]Evidence{row})
+		row.ID = fmt.Sprintf("source-%d", len(x.evidence)+1)
+		x.evidence = append(x.evidence, row)
+		view := evidenceWindow(row, p.Query, p.Offset, p.Limit)
+		view["sources"] = []Evidence{view["source"].(Evidence)}
+		delete(view, "source")
+		return view
 	case "register_candidate":
 		var c Candidate
 		if json.Unmarshal([]byte(payload), &c) != nil {
@@ -362,7 +372,7 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		}
 		for _, saved := range x.candidates {
 			if saved.ID == c.ID {
-				return map[string]any{"registered": c.ID, "candidate": saved, "instruction": "candidate是实际保存的参数；unknown中的项目尚未核验，需补查正文后重新注册。注册成功不等于兼容性通过。"}
+				return map[string]any{"registered": c.ID, "candidate": saved, "instruction": "candidate是实际保存的参数；unknown中的规格可补查官网正文后重新注册。价格仅用本地快照，缺价保留未知，不联网补价。注册成功不等于兼容性通过。"}
 			}
 		}
 		return map[string]any{"error": "候选注册后未找到"}
@@ -445,18 +455,15 @@ func (x *execution) register(c Candidate) error {
 		}
 	}
 	c.Specs, _ = json.Marshal(specs)
+	// Live web research supplies technical facts, never a new quote. Preserve
+	// legacy snapshots on read; this policy applies only to new registrations.
 	if c.Price != nil {
-		page, ok := pages[c.FieldEvidence["price_cny"]]
-		quote := c.FieldQuotes["price_cny"]
-		_, dateErr := time.Parse(time.RFC3339, c.PriceObservedAt)
-		if dateErr != nil {
-			_, dateErr = time.Parse("2006-01-02", c.PriceObservedAt)
-		}
-		if !ok || quote == "" || !strings.Contains(page.Text, quote) || !numericEvidence(json.RawMessage(*c.Price), quote) || c.Currency != "CNY" || c.Merchant == "" || dateErr != nil {
-			c.Price = nil
-			c.Unknown = append(c.Unknown, "价格缺少正文依据")
-		}
+		c.Unknown = append(c.Unknown, "联网仅查询装机技术资料，网页价格不纳入报价；该候选价格未知")
 	}
+	c.Price = nil
+	c.Merchant, c.Currency, c.PriceObservedAt = "", "", ""
+	delete(c.FieldEvidence, "price_cny")
+	delete(c.FieldQuotes, "price_cny")
 	c.External = true
 	for i, old := range x.candidates {
 		if old.ID == c.ID {
@@ -488,7 +495,7 @@ func (x *execution) evaluate(ctx context.Context, raw json.RawMessage) map[strin
 	}
 	x.result.Draft = append(json.RawMessage(nil), raw...)
 	x.captureSelectedEvidence(ctx, draft.Selection.SKUs())
-	result, e := validate.New(snapshotResolver{candidates: x.candidates, date: x.date}).Evaluate(ctx, draft.Selection)
+	result, e := validate.New(snapshotResolver{snapshotID: x.snapshotID, candidates: x.candidates, date: x.date}).Evaluate(ctx, draft.Selection)
 	if e != nil {
 		x.result.Validation = nil
 		x.result.Quote = nil

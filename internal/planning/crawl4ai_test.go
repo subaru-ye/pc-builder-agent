@@ -16,38 +16,26 @@ func TestCrawlPageToolContract(t *testing.T) {
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
-		if r.URL.Path != "/crawl" || r.Method != "POST" || r.Header.Get("Authorization") != "Bearer test-token" {
+		if r.URL.Path != "/read" || r.Method != "POST" || r.Header.Get("Authorization") != "Bearer test-token" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
-		var body struct {
-			URLs   []string `json:"urls"`
-			Config struct {
-				Type   string         `json:"type"`
-				Params map[string]any `json:"params"`
-			} `json:"crawler_config"`
-		}
+		var body map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Error(err)
 		}
-		cache, _ := body.Config.Params["cache_mode"].(map[string]any)
-		if len(body.URLs) != 1 || body.URLs[0] != "https://1.1.1.1/spec" || body.Config.Type != "CrawlerRunConfig" || cache["type"] != "CacheMode" || cache["params"] != "bypass" {
+		if len(body) != 1 || body["url"] != "https://1.1.1.1/spec" {
 			t.Errorf("unexpected config %+v", body)
-		}
-		for _, forbidden := range []string{"extraction_strategy", "deep_crawl_strategy", "js_code", "llm_config"} {
-			if _, ok := body.Config.Params[forbidden]; ok {
-				t.Errorf("unexpected %s", forbidden)
-			}
 		}
 		fmt.Fprint(w, crawlPageFixture)
 	}))
 	defer server.Close()
 	w := &Web{CrawlerURL: server.URL, CrawlerToken: "test-token"}
-	page, err := w.Read(context.Background(), "https://1.1.1.1/spec")
+	page, err := w.ReadPage(context.Background(), "https://1.1.1.1/spec", "browser")
 	if err != nil || calls != 1 || page.Title != "CPU 规格" || page.Kind != "page" || page.CapturedAt == "" || !strings.Contains(page.Text, "105W") || page.URL != "https://1.1.1.1/spec" {
 		t.Fatalf("page=%+v calls=%d err=%v", page, calls, err)
 	}
 	for _, link := range []string{"https://127.0.0.1/", "https://[::1]/", "https://192.168.1.1/", "file:///etc/passwd", "http://1.1.1.1/", "https://u:p@1.1.1.1/", "https://1.1.1.1:8082/"} {
-		if _, err := w.Read(context.Background(), link); err == nil {
+		if _, err := w.ReadPage(context.Background(), link, "browser"); err == nil {
 			t.Errorf("accepted %s", link)
 		}
 	}
@@ -73,8 +61,8 @@ func TestCrawlFailuresStayToolFailures(t *testing.T) {
 	row["markdown"].(map[string]any)["raw_markdown"] = strings.Repeat("中", 17000)
 	data, _ := json.Marshal(payload)
 	page, err := decodeCrawlPage(data, "https://example.com")
-	if err != nil || !strings.HasSuffix(page.Text, " [正文已截断]") || len([]rune(page.Text)) > 16100 {
-		t.Fatalf("truncation err=%v", err)
+	if err != nil || len([]rune(page.Text)) != 17000 {
+		t.Fatalf("complete source was lost err=%v", err)
 	}
 }
 
@@ -87,7 +75,7 @@ func TestCrawlerRedirectDoesNotLeakToken(t *testing.T) {
 	}))
 	defer server.Close()
 	w := &Web{CrawlerURL: server.URL, CrawlerToken: "test-token"}
-	if _, err := w.Read(context.Background(), "https://1.1.1.1/spec"); err == nil || forwarded {
+	if _, err := w.ReadPage(context.Background(), "https://1.1.1.1/spec", "browser"); err == nil || forwarded {
 		t.Fatal("redirect followed or accepted")
 	}
 }
@@ -96,7 +84,7 @@ func TestCrawlerCanceledRequest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	w := &Web{CrawlerURL: "http://127.0.0.1:1", CrawlerToken: "test-token"}
-	if _, err := w.Read(ctx, "https://1.1.1.1/spec"); err == nil {
+	if _, err := w.ReadPage(ctx, "https://1.1.1.1/spec", "browser"); err == nil {
 		t.Fatal("canceled request accepted")
 	}
 }

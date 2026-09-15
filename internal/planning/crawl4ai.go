@@ -50,19 +50,11 @@ func (w *Web) readWithCrawler(ctx context.Context, link string) (Evidence, error
 	if err != nil || (base.Scheme != "http" && base.Scheme != "https") || base.Host == "" || base.User != nil || base.RawQuery != "" || base.Fragment != "" || w.CrawlerToken == "" {
 		return Evidence{}, fmt.Errorf("网页读取服务配置不完整")
 	}
-	// One requested page per tool call, no deep crawling, scripts or LLM strategy.
-	// raw_markdown preserves short specification rows; aggressive pruning can
-	// discard socket/power/BIOS facts and must not be the only evidence retained.
-	payload := map[string]any{
-		"urls": []string{link},
-		"crawler_config": map[string]any{"type": "CrawlerRunConfig", "params": map[string]any{
-			"stream": false, "cache_mode": map[string]any{"type": "CacheMode", "params": "bypass"}, "page_timeout": 40000,
-			"wait_until": "domcontentloaded", "delay_before_return_html": 2.0,
-			"word_count_threshold": 0, "excluded_tags": []string{"nav", "footer"},
-		}},
-	}
+	// Our bounded HTTP adapter owns the fixed BrowserConfig and lifecycle.
+	// Callers can only supply one URL, never scripts, credentials or LLM strategies.
+	payload := map[string]any{"url": link}
 	body, _ := json.Marshal(payload)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(w.CrawlerURL, "/")+"/crawl", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(w.CrawlerURL, "/")+"/read", bytes.NewReader(body))
 	if err != nil {
 		return Evidence{}, fmt.Errorf("网页读取服务配置无效")
 	}
@@ -84,16 +76,22 @@ func (w *Web) readWithCrawler(ctx context.Context, link string) (Evidence, error
 	if err != nil || len(data) > 8*1024*1024 {
 		return Evidence{}, fmt.Errorf("网页读取结果无法读取或过大")
 	}
-	return decodeCrawlPage(data, link)
+	page, err := decodeCrawlPage(data, link)
+	page.ReadBytes = len(data)
+	return page, err
 }
 
 func decodeCrawlPage(data []byte, requestedURL string) (Evidence, error) {
 	var result struct {
 		Success bool `json:"success"`
 		Results []struct {
-			Success    bool `json:"success"`
-			StatusCode int  `json:"status_code"`
-			Markdown   struct {
+			Success          bool   `json:"success"`
+			StatusCode       int    `json:"status_code"`
+			FinalStatus      int    `json:"final_status"`
+			FinalURL         string `json:"final_url"`
+			RedirectedURL    string `json:"redirected_url"`
+			RedirectedStatus int    `json:"redirected_status_code"`
+			Markdown         struct {
 				Raw string `json:"raw_markdown"`
 			} `json:"markdown"`
 			Metadata struct {
@@ -105,19 +103,34 @@ func decodeCrawlPage(data []byte, requestedURL string) (Evidence, error) {
 		return Evidence{}, fmt.Errorf("网页读取结果无效或抓取失败")
 	}
 	page := result.Results[0]
-	if !page.Success || page.StatusCode < 200 || page.StatusCode >= 300 {
+	// Recorded upstream responses expose the final hop under these names.
+	// A redirect without its observed final status is never assumed successful.
+	if page.FinalStatus == 0 && page.RedirectedStatus != 0 {
+		page.FinalStatus, page.FinalURL = page.RedirectedStatus, page.RedirectedURL
+	}
+	status := page.StatusCode
+	if page.FinalStatus != 0 {
+		status = page.FinalStatus
+	}
+	if !page.Success || status < 200 || status >= 300 {
 		return Evidence{}, fmt.Errorf("目标网页未成功读取，已保留已有资料")
 	}
-	text := []rune(strings.TrimSpace(page.Markdown.Raw))
-	if len(text) == 0 {
-		return Evidence{}, fmt.Errorf("目标网页正文为空，可改查其他资料来源")
-	}
-	if len(text) > 16000 {
-		text = append(text[:16000], []rune(" [正文已截断]")...)
+	text := strings.TrimSpace(page.Markdown.Raw)
+	if len(text) > maxPageBytes {
+		return Evidence{}, pageFailure("too_large", "正文超过2MiB上限")
 	}
 	title := page.Metadata.Title
 	if title == "" {
 		title = requestedURL
 	}
-	return Evidence{URL: requestedURL, Title: title, Text: string(text), CapturedAt: time.Now().UTC().Format(time.RFC3339), Kind: "page"}, nil
+	finalURL := page.FinalURL
+	if finalURL == "" {
+		finalURL = requestedURL
+	}
+	u, err := url.Parse(finalURL)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || (u.Port() != "" && u.Port() != "443") {
+		return Evidence{}, pageFailure("unsafe_url", "网页最终地址不符合公开HTTPS资料要求")
+	}
+	evidence := Evidence{URL: requestedURL, FinalURL: finalURL, Reader: "browser", HTTPStatus: status, Title: title, Text: text, CapturedAt: time.Now().UTC().Format(time.RFC3339), Kind: "page"}
+	return evidence, checkPageContent(evidence, false, false)
 }

@@ -21,6 +21,10 @@ type Evidence struct {
 	Text        string `json:"text"`
 	CapturedAt  string `json:"captured_at"`
 	Kind        string `json:"kind"`
+	FinalURL    string `json:"final_url,omitempty"`
+	Reader      string `json:"reader,omitempty"`
+	HTTPStatus  int    `json:"http_status,omitempty"`
+	ReadBytes   int    `json:"read_bytes,omitempty"`
 }
 
 // Delivery is the server's assessment, independent of the model's routing label.
@@ -75,6 +79,7 @@ type Result struct {
 	SearchCalls    int                       `json:"search_calls"`
 	SearchRequests int                       `json:"search_requests"`
 	PageCalls      int                       `json:"page_calls"`
+	ReadAttempts   []ReadAttempt             `json:"read_attempts,omitempty"`
 	Tokens         int32                     `json:"tokens"`
 	DurationMS     int64                     `json:"duration_ms"`
 	StageMS        map[string]int64          `json:"stage_ms"`
@@ -85,6 +90,7 @@ type Catalog interface {
 }
 
 type snapshotResolver struct {
+	snapshotID int64
 	candidates []Candidate
 	date       string
 }
@@ -98,7 +104,7 @@ func (r snapshotResolver) ResolveBuild(_ context.Context, s schemas.BuildSelecti
 }
 func (r snapshotResolver) LatestSnapshot(context.Context) (store.Snapshot, error) {
 	t, _ := time.Parse("2006-01-02", r.date)
-	return store.Snapshot{ID: 1, SnapshotDate: t}, nil
+	return store.Snapshot{ID: r.snapshotID, SnapshotDate: t}, nil
 }
 func (r snapshotResolver) PricesBySnapshot(context.Context, int64) ([]store.Price, error) {
 	var rows []store.Price

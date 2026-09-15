@@ -182,7 +182,7 @@ func TestLocalQueryRanksWithoutErasingUnmatchedAlternatives(t *testing.T) {
 	}
 }
 
-func TestExternalCandidateUsesSessionSnapshotForValidation(t *testing.T) {
+func TestExternalSpecsValidateWithoutImportingWebPrices(t *testing.T) {
 	catalog, draft := fixture(t)
 	var selected store.Candidate
 	for _, c := range catalog.Candidates {
@@ -191,7 +191,8 @@ func TestExternalCandidateUsesSessionSnapshotForValidation(t *testing.T) {
 			break
 		}
 	}
-	// Real saved product/spec/price, wrapped in an offline HTML protocol fixture.
+	// A saved product/spec/price in an offline HTML fixture: incidental web
+	// prices must not become quotes, while valid specifications still validate.
 	pageText := selected.Model + " " + string(selected.Specs) + " price " + *selected.PriceCNY
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "<html><body>"+pageText+"</body></html>") }))
 	defer server.Close()
@@ -222,19 +223,25 @@ func TestExternalCandidateUsesSessionSnapshotForValidation(t *testing.T) {
 		}
 	}}
 	result, err := (Runner{Model: m, Catalog: catalog, Web: &Web{Client: server.Client()}}).Run(context.Background(), schemas.PlanningInput{SchemaVersion: 2, State: schemas.NewRequirementState()})
-	if err != nil || result.Outcome != "ready" || result.Validation.OverallStatus != schemas.OverallPass {
+	if err != nil || result.Outcome != "proposal" || result.Validation == nil || result.Validation.OverallStatus != schemas.OverallPass || result.Quote == nil || result.Quote.MissingCount != 1 {
 		t.Fatalf("external candidate rejected: %+v %v", result, err)
 	}
 	found := false
 	for _, c := range result.Candidates {
 		if c.ID == candidate.ID {
 			found = c.External && c.FieldQuotes["height_mm"] != ""
+			if c.Price != nil || c.Merchant != "" || c.Currency != "" || c.PriceObservedAt != "" || c.FieldEvidence["price_cny"] != "" || c.FieldQuotes["price_cny"] != "" {
+				t.Fatalf("web price entered candidate quote: %+v", c)
+			}
 		}
 	}
 	if !found || len(result.Evidence) != 1 {
 		t.Fatal("external source snapshot lost")
 	}
 	for _, c := range catalog.Candidates {
+		if c.SKU == selected.SKU && (c.PriceCNY == nil || *c.PriceCNY != *selected.PriceCNY) {
+			t.Fatal("local price snapshot changed")
+		}
 		if c.SKU == candidate.ID {
 			t.Fatal("external candidate published globally")
 		}

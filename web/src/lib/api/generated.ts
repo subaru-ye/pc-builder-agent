@@ -792,6 +792,17 @@ export interface components {
             candidate_id?: string;
             /** @description 资料对应的规格或价格字段 */
             field?: string;
+            /** @description 实际最终导航地址，历史证据可能缺失 */
+            final_url?: string;
+            /**
+             * @description 本次正文读取方式
+             * @enum {string}
+             */
+            reader?: "http" | "browser";
+            /** @description 实际最终页面状态码 */
+            http_status?: number;
+            /** @description 客户端消费的响应正文大小，不等于浏览器外网流量 */
+            read_bytes?: number;
         };
         PlanningCandidate: {
             id: string;
@@ -852,12 +863,26 @@ export interface components {
                 total_cny: string;
                 missing_count: number;
                 snapshot_date: string;
+                /**
+                 * Format: int64
+                 * @description 不可变价格批次编号，旧记录可缺省
+                 */
+                snapshot_id?: number;
             };
             model_calls?: number;
             tool_calls?: number;
             search_calls?: number;
             search_requests?: number;
             page_calls?: number;
+            /** @description 实际物理读取次数，含失败；自动升级可产生两次，证据续读不产生请求 */
+            read_attempts?: {
+                /** @enum {string} */
+                method: "http" | "browser";
+                duration_ms: number;
+                bytes: number;
+                status: number;
+                outcome: string;
+            }[];
             tokens?: number;
             duration_ms?: number;
             stage_ms?: {
@@ -1016,6 +1041,11 @@ export interface components {
             checks: components["schemas"]["ValidationCheck"][];
         };
         Quote: {
+            /**
+             * Format: int64
+             * @description 不可变价格批次编号，旧记录可缺省
+             */
+            snapshot_id?: number;
             budget_known?: boolean;
             purchase_total_cny?: components["schemas"]["Money"];
             /** @enum {string} */

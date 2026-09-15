@@ -176,6 +176,10 @@ const PlanningEvidence = z
     kind: z.string(),
     candidate_id: z.string().optional(),
     field: z.string().optional(),
+    final_url: z.string().optional(),
+    reader: z.enum(["http", "browser"]).optional(),
+    http_status: z.number().int().optional(),
+    read_bytes: z.number().int().optional(),
   })
   .passthrough();
 const ValidationCheck = z.object({
@@ -239,6 +243,7 @@ const PlanningResult = z
         total_cny: z.string(),
         missing_count: z.number().int(),
         snapshot_date: z.string(),
+        snapshot_id: z.number().int().optional(),
       })
       .passthrough()
       .optional(),
@@ -247,6 +252,19 @@ const PlanningResult = z
     search_calls: z.number().int().optional(),
     search_requests: z.number().int().optional(),
     page_calls: z.number().int().optional(),
+    read_attempts: z
+      .array(
+        z
+          .object({
+            method: z.enum(["http", "browser"]),
+            duration_ms: z.number().int(),
+            bytes: z.number().int(),
+            status: z.number().int(),
+            outcome: z.string(),
+          })
+          .passthrough()
+      )
+      .optional(),
     tokens: z.number().int().optional(),
     duration_ms: z.number().int().optional(),
     stage_ms: z.record(z.string(), z.number().int()).optional(),
@@ -459,6 +477,7 @@ const PriceFreshnessSummary = z.object({
   unknown_count: z.number().int().gte(0),
 });
 const Quote = z.object({
+  snapshot_id: z.number().int().optional(),
   budget_known: z.boolean().optional(),
   purchase_total_cny: Money.regex(/^-?[0-9]+\.[0-9]{2}$/).optional(),
   budget_basis: z.enum(["new_purchase", "full_build"]).optional(),

@@ -1028,6 +1028,10 @@ components:
         kind: {type: string}
         candidate_id: {type: string, description: 关联的配件编号；历史记录可能缺失}
         field: {type: string, description: 资料对应的规格或价格字段}
+        final_url: {type: string, description: 实际最终导航地址，历史证据可能缺失}
+        reader: {type: string, enum: [http, browser], description: 本次正文读取方式}
+        http_status: {type: integer, description: 实际最终页面状态码}
+        read_bytes: {type: integer, description: 客户端消费的响应正文大小，不等于浏览器外网流量}
     PlanningCandidate:
       type: object
       required: [id, category, brand, model, specs, price_cny, evidence, external]
@@ -1085,11 +1089,24 @@ components:
             total_cny: {type: string}
             missing_count: {type: integer}
             snapshot_date: {type: string}
+            snapshot_id: {type: integer, format: int64, description: 不可变价格批次编号，旧记录可缺省}
         model_calls: {type: integer}
         tool_calls: {type: integer}
         search_calls: {type: integer}
         search_requests: {type: integer}
         page_calls: {type: integer}
+        read_attempts:
+          type: array
+          description: 实际物理读取次数，含失败；自动升级可产生两次，证据续读不产生请求
+          items:
+            type: object
+            required: [method, duration_ms, bytes, status, outcome]
+            properties:
+              method: {type: string, enum: [http, browser]}
+              duration_ms: {type: integer}
+              bytes: {type: integer}
+              status: {type: integer}
+              outcome: {type: string}
         tokens: {type: integer}
         duration_ms: {type: integer}
         stage_ms: {type: object, additionalProperties: {type: integer}}
@@ -1284,6 +1301,7 @@ components:
       additionalProperties: false
       required: [snapshot_date, total_cny, budget_cny, budget_delta_cny, missing_count, missing_skus]
       properties:
+        snapshot_id: {type: integer, format: int64, description: 不可变价格批次编号，旧记录可缺省}
         budget_known: {type: boolean}
         purchase_total_cny: {$ref: "#/components/schemas/Money"}
         budget_basis: {type: string, enum: [new_purchase, full_build]}

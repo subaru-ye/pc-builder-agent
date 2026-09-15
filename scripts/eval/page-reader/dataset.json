@@ -1,0 +1,342 @@
+[
+  {
+    "id": "kingston",
+    "url": "https://www.kingston.com/en/blog/pc-performance/ddr-memory-generation-differences",
+    "scenario": "装机知识/长导航",
+    "question": "DDR4 能否直接换成 DDR5，电压与数据通道有什么差异？",
+    "reference": "web-view-1.json: article sections Key differences / Compatibility; viewed before A/B",
+    "date": "Sep 2026",
+    "points": [
+      [
+        "DDR4/DDR5 不可混用",
+        "cannot mix DDR4 and DDR5"
+      ],
+      [
+        "电压 DDR4 1.2V、DDR5 1.1V",
+        "1.2V",
+        "1.1V"
+      ],
+      [
+        "通道64bit与双32bit",
+        "64-bit",
+        "32-bit"
+      ],
+      [
+        "需要兼容CPU和主板",
+        "compatible motherboard and processor"
+      ]
+    ],
+    "positive": true
+  },
+  {
+    "id": "amd",
+    "url": "https://www.amd.com/en/products/processors/desktops/ryzen/5000-series/amd-ryzen-9-5900x.html",
+    "scenario": "厂商具体CPU型号",
+    "question": "5900X 的插槽、TDP、核显要求、内存上限及发布日期？",
+    "reference": "historical/raw-6.json General Specifications/Connectivity/Graphics; captured 2026-09-13T12:37:15Z; current web view verifies URL",
+    "date": "Launch Date 11/5/2020 (preserve source format)",
+    "points": [
+      [
+        "5900X AM4",
+        "5900X",
+        "AM4"
+      ],
+      [
+        "默认TDP105W",
+        "Default TDP",
+        "105W"
+      ],
+      [
+        "需独立显卡",
+        "Discrete Graphics Card Required"
+      ],
+      [
+        "DDR4 至3200 MT/s",
+        "DDR4",
+        "3200 MT/s"
+      ],
+      [
+        "发布日期",
+        "11/5/2020"
+      ]
+    ],
+    "positive": true
+  },
+  {
+    "id": "zol",
+    "url": "https://detail.zol.com.cn/1341/1340449/param.shtml",
+    "scenario": "长参数表/既有截断失败",
+    "question": "该页5900X的插槽、TDP、内存及报价适用条件是否保留？",
+    "reference": "historical/raw-2.json Important params around rune 27615; TDP around 30434; current web-view-3 verifies URL",
+    "date": "页面未标规格更新日，采集日不等于报价日",
+    "points": [
+      [
+        "5900X/Socket AM4",
+        "5900X",
+        "Socket AM4"
+      ],
+      [
+        "TDP105W",
+        "105W"
+      ],
+      [
+        "DDR4 3200MHz",
+        "DDR4 3200MHz"
+      ],
+      [
+        "限当地实际销售",
+        "以当地实际销售信息为准"
+      ]
+    ],
+    "positive": true
+  },
+  {
+    "id": "asus",
+    "url": "https://www.asus.com/uk/support/faq/1038568/",
+    "scenario": "安装指南/排障FAQ/BIOS前置条件",
+    "question": "USB BIOS FlashBack 如何准备U盘与判断失败，400系列搭11代CPU有何ME条件？",
+    "reference": "web-view-2.json ASUS lines30,91,106-116,156-171",
+    "date": "Last Update 2026/04/09 18:20",
+    "points": [
+      [
+        "U盘>=1GB FAT16/32 MBR",
+        "1GB",
+        "FAT16",
+        "MBR"
+      ],
+      [
+        "CAP放U盘根目录",
+        "root directory"
+      ],
+      [
+        "过程中不可移除电源",
+        "do not remove",
+        "power"
+      ],
+      [
+        "闪5秒转常亮为失败",
+        "five seconds",
+        "not operating properly"
+      ],
+      [
+        "400系列/11代 ME14.1.51.1528或更新",
+        "400 series",
+        "11th",
+        "14.1.51.1528",
+        "newer"
+      ]
+    ],
+    "positive": true
+  },
+  {
+    "id": "msi-spec",
+    "url": "https://us.msi.com/Motherboard/B550-A-PRO/Specification",
+    "scenario": "厂商主板规格/列表条件",
+    "question": "B550-A PRO内存、PCIe共享与显示输出限制？",
+    "reference": "web-view-2.json MSI lines98-119,130",
+    "date": "未标更新日期",
+    "points": [
+      [
+        "型号与4槽128GB",
+        "B550-A PRO",
+        "4x DDR4",
+        "128GB"
+      ],
+      [
+        "ECC UDIMM仅non-ECC模式",
+        "ECC UDIMM",
+        "non-ECC mode"
+      ],
+      [
+        "M.2_2占用使PCI_E3不可用",
+        "M.2_2",
+        "PCI_E3",
+        "unavailable"
+      ],
+      [
+        "显示输出需集显CPU",
+        "processor with integrated graphics"
+      ]
+    ],
+    "positive": true
+  },
+  {
+    "id": "msi-support",
+    "url": "https://us.msi.com/Motherboard/B550-A-PRO/support",
+    "scenario": "动态BIOS/CPU支持表",
+    "question": "5900X最低BIOS版本是什么，发布日期及更新限制？",
+    "reference": "web-view-1.json only {{data.name}} shell; no trustworthy table before A/B",
+    "date": "unknown",
+    "points": [
+      [
+        "目标主板身份"
+      ],
+      [
+        "5900X对应BIOS版本"
+      ],
+      [
+        "BIOS发布日期"
+      ],
+      [
+        "升级限制条件"
+      ]
+    ],
+    "positive": true,
+    "exclude": true,
+    "exclude_reason": "动态表原文不可见，不依据论坛或常识补造；只报告可用性"
+  },
+  {
+    "id": "noctua",
+    "url": "https://www.noctua.at/en/nh-d15/specification",
+    "scenario": "厂商散热器/结构表格/跳转",
+    "question": "NH-D15带扇/不带扇高度、重量及保修怎样区分？",
+    "reference": "web-view-2.json Noctua Mechanical specifications lines110-117,79; source currently says168, do not replace with remembered165",
+    "date": "页面未标规格生效日期",
+    "points": [
+      [
+        "准确型号",
+        "NH-D15"
+      ],
+      [
+        "带扇高度168mm",
+        "168 mm"
+      ],
+      [
+        "不带扇高度160mm",
+        "160 mm"
+      ],
+      [
+        "带扇1320g不带扇980g",
+        "1320 g",
+        "980 g"
+      ],
+      [
+        "保修6年",
+        "6 years"
+      ]
+    ],
+    "positive": true
+  },
+  {
+    "id": "gigabyte",
+    "url": "https://www.gigabyte.com/Motherboard/B550-AORUS-ELITE-rev-10/support#support-cpu",
+    "scenario": "主板版本/动态CPU支持",
+    "question": "B550 AORUS ELITE rev1.0支持5900X的最低BIOS及限制？",
+    "reference": "web-view-1.json landing title Rev1.0; follow-up open/find failed; no trustworthy CPU row",
+    "date": "unknown",
+    "points": [
+      [
+        "rev1.0身份"
+      ],
+      [
+        "5900X对应行"
+      ],
+      [
+        "最低BIOS"
+      ],
+      [
+        "适用更新条件"
+      ]
+    ],
+    "positive": true,
+    "exclude": true,
+    "exclude_reason": "参照页CPU行未取得，不参与覆盖率"
+  },
+  {
+    "id": "crucial",
+    "url": "https://www.crucial.com/articles/about-memory/how-to-install-desktop-memory",
+    "scenario": "内存安装指南/可达性",
+    "question": "安装台式内存前如何断电防静电、对准缺口和确认卡扣？",
+    "reference": "web-view-1.json open failed; no original instructions available",
+    "date": "unknown",
+    "points": [
+      [
+        "断电步骤原文"
+      ],
+      [
+        "防静电步骤原文"
+      ],
+      [
+        "缺口对准步骤原文"
+      ],
+      [
+        "完成检查原文"
+      ]
+    ],
+    "positive": true,
+    "exclude": true,
+    "exclude_reason": "原文未取得，不以常识作正确答案"
+  },
+  {
+    "id": "smzdm",
+    "url": "https://m.smzdm.com/p/73291341/",
+    "scenario": "负面/旧优惠/推荐混杂",
+    "question": "能否证明5900X当前京东现价2399元？",
+    "reference": "historical/raw-1.json rune~2100-2900 offer section, captured 2026-09-13; current web open failed",
+    "date": "23-02-20发布",
+    "points": [
+      [
+        "准确盒装型号",
+        "R9-5900X",
+        "盒装"
+      ],
+      [
+        "历史发布日期",
+        "23-02-20"
+      ],
+      [
+        "历史促销2399元",
+        "2399"
+      ],
+      [
+        "当时商家",
+        "京东自营旗舰店"
+      ]
+    ],
+    "positive": false,
+    "expected": "不能证明当前价格、现货或当前可成交；旧优惠必须连同日期引用，推荐商品不能绑定5900X"
+  },
+  {
+    "id": "jd",
+    "url": "https://u.jd.com/x6yjnHz",
+    "scenario": "负面/登录跳转",
+    "question": "短链是否提供免登录的商品规格和当前报价？",
+    "reference": "historical/page-4.json / raw-4.json, 2026-09-13T12:36:56Z",
+    "date": "采集时刻而非报价时刻",
+    "points": [
+      [
+        "登录页面身份",
+        "登录"
+      ],
+      [
+        "缺少确定商品型号"
+      ],
+      [
+        "缺少商品当前报价"
+      ]
+    ],
+    "positive": false,
+    "expected": "不可用作商品规格或价格证据，不登录、不绕过"
+  },
+  {
+    "id": "taobao",
+    "url": "https://m.tb.cn/h.8KQpZGh",
+    "scenario": "负面/优惠空壳",
+    "question": "短链是否证明某一准确商品的当前价格？",
+    "reference": "historical/page-5.json / raw-5.json, 2026-09-13T12:36:58Z; image-only markdown",
+    "date": "无报价观察日",
+    "points": [
+      [
+        "福利入口标题/落地身份"
+      ],
+      [
+        "只有图片/无规格"
+      ],
+      [
+        "无准确商品价格"
+      ]
+    ],
+    "positive": false,
+    "expected": "不能证明型号、规格或当前价；不可用资料"
+  }
+]

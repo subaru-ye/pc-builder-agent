@@ -48,8 +48,11 @@ func TestRecordedExternalSpecPathsRetainEvidenceAndReportMissingFields(t *testin
 	if _, ok = specs["supported_chipsets"]; ok {
 		t.Fatal("accepted chipset without evidence")
 	}
-	if len(saved.Unknown) != 1 || !strings.Contains(saved.Unknown[0], "supported_chipsets") {
+	if len(saved.Unknown) != 2 || !strings.Contains(saved.Unknown[0], "supported_chipsets") || !strings.Contains(saved.Unknown[1], "网页价格不纳入报价") {
 		t.Fatalf("missing actionable registration feedback: %+v", response)
+	}
+	if saved.Price != nil || c.Price == nil || saved.FieldEvidence["price_cny"] != "" {
+		t.Fatal("web quote accepted or recorded input mutated")
 	}
 	if saved.FieldEvidence["socket"] != "source-173" || saved.FieldQuotes["socket"] != "AM4接口" || c.FieldEvidence["specs.socket"] != "source-173" {
 		t.Fatal("provenance lost or caller mutated")

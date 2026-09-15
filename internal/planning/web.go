@@ -12,8 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"golang.org/x/net/html"
 )
 
 type Quota interface {
@@ -29,6 +27,7 @@ type Web struct {
 	CrawlerURL      string
 	CrawlerToken    string
 	CrawlerClient   *http.Client
+	OnReadAttempt   func(ReadAttempt)
 }
 
 func NewWeb(quota Quota) *Web {
@@ -174,39 +173,4 @@ func (w *Web) Search(ctx context.Context, query string) ([]Evidence, error) {
 		}
 	}
 	return rows, nil
-}
-
-func (w *Web) Read(ctx context.Context, link string) (Evidence, error) {
-	if w.CrawlerURL != "" {
-		return w.readWithCrawler(ctx, link)
-	}
-	data, e := w.get(ctx, link)
-	if e != nil {
-		return Evidence{}, e
-	}
-	doc, e := html.Parse(strings.NewReader(string(data)))
-	if e != nil {
-		return Evidence{}, fmt.Errorf("网页正文无法解析")
-	}
-	var chunks []string
-	var walk func(*html.Node)
-	walk = func(n *html.Node) {
-		if n.Type == html.ElementNode && (n.Data == "script" || n.Data == "style" || n.Data == "noscript") {
-			return
-		}
-		if n.Type == html.TextNode {
-			if s := strings.TrimSpace(n.Data); s != "" {
-				chunks = append(chunks, s)
-			}
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			walk(c)
-		}
-	}
-	walk(doc)
-	text := []rune(strings.Join(chunks, " "))
-	if len(text) > 16000 {
-		text = append(text[:16000], []rune(" [正文已截断]")...)
-	}
-	return Evidence{URL: link, Title: link, Text: string(text), CapturedAt: time.Now().UTC().Format(time.RFC3339), Kind: "page"}, nil
 }

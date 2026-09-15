@@ -260,7 +260,9 @@ func guardRequirementUpdateEvidence(state schemas.RequirementState, update schem
 			for _, part := range owned {
 				known := false
 				for _, prior := range priorOwned {
-					if prior.Category == part.Category && prior.Model == part.Model && prior.Quantity == part.Quantity {
+					// OwnedPart's omitted quantity means one; wire formatting must
+					// not require fresh model evidence for an unchanged owned part.
+					if prior.Category == part.Category && prior.Model == part.Model && max(prior.Quantity, 1) == max(part.Quantity, 1) {
 						known = true
 					}
 				}

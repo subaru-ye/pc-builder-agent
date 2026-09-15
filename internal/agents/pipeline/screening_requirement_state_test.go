@@ -19,6 +19,27 @@ type stateProtocolModel struct {
 	request *model.LLMRequest
 }
 
+func TestOwnedSourceGuardUsesQuantityDefault(t *testing.T) {
+	for _, tc := range []struct {
+		name, before, after string
+		pass                bool
+	}{
+		{"add GPU without repeating known CPU", `[{"category":"cpu","model":"AMD Ryzen 5 7600","quantity":1}]`, `[{"category":"cpu","model":"AMD Ryzen 5 7600"},{"category":"gpu","model":"RTX 4060"}]`, true},
+		{"prior omitted quantity", `[{"category":"cpu","model":"AMD Ryzen 5 7600"}]`, `[{"category":"cpu","model":"AMD Ryzen 5 7600","quantity":1},{"category":"gpu","model":"RTX 4060","quantity":1}]`, true},
+		{"invented CPU still rejected", `[{"category":"cpu","model":"AMD Ryzen 5 7600"}]`, `[{"category":"cpu","model":"AMD Ryzen 9 7900"},{"category":"gpu","model":"RTX 4060"}]`, false},
+		{"changed SSD quantity needs evidence", `[{"category":"ssd","model":"Samsung 990 PRO","quantity":1}]`, `[{"category":"ssd","model":"Samsung 990 PRO","quantity":2},{"category":"gpu","model":"RTX 4060"}]`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			state := schemas.NewRequirementState()
+			state.Fields["owned_parts"] = schemas.RequirementField{Status: "active", Value: json.RawMessage(tc.before)}
+			update := schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{{Op: "set", Field: "owned_parts", Value: json.RawMessage(tc.after), Quote: "还已有RTX 4060显卡"}}}
+			if err := guardRequirementUpdateEvidence(state, update); (err == nil) != tc.pass {
+				t.Fatalf("guard error = %v, want pass %v", err, tc.pass)
+			}
+		})
+	}
+}
+
 func (m *stateProtocolModel) Name() string { return "offline-state-protocol" }
 func (m *stateProtocolModel) GenerateContent(_ context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {

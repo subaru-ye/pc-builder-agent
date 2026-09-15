@@ -176,6 +176,9 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 		}
 		if c.PreviousBuild != nil {
 			base, e := seedPreviousBuild(ctx, st, ws.ID, *c.PreviousBuild)
+			if e == nil && c.PreviousBuild.Snapshot != nil {
+				e = seedSnapshotConfirmation(ctx, st, svc, owner, ws.ID, *c.PreviousBuild)
+			}
 			if e == nil {
 				e = g.journal(map[string]any{"event": "historical_precondition", "case_id": c.ID, "source": c.PreviousBuild.Source, "build": base})
 			}
@@ -268,6 +271,16 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 			if len(cr.Steps) > 0 {
 				previous = &cr.Steps[len(cr.Steps)-1]
 			}
+			if (previous == nil || previous.Result == nil) && before.Session.VersionCount > 0 {
+				// A seeded formal version is also a comparison baseline, even
+				// when this is the first message or a preceding step only read it.
+				baseRecord := StepRecord{}
+				if previous != nil {
+					baseRecord = *previous
+				}
+				baseRecord.Result = &planning.Result{Draft: history[before.Session.VersionCount].Draft}
+				previous = &baseRecord
+			}
 			Grade(&record, step.Expect, previous)
 			for _, check := range record.Checks {
 				cr.Pass = cr.Pass && check.Pass
@@ -307,6 +320,13 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 		}
 		report.Cases = append(report.Cases, cr)
 	}
+	countUsage(&report)
+	report.DurationMS = time.Since(start).Milliseconds()
+	return report, nil
+}
+
+// Count failed planning attempts too, without treating them as saved results.
+func countUsage(report *Report) {
 	var totalTokens int64
 	allTokens := true
 	for _, c := range report.Cases {
@@ -321,24 +341,29 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 				} else {
 					report.BuilderCalls++
 				}
+				if report.Mode == "live_models_offline_tools" && !t.ProviderCalled {
+					continue // A request blocked before sending has no provider usage.
+				}
 				if t.Tokens == nil {
 					allTokens = false
 				} else {
 					totalTokens += int64(*t.Tokens)
 				}
 			}
-			if r.PlanningInput != nil && r.Result != nil {
-				report.ToolCalls += r.Result.ToolCalls
-				report.SearchCalls += r.Result.SearchCalls
-				report.PageCalls += r.Result.PageCalls
+			attempt := r.PlanningAttempt
+			if attempt == nil {
+				attempt = r.Result // Compatibility with older saved records.
+			}
+			if r.PlanningInput != nil && attempt != nil {
+				report.ToolCalls += attempt.ToolCalls
+				report.SearchCalls += attempt.SearchCalls
+				report.PageCalls += attempt.PageCalls
 			}
 		}
 	}
 	if allTokens {
 		report.Tokens = &totalTokens
 	}
-	report.DurationMS = time.Since(start).Milliseconds()
-	return report, nil
 }
 func waitRun(ctx context.Context, svc *product.Service, owner, id string, live bool) error {
 	limit := 30 * time.Second

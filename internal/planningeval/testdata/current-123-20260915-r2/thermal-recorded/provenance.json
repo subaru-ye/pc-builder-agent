@@ -1,0 +1,16 @@
+{
+  "suite_sha256": "1960b826753deb37d1295e24dcb531a90a1eeef71c190076a690f6d018c2e331",
+  "database_snapshot_sha256": "12b00273edafcbe7ff7d7e78441167ec23ab61b91a31735222ec647bd0de6986",
+  "generator_sha256": "1f7554682625a4a22ea5aa8031519835e8cf0550c57f49ed097e32d546fa178c",
+  "source_files": {
+    "artifacts/planning-local-reference-recorded-20260915-r1/suite.json": "4c750923b75a75941c0238dd9f8ceddc59ce37aba384a8bd293b686eb05f7225"
+  },
+  "source_commit": "6e7a9b8b2baaaf4f1bc3b314eb4cb6582a31fbbd",
+  "snapshot_id": 9,
+  "active_parts": 123,
+  "limitations": [
+    "Offline authored decisions or frozen real responses, not a fresh model quality score.",
+    "Current-catalog variants are separate from original historical results.",
+    "Existing compatibility rules do not cover all physical fit, BIOS, noise or performance evidence."
+  ]
+}

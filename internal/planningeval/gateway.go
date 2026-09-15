@@ -189,6 +189,9 @@ func (g *gateway) Remote(ctx context.Context, _, _ string, payload json.RawMessa
 	// SerpAPI/Crawl4AI credentials. Unknown requests fail closed without dialing.
 	w := &planning.Web{Client: &http.Client{Transport: fixtureTransport{g.pages}}, Key: "offline-fixture", BaseURL: "https://search.eval.invalid", Budget: 1000, Quota: g.store}
 	result, err := (planning.Runner{Model: m, Catalog: g.store, Web: w}).Run(ctx, input)
+	g.mu.Lock()
+	g.record.PlanningAttempt = &result
+	g.mu.Unlock()
 	if err != nil {
 		return product.RemoteResult{Planning: &result}, err
 	}

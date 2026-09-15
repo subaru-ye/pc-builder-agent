@@ -1,0 +1,10 @@
+{
+  "source": "artifacts\\current-123-live-20260915",
+  "source_suite_sha256": "066b752338d24360f75c26b18a14613cbb775c40f4b52212f6c4538518bdc876",
+  "source_report_sha256": "42120e46c123ca78174cbb6e1869cdc1bc7feb5293d95f93a0cd8c241950e4c8",
+  "source_journal_sha256": "cba7e004c35022303529a993e9fc367ab84739e232dcc26cdd03c579a7c2e9d9",
+  "original_score": "0/2; CPU comparison baseline omitted by the runner, retired case interrupted at the shared request limit",
+  "cpu_subset": "artifacts/current-123-live-cpu-subset-20260915",
+  "expectations_changed": false,
+  "actual_model_requests": 12
+}

@@ -1,0 +1,9 @@
+{
+  "source": "artifacts\\current-123-live-cpu-subset-20260915",
+  "source_suite_sha256": "768ce1b779e29a4767e3b06bc029dedbbac6db22e5a2f4a18a0457cfc3b20d58",
+  "source_report_sha256": "584c77a350eb4b6c7b90682dee765ecbe17f47325c669b861690814eac95e2bc",
+  "suite_sha256": "24b1525ff927bb5dd541ee5bd6d9aae73c6c765c4abde3ba1bfc9a4da8e3dce0",
+  "expectations_changed": false,
+  "actual_model_requests": 0,
+  "external_requests": 0
+}

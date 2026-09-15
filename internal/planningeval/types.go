@@ -45,6 +45,8 @@ type PreviousBuildFixture struct {
 	Selection   json.RawMessage `json:"selection"`
 	Requirement json.RawMessage `json:"requirement"`
 	Source      string          `json:"source"`
+	// Snapshot preserves a recorded version whose parts may have left the catalog.
+	Snapshot *planning.Result `json:"snapshot,omitempty"`
 }
 type Step struct {
 	Kind    string                         `json:"kind"`
@@ -108,19 +110,20 @@ type Check struct {
 	Detail string `json:"detail,omitempty"`
 }
 type StepRecord struct {
-	Kind           string                   `json:"kind"`
-	Text           string                   `json:"text,omitempty"`
-	State          schemas.RequirementState `json:"state"`
-	ScreenInput    *product.ScreenInput     `json:"screen_input,omitempty"`
-	PlanningInput  *schemas.PlanningInput   `json:"planning_input,omitempty"`
-	Result         *planning.Result         `json:"result,omitempty"`
-	Versions       int                      `json:"versions"`
-	Reply          string                   `json:"reply"`
-	Trace          []Trace                  `json:"trace"`
-	Checks         []Check                  `json:"checks"`
-	DurationMS     int64                    `json:"duration_ms"`
-	Error          string                   `json:"error,omitempty"`
-	Classification string                   `json:"classification"`
+	Kind            string                   `json:"kind"`
+	Text            string                   `json:"text,omitempty"`
+	State           schemas.RequirementState `json:"state"`
+	ScreenInput     *product.ScreenInput     `json:"screen_input,omitempty"`
+	PlanningInput   *schemas.PlanningInput   `json:"planning_input,omitempty"`
+	Result          *planning.Result         `json:"result,omitempty"`
+	PlanningAttempt *planning.Result         `json:"planning_attempt,omitempty"` // Diagnostics/accounting, never proof of a saved proposal.
+	Versions        int                      `json:"versions"`
+	Reply           string                   `json:"reply"`
+	Trace           []Trace                  `json:"trace"`
+	Checks          []Check                  `json:"checks"`
+	DurationMS      int64                    `json:"duration_ms"`
+	Error           string                   `json:"error,omitempty"`
+	Classification  string                   `json:"classification"`
 }
 type CaseRecord struct {
 	ID    string       `json:"id"`

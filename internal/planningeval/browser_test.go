@@ -27,9 +27,11 @@ func (browserOfflineRedis) Available() bool            { return false }
 func (browserOfflineRedis) Ping(context.Context) error { return nil }
 
 // Explicit test server only. The launcher supplies a fresh peval_ database;
-// all seven model responses are saved real outputs, never a provider call.
+// The legacy mode replays seven real outputs; current-catalog mode uses the
+// explicitly authored C123-002 oracle. Neither mode calls a provider.
 func TestRecordedBudgetBrowserServer(t *testing.T) {
-	if os.Getenv("PLANNING_RECORDED_BROWSER") != "1" {
+	currentCatalog := os.Getenv("PLANNING_CURRENT_BROWSER") == "1"
+	if os.Getenv("PLANNING_RECORDED_BROWSER") != "1" && !currentCatalog {
 		t.Skip("explicit browser replay only")
 	}
 	ctx := context.Background()
@@ -62,6 +64,24 @@ func TestRecordedBudgetBrowserServer(t *testing.T) {
 	if c.PreviousBuild == nil || len(recording.Responses) != 7 {
 		t.Fatal("recorded case missing")
 	}
+	step := Step{Kind: "confirm", Builder: recording.Responses}
+	expectedCalls, expectedTotal := 7, "6754.00"
+	if currentCatalog {
+		raw, err = os.ReadFile("testdata/current-123-20260915-r2/mechanisms/suite.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		suite, err = Load(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c = suite.Cases[1] // Retired historical parts -> current priced alternatives.
+		if c.ID != "C123-002" || c.PreviousBuild.Snapshot == nil {
+			t.Fatal("current historical fixture changed")
+		}
+		step = c.Steps[1]
+		expectedCalls, expectedTotal = 4, "6483.00"
+	}
 	dsn := os.Getenv("PLANNING_EVAL_DSN")
 	if err = Prepare(ctx, dsn, suite.Catalog); err != nil {
 		t.Fatal(err)
@@ -71,8 +91,8 @@ func TestRecordedBudgetBrowserServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
-	g := &gateway{store: st, pages: suite.Pages, models: Models{MaxCalls: 7}}
-	g.begin(Step{Kind: "confirm", Builder: recording.Responses})
+	g := &gateway{store: st, pages: suite.Pages, models: Models{MaxCalls: expectedCalls}}
+	g.begin(step)
 	events := runevents.NewMemory()
 	svc, err := product.NewService(ctx, st, g, events)
 	if err != nil {
@@ -88,8 +108,14 @@ func TestRecordedBudgetBrowserServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = svc.EditRequirement(ctx, owner, ws.ID, uuid.NewString(), product.RequirementEdit{Operations: c.Steps[0].Edit}); err != nil {
-		t.Fatal(err)
+	if currentCatalog {
+		if err = seedSnapshotConfirmation(ctx, st, svc, owner, ws.ID, *c.PreviousBuild); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		if _, err = svc.EditRequirement(ctx, owner, ws.ID, uuid.NewString(), product.RequirementEdit{Operations: c.Steps[0].Edit}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	p := presenter.New(st)
 	codec, err := sharing.NewTokenCodec(base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("s", 32))))
@@ -133,7 +159,7 @@ func TestRecordedBudgetBrowserServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	detail, err := svc.GetSession(ctx, owner, ws.ID)
-	if err != nil || detail.Session.VersionCount != 2 || g.calls != 7 {
+	if err != nil || detail.Session.VersionCount != 2 || g.calls != expectedCalls {
 		t.Fatalf("browser did not complete v2 exactly once: calls=%d versions=%d err=%v", g.calls, detail.Session.VersionCount, err)
 	}
 	after, err := st.BuildByVersion(ctx, ws.ID, 1)
@@ -141,8 +167,8 @@ func TestRecordedBudgetBrowserServer(t *testing.T) {
 		t.Fatal("historical version changed", err)
 	}
 	latest, err := st.BuildByVersion(ctx, ws.ID, 2)
-	if err != nil || !strings.Contains(string(latest.Quote), "6754.00") {
+	if err != nil || !strings.Contains(string(latest.Quote), expectedTotal) {
 		t.Fatal("wrong delivered quote", err)
 	}
-	t.Log("browser completed: 7 offline responses, v2 persisted, v1 unchanged", ws.ID)
+	t.Log("browser completed: offline responses, v2 persisted, v1 unchanged", expectedCalls, ws.ID)
 }

@@ -1,0 +1,221 @@
+{
+  "actual_model_requests": 12,
+  "duration_ms": 100253,
+  "cash_cost": null,
+  "cases": [
+    {
+      "id": "LIVE123-CPU",
+      "passed": false,
+      "provider_calls": {
+        "screening": 1,
+        "builder": 3
+      },
+      "usage": {
+        "tokens": 41962,
+        "input_tokens": 39698,
+        "output_tokens": 2264
+      },
+      "requested_actions": {
+        "search_local": 1,
+        "evaluate": 1
+      },
+      "steps": [
+        {
+          "kind": "message",
+          "versions": 2,
+          "reply": "配置已保存为 v2。\n\n已将CPU升级为Ryzen 7 5700X，其余配件保持不变。整机约6701元，仍在7500元预算内；AM4/B550平台、DDR4内存、650W电源及AP201机箱均兼容，无需联动更换。AG400散热器高度与解热能力满足5700X（65W TDP）安装要求，但静音为主观偏好，实际噪声取决于负载与风扇曲线，无法保证绝对安静。",
+          "error": null,
+          "selection": {
+            "cpu": "cpu-r7-5700x",
+            "gpu": "gpu-gb-5060-windforce",
+            "psu": "psu-msi-mag-a650bn",
+            "ssd": [
+              {
+                "sku": "ssd-zhitai-ti600-1tb",
+                "quantity": 1
+              }
+            ],
+            "case": "case-asus-prime-ap201",
+            "cooler": "cooler-deepcool-ag400",
+            "memory": "mem-crucial-ballistix-16-3200",
+            "motherboard": "mb-msi-b550m-pro-vdh-wifi"
+          },
+          "result_keys": [
+            "model_outcome",
+            "delivery",
+            "build_version",
+            "schema_version",
+            "outcome",
+            "reply",
+            "draft",
+            "assessments",
+            "issues",
+            "assumptions",
+            "candidates",
+            "evidence",
+            "validation",
+            "quote",
+            "model_calls",
+            "tool_calls",
+            "search_calls",
+            "search_requests",
+            "page_calls",
+            "tokens",
+            "duration_ms",
+            "stage_ms"
+          ],
+          "failed_checks": [
+            {
+              "name": "preserved_other_parts",
+              "pass": false
+            },
+            {
+              "name": "changed_cpu",
+              "pass": false,
+              "detail": "performance benefit needs separate evidence review"
+            }
+          ]
+        },
+        {
+          "kind": "refresh",
+          "versions": 2,
+          "reply": "配置已保存为 v2。\n\n已将CPU升级为Ryzen 7 5700X，其余配件保持不变。整机约6701元，仍在7500元预算内；AM4/B550平台、DDR4内存、650W电源及AP201机箱均兼容，无需联动更换。AG400散热器高度与解热能力满足5700X（65W TDP）安装要求，但静音为主观偏好，实际噪声取决于负载与风扇曲线，无法保证绝对安静。",
+          "error": null,
+          "selection": {
+            "cpu": "cpu-r7-5700x",
+            "gpu": "gpu-gb-5060-windforce",
+            "psu": "psu-msi-mag-a650bn",
+            "ssd": [
+              {
+                "sku": "ssd-zhitai-ti600-1tb",
+                "quantity": 1
+              }
+            ],
+            "case": "case-asus-prime-ap201",
+            "cooler": "cooler-deepcool-ag400",
+            "memory": "mem-crucial-ballistix-16-3200",
+            "motherboard": "mb-msi-b550m-pro-vdh-wifi"
+          },
+          "result_keys": [
+            "model_outcome",
+            "delivery",
+            "build_version",
+            "schema_version",
+            "outcome",
+            "reply",
+            "draft",
+            "assessments",
+            "issues",
+            "assumptions",
+            "candidates",
+            "evidence",
+            "validation",
+            "quote",
+            "model_calls",
+            "tool_calls",
+            "search_calls",
+            "search_requests",
+            "page_calls",
+            "tokens",
+            "duration_ms",
+            "stage_ms"
+          ],
+          "failed_checks": []
+        }
+      ]
+    },
+    {
+      "id": "LIVE123-RETIRED",
+      "passed": false,
+      "provider_calls": {
+        "screening": 1,
+        "builder": 7
+      },
+      "usage": {
+        "tokens": 99896,
+        "input_tokens": 96788,
+        "output_tokens": 3108
+      },
+      "requested_actions": {
+        "search_local_batch": 1,
+        "evaluate": 3,
+        "search_local": 2
+      },
+      "steps": [
+        {
+          "kind": "refresh",
+          "versions": 1,
+          "reply": "需求已经整理好，请确认或编辑后再生成配置。",
+          "error": null,
+          "selection": null,
+          "result_keys": [],
+          "failed_checks": []
+        },
+        {
+          "kind": "message",
+          "versions": 1,
+          "reply": "Agent 服务不可用。\n\n上游 Agent 暂时不可用，请稍后使用新请求重试。",
+          "error": "product run failed: {\"code\": \"upstream_unavailable\", \"type\": \"/problems/upstream_unavailable\", \"title\": \"Agent 服务不可用\", \"detail\": \"上游 Agent 暂时不可用，请稍后使用新请求重试。\", \"status\": 503, \"request_id\": \"3972872e-e749-4ebe-bac7-5ba93258f8fd\"}",
+          "selection": null,
+          "result_keys": [],
+          "failed_checks": [
+            {
+              "name": "run_completed",
+              "pass": false,
+              "detail": "product run failed: {\"code\": \"upstream_unavailable\", \"type\": \"/problems/upstream_unavailable\", \"title\": \"Agent 服务不可用\", \"detail\": \"上游 Agent 暂时不可用，请稍后使用新请求重试。\", \"status\": 503, \"request_id\": \"3972872e-e749-4ebe-bac7-5ba93258f8fd\"}"
+            },
+            {
+              "name": "version_count",
+              "pass": false,
+              "detail": "1"
+            },
+            {
+              "name": "tool_required:evaluate",
+              "pass": false,
+              "detail": "[search_local_batch evaluate search_local search_local evaluate evaluate]"
+            },
+            {
+              "name": "final_outcome",
+              "pass": false,
+              "detail": "<nil>"
+            },
+            {
+              "name": "missing_prices",
+              "pass": false,
+              "detail": "<nil>"
+            },
+            {
+              "name": "budget_ceiling",
+              "pass": false,
+              "detail": "7000"
+            }
+          ]
+        },
+        {
+          "kind": "refresh",
+          "versions": 1,
+          "reply": "Agent 服务不可用。\n\n上游 Agent 暂时不可用，请稍后使用新请求重试。",
+          "error": null,
+          "selection": null,
+          "result_keys": [],
+          "failed_checks": [
+            {
+              "name": "version_count",
+              "pass": false,
+              "detail": "1"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "tokens": 141858,
+    "input_tokens": 136486,
+    "output_tokens": 5372
+  },
+  "planning_tool_actions": 8,
+  "internal_tool_executions": 11,
+  "external_search": 0,
+  "external_pages": 0
+}

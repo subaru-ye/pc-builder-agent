@@ -126,3 +126,25 @@ func TestMigratedHistoricalBuilderSuite(t *testing.T) {
 		}
 	}
 }
+
+func TestRecordedHistoricalSnapshotRequiresMatchingSelection(t *testing.T) {
+	raw, err := os.ReadFile("testdata/current-123-20260915-r2/mechanisms/suite.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	suite, err := Load(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := *suite.Cases[1].PreviousBuild
+	if f.Snapshot == nil || validatePreviousBuild(f) != nil {
+		t.Fatal("recorded historical fixture invalid")
+	}
+	var selection map[string]any
+	_ = json.Unmarshal(f.Selection, &selection)
+	selection["parts"].(map[string]any)["cpu"] = "cpu-r7-5700x"
+	f.Selection, _ = json.Marshal(selection)
+	if validatePreviousBuild(f) == nil {
+		t.Fatal("historical snapshot accepted for a different selection")
+	}
+}

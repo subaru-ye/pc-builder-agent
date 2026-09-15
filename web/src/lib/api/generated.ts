@@ -812,6 +812,7 @@ export interface components {
             /** @description 客户端消费的响应正文大小，不等于浏览器外网流量 */
             read_bytes?: number;
         };
+        /** @description 会话候选快照。本地候选可含已读取正文支持的缺失规格补充，external仍为false且保留本地报价；field_evidence关联具体字段来源，不代表全局商品已更新。 */
         PlanningCandidate: {
             id: string;
             category: components["schemas"]["PartCategory"];

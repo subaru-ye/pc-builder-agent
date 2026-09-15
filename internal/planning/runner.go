@@ -31,7 +31,7 @@ search_semantic: {query:自然语言需求,category?:品类}，复用本地语�
 search_web: {query:搜索词}，搜索上述装机技术资料和官网链接，不用于查价；返回来源编号。
 read_page: {url:链接,method?:auto|http|browser,query?:要定位的词,offset?:0,limit?:16000}，默认普通HTTP优先，仅动态空壳自动尝试浏览器。正文缺少动态表格时可主动选择browser，不必反复搜索；登录、验证码、限流时不要重试绕过。搜索摘要只能作为线索，规格优先用厂商，噪声要区分单件/整机及测试工况。
 read_evidence: {id:来源编号,query?:要定位的词,offset?:0,limit?:16000}，读取服务端保存的正文窗口，不发起网络请求。local:候选id返回本地商品快照及字段来源索引，不能当作已阅读全文或补齐未知规格；正文按返回的来源编号读取。query优先定位相关段落（空格分隔多个词），next_offset可继续向后读取，offset=0且不带query从头读取。truncated表示仅展示部分，不代表服务端丢失剩余正文；窗口不能证明未展示内容不存在。
-register_candidate: {id:ext-唯一编号,category:cpu|gpu|motherboard|memory|ssd|psu|case|cooler,brand:品牌,model:完整型号,specs:{规范字段:值},price_cny:null,evidence:[来源编号],field_evidence:{model:来源编号,每个specs键:来源编号},unknown:[缺失或冲突说明]}。只能提取已读取正文的规格事实；不明确的参数省略，不猜测。注册到会话候选，不是全局目录发布，网页价格不进入报价。
+register_candidate: {id:本地候选原编号或ext-唯一编号,category:cpu|gpu|motherboard|memory|ssd|psu|case|cooler,brand:品牌,model:完整型号,specs:{规范字段:值},price_cny:null,evidence:[来源编号],field_evidence:{model:来源编号,每个specs键:来源编号},unknown:[缺失或冲突说明]}。只能提取已读取正文的规格事实；不明确的参数省略，不猜测。本地配件缺规格时使用原编号和准确品类、品牌、型号，仅提交待补字段；补充保存在本次会话快照，保留本地报价，不覆盖已知规格或全局目录。新型号用ext-编号，网页价格不进入报价。
 注册时同时提供field_quotes:{字段:支持该值的逐字正文摘录}。非兼容性字段（接口数量、噪声等）可放specs，会另存为attributes供推理。多来源冲突放unknown；不能只附链接却编造数值。
 规格来源字段推荐使用完整路径，例如field_evidence:{"specs.socket":"source-1"}及field_quotes:{"specs.socket":"AM4接口"}；工具也兼容socket这样的短键。注册结果会返回实际保留的candidate及unknown；registered不表示所有参数已核实。收到缺项应优先补查厂商规格再更新候选，不要沿用被剔除的数据宣称兼容。可以在同一回复调用多个独立工具；注意每次反馈中的剩余往返额度，尽早检查规格与兼容性，为必要修复留出往返。
 evaluate: {draft:{schema_version:1,requirement_ref:current,build_ref:proposal,selection:{cpu:候选id,gpu:候选id或null,motherboard:候选id,memory:候选id,ssd:[{sku:候选id,quantity:1}],psu:候选id,case:候选id,cooler:候选id},rationale:{品类:简短选型理由}}}，兼容性和报价反馈供你继续修复，不自动终止对话。
@@ -92,7 +92,7 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 	for _, c := range catalog.Candidates {
 		x.candidates = append(x.candidates, Candidate{ID: c.SKU, Category: c.Category, Brand: c.Brand, Model: c.Model, Specs: c.Specs, Price: c.PriceCNY, Evidence: []string{"local:" + c.SKU}})
 	}
-	// Restore only this session's saved, sourced external candidates and evidence.
+	// Restore session evidence; reapply local supplements against current facts.
 	var previous Result
 	if len(input.PreviousProposal) > 0 && json.Unmarshal(input.PreviousProposal, &previous) == nil {
 		x.evidence = previous.Evidence
@@ -100,6 +100,8 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 		for _, c := range previous.Candidates {
 			if c.External {
 				x.candidates = append(x.candidates, c)
+			} else if len(c.FieldEvidence) > 0 {
+				x.restoreSupplement(c)
 			}
 		}
 	}
@@ -328,7 +330,7 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 					}
 				}
 				return map[string]any{"id": p.ID, "kind": "local_snapshot", "candidate": candidate, "snapshot_date": x.date, "sources": sources,
-					"instruction": "这是本轮本地目录快照，未发起联网或读取额外正文；缺失字段仍未知。sources为已载入的字段资料索引，可按来源编号继续read_evidence。"}
+					"instruction": "这是本轮本地候选快照，可能含field_evidence标注的会话规格补充；报价来自本地目录。未发起联网或读取额外正文，缺失字段仍未知。sources及field_evidence可按编号继续read_evidence。"}
 			}
 		}
 		for _, e := range x.evidence {
@@ -538,6 +540,9 @@ func (x *execution) addEvidence(rows []Evidence) map[string]any {
 }
 
 func (x *execution) register(c Candidate) error {
+	if !strings.HasPrefix(c.ID, "ext-") {
+		return x.supplement(c)
+	}
 	if !strings.HasPrefix(c.ID, "ext-") || c.Model == "" || len(c.Evidence) == 0 {
 		return fmt.Errorf("候选须含ext-编号、型号及已读取的来源")
 	}
@@ -741,7 +746,7 @@ func (x *execution) finalize() Result {
 			}
 		}
 	}
-	if wasReady {
+	if wasReady || len(x.result.Draft) > 0 {
 		x.result.Issues = append(x.result.Issues, x.deliveryIssues()...)
 	}
 	if x.result.Outcome == "ready" {
@@ -792,7 +797,7 @@ func (x *execution) finalize() Result {
 		x.result.Outcome = "proposal"
 		x.result.Issues = append(x.result.Issues, "尚未形成完整候选配置")
 	}
-	if wasReady && x.result.Outcome != "ready" {
+	if (wasReady || (len(x.result.Draft) > 0 && len(x.result.Issues) > 0)) && x.result.Outcome != "ready" {
 		x.result.Reply = "候选方案已保存，仍有项目需要解决。" + strings.Join(x.result.Issues, "；") + "。可以继续调整，已确认配置保持不变。"
 	}
 	// Delivery checks above inspect selected parts only. Unfinished sessions also
@@ -803,7 +808,7 @@ func (x *execution) finalize() Result {
 			kept[c.ID] = true
 		}
 		for _, c := range x.candidates {
-			if c.External && !kept[c.ID] {
+			if (c.External || x.seen[c.ID] || len(c.FieldEvidence) > 0) && !kept[c.ID] {
 				x.result.Candidates = append(x.result.Candidates, c)
 				kept[c.ID] = true
 			}
@@ -845,7 +850,7 @@ func (x *execution) finalize() Result {
 	}
 	x.result.Issues = issues
 	status := "not_applicable"
-	if wasReady {
+	if wasReady || (len(x.result.Draft) > 0 && len(issues) > 0) {
 		status = "unresolved"
 		if x.result.Outcome == "ready" {
 			status = "eligible"

@@ -1041,6 +1041,7 @@ components:
         read_bytes: {type: integer, description: 客户端消费的响应正文大小，不等于浏览器外网流量}
     PlanningCandidate:
       type: object
+      description: 会话候选快照。本地候选可含已读取正文支持的缺失规格补充，external仍为false且保留本地报价；field_evidence关联具体字段来源，不代表全局商品已更新。
       required: [id, category, brand, model, specs, price_cny, evidence, external]
       properties:
         id: {type: string}

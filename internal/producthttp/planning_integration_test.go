@@ -53,6 +53,19 @@ func seedPlanningRecording(t *testing.T, conn *pgx.Conn, snapshot int64, fixture
 		if _, err = conn.Exec(ctx, `INSERT INTO prices(snapshot_id,sku,price_cny,source) VALUES($1,$2,$3,'saved-user-recording') ON CONFLICT(snapshot_id,sku) DO UPDATE SET price_cny=EXCLUDED.price_cny,source=EXCLUDED.source`, snapshot, c.ID, c.Price); err != nil {
 			t.Fatal(err)
 		}
+		if c.Category == schemas.CategoryMotherboard {
+			// Explicit synthetic gap, confined to this disposable test database.
+			var specs map[string]json.RawMessage
+			_ = json.Unmarshal(c.Specs, &specs)
+			specs["memory_speed_max_mts"] = json.RawMessage(`null`)
+			gap, _ := json.Marshal(specs)
+			if _, err = conn.Exec(ctx, `INSERT INTO parts(sku,category,brand,model,specs) VALUES('mb-offline-gap',$1,$2,$3,$4)`, c.Category, c.Brand, c.Model, gap); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = conn.Exec(ctx, `INSERT INTO prices(snapshot_id,sku,price_cny,source) VALUES($1,'mb-offline-gap',$2,'synthetic-gap-test')`, snapshot, c.Price); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 	for _, e := range saved.Result.Evidence {
 		parts := strings.Split(e.Title, " · ")
@@ -85,6 +98,10 @@ func seedPlanningRecording(t *testing.T, conn *pgx.Conn, snapshot int64, fixture
 func (g *planningReplayGateway) Screen(ctx context.Context, owner, sessionID string, input product.ScreenInput) (product.ScreenResult, error) {
 	output := ""
 	switch input.Text {
+	case "换成缺规格主板候选继续核实", "读取资料补齐主板规格并继续校验", "按当前方案继续校验":
+		output = `{"next_action":"plan","operations":[]}`
+	case "预算调整为6500，其他要求保留并继续选配":
+		output = `{"next_action":"plan","operations":[{"op":"set","field":"budget_cny","value":6500,"strength":"must","quote":"预算调整为6500"}]}`
 	case "预算7000，剪1080p多轨视频，不要求静音":
 		output = `{"next_action":"confirm","operations":[{"op":"set","field":"budget_cny","value":7000,"strength":"must","quote":"预算7000"},{"op":"set","field":"free.workload_resolution","value":"1080p多轨视频剪辑","kind":"fact","strength":"must","quote":"剪1080p多轨视频"},{"op":"remove","field":"noise_pref","quote":"不要求静音"}]}`
 	case "把处理器换更好的，预算还很充足啊，其他配件尽量不动":
@@ -132,6 +149,9 @@ func (g *planningReplayGateway) Remote(ctx context.Context, _, sessionID string,
 		return product.RemoteResult{}, e
 	}
 	m := &planningReplayModel{draft: g.fixture.Draft, input: input}
+	if input.Request != nil && (input.Request.Quote == "换成缺规格主板候选继续核实" || input.Request.Quote == "读取资料补齐主板规格并继续校验" || input.Request.Quote == "按当前方案继续校验") {
+		return g.supplementReplay(ctx, input)
+	}
 	if input.Request != nil && input.State.Fields["priority"].Status == "active" {
 		if len(input.BaseDraft) == 0 || len(input.PreviousProposal) == 0 || input.Request.MessageID == "" {
 			return product.RemoteResult{}, fmt.Errorf("missing continuation context")

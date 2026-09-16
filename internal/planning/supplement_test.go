@@ -142,3 +142,41 @@ func TestUnverifiedDraftCannotClaimDeliveryThroughClarification(t *testing.T) {
 		}
 	}
 }
+
+func TestUnknownThermalCapacityRemovesUnsupportedAssurances(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	var draft map[string]any
+	if err := json.Unmarshal(record.Draft, &draft); err != nil {
+		t.Fatal(err)
+	}
+	draft["rationale"].(map[string]any)["cooler"] = "360 水冷压制这颗处理器绰绰有余"
+	record.Draft, _ = json.Marshal(draft)
+	record.Issues = []string{"散热能力未知，但这款水冷完全足够"}
+	record.Assumptions = append(record.Assumptions, "散热数据缺失不影响实际安全性")
+	selected := draft["selection"].(map[string]any)["cooler"].(string)
+	for i := range catalog.Candidates {
+		if catalog.Candidates[i].SKU == selected {
+			var specs map[string]any
+			_ = json.Unmarshal(catalog.Candidates[i].Specs, &specs)
+			specs["cooling_capacity_w"] = nil
+			catalog.Candidates[i].Specs, _ = json.Marshal(specs)
+		}
+	}
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil || got.Outcome != "proposal" || got.Validation.OverallStatus != schemas.OverallReview {
+		t.Fatalf("unexpected result: %+v %v", got, err)
+	}
+	encoded, _ := json.Marshal(got)
+	for _, forbidden := range []string{"绰绰有余", "完全足够", "不影响实际安全性"} {
+		if strings.Contains(string(encoded), forbidden) {
+			t.Fatalf("unsupported assurance survived: %s", forbidden)
+		}
+	}
+	if !strings.Contains(got.Reply, "散热能力字段缺失") || !strings.Contains(string(got.Draft), "当前不能确认温控表现") {
+		t.Fatalf("deterministic unresolved explanation missing: %+v", got)
+	}
+}

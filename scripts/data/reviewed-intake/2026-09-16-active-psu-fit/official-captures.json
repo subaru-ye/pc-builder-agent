@@ -1,0 +1,66 @@
+{
+  "captured_at": "2026-09-16T10:30:00+08:00",
+  "method": "官网产品页或官网 PDF 正文读取并人工核对型号、外形与长度；不使用搜索摘要作为字段证据",
+  "captures": [
+    {
+      "source_id": "bequiet-pure-power-12m-850_official",
+      "source_url": "https://bequiet.com/en/powersupply/4072",
+      "source_text": "Pure Power 12 M 850W; ATX 3.0 PSU; Dimensions without cable (L x W x H): 160 x 150 x 86 mm."
+    },
+    {
+      "source_id": "corsair-hx1000i-2022_qsg_official",
+      "source_url": "https://assets.corsair.com/image/upload/corsairmedia/sys_master/productcontent/49_002614_AA_WW_HXi_Series_QSG_Web.pdf",
+      "source_text": "CORSAIR HX1000i ATX power supply; Dimensions: 180mm(L) x 150mm(W) x 86mm(H)."
+    },
+    {
+      "source_id": "corsair-rmx-2021_qsg_official",
+      "source_url": "https://assets.corsair.com/image/upload/corsairmedia/sys_master/productcontent/WW_RMx_Series_2021_QSG_Web_AD.pdf",
+      "source_text": "CORSAIR RM850x and RM1000x ATX power supplies; both list Dimensions: 160mm(L) x 150mm(W) x 86mm(H)."
+    },
+    {
+      "source_id": "corsair-rm750e-2023_official",
+      "source_url": "https://www.corsair.com/us/en/p/psu/cp-9020248-na/rme-series-rm750e-fully-modular-low-noise-atx-power-supply-cp-9020248-na",
+      "source_text": "RM750e Fully Modular Low-Noise ATX Power Supply; PSU Form Factor: ATX; Dimensions: 140 x 150 x 86 mm."
+    },
+    {
+      "source_id": "corsair-rm850e-2023_official",
+      "source_url": "https://www.corsair.com/eu/en/p/psu/cp-9020249-eu/rme-series-rm850e-fully-modular-low-noise-atx-power-supply-cp-9020249-eu",
+      "source_text": "RM850e Fully Modular Low-Noise ATX Power Supply; Dimensions: 140 x 150 x 86 mm."
+    },
+    {
+      "source_id": "gigabyte-ud850gm-pg5-rev20_official",
+      "source_url": "https://www.gigabyte.com/sg/Power-Supply/GP-UD850GM-PG5-rev-20/sp",
+      "source_text": "UD850GM PG5 rev. 2.0; Type: Intel Form Factor ATX 12V v3.0; Dimensions: 150 x 140 x 86 mm."
+    },
+    {
+      "source_id": "msi-mag-a750gl_official",
+      "source_url": "https://us.msi.com/Power-Supply/MAG-A750GL-PCIE5/Specification",
+      "source_text": "MAG A750GL PCIE5 ATX power supply; Dimensions (D x W x H): 140 x 150 x 86 mm."
+    },
+    {
+      "source_id": "msi-mag-a850gl_official",
+      "source_url": "https://us-store.msi.com/MAG-A850GL",
+      "source_text": "MAG A850GL PCIE5; Form Factor: ATX; Dimensions: 140 x 150 x 86 mm."
+    },
+    {
+      "source_id": "seasonic-focus-gx-atx30_official",
+      "source_url": "https://seasonic.com/atx3-focus-gx/",
+      "source_text": "FOCUS GX ATX 3.0 850W; Form Factor: ATX/EPS; Dimensions: 140 x 150 x 86 mm."
+    },
+    {
+      "source_id": "seasonic-vertex-gx1000_official",
+      "source_url": "https://seasonic.com/vertex-gx/",
+      "source_text": "VERTEX GX 1000W; Form Factor: ATX/EPS; Dimensions: 160 x 150 x 86 mm."
+    },
+    {
+      "source_id": "thermaltake-gf3-750_official",
+      "source_url": "https://latam.thermaltake.com/toughpower-gf3-750w-gold-tt-premium-edition.html",
+      "source_text": "Toughpower GF3 750W; Intel ATX 3.0; Dimension (W x H x D): 150 x 86 x 160 mm."
+    },
+    {
+      "source_id": "thermaltake-gf3-850_official",
+      "source_url": "https://latam.thermaltake.com/toughpower-gf3-850w-gold-tt-premium-edition.html",
+      "source_text": "Toughpower GF3 850W, P/N PS-TPD-0850FNFAGU-4; Intel ATX 3.0; Dimension (W x H x D): 150 x 86 x 160 mm."
+    }
+  ]
+}

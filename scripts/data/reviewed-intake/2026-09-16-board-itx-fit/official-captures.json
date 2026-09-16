@@ -1,0 +1,31 @@
+{
+  "captured_at": "2026-09-16T06:30:00+08:00",
+  "method": "官网页面正文读取并人工核对型号与字段；完整 HTML 直连返回 403，保存读取器取得的原文片段和网址",
+  "captures": [
+    {
+      "source_id": "gigabyte-b650-aorus-elite-ax-rev12_manual_official",
+      "source_url": "https://www.gigabyte.com/Motherboard/B650-AORUS-ELITE-AX-rev-12/sp",
+      "source_text": "B650 AORUS ELITE AX (rev. 1.2); Support for DDR5 8000(OC) / 7800(OC) / 7600(OC) / 7200(OC) / 7000(OC) / 6800(OC) / 6666(OC) / 6600(OC) / 6400(OC) / 6200(OC) / 6000(OC) / 5600(OC) / 5200 / 4800 / 4400 MT/s memory modules. Supported data rate depends on CPU and memory configuration; consult the memory support list."
+    },
+    {
+      "source_id": "gigabyte-b650-aorus-elite-ax-rev10-11_manual_official",
+      "source_url": "https://www.gigabyte.com/il/Motherboard/B650-AORUS-ELITE-AX-rev-10-11/sp",
+      "source_text": "B650 AORUS ELITE AX (rev. 1.0/1.1); Support for DDR5 8000(OC) / 7800(OC) / 7600(OC) / 7200(OC) / 7000(OC) / 6800(OC) / 6666(OC) / 6600(OC) / 6400(OC) / 6200(OC) / 6000(OC) / 5600(OC) / 5200 / 4800 / 4400 MT/s memory modules. Supported data rate depends on CPU and memory configuration; consult the memory support list."
+    },
+    {
+      "source_id": "msi-mag-a650bn_manual_official",
+      "source_url": "https://storage-asset.msi.com/datasheet/power-supply/vn/MAG-A650BN.pdf",
+      "source_text": "MAG A650BN; PSU Form Factor: ATX; Power Watt: 650W; Dimension: 150mm x 140mm x 86mm. The chassis installation length is 140mm."
+    },
+    {
+      "source_id": "coolermaster-nr200p_manual_official",
+      "source_url": "https://www.coolermaster.com/en-sg/products/masterbox-nr200p.html",
+      "source_text": "MasterBox NR200P; PSU Support: SFX, SFX-L; PSU Clearance: 130mm."
+    },
+    {
+      "source_id": "fractal-terra_manual_official",
+      "source_url": "https://www.fractal-design.com/products/cases/terra-series/terra/terra-silver/",
+      "source_text": "Terra; PSU compatibility: SFX, SFX-L; Maximum PSU length: 130 mm."
+    }
+  ]
+}

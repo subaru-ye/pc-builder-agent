@@ -16,7 +16,7 @@ export const ruleOrder = [
 export const ruleLabels: Record<string, string> = {
   SOCKET_MATCH: "处理器与主板接口", CHIPSET_SUPPORT: "芯片组支持", MEMORY_GENERATION: "内存代际",
   MEMORY_SPEED: "内存频率", GPU_CLEARANCE: "显卡长度空间", COOLER_CLEARANCE: "散热器空间",
-  PSU_HEADROOM: "电源余量", FORM_FACTOR_SUPPORT: "板型与机箱", M2_SLOT_CAPACITY: "M.2 插槽容量",
+  PSU_HEADROOM: "电源余量", FORM_FACTOR_SUPPORT: "主板与电源安装", M2_SLOT_CAPACITY: "M.2 插槽容量",
   GPU_POWER_CONNECTORS: "显卡供电接口", DISPLAY_OUTPUT: "显示输出", COOLER_THERMAL_CAPACITY: "散热能力",
 };
 

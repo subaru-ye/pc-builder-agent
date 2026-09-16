@@ -230,7 +230,7 @@ Next.js 不定义业务 Route Handler 或 Server Action。开发环境由 next.c
 ### 6.3 校验区
 
 - 摘要先展示总体状态和通过/警告/unknown/错误数量。
-- 12 条规则顺序与 schemas.AllRuleIDs 一致。
+- 12 条规则顺序与 schemas.AllRuleIDs 一致；“主板与电源安装”在纯 ITX 机箱中同时展示电源形态及限长结果。
 - 每条展示规则中文名、outcome、severity、detail;高级展开才显示 observed/missing_fields。
 - pass 不用大面积绿色,只使用小图标和文本。
 - unknown 与 warning 视觉不同:unknown 表示数据不足,warning 表示已知风险。

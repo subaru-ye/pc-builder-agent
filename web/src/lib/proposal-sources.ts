@@ -36,6 +36,7 @@ export const sourceFieldLabels: Record<string, string> = {
   memory_speed_max_mts: "支持内存频率", speed_mts: "内存频率", form_factor: "板型", chipset: "芯片组",
   gpu_length_max_mm: "显卡限长", length_mm: "长度", height_mm: "高度", cooler_height_max_mm: "散热器限高",
   wattage_w: "额定功率", m2_slots: "M.2 槽位", supported_sockets: "支持插槽", supported_form_factors: "支持板型",
+  supported_psu_form_factors: "支持电源形态", psu_length_max_mm: "电源限长",
   cooling_capacity_w: "散热能力", price_cny: "参考报价", model: "型号", brand: "品牌", capacity_gb: "容量",
 };
 

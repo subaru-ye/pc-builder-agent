@@ -55,6 +55,28 @@ func (f *FormFactor) UnmarshalJSON(b []byte) error {
 	return fmt.Errorf("非法板型枚举 %q(仅 atx|matx|itx)", s)
 }
 
+// PSUFormFactor 电源外形规格。ATX 12V 版本不在这里表达；这里只描述机箱安装尺寸。
+type PSUFormFactor string
+
+const (
+	PSUFormFactorATX  PSUFormFactor = "atx"
+	PSUFormFactorSFX  PSUFormFactor = "sfx"
+	PSUFormFactorSFXL PSUFormFactor = "sfx_l"
+)
+
+func (f *PSUFormFactor) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("psu form_factor 必须为字符串: %w", err)
+	}
+	switch PSUFormFactor(s) {
+	case PSUFormFactorATX, PSUFormFactorSFX, PSUFormFactorSFXL:
+		*f = PSUFormFactor(s)
+		return nil
+	}
+	return fmt.Errorf("非法电源形态枚举 %q(仅 atx|sfx|sfx_l)", s)
+}
+
 // SSDFormFactor SSD 形态。
 type SSDFormFactor string
 
@@ -161,14 +183,18 @@ type SSDSpec struct {
 type PSUSpec struct {
 	WattageW        *int             `json:"wattage_w"`
 	PowerConnectors []PowerConnector `json:"power_connectors"`
+	FormFactor      *PSUFormFactor   `json:"form_factor"`
+	LengthMM        *int             `json:"length_mm"`
 }
 
 // CaseSpec 机箱规格。
 type CaseSpec struct {
-	GPULengthMaxMM       *int         `json:"gpu_length_max_mm"`
-	CoolerHeightMaxMM    *int         `json:"cooler_height_max_mm"`
-	SupportedFormFactors []FormFactor `json:"supported_form_factors"`
-	RadiatorSizesMM      []int        `json:"radiator_sizes_mm"`
+	GPULengthMaxMM          *int            `json:"gpu_length_max_mm"`
+	CoolerHeightMaxMM       *int            `json:"cooler_height_max_mm"`
+	SupportedFormFactors    []FormFactor    `json:"supported_form_factors"`
+	RadiatorSizesMM         []int           `json:"radiator_sizes_mm"`
+	SupportedPSUFormFactors []PSUFormFactor `json:"supported_psu_form_factors"`
+	PSULengthMaxMM          *int            `json:"psu_length_max_mm"`
 }
 
 // CoolerSpec 散热器规格。
@@ -318,7 +344,10 @@ func DecodePSUSpec(data []byte) (PSUSpec, error) {
 	if err := decodeStrict(data, &s); err != nil {
 		return PSUSpec{}, fmt.Errorf("psu specs: %w", err)
 	}
-	if err := requirePositive("wattage_w", s.WattageW); err != nil {
+	if err := firstErr(
+		requirePositive("wattage_w", s.WattageW),
+		requirePositive("length_mm", s.LengthMM),
+	); err != nil {
 		return PSUSpec{}, fmt.Errorf("psu specs: %w", err)
 	}
 	return s, nil
@@ -338,6 +367,7 @@ func DecodeCaseSpec(data []byte) (CaseSpec, error) {
 	if err := firstErr(
 		requirePositive("gpu_length_max_mm", s.GPULengthMaxMM),
 		requirePositive("cooler_height_max_mm", s.CoolerHeightMaxMM),
+		requirePositive("psu_length_max_mm", s.PSULengthMaxMM),
 	); err != nil {
 		return CaseSpec{}, fmt.Errorf("case specs: %w", err)
 	}

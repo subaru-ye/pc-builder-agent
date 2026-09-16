@@ -66,6 +66,24 @@ class TestBuildReport:
         mb = report["per_category"]["motherboard"]
         assert mb["warning_field_null_skus"]["memory_speed_max_mts"] == []
 
+    def test_仅纯itx机箱统计电源安装字段(self, sample_parts):
+        parts = [dict(p, specs=dict(p["specs"])) for p in sample_parts]
+        case = next(p for p in parts if p["category"] == "case")
+        case["specs"]["supported_psu_form_factors"] = None
+        case["specs"]["psu_length_max_mm"] = None
+
+        case["specs"]["supported_form_factors"] = ["atx", "matx", "itx"]
+        report = build_report(parts)
+        warning = report["per_category"]["case"]["warning_field_null_skus"]
+        assert warning["supported_psu_form_factors"] == []
+        assert warning["psu_length_max_mm"] == []
+
+        case["specs"]["supported_form_factors"] = ["itx"]
+        report = build_report(parts)
+        warning = report["per_category"]["case"]["warning_field_null_skus"]
+        assert warning["supported_psu_form_factors"] == [case["sku"]]
+        assert warning["psu_length_max_mm"] == [case["sku"]]
+
     def test_错误级字段缺口被点名(self, sample_parts):
         broken = [dict(p, specs=dict(p["specs"])) for p in sample_parts]
         broken[0]["specs"]["socket"] = None  # cpu-r5-7600

@@ -72,7 +72,11 @@ func TestDecodeSpecErrors(t *testing.T) {
 		{"内存频率非正", func() error { _, err := DecodeMemorySpec([]byte(`{"speed_mts": 0}`)); return err }},
 		{"ssd 非法形态", func() error { _, err := DecodeSSDSpec([]byte(`{"form_factor": "u2"}`)); return err }},
 		{"psu 功率非正", func() error { _, err := DecodePSUSpec([]byte(`{"wattage_w": -650}`)); return err }},
+		{"psu 非法形态", func() error { _, err := DecodePSUSpec([]byte(`{"form_factor": "tfx"}`)); return err }},
+		{"psu 长度非正", func() error { _, err := DecodePSUSpec([]byte(`{"length_mm": 0}`)); return err }},
 		{"机箱冷排尺寸非正", func() error { _, err := DecodeCaseSpec([]byte(`{"radiator_sizes_mm": [0]}`)); return err }},
+		{"机箱电源形态非法", func() error { _, err := DecodeCaseSpec([]byte(`{"supported_psu_form_factors": ["tfx"]}`)); return err }},
+		{"机箱电源限长非正", func() error { _, err := DecodeCaseSpec([]byte(`{"psu_length_max_mm": 0}`)); return err }},
 		{"散热器非法类型", func() error { _, err := DecodeCoolerSpec([]byte(`{"type": "passive"}`)); return err }},
 		{"散热器解热非正", func() error { _, err := DecodeCoolerSpec([]byte(`{"cooling_capacity_w": 0}`)); return err }},
 	}

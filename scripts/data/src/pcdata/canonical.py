@@ -15,6 +15,7 @@ __all__ = [
     "SpecError",
     "CATEGORIES",
     "FORM_FACTORS",
+    "PSU_FORM_FACTORS",
     "SSD_FORM_FACTORS",
     "COOLER_TYPES",
     "POWER_CONNECTORS",
@@ -32,6 +33,7 @@ class SpecError(ValueError):
 CATEGORIES = ("cpu", "gpu", "motherboard", "memory", "ssd", "psu", "case", "cooler")
 
 FORM_FACTORS = ("atx", "matx", "itx")
+PSU_FORM_FACTORS = ("atx", "sfx", "sfx_l")
 SSD_FORM_FACTORS = ("m2", "sata_2_5")
 COOLER_TYPES = ("air", "aio")
 # 12VHPWR / 12V-2×6 由适配器归一为 pcie_16pin,本层不做别名兼容。
@@ -153,6 +155,18 @@ SPEC_FIELDS: dict[str, dict[str, Validator]] = {
     },
 }
 
+# schema_version=1 的历史发布没有这些字段。新发布可增加，读取端仍把缺失视为未知。
+OPTIONAL_SPEC_FIELDS: dict[str, dict[str, Validator]] = {
+    "psu": {
+        "form_factor": _enum(PSU_FORM_FACTORS),
+        "length_mm": _scalar_pos_int,
+    },
+    "case": {
+        "supported_psu_form_factors": _list_of(_enum(PSU_FORM_FACTORS)),
+        "psu_length_max_mm": _scalar_pos_int,
+    },
+}
+
 
 def validate_specs(category: str, specs: Any) -> None:
     """校验单个零件的 canonical specs;非法时抛 SpecError。"""
@@ -161,7 +175,8 @@ def validate_specs(category: str, specs: Any) -> None:
     if not isinstance(specs, dict):
         raise SpecError(f"specs 必须为对象,得到 {type(specs).__name__}")
     fields = SPEC_FIELDS[category]
-    unknown = sorted(set(specs) - set(fields))
+    optional = OPTIONAL_SPEC_FIELDS.get(category, {})
+    unknown = sorted(set(specs) - set(fields) - set(optional))
     if unknown:
         raise SpecError(f"{category} specs 含未知字段: {', '.join(unknown)}")
     missing = sorted(set(fields) - set(specs))
@@ -171,6 +186,9 @@ def validate_specs(category: str, specs: Any) -> None:
         )
     for name, check in fields.items():
         check(name, specs[name])
+    for name, check in optional.items():
+        if name in specs:
+            check(name, specs[name])
 
 
 # parts.jsonl 单条记录的固定键集(与 parts 表列一致,时间戳由 DB 生成)。

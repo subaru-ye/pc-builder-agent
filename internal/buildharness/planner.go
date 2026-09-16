@@ -528,8 +528,8 @@ var specFields = map[schemas.Category][]string{
 	schemas.CategoryMotherboard: {"socket", "chipset", "memory_generation", "memory_speed_max_mts", "form_factor", "m2_slots"},
 	schemas.CategoryMemory:      {"generation", "speed_mts"},
 	schemas.CategorySSD:         {"form_factor"},
-	schemas.CategoryPSU:         {"wattage_w", "power_connectors"},
-	schemas.CategoryCase:        {"gpu_length_max_mm", "cooler_height_max_mm", "supported_form_factors", "radiator_sizes_mm"},
+	schemas.CategoryPSU:         {"wattage_w", "power_connectors", "form_factor", "length_mm"},
+	schemas.CategoryCase:        {"gpu_length_max_mm", "cooler_height_max_mm", "supported_form_factors", "radiator_sizes_mm", "supported_psu_form_factors", "psu_length_max_mm"},
 	schemas.CategoryCooler:      {"type", "height_mm", "radiator_size_mm", "cooling_capacity_w"},
 }
 

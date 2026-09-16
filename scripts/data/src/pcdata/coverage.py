@@ -55,8 +55,8 @@ WARNING_ONLY_FIELDS: dict[str, tuple[str, ...]] = {
     "motherboard": ("memory_speed_max_mts",),
     "memory": ("speed_mts",),
     "ssd": (),
-    "psu": (),
-    "case": (),
+    "psu": ("form_factor", "length_mm"),
+    "case": ("supported_psu_form_factors", "psu_length_max_mm"),
     "cooler": ("cooling_capacity_w",),
 }
 
@@ -119,6 +119,15 @@ def _required_fields(record: dict[str, Any]) -> tuple[str, ...]:
     return fields
 
 
+def _warning_fields(record: dict[str, Any]) -> tuple[str, ...]:
+    """返回当前规则实际会读取的 warning 字段。"""
+    fields = WARNING_ONLY_FIELDS[record["category"]]
+    if record["category"] == "case":
+        # 当前电源安装检查仅对纯 ITX 机箱启用；混合尺寸机箱还缺少电源仓/转接架语义。
+        return fields if record["specs"]["supported_form_factors"] == ["itx"] else ()
+    return fields
+
+
 def build_report(
     parts: list[dict[str, Any]], priced_skus: set[str] | None = None
 ) -> dict[str, Any]:
@@ -135,8 +144,8 @@ def build_report(
             for field in _required_fields(r):
                 if r["specs"][field] is None:
                     missing.setdefault(field, []).append(r["sku"])
-            for field in WARNING_ONLY_FIELDS[category]:
-                if r["specs"][field] is None:
+            for field in _warning_fields(r):
+                if r["specs"].get(field) is None:
                     warning_nulls[field].append(r["sku"])
         count_ok = len(records) >= EXPECTED_PER_CATEGORY
         fields_ok = not missing

@@ -1,0 +1,15 @@
+{
+  "suite_sha256": "ecc94bf12ba2d4b13c0b240860a92365710284e692ce30a8744b164da2d1d7c6",
+  "source_suite_sha256": "066b752338d24360f75c26b18a14613cbb775c40f4b52212f6c4538518bdc876",
+  "thermal_source_suite_sha256": "1960b826753deb37d1295e24dcb531a90a1eeef71c190076a690f6d018c2e331",
+  "max_model_requests": 60,
+  "external_search_requests": 0,
+  "external_page_requests": 0,
+  "embedding_requests": 0,
+  "limitations": [
+    "Smoke purposes only: single attempt per scenario, no representative success-rate estimate.",
+    "Max model requests is a shared safety ceiling, not a quota; per-scenario one attempt only.",
+    "SMOKE-THERMAL-UNKNOWN is derived from the frozen L1-006 recording with builder_oracle stripped for live use.",
+    "Billing amounts are not observable; recorded token usage is not a cost."
+  ]
+}

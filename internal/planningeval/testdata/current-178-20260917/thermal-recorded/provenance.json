@@ -1,0 +1,18 @@
+{
+  "suite_sha256": "d933838d339ba0b79c5bfcf201cfed96ad87c0c1badd107135127693c371c656",
+  "database_snapshot_sha256": "ceb4d2d9b4bec9898d763ccdc635061a25ec90a6065820bf5b8b5ceaff3a4c63",
+  "generator_sha256": "f3d989d728c95f2a2c4bef2319b4faba9b40f78490b27d546fa31c91391b1103",
+  "source_files": {
+    "artifacts/planning-local-reference-recorded-20260915-r1/suite.json": "4c750923b75a75941c0238dd9f8ceddc59ce37aba384a8bd293b686eb05f7225"
+  },
+  "source_commit": "5f12d548b38d384423b4a7982919fe29a2c6e122",
+  "snapshot_id": 11,
+  "active_parts": 126,
+  "limitations": [
+    "Offline authored decisions or frozen real responses, not a fresh model quality score.",
+    "Current-catalog variants are separate from original historical results.",
+    "Existing compatibility rules do not cover all physical fit, BIOS, noise or performance evidence.",
+    "RX 6600/7600 and 5600G/5700G intake is deferred; see docs/data/数据获取与发布规则.md §5.4.",
+    "10 coolers still have unknown cooling_capacity_w after buyer recheck; scenarios keep unknown honestly."
+  ]
+}

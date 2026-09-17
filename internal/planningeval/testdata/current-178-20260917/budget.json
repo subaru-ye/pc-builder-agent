@@ -1,0 +1,11 @@
+{
+  "model_requests_limit": 12,
+  "model_requests_used": 0,
+  "external_search_limit": 3,
+  "external_search_used": 0,
+  "page_read_limit": 6,
+  "page_read_used": 0,
+  "embedding_requests": 0,
+  "buyer_requests": 0,
+  "policy": "Only explicit registered live plan may spend; failures count; stop at cumulative limit without new batches."
+}

@@ -1,0 +1,190 @@
+{
+  "active_parts": 126,
+  "retired_parts": 52,
+  "snapshot_id": 11,
+  "snapshot_date": "2026-09-17",
+  "parts_release": "4dc0da59-f63b-5adc-a3b0-cd30394b7bd9",
+  "categories": {
+    "case": 13,
+    "cooler": 13,
+    "cpu": 28,
+    "gpu": 13,
+    "motherboard": 16,
+    "memory": 14,
+    "psu": 16,
+    "ssd": 13
+  },
+  "compatibility_spec_gaps": [
+    {
+      "sku": "case-asus-prime-ap201",
+      "category": "case",
+      "missing": [
+        "supported_psu_form_factors",
+        "psu_length_max_mm"
+      ]
+    },
+    {
+      "sku": "case-bequiet-shadow-base-800-fx",
+      "category": "case",
+      "missing": [
+        "supported_psu_form_factors",
+        "psu_length_max_mm"
+      ]
+    },
+    {
+      "sku": "case-coolermaster-td500-mesh-v2",
+      "category": "case",
+      "missing": [
+        "supported_psu_form_factors",
+        "psu_length_max_mm"
+      ]
+    },
+    {
+      "sku": "case-corsair-5000d-airflow",
+      "category": "case",
+      "missing": [
+        "supported_psu_form_factors",
+        "psu_length_max_mm"
+      ]
+    },
+    {
+      "sku": "case-fractal-north",
+      "category": "case",
+      "missing": [
+        "supported_psu_form_factors",
+        "psu_length_max_mm"
+      ]
+    },
+    {
+      "sku": "case-fractal-pop-air",
+      "category": "case",
+      "missing": [
+        "supported_psu_form_factors",
+        "psu_length_max_mm"
+      ]
+    },
+    {
+      "sku": "case-fractal-torrent",
+      "category": "case",
+      "missing": [
+        "supported_psu_form_factors",
+        "psu_length_max_mm"
+      ]
+    },
+    {
+      "sku": "case-lianli-a3-matx",
+      "category": "case",
+      "missing": [
+        "supported_psu_form_factors",
+        "psu_length_max_mm"
+      ]
+    },
+    {
+      "sku": "case-lianli-lancool-207",
+      "category": "case",
+      "missing": [
+        "supported_psu_form_factors",
+        "psu_length_max_mm"
+      ]
+    },
+    {
+      "sku": "case-lianli-lancool-216",
+      "category": "case",
+      "missing": [
+        "supported_psu_form_factors",
+        "psu_length_max_mm"
+      ]
+    },
+    {
+      "sku": "case-lianli-o11-dynamic-evo",
+      "category": "case",
+      "missing": [
+        "supported_psu_form_factors",
+        "psu_length_max_mm"
+      ]
+    },
+    {
+      "sku": "cooler-arctic-lf3-240",
+      "category": "cooler",
+      "missing": [
+        "cooling_capacity_w"
+      ]
+    },
+    {
+      "sku": "cooler-arctic-lf3-360",
+      "category": "cooler",
+      "missing": [
+        "cooling_capacity_w"
+      ]
+    },
+    {
+      "sku": "cooler-coolermaster-hyper212-black",
+      "category": "cooler",
+      "missing": [
+        "cooling_capacity_w"
+      ]
+    },
+    {
+      "sku": "cooler-deepcool-assassin-iv",
+      "category": "cooler",
+      "missing": [
+        "cooling_capacity_w"
+      ]
+    },
+    {
+      "sku": "cooler-deepcool-lt520",
+      "category": "cooler",
+      "missing": [
+        "cooling_capacity_w"
+      ]
+    },
+    {
+      "sku": "cooler-noctua-nh-d15",
+      "category": "cooler",
+      "missing": [
+        "cooling_capacity_w"
+      ]
+    },
+    {
+      "sku": "cooler-noctua-nh-u12s",
+      "category": "cooler",
+      "missing": [
+        "cooling_capacity_w"
+      ]
+    },
+    {
+      "sku": "cooler-thermalright-frozen-prism-240",
+      "category": "cooler",
+      "missing": [
+        "cooling_capacity_w"
+      ]
+    },
+    {
+      "sku": "cooler-thermalright-pa120se",
+      "category": "cooler",
+      "missing": [
+        "cooling_capacity_w"
+      ]
+    },
+    {
+      "sku": "cooler-thermalright-ps120se",
+      "category": "cooler",
+      "missing": [
+        "cooling_capacity_w"
+      ]
+    }
+  ],
+  "unpriced_active_parts": 0,
+  "price_lower_bound": {
+    "with_gpu": "5627.5",
+    "without_gpu": "3060.3",
+    "meaning": "Necessary lower bound only; ignores compatibility and unknown specs, not a selectable build."
+  },
+  "limits": [
+    "No noise or FPS measurement dataset.",
+    "Current PSU schema has no dimensions/form factor, so ITX electrical-rule pass does not establish enclosure fit.",
+    "Buyer observation dates remain unchanged; prices do not establish current stock.",
+    "RX 6600/7600 and 5600G/5700G intake is deferred (docs/data/数据获取与发布规则.md §5.4).",
+    "10 coolers keep cooling_capacity_w unknown after recheck; unknowns stay honest."
+  ]
+}

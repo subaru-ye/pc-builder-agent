@@ -1,0 +1,571 @@
+{
+  "version": "current-178-20260917",
+  "default_suite": "internal/planningeval/testdata/current-178-20260917/mechanisms/suite.json",
+  "suites": [
+    {
+      "id": "mechanisms",
+      "path": "internal/planningeval/testdata/current-178-20260917/mechanisms/suite.json",
+      "sha256": "3aa8294eda86830a17613e50c563924bd247fd9a8aad306fa095b4f36a8518ae",
+      "cases": [
+        {
+          "id": "C123-001",
+          "title": "首次确认交付、直接升级CPU、降预算保留有效需求与旧版本",
+          "source": "当前快照11目录（126件active）；明确人工协议轨迹，不是新真实模型回答。"
+        },
+        {
+          "id": "C123-002",
+          "title": "旧版含四件退库配件，读取历史并更换为当前有价候选",
+          "source": "当前快照11目录（126件active）；明确人工协议轨迹，不是新真实模型回答。"
+        },
+        {
+          "id": "C123-003",
+          "title": "准确已有退库内存保留需求，允许明确改成新购内存后继续",
+          "source": "当前快照11目录（126件active）；明确人工协议轨迹，不是新真实模型回答。"
+        },
+        {
+          "id": "C123-004",
+          "title": "必须静音无测量证据则保留候选，改为软偏好后继续",
+          "source": "当前快照11目录（126件active）；明确人工协议轨迹，不是新真实模型回答。"
+        },
+        {
+          "id": "C123-005",
+          "title": "ITX机箱电源形态规则：ATX电源不兼容，换SFX电源后通过",
+          "source": "当前快照11目录（126件active）；明确人工协议轨迹，不是新真实模型回答。"
+        },
+        {
+          "id": "C123-006",
+          "title": "4000元办公核显方案（无独显、CPU自带核显）及3000元预算不足时的续聊",
+          "source": "当前快照11目录（126件active）；明确人工协议轨迹，不是新真实模型回答。"
+        },
+        {
+          "id": "C123-007",
+          "title": "散热器解热容量未知保留方案，换有容量数据备选后重新校验",
+          "source": "当前快照11目录（126件active）；明确人工协议轨迹，不是新真实模型回答。"
+        },
+        {
+          "id": "B2-001",
+          "title": "未知预算、未预设工作负载与多条独立条件进入规划并可分别撤销",
+          "source": "用户反馈的自由需求机制；人工多轮oracle，目录为完整冻结172件"
+        },
+        {
+          "id": "B2-002",
+          "title": "已有件简称先检索方向，再只澄清影响升级的主板细节",
+          "source": "用户CPU升级反馈的变体；人工oracle，不将简称伪装为已核对型号"
+        },
+        {
+          "id": "B2-003",
+          "title": "语义检索和正文读取不可用后保留本地检索进展并继续",
+          "source": "人工故障注入：无Embedder、未登记网页请求由离线transport拒绝"
+        }
+      ],
+      "steps": 41,
+      "active_parts": 126,
+      "mode": "authored_oracle",
+      "is_live_score": false
+    },
+    {
+      "id": "screening-recorded",
+      "path": "internal/planningeval/testdata/current-178-20260917/screening-recorded/suite.json",
+      "sha256": "3e8a1bfa380911be129ed9ea3252e363904b40bc3c0d02d2020b1548f4af6dbc",
+      "cases": [
+        {
+          "id": "L3-101",
+          "title": "陷阱:噪音偏好不得推断品牌",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L3-102",
+          "title": "陷阱:预算缺失应追问,不编造",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L3-103",
+          "title": "陷阱:游戏缺分辨率应追问或明示推断,不静默编造",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L3-104",
+          "title": "对照:正常需求应结构化(8000 2K 黑神话)",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L3-105",
+          "title": "显式品牌应照抄(A 卡 + AMD CPU)",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L4-211",
+          "title": "初筛追问已有件具体型号，不重复询问已知信息",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L4-212",
+          "title": "初筛追问已有件的预算口径，不重复询问已知信息",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L4-213",
+          "title": "游戏用途和分辨率已知，只追问已有显卡型号",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L4-214",
+          "title": "已有件型号和采购口径已知，只追问预算金额",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L5-301",
+          "title": "补分辨率前修改预算，以新金额为准",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L5-302",
+          "title": "补充缺失字段后不再追问可选游戏名",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L5-303",
+          "title": "显卡价格不是整机预算",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L5-304",
+          "title": "已有件型号和采购口径分轮补充",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L5-305",
+          "title": "明确更正采购预算口径",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L5-306",
+          "title": "中文金额和简短补充不丢用途",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L5-307",
+          "title": "品牌偏好改变后其他条件保持",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L5-308",
+          "title": "更正已有CPU型号，不能保留旧型号",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L5-309",
+          "title": "办公改游戏后仅补问分辨率",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "L5-310",
+          "title": "用户撤回预算后应重新询问",
+          "source": "Frozen v1.5 case; unchanged user messages, explicitly migrated state assertions"
+        },
+        {
+          "id": "R-REF-01",
+          "title": "给同事记录未购买内存报价，改总预算后仍保留参考",
+          "source": "New independent literal-retention regression; not a historical score."
+        }
+      ],
+      "steps": 54,
+      "active_parts": 126,
+      "mode": "recorded_responses",
+      "is_live_score": false
+    },
+    {
+      "id": "thermal-recorded",
+      "path": "internal/planningeval/testdata/current-178-20260917/thermal-recorded/suite.json",
+      "sha256": "d933838d339ba0b79c5bfcf201cfed96ad87c0c1badd107135127693c371c656",
+      "cases": [
+        {
+          "id": "L1-006",
+          "title": "25K 4K 高刷电竞,预算向 GPU 倾斜",
+          "source": "Frozen v1.5 typed Builder input via product edit/confirm; original change and base retained"
+        }
+      ],
+      "steps": 3,
+      "active_parts": 126,
+      "mode": "recorded_responses",
+      "is_live_score": false
+    },
+    {
+      "id": "cpu-recorded",
+      "path": "internal/planningeval/testdata/current-178-20260917/cpu-recorded/suite.json",
+      "sha256": "1da53a87c8afc0a602089e85121c5842bc1826aa8a85d7544c744c01f71b9aeb",
+      "cases": [
+        "LIVE123-CPU"
+      ],
+      "active_parts": 126,
+      "mode": "recorded_responses",
+      "is_live_score": false,
+      "source": "current-123-20260915-r2/live-recording; unchanged first-case answers and expectations"
+    }
+  ],
+  "historical_v15": {
+    "cases": 50,
+    "manifest_sha256": "1d4c104712b98a51e7b4d10e4b82b7b170f90429bb86b9a0c3ab114dd84b7422",
+    "mappings": [
+      {
+        "id": "L1-001",
+        "original_file": "L1-001.json",
+        "original_sha256": "b6daa7b81dcb146c2839b2813e2713836aa94aed8b07ed5a40f0422e1fd1f2a6",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L1-002",
+        "original_file": "L1-002.json",
+        "original_sha256": "5cdf46c0a958997e89bbc52aa2c3abdab1e920613975495aa7f836e3e6d69f4d",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L1-003",
+        "original_file": "L1-003.json",
+        "original_sha256": "8e1bd4985233309961178614a66a5d9ab4dca8a8909b136d0ed2de637595bf31",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L1-005",
+        "original_file": "L1-005.json",
+        "original_sha256": "4dc189d2dbb85c66fb7c268260faf0d54ecd7e085f2987c774f9c1ed7bf67b35",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L1-006",
+        "original_file": "L1-006.json",
+        "original_sha256": "da418f5118c23b841b2d1476138f039d2247ceaa51b4301876818c9cfb6be7ba",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L1-007",
+        "original_file": "L1-007.json",
+        "original_sha256": "231c3d7ddc7621cfe3a37ac1cb0b4470fc8a4812b5126dfff0061bcb0a824f1d",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L1-008",
+        "original_file": "L1-008.json",
+        "original_sha256": "f400c4e4ce5a3afb06d6d9be459368fa8f886716d4c83fd074d4e9c2887f6136",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L1-009",
+        "original_file": "L1-009.json",
+        "original_sha256": "237cf234fdb1f859f6ca149e793888bddee8eab63097dffc7df52cc683e30f27",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L1-012",
+        "original_file": "L1-012.json",
+        "original_sha256": "42cf692ff48cfa685d77bb24b7c4091c65eaa7cd6969f0d58ce563a84a32893b",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L1-013",
+        "original_file": "L1-013.json",
+        "original_sha256": "3cdf8c0ca41a4dc153decddb9d8c999fb9e63e08d74f3e8c7dd53d99e639dc02",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L1-014",
+        "original_file": "L1-014.json",
+        "original_sha256": "8842e45d69790d4f7bf93f04f67c308432428233edfa703245750d26887d22f7",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L1-015",
+        "original_file": "L1-015.json",
+        "original_sha256": "28b546f76633ee5841bec6854ac9f2dd0d1163564b9b43160f6f6b0a217fb6ce",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L2-101",
+        "original_file": "L2-101.json",
+        "original_sha256": "63a2c49ccdff78f2e7e03eb2397678d107531015292c2a10b7aff8816511aa94",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L2-102",
+        "original_file": "L2-102.json",
+        "original_sha256": "67b37115951b4e58e140226c17633aaf506db4bfba986100e20347b0df3c3d84",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L2-103",
+        "original_file": "L2-103.json",
+        "original_sha256": "9b1061c982f35bdb5fac04ee8028e970e6bb22ed6fb0ee775b9e537c9b6c790d",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L2-104",
+        "original_file": "L2-104.json",
+        "original_sha256": "f4cd9e37a507ac96a55cc35bd66c965bec1348b53685ee7ee8edea5feb176133",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L2-105",
+        "original_file": "L2-105.json",
+        "original_sha256": "e1f0b27d69a5c1305e89eab75b475cca9fe148386955cd0fee0e8f6030324314",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L2-106",
+        "original_file": "L2-106.json",
+        "original_sha256": "bc5d05a179c948e26be986973216549c2b450080cf0c2f556c898693991ebbc7",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L2-107",
+        "original_file": "L2-107.json",
+        "original_sha256": "2041416f7484c15645c0e86c3bd950babec14687e60163ea33a10b1353bca19d",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L2-108",
+        "original_file": "L2-108.json",
+        "original_sha256": "9b568467b92e7b40a50d87d978fdfdeeef04b7304e1306a5e5854d6c4f7973bb",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L2-109",
+        "original_file": "L2-109.json",
+        "original_sha256": "51e3cacb1570575a937e0c416c92f4643a1a892256e6bc65a6a275b10b64b1e8",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L2-110",
+        "original_file": "L2-110.json",
+        "original_sha256": "264182f99eb8886e5949a636a5288bab27fd400fea234de59e221459ad557862",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L3-101",
+        "original_file": "L3-101.json",
+        "original_sha256": "05b8a2a1f1f889fd152862284153c9077c44fc120eb6a61858555c06367e220a",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L3-102",
+        "original_file": "L3-102.json",
+        "original_sha256": "052ba6e396bc622f565885443c4afc4517a33e3ca2e5e3a0b9690c88f9c78e2b",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L3-103",
+        "original_file": "L3-103.json",
+        "original_sha256": "cc343567320f16a04cce9d673f9d8ae1cad399c894613f976945a8be6135ce3b",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L3-104",
+        "original_file": "L3-104.json",
+        "original_sha256": "3a4cf626aeb76eb0877db90f9f9e946dd770af46c1a302415728fef83a99280c",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L3-105",
+        "original_file": "L3-105.json",
+        "original_sha256": "147d53d9487305a62357d487bb6027f4f73d8cc146c6dc8410200d5a44ae56ce",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L4-201",
+        "original_file": "L4-201.json",
+        "original_sha256": "21be6bb40e87bb342c370dbb0ba372ae5625cbfac8b8daf9b8c87ce533d560b0",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L4-202",
+        "original_file": "L4-202.json",
+        "original_sha256": "2baabb8af8cdd286495a0f159de7108bd4b019f4eb3892822bcbd573dbd1921e",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L4-203",
+        "original_file": "L4-203.json",
+        "original_sha256": "fc518123881a675ea5cd3ccb2092788f73ebd30ad3a18d398ed8a5257f1a74fd",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L4-204",
+        "original_file": "L4-204.json",
+        "original_sha256": "1d0a030ea3331d516c60b50655ad54748106d19c462d10ffa3c4301ec5b142d9",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L4-205",
+        "original_file": "L4-205.json",
+        "original_sha256": "b5095f6283af83760b2464b39dd70455d938b9ab285095431ef428a7e1959401",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L4-206",
+        "original_file": "L4-206.json",
+        "original_sha256": "fa50939e8465efb55891a3a5546f61a6012ab5eac4176adf19e646632ddaf28a",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L4-209",
+        "original_file": "L4-209.json",
+        "original_sha256": "55020b51a90b1c13ff8f52338aeacb85b138db2c02756f99c02b23be7354eb35",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L4-210",
+        "original_file": "L4-210.json",
+        "original_sha256": "bc38c38b6267b707d7a1bd918eea23e4a6888756e860bac8bfd5b743e65ce876",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L4-211",
+        "original_file": "L4-211.json",
+        "original_sha256": "9059a7ca04ebd0f5d637bb5a8f226905612bbd24ed95f87c19a1f9ab26a7ccec",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L4-212",
+        "original_file": "L4-212.json",
+        "original_sha256": "fb24179fcafd5babcb7f7b6c914b751b6a2ec82d9a36a1852f5cbf4526a5e5f1",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L4-213",
+        "original_file": "L4-213.json",
+        "original_sha256": "7be52e53eaafdd003dc8bd2027f70d06bb4d28d19f51019f62b2a136d7c46f6e",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L4-214",
+        "original_file": "L4-214.json",
+        "original_sha256": "f82b490d41682d2ec4c21979ec94dfa98a7252b5663669d10f3ca11d1c8bfdce",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L4-215",
+        "original_file": "L4-215.json",
+        "original_sha256": "7c39f86a6aebe6f35ef162a145441508892de65edbd1bb48c377c632072fb80b",
+        "migration": "internal/planningeval/testdata/legacy-builder-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L5-301",
+        "original_file": "L5-301.json",
+        "original_sha256": "48b31497e650a20f0271002f07ac9031ec78211d70421002f4276057f2148032",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L5-302",
+        "original_file": "L5-302.json",
+        "original_sha256": "8a6c21f82b850dbc4fe34d01dfbcb7e70427b3534b1ae4fe525228ae6a3416b1",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L5-303",
+        "original_file": "L5-303.json",
+        "original_sha256": "bd05165a10380a9d6f25695e329f6b0ef23d47765881996426e296b046a40c69",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L5-304",
+        "original_file": "L5-304.json",
+        "original_sha256": "fb8d4a08b02bdd24838b15befd46dd8b93668be1235eea7ce8634ea0d5d6dc26",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L5-305",
+        "original_file": "L5-305.json",
+        "original_sha256": "5b4fbc4e53fc1f460afbce8a85cdd0e8a19364cb6efe8a642d90a69e53bf8cee",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L5-306",
+        "original_file": "L5-306.json",
+        "original_sha256": "93854cc001814940de41bd4100e2ca8b95111fb1b46e3d3584dea694ad2d844d",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L5-307",
+        "original_file": "L5-307.json",
+        "original_sha256": "37173122cd0f137b46d04a10feb2d2e0a8e2e85ee81e357acd2bcdef97f17367",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L5-308",
+        "original_file": "L5-308.json",
+        "original_sha256": "b198cd78b01d80818651a70a276f0a05c152b3c146fd39903dbb1c6457843f8c",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L5-309",
+        "original_file": "L5-309.json",
+        "original_sha256": "33465f1e248b8d25d0ebb2e40f8296b85c0ed528f8b710adfa3a7d1ecea6fc11",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      },
+      {
+        "id": "L5-310",
+        "original_file": "L5-310.json",
+        "original_sha256": "ae6d384f7620db7b1c0b6f0413d74ae6e89a0cee112d2bb91f72768dc07f741b",
+        "migration": "internal/planningeval/testdata/legacy-screening-v1.5-20260915/suite.json",
+        "status": "Historical input migrated; not a full live re-evaluation on the current 126-part catalog."
+      }
+    ]
+  },
+  "fixed_catalog_regressions": [
+    "internal/planningeval/testdata/proposal-review-20260915/suite.json"
+  ],
+  "supplement_regressions": [
+    "internal/planning/supplement_test.go",
+    "internal/producthttp/planning_supplement_test.go",
+    "web/e2e-requirements/supplement.spec.ts"
+  ],
+  "no_combined_score": "Overlapping historical, authored and recorded scenarios retain their own denominators."
+}

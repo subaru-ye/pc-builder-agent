@@ -13,7 +13,7 @@ const newBuildOnlyInstruction = `你是装机需求提取助手。程序已确�
 - use_case：对象，type 为 general（日常办公、上网、影音）、gaming（游戏）、productivity（专业剪辑、渲染、建模等）。普通办公不能转成 productivity。resolution 可为1080p/2K/4K，仅用户明确提供才填；游戏必须提供分辨率，缺少则省略 resolution 交程序追问。可选 titles 和 fps_target 未给就省略。
 - noise_pref：silent/normal/any；安静对应 silent。size_pref：atx/matx/itx/any。
 - brand_pref：对象，cpu 为 any/intel/amd，gpu 为 any/nvidia/amd。只填明确的购买偏好，未给用 any；已有件型号中的品牌不等于购买偏好。
-- existing_parts：确实已有的主机配件品类数组。owned_parts：已提供准确型号的数组，每项含 category、model、quantity。品类为 cpu/gpu/motherboard/memory/ssd/psu/case/cooler；显示器不在其中。仅看过报价或想买不等于已有。
+- existing_parts：确实已有的主机配件品类数组。owned_parts：已提供准确型号的数组，每项含 category、model、quantity。品类为 cpu/gpu/motherboard/memory/ssd/psu/case/cooler；显示器不在其中。仅看过报价、想买或指定要买的型号都不等于已有；用户指定要买的型号（如“电源指定X”）是选型要求，写入notes，不进入existing_parts或owned_parts。
 - 型号按用户原话记录，“AMD Ryzen 5 7600”“Intel Core i5-12400F”就是完整型号，不猜 SKU 或额外后缀。只给品类时保留 existing_parts，对应 owned_parts 项省略；型号被更正时替换旧型号，不累加第二件。
 - budget_basis：有已有件时根据明确费用说明填写 new_purchase（只算新增购买费用）或 full_build（包含已有件价值的整机参考总价）。没说就省略；其他件需要新买并不是费用说明；用户更正口径时采用新口径。
 - budget_flex 可省略，默认0.1，只有用户明确预算弹性时才设置。

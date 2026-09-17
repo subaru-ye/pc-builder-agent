@@ -38,7 +38,7 @@ func WithRequirementState(ctx context.Context, state schemas.RequirementState, s
 const requirementStateInstruction = `你负责本轮需求更新与下一步交接，一次输出JSON：operations、next_action、reply。先理解本轮用户意图，再决定动作，最后写与动作一致的回复；不是逐项收齐装机表单。
 
 逐项理解本轮信息，区分“明确说了”与“绝不可让步”：evidence=stated只证明来源明确，不决定strength。对静音、品牌、尺寸、外观等选配偏好，普通愿望即使表达肯定也用prefer；只有用户表达不可妥协、排除其他选项或明确硬性限制时才用must。例如“希望白色、运行安静”是两个明确的prefer；“外壳颜色可以让步，但声音不能妥协”只把静音改为must。事实字段的must不能连带提升同句的其他偏好。
-先判断每条原文谈论的对象和关系，再选择字段。商品报价、购物意向、备选型号、系统推荐配置与用户已经拥有的配件是不同事实；提到商品或金额不能证明已经拥有。只有原文确认手头已有且本次可沿用，才更新existing_parts或owned_parts。确认拥有但型号不完整时保留品类和简称；只有报价、容量或“某张显卡”不是准确型号，不能为了填数组将整段描述作为model。
+先判断每条原文谈论的对象和关系，再选择字段。商品报价、购物意向、备选型号、系统推荐配置与用户已经拥有的配件是不同事实；提到商品或金额不能证明已经拥有。用户以“指定”“要用”“必须配”等措辞点名要买的型号是购买要求，不是已有件，应保存为独立free.*约束条目（kind=constraint），绝不写进existing_parts或owned_parts；只有“有/手头有/在用/我现在的”等明确确认拥有的表达才记录已有件。只有原文确认手头已有且本次可沿用，才更新existing_parts或owned_parts。确认拥有但型号不完整时保留品类和简称；只有报价、容量或“某张显卡”不是准确型号，不能为了填数组将整段描述作为model。
 用户提供的选配相关参考信息也必须保留，不因未购买、未核验、型号不明而丢弃。报价参考用独立free.*、kind=context记录商品/品类、原金额和用户说明的购买状态，不能写成budget_cny、已有件、必须采购或已核验价格；未决定采用的具体型号用alternative。暂时无法整理的参考信息用observations保留完整相关原文。每个参考独立记录并沿用稳定编号，其他预算/用途变化不能删除它；用户撤销时按同一编号remove，不从旧消息恢复。回复中声称保留的参考必须确实出现在本次操作、观察记录或当前有效状态中，不能只在reply里提及。
 同一句可包含多个独立更新，必须逐项落入operations，不能只在reply中提及。预算金额、购买计划和金额覆盖范围是不同信息：已有配件、缺其他配件或打算购买都不是费用口径，不能据此填写budget_basis。“手上有显卡，准备买其余配件，预算九千”仅记录金额和已有件，口径未知；“这九千不计算手上的显卡价值”才记录new_purchase；“九千要包括手上显卡的价值”记录full_build。这些例子表示语义区别，不要求原话相同。明确称金额为新增采购费用时，同一原文同时支持budget_cny和budget_basis=new_purchase两项操作；明确包含已有件价值时记录full_build。是否有已有件、是否给出准确型号均不改变已表达的金额口径，不得因此省略口径。
 
@@ -68,11 +68,11 @@ kind 与 strength 独立：fact 表示用途、工作负载、已有件、装机
 
 操作语义：
 - set：用户明确新增或修改当前要求。只提交被修改字段，不重发未变字段。撤销过的值不能因为历史存在而恢复。
-- remove：用户明确撤回、不要、取消、还没确定某项要求，value 省略。"不要求安静"是 remove noise_pref；"不要噪音"仍是 set silent。不喜欢某品牌等负向约束不能误写成选择该品牌，应以独立free.*条目保留原话、kind=constraint及用户表达的强度，不混入notes。
+- remove：用户明确撤回、不要、取消、还没确定某项要求，value 省略。"不要求安静"是 remove noise_pref；"不要噪音"仍是 set silent。不喜欢某品牌等负向约束不能误写成选择该品牌，应以独立free.*条目保留原话、kind=constraint及用户表达的强度，不混入notes；例如“不要英伟达显卡”应保存为 free.no_nvidia_gpu kind=constraint，不写brand_pref.gpu=amd。
 - alternative：仅比较、询问“如果换成”“方案B”“考虑一下”，未表示采用时只记录备选；不能 set 当前字段。用户后来明确采用备选才 set。
 - conflict：同轮相互矛盾、无法判断最终选择的字段用此操作，value 可省略或保存一个合法候选，evidence=uncertain；由你判断该冲突是否需要追问，其他可靠信息仍可更新和讨论。明确的后来更正直接 set，不制造冲突。
 - scope=temporary："这次先用""这次可以例外"等明确临时放宽/覆盖；保留原值，直到用户明确恢复。scope=session 为当前装机会话常规要求。不是跨会话个人偏好。用户"恢复原要求"时 op=restore，value省略。
-- strength=must 表示必须、只要、不能妥协、硬上限；prefer 表示尽量、优先、喜欢、可让步。静音/品牌/尺寸/外观未明确硬性时用prefer。预算、用途、分辨率、已有件事实用must；不可将尽量安静变必须。预算数值与是否允许超预算分别记录。
+- strength=must 表示必须、只要、不能妥协、硬上限；prefer 表示尽量、优先、喜欢、可让步。静音/品牌/尺寸/外观未明确硬性时用prefer。预算、用途、分辨率、已有件事实用must；不可将尽量安静变必须。预算数值与是否允许超预算分别记录。value 与 strength 是不同字段，不要把 prefer、must、unknown、uncertain 写成 value；枚举字段（如 noise_pref）的 value 只能取其枚举值。
 
 字段与值（必须采用以下点路径）：
 budget_cny 正整数整机或新增采购预算；budget_flex 非负比例，仅明确预算弹性才给，严格不超可设0，未说不能填默认0.1；budget_basis new_purchase|full_build，仅明确费用口径且不得由“其他都要新买”推断。

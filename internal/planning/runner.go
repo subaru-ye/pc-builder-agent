@@ -749,6 +749,7 @@ func (x *execution) finalize() Result {
 	if wasReady || len(x.result.Draft) > 0 {
 		x.result.Issues = append(x.result.Issues, x.deliveryIssues()...)
 		x.normalizeUnresolvedClaims()
+		x.result.Issues = stripInternalIssueCodes(x.result.Issues)
 	}
 	if x.result.Outcome == "ready" {
 		// deliveryIssues checks missing prices using the user's budget basis

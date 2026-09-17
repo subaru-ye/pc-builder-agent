@@ -206,3 +206,57 @@ func TestUnfinishedDeliveryRetainsExternalAlternatives(t *testing.T) {
 		t.Fatal("unselected alternative entered formal build")
 	}
 }
+
+func TestUnmatchedOwnedPartsAggregateIntoOneIssue(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active",
+		Value:  json.RawMessage(`[{"category":"cooler","model":"旧风冷A"},{"category":"psu","model":"旧电源B"}]`),
+	}
+	record.Outcome = "proposal"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, s := range got.Issues {
+		if strings.Contains(s, "已有配件尚未对应到候选中的准确型号") {
+			count++
+			if !strings.Contains(s, "旧风冷A、旧电源B") {
+				t.Fatalf("aggregation lost models: %q", s)
+			}
+		}
+	}
+	if count != 1 {
+		t.Fatalf("want one aggregated issue, got %d: %v", count, got.Issues)
+	}
+}
+
+func TestUserIssuesKeepChineseDetailButDropInternalRuleCodes(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	record.Outcome = "proposal"
+	record.Issues = []string{"DISPLAY_OUTPUT_FAIL：当前CPU无核显且未配置独立显卡，整机无显示输出"}
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range got.Issues {
+		if strings.Contains(s, "DISPLAY_OUTPUT_FAIL") {
+			t.Fatalf("internal rule code leaked to user issues: %q", s)
+		}
+	}
+	if got.Reply != "" && strings.Contains(got.Reply, "DISPLAY_OUTPUT_FAIL") {
+		t.Fatalf("internal rule code leaked to user reply: %q", got.Reply)
+	}
+	if !slices.ContainsFunc(got.Issues, func(s string) bool { return strings.Contains(s, "整机无显示输出") }) {
+		t.Fatalf("chinese detail lost: %v", got.Issues)
+	}
+}

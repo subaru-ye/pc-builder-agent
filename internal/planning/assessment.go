@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"regexp"
 	"strings"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
@@ -12,6 +13,19 @@ import (
 func matchesOwnedPart(c Candidate, p schemas.OwnedPart) bool {
 	return p.Model != "" && c.Category == p.Category &&
 		(strings.EqualFold(p.Model, c.Model) || strings.EqualFold(p.Model, c.Brand+" "+c.Model))
+}
+
+// Internal rule identifiers echoed by the model into issue text must not reach
+// user-visible copy; the Chinese detail stays, the code prefix is dropped.
+var internalIssueCode = regexp.MustCompile(`^[A-Z][A-Z_]{3,}[：:]`)
+
+func stripInternalIssueCodes(issues []string) []string {
+	for i, s := range issues {
+		if loc := internalIssueCode.FindStringIndex(s); loc != nil {
+			issues[i] = strings.TrimSpace(s[loc[1]:])
+		}
+	}
+	return issues
 }
 
 // Accounting uses only stated values, never a default budget or spend floor.
@@ -69,6 +83,7 @@ func (x *execution) deliveryIssues() []string {
 	// Extra attributes with missing evidence remain visible on the candidate.
 	// Only actual compatibility/price gaps and unresolved user conditions affect
 	// delivery; an unrelated unknown attribute must not become a new hard gate.
+	unmatched := []string{}
 	for _, p := range spec.OwnedParts {
 		matched := false
 		for _, c := range x.result.Candidates {
@@ -77,8 +92,11 @@ func (x *execution) deliveryIssues() []string {
 			}
 		}
 		if !matched {
-			issues = append(issues, "已有配件尚未对应到候选中的准确型号："+p.Model)
+			unmatched = append(unmatched, p.Model)
 		}
+	}
+	if len(unmatched) > 0 {
+		issues = append(issues, "已有配件尚未对应到候选中的准确型号："+strings.Join(unmatched, "、"))
 	}
 	return issues
 }

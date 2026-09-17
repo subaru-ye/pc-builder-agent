@@ -1,0 +1,17 @@
+{
+  "suite_sha256": "31dcec9110a54a8e8e1a508ecee83a45bdff33a029adc668c4d2cad2d2ab3b69",
+  "source_suite_sha256": "3aa8294eda86830a17613e50c563924bd247fd9a8aad306fa095b4f36a8518ae",
+  "source_report_sha256": "ef9f1dbed96ec19c2d7b7c69a177c1b64106c10b253d1baeab06b6b50379d308",
+  "generator_sha256": "fc068b572326d4d63b72d741c5c5dbe1a34b26ccf9e63617e30a79a7070c2362",
+  "snapshot_id": 11,
+  "parts_release": "4dc0da59-f63b-5adc-a3b0-cd30394b7bd9",
+  "max_model_requests": 120,
+  "external_search_requests": 0,
+  "external_page_requests": 0,
+  "embedding_requests": 0,
+  "limitations": [
+    "Single attempt per scenario, no representative success-rate estimate.",
+    "Correct delivery does not independently prove workload speedup or noise.",
+    "Scenarios share one request allowance; later cases may stop early when it runs out."
+  ]
+}

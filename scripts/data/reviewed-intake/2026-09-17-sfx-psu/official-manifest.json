@@ -1,0 +1,28 @@
+{
+  "requests": 2,
+  "retries": 0,
+  "pages": [
+    {
+      "id": "cm-v-sfx-gold-850-white",
+      "url": "https://www.coolermaster.com/en-global/products/v-sfx-gold-850-atx-3-1-white-edition.html",
+      "captured_at": "2026-09-17T09:47:00+08:00",
+      "status": "captured_needs_review",
+      "http_status": 200,
+      "content_type": "text/html",
+      "content_encoding": null,
+      "raw_sha256": "73a1d1d0aa94fb83a8778cb1d0bf9f0a757599202665629775c35171ede6bba1",
+      "capture_method": "curl (site reachable; canonical URL from saved page)"
+    },
+    {
+      "id": "asus-rog-loki-850p-white",
+      "url": "https://rog.asus.com.cn/power-supply-units/rog-loki/rog-loki-850p-white-sfx-l-gaming-model/spec/",
+      "captured_at": "2026-09-17T09:59:00+08:00",
+      "status": "captured_needs_review",
+      "http_status": 200,
+      "content_type": "text/html",
+      "content_encoding": null,
+      "raw_sha256": "d2ce9a6ea683bb7b758b66fe8d7f13e5693055e926881d91a7d50f8f36d1bb89",
+      "capture_method": "browser DOM export after cookie consent (direct TLS blocked on this host)"
+    }
+  ]
+}

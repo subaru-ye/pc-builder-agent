@@ -1,0 +1,13 @@
+{
+  "status": "prepared_not_published",
+  "added": 2,
+  "official_evidence_added": 10,
+  "base_release": "e2f061cb-429b-5f57-b5fa-d933f18c1f8c",
+  "base_parts": 175,
+  "base_priced": 123,
+  "base_price_release": "6d8adcdf-729f-58f1-8446-1386aad8bc37",
+  "official_pages": "artifacts\\data-intake-official-sfx-psu-20260917-r1",
+  "base_price_hash": "ef23581d9144048da35373414c5f8f97b2fc1964eef297aac0b069aa22a8da41",
+  "selected_offers_sha256": "5b69f7362818bf51bb4bd215cad84e0f1613258cf516df533198ac55cbc75dea",
+  "input_sha256": "503b35047206009cf3b382d913e5c726677ac74211281cade89281d0df548e52"
+}

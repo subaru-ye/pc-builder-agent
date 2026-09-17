@@ -1,0 +1,70 @@
+{
+  "batch_dir": "var/data/collections/2026-09-17-sfx-psu-01",
+  "bindings": [
+    {
+      "sku": "psu-cm-v850sfx-gold-white",
+      "page_key": "cm-v-sfx-gold-850-white",
+      "brand": "Cooler Master",
+      "model": "V SFX Gold 850W ATX 3.1 White Edition",
+      "row_key": "ea90aa7a76ed0b88",
+      "needle": "V SFX 850GOLD 白 ATX3.1电源",
+      "goods_id": "ejQZew6fEXG04SgmCd1l04SgmCd1lQ_3vbTPorgpRZ4sRJBrY",
+      "offer": {
+        "row_key": null,
+        "model_id": "psu-cm-v850sfx-gold-white",
+        "category": "psu",
+        "platform_src": "2",
+        "goodsId": "ejQZew6fEXG04SgmCd1l04SgmCd1lQ_3vbTPorgpRZ4sRJBrY",
+        "title": "酷冷至尊（CoolerMaster）V SFX 850GOLD 白 ATX3.1电源 金牌全模组/全日系电容/支持PCle 5.1/FDB降噪风扇/电脑组件",
+        "price_cny": "1199",
+        "original_cny": "1199",
+        "shop": "酷冷至尊京东自营旗舰店",
+        "month_sales": "0",
+        "buy_url": "https://u.jd.com/41tPHnn",
+        "detail_observed_date": "2026-09-17",
+        "detail_source_file": "var/data/collections/2026-09-17-sfx-psu-01/raw/detail/psu-cm-v850sfx-gold-white__r1__s2.yaml",
+        "detail_source_sha256": "8c3e8b1812bfaf78fd6768a8254bbf79340463fdab8c0be1b079acdf96f10db3",
+        "detail_request_goods_id": "ejQZew6fEXG04SgmCd1l04SgmCd1lQ_3vbTPorgpRZ4sRJBrY",
+        "detail_response_goods_id": "ejQ4ew6fEXG04Sg8rCAF04SgmCd1lQ_3vbTPorgpRZ4sRJBrY",
+        "original_search_csv": "var/data/collections/2026-09-17-sfx-psu-01/raw/search/sfx-coolermaster__s0__p1.csv",
+        "original_search_csv_sha256": "40c348a70c6a7f079e4c3fa2962bf30ea0b1867c41af49af4a0753c7c41459a9"
+      },
+      "note": "Opaque response goodsId differs from the request goodsId; the exact title, seller, purchase link, price and the saved request index bind this observation. No claim of fresh price or stock."
+    },
+    {
+      "sku": "psu-asus-rog-loki-850p-white",
+      "page_key": "asus-rog-loki-850p-white",
+      "brand": "ASUS",
+      "model": "ROG Loki SFX-L 850P White",
+      "row_key": "09d87a4482de62f2",
+      "needle": "ROG洛基850W SFX-L白色电源",
+      "goods_id": "qp4cyXdLsbBYtDnyVlEOYtDnyVlEO4_3JKSxQ3GEqctDaWtCm",
+      "offer": {
+        "row_key": null,
+        "model_id": "psu-asus-rog-loki-850p-white",
+        "category": "psu",
+        "platform_src": "2",
+        "goodsId": "qp4cyXdLsbBYtDnyVlEOYtDnyVlEO4_3JKSxQ3GEqctDaWtCm",
+        "title": "华硕ROG洛基850W SFX-L白色电源 ATX3/神光同步/日系电容/白金认证/5060显卡支持 LOKI",
+        "price_cny": "1649",
+        "original_cny": "1799",
+        "shop": "华硕京东自营旗舰店",
+        "month_sales": "34",
+        "buy_url": "https://u.jd.com/4gtBAg8",
+        "detail_observed_date": "2026-09-17",
+        "detail_source_file": "var/data/collections/2026-09-17-sfx-psu-01/raw/detail/psu-asus-rog-loki-850p-white__r1__s2.yaml",
+        "detail_source_sha256": "3b822c14082a1420853bff313730b024af0a7f1e2d4f11f7a568a615f9071c1d",
+        "detail_request_goods_id": "qp4cyXdLsbBYtDnyVlEOYtDnyVlEO4_3JKSxQ3GEqctDaWtCm",
+        "detail_response_goods_id": "qp4tyXdLsbBYtDnzNwrsYtDnyVlEO4_3JKSxQ3GEqctDaWtCm",
+        "original_search_csv": "var/data/collections/2026-09-17-sfx-psu-01/raw/search/sfxl-psu-generic__s0__p1.csv",
+        "original_search_csv_sha256": "5df179f2e59f9332f2c1dcc8ebacc72da0d2b2167c02c4cfeeb1b7b4fa004c76"
+      },
+      "note": "Opaque response goodsId differs from the request goodsId; the exact title, seller, purchase link, price and the saved request index bind this observation. No claim of fresh price or stock."
+    }
+  ],
+  "deferred": {
+    "psu-thermalright-tr-sgfx650": "官网规格页(thermalright.com/product/sgfx650/)公布额定650W与尺寸，但未公布供电接口数量，power_connectors 无可追溯证据",
+    "psu-fsp-dagger-sd650gm": "fsptech.com HTTPS 不可达且无 Dagger 产品页，无可追溯官网规格",
+    "psu-deepcool-ps750g": "cn.deepcool.com 与全球站均无 PS750G 产品页，无可追溯官网规格"
+  }
+}

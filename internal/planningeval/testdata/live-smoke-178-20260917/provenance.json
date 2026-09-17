@@ -1,0 +1,15 @@
+{
+  "suite_sha256": "61bfa7cfed607a6a30680f342844b57f67fd94da0537f73aa760a32a69a0a1d7",
+  "source_suite_sha256": "3aa8294eda86830a17613e50c563924bd247fd9a8aad306fa095b4f36a8518ae",
+  "snapshot_id": 11,
+  "parts_release": "4dc0da59-f63b-5adc-a3b0-cd30394b7bd9",
+  "max_model_requests": 16,
+  "external_search_requests": 0,
+  "external_page_requests": 0,
+  "embedding_requests": 0,
+  "limitations": [
+    "Single attempt per scenario, no representative success-rate estimate.",
+    "Smoke checks execution and delivery, not selection quality or speed.",
+    "Second scenario shares the remaining request allowance."
+  ]
+}

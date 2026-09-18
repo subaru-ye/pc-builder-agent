@@ -73,6 +73,9 @@ def main():
             # session never reaches requirement_ready. Drop that confirm; the
             # later message/refresh steps still exercise plan and continuation.
             steps = [s for i, s in enumerate(steps) if not (i == 1 and s.get("kind") == "confirm")]
+        # The per-id blocks rebind `steps` (slice or filter); write the result
+        # back or only in-place dict edits survive into the suite.
+        case["steps"] = steps
         cases.append(case)
     # r1/r2 evidence: C123-001 alone consumed ~35 calls and the tail cases
     # (C123-007, B2-*) starved at 0 calls, so the B2 fixes were never live

@@ -8926,7 +8926,7 @@
           "kind": "confirm",
           "expect": {
             "versions": 0,
-            "outcome": "proposal",
+            "outcome": "ready",
             "missing_prices": 0,
             "require_tools": [
               "search_local_batch",

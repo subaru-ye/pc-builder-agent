@@ -1,7 +1,7 @@
 {
   "version": "current-178-live-mechanisms-20260918-r3",
   "live": true,
-  "provenance": "全量10场景真实模型：oracle剥离，保留authored业务交付断言与本地工具要求（离线工具要求剔除），不额外强加工具断言；模型选型自由，外部工具离线。目录为 current-178-20260917 冻结快照11（126件active）。相对r2套件：B2-002/003剔除被用户明确推迟配置所阻挡的step2 confirm，C123-001 step3的preserve_other_parts改为preserve_essential_parts（r2证据：逐件相等与预算硬上限在v1余量119元+CPU差价510元下不可同时满足，见 docs/eval/planning-v2/current-178-20260917.md）；待验证修复含keyword_hits检索、budget_alternatives、evaluate时机、noise_pref与confirm时机提示词、超预算最小替换策略。",
+  "provenance": "全量10场景真实模型：oracle剥离，保留authored业务交付断言与本地工具要求（离线工具要求剔除），不额外强加工具断言；模型选型自由，外部工具离线。目录为 current-178-20260917 冻结快照11（126件active）。相对r2套件：B2-002/003剔除被用户明确推迟配置所阻挡的step2 confirm，C123-001 step3的preserve_other_parts改为preserve_essential_parts（r2证据：逐件相等与预算硬上限在v1余量119元+CPU差价510元下不可同时满足，见 docs/eval/planning-v2/current-178-20260917.md）；执行顺序B2与C123-007在前（r1/r2证据：C123-001单例消耗~35次调用导致队尾case饿死0调用，B2修复从未被现场验证）；待验证修复含keyword_hits检索、budget_alternatives、evaluate时机、noise_pref与confirm时机提示词、超预算最小替换策略。",
   "catalog": {
     "date": "2026-09-17",
     "candidates": [
@@ -5721,6 +5721,374 @@
   "pages": {},
   "cases": [
     {
+      "id": "B2-001",
+      "title": "未知预算、未预设工作负载与多条独立条件进入规划并可分别撤销",
+      "source": "用户反馈的自由需求机制；人工多轮oracle，目录为完整冻结172件 Live full-batch variant; oracles stripped, business assertions kept, model choices free.",
+      "steps": [
+        {
+          "kind": "message",
+          "text": "做本地Whisper转写，音频不上传云端，不要英伟达显卡，预算还没定。",
+          "expect": {
+            "versions": 0,
+            "fields": {
+              "budget_cny": {
+                "status": "unknown"
+              },
+              "use_case.resolution": {
+                "status": "unknown"
+              },
+              "free.workload": {
+                "status": "active",
+                "value": "本地Whisper转写",
+                "kind": "fact"
+              },
+              "free.offline": {
+                "status": "active",
+                "value": "音频不上传云端",
+                "strength": "must",
+                "kind": "constraint"
+              },
+              "free.avoid_brand": {
+                "status": "active",
+                "value": "不要英伟达显卡",
+                "strength": "must",
+                "kind": "constraint"
+              }
+            }
+          }
+        },
+        {
+          "kind": "confirm",
+          "expect": {
+            "versions": 0,
+            "outcome": "collect",
+            "require_tools": [
+              "search_local"
+            ],
+            "fields": {
+              "budget_cny": {
+                "status": "unknown"
+              },
+              "use_case.resolution": {
+                "status": "unknown"
+              },
+              "free.workload": {
+                "status": "active",
+                "value": "本地Whisper转写",
+                "kind": "fact"
+              },
+              "free.offline": {
+                "status": "active",
+                "value": "音频不上传云端",
+                "strength": "must",
+                "kind": "constraint"
+              },
+              "free.avoid_brand": {
+                "status": "active",
+                "value": "不要英伟达显卡",
+                "strength": "must",
+                "kind": "constraint"
+              }
+            },
+            "model_input_contains": [
+              "free.workload",
+              "free.offline",
+              "free.avoid_brand"
+            ],
+            "reply_forbidden": [
+              "请先提供预算",
+              "请选择预设用途"
+            ]
+          }
+        },
+        {
+          "kind": "message",
+          "text": "取消显卡品牌限制，继续比较；音频仍然不上传云端。",
+          "expect": {
+            "versions": 0,
+            "outcome": "collect",
+            "fields": {
+              "budget_cny": {
+                "status": "unknown"
+              },
+              "use_case.resolution": {
+                "status": "unknown"
+              },
+              "free.workload": {
+                "status": "active",
+                "value": "本地Whisper转写",
+                "kind": "fact"
+              },
+              "free.offline": {
+                "status": "active",
+                "value": "音频不上传云端",
+                "strength": "must",
+                "kind": "constraint"
+              },
+              "free.avoid_brand": {
+                "status": "removed"
+              }
+            },
+            "require_tools": [
+              "search_local"
+            ]
+          }
+        },
+        {
+          "kind": "refresh",
+          "expect": {
+            "versions": 0,
+            "fields": {
+              "free.avoid_brand": {
+                "status": "removed"
+              },
+              "free.offline": {
+                "status": "active",
+                "value": "音频不上传云端",
+                "strength": "must",
+                "kind": "constraint"
+              }
+            },
+            "builder_calls": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "B2-002",
+      "title": "已有件简称先检索方向，再只澄清影响升级的主板细节",
+      "source": "用户CPU升级反馈的变体；人工oracle，不将简称伪装为已核对型号 Live full-batch variant; oracles stripped, business assertions kept, model choices free.",
+      "steps": [
+        {
+          "kind": "message",
+          "text": "手里有个5600和B550M，预算暂未定，先看看升级方向。",
+          "expect": {
+            "versions": 0,
+            "fields": {
+              "existing_parts": {
+                "status": "active",
+                "value": [
+                  "cpu",
+                  "motherboard"
+                ]
+              },
+              "owned_parts": {
+                "status": "unknown"
+              },
+              "free.owned_cpu": {
+                "status": "active",
+                "value": "5600",
+                "kind": "fact"
+              },
+              "free.owned_board": {
+                "status": "active",
+                "value": "B550M",
+                "kind": "fact"
+              },
+              "budget_cny": {
+                "status": "unknown"
+              }
+            }
+          }
+        },
+        {
+          "kind": "confirm",
+          "expect": {
+            "versions": 0,
+            "outcome": "collect",
+            "fields": {
+              "existing_parts": {
+                "status": "active",
+                "value": [
+                  "cpu",
+                  "motherboard"
+                ]
+              },
+              "owned_parts": {
+                "status": "unknown"
+              },
+              "free.owned_cpu": {
+                "status": "active",
+                "value": "5600",
+                "kind": "fact"
+              },
+              "free.owned_board": {
+                "status": "active",
+                "value": "B550M",
+                "kind": "fact"
+              },
+              "budget_cny": {
+                "status": "unknown"
+              }
+            },
+            "require_tools": [
+              "search_local"
+            ],
+            "model_input_contains": [
+              "free.owned_cpu",
+              "free.owned_board"
+            ]
+          }
+        },
+        {
+          "kind": "message",
+          "text": "预算6000，只先换CPU，其他配件尽量不动。",
+          "expect": {
+            "versions": 0,
+            "outcome": "clarify",
+            "fields": {
+              "existing_parts": {
+                "status": "active",
+                "value": [
+                  "cpu",
+                  "motherboard"
+                ]
+              },
+              "owned_parts": {
+                "status": "unknown"
+              },
+              "free.owned_cpu": {
+                "status": "active",
+                "value": "5600",
+                "kind": "fact"
+              },
+              "free.owned_board": {
+                "status": "active",
+                "value": "B550M",
+                "kind": "fact"
+              },
+              "budget_cny": {
+                "status": "active",
+                "value": 6000
+              }
+            },
+            "require_tools": [
+              "search_local"
+            ],
+            "reply_forbidden": [
+              "你的预算是多少",
+              "你已有的CPU是什么"
+            ]
+          }
+        },
+        {
+          "kind": "refresh",
+          "expect": {
+            "versions": 0,
+            "fields": {
+              "free.owned_cpu": {
+                "status": "active",
+                "value": "5600"
+              },
+              "budget_cny": {
+                "status": "active",
+                "value": 6000
+              }
+            },
+            "builder_calls": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "B2-003",
+      "title": "语义检索和正文读取不可用后保留本地检索进展并继续",
+      "source": "人工故障注入：无Embedder、未登记网页请求由离线transport拒绝 Live full-batch variant; oracles stripped, business assertions kept, model choices free.",
+      "steps": [
+        {
+          "kind": "message",
+          "text": "预算7000，先比较视频转写处理器，顺便看一下官网资料。",
+          "expect": {
+            "versions": 0
+          }
+        },
+        {
+          "kind": "confirm",
+          "expect": {
+            "versions": 0,
+            "outcome": "collect",
+            "require_tools": [
+              "search_local"
+            ],
+            "model_input_contains": [
+              "语义检索当前不可用",
+              "资料服务暂时不可用或超时"
+            ]
+          }
+        },
+        {
+          "kind": "message",
+          "text": "那先用已有资料继续比较。",
+          "expect": {
+            "versions": 0,
+            "outcome": "collect",
+            "require_tools": [
+              "search_local"
+            ],
+            "forbid_tools": [
+              "search_web",
+              "read_page"
+            ],
+            "model_input_contains": [
+              "previous_proposal"
+            ],
+            "fields": {
+              "budget_cny": {
+                "status": "active",
+                "value": 7000
+              }
+            }
+          }
+        },
+        {
+          "kind": "refresh",
+          "expect": {
+            "versions": 0,
+            "builder_calls": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "C123-007",
+      "title": "散热器解热容量未知保留方案，换有容量数据备选后重新校验",
+      "source": "当前快照11目录（126件active）；明确人工协议轨迹，不是新真实模型回答。 Live full-batch variant; oracles stripped, business assertions kept, model choices free.",
+      "steps": [
+        {
+          "kind": "message",
+          "text": "预算7500，用于视频剪辑。",
+          "expect": {
+            "versions": 0
+          }
+        },
+        {
+          "kind": "confirm",
+          "expect": {
+            "missing_prices": 0
+          }
+        },
+        {
+          "kind": "message",
+          "text": "改用有散热容量数据的备选散热器，继续校验。",
+          "expect": {
+            "versions": 1,
+            "outcome": "ready",
+            "validation": "pass",
+            "model_input_contains": [
+              "previous_proposal"
+            ]
+          }
+        },
+        {
+          "kind": "refresh",
+          "expect": {
+            "versions": 1,
+            "builder_calls": 0
+          }
+        }
+      ]
+    },
+    {
       "id": "C123-001",
       "title": "首次确认交付、直接升级CPU、降预算保留有效需求与旧版本",
       "source": "当前快照11目录（126件active）；明确人工协议轨迹，不是新真实模型回答。 Live full-batch variant; oracles stripped, business assertions kept, model choices free.",
@@ -7424,374 +7792,6 @@
           "kind": "refresh",
           "expect": {
             "versions": 1,
-            "builder_calls": 0
-          }
-        }
-      ]
-    },
-    {
-      "id": "C123-007",
-      "title": "散热器解热容量未知保留方案，换有容量数据备选后重新校验",
-      "source": "当前快照11目录（126件active）；明确人工协议轨迹，不是新真实模型回答。 Live full-batch variant; oracles stripped, business assertions kept, model choices free.",
-      "steps": [
-        {
-          "kind": "message",
-          "text": "预算7500，用于视频剪辑。",
-          "expect": {
-            "versions": 0
-          }
-        },
-        {
-          "kind": "confirm",
-          "expect": {
-            "missing_prices": 0
-          }
-        },
-        {
-          "kind": "message",
-          "text": "改用有散热容量数据的备选散热器，继续校验。",
-          "expect": {
-            "versions": 1,
-            "outcome": "ready",
-            "validation": "pass",
-            "model_input_contains": [
-              "previous_proposal"
-            ]
-          }
-        },
-        {
-          "kind": "refresh",
-          "expect": {
-            "versions": 1,
-            "builder_calls": 0
-          }
-        }
-      ]
-    },
-    {
-      "id": "B2-001",
-      "title": "未知预算、未预设工作负载与多条独立条件进入规划并可分别撤销",
-      "source": "用户反馈的自由需求机制；人工多轮oracle，目录为完整冻结172件 Live full-batch variant; oracles stripped, business assertions kept, model choices free.",
-      "steps": [
-        {
-          "kind": "message",
-          "text": "做本地Whisper转写，音频不上传云端，不要英伟达显卡，预算还没定。",
-          "expect": {
-            "versions": 0,
-            "fields": {
-              "budget_cny": {
-                "status": "unknown"
-              },
-              "use_case.resolution": {
-                "status": "unknown"
-              },
-              "free.workload": {
-                "status": "active",
-                "value": "本地Whisper转写",
-                "kind": "fact"
-              },
-              "free.offline": {
-                "status": "active",
-                "value": "音频不上传云端",
-                "strength": "must",
-                "kind": "constraint"
-              },
-              "free.avoid_brand": {
-                "status": "active",
-                "value": "不要英伟达显卡",
-                "strength": "must",
-                "kind": "constraint"
-              }
-            }
-          }
-        },
-        {
-          "kind": "confirm",
-          "expect": {
-            "versions": 0,
-            "outcome": "collect",
-            "require_tools": [
-              "search_local"
-            ],
-            "fields": {
-              "budget_cny": {
-                "status": "unknown"
-              },
-              "use_case.resolution": {
-                "status": "unknown"
-              },
-              "free.workload": {
-                "status": "active",
-                "value": "本地Whisper转写",
-                "kind": "fact"
-              },
-              "free.offline": {
-                "status": "active",
-                "value": "音频不上传云端",
-                "strength": "must",
-                "kind": "constraint"
-              },
-              "free.avoid_brand": {
-                "status": "active",
-                "value": "不要英伟达显卡",
-                "strength": "must",
-                "kind": "constraint"
-              }
-            },
-            "model_input_contains": [
-              "free.workload",
-              "free.offline",
-              "free.avoid_brand"
-            ],
-            "reply_forbidden": [
-              "请先提供预算",
-              "请选择预设用途"
-            ]
-          }
-        },
-        {
-          "kind": "message",
-          "text": "取消显卡品牌限制，继续比较；音频仍然不上传云端。",
-          "expect": {
-            "versions": 0,
-            "outcome": "collect",
-            "fields": {
-              "budget_cny": {
-                "status": "unknown"
-              },
-              "use_case.resolution": {
-                "status": "unknown"
-              },
-              "free.workload": {
-                "status": "active",
-                "value": "本地Whisper转写",
-                "kind": "fact"
-              },
-              "free.offline": {
-                "status": "active",
-                "value": "音频不上传云端",
-                "strength": "must",
-                "kind": "constraint"
-              },
-              "free.avoid_brand": {
-                "status": "removed"
-              }
-            },
-            "require_tools": [
-              "search_local"
-            ]
-          }
-        },
-        {
-          "kind": "refresh",
-          "expect": {
-            "versions": 0,
-            "fields": {
-              "free.avoid_brand": {
-                "status": "removed"
-              },
-              "free.offline": {
-                "status": "active",
-                "value": "音频不上传云端",
-                "strength": "must",
-                "kind": "constraint"
-              }
-            },
-            "builder_calls": 0
-          }
-        }
-      ]
-    },
-    {
-      "id": "B2-002",
-      "title": "已有件简称先检索方向，再只澄清影响升级的主板细节",
-      "source": "用户CPU升级反馈的变体；人工oracle，不将简称伪装为已核对型号 Live full-batch variant; oracles stripped, business assertions kept, model choices free.",
-      "steps": [
-        {
-          "kind": "message",
-          "text": "手里有个5600和B550M，预算暂未定，先看看升级方向。",
-          "expect": {
-            "versions": 0,
-            "fields": {
-              "existing_parts": {
-                "status": "active",
-                "value": [
-                  "cpu",
-                  "motherboard"
-                ]
-              },
-              "owned_parts": {
-                "status": "unknown"
-              },
-              "free.owned_cpu": {
-                "status": "active",
-                "value": "5600",
-                "kind": "fact"
-              },
-              "free.owned_board": {
-                "status": "active",
-                "value": "B550M",
-                "kind": "fact"
-              },
-              "budget_cny": {
-                "status": "unknown"
-              }
-            }
-          }
-        },
-        {
-          "kind": "confirm",
-          "expect": {
-            "versions": 0,
-            "outcome": "collect",
-            "fields": {
-              "existing_parts": {
-                "status": "active",
-                "value": [
-                  "cpu",
-                  "motherboard"
-                ]
-              },
-              "owned_parts": {
-                "status": "unknown"
-              },
-              "free.owned_cpu": {
-                "status": "active",
-                "value": "5600",
-                "kind": "fact"
-              },
-              "free.owned_board": {
-                "status": "active",
-                "value": "B550M",
-                "kind": "fact"
-              },
-              "budget_cny": {
-                "status": "unknown"
-              }
-            },
-            "require_tools": [
-              "search_local"
-            ],
-            "model_input_contains": [
-              "free.owned_cpu",
-              "free.owned_board"
-            ]
-          }
-        },
-        {
-          "kind": "message",
-          "text": "预算6000，只先换CPU，其他配件尽量不动。",
-          "expect": {
-            "versions": 0,
-            "outcome": "clarify",
-            "fields": {
-              "existing_parts": {
-                "status": "active",
-                "value": [
-                  "cpu",
-                  "motherboard"
-                ]
-              },
-              "owned_parts": {
-                "status": "unknown"
-              },
-              "free.owned_cpu": {
-                "status": "active",
-                "value": "5600",
-                "kind": "fact"
-              },
-              "free.owned_board": {
-                "status": "active",
-                "value": "B550M",
-                "kind": "fact"
-              },
-              "budget_cny": {
-                "status": "active",
-                "value": 6000
-              }
-            },
-            "require_tools": [
-              "search_local"
-            ],
-            "reply_forbidden": [
-              "你的预算是多少",
-              "你已有的CPU是什么"
-            ]
-          }
-        },
-        {
-          "kind": "refresh",
-          "expect": {
-            "versions": 0,
-            "fields": {
-              "free.owned_cpu": {
-                "status": "active",
-                "value": "5600"
-              },
-              "budget_cny": {
-                "status": "active",
-                "value": 6000
-              }
-            },
-            "builder_calls": 0
-          }
-        }
-      ]
-    },
-    {
-      "id": "B2-003",
-      "title": "语义检索和正文读取不可用后保留本地检索进展并继续",
-      "source": "人工故障注入：无Embedder、未登记网页请求由离线transport拒绝 Live full-batch variant; oracles stripped, business assertions kept, model choices free.",
-      "steps": [
-        {
-          "kind": "message",
-          "text": "预算7000，先比较视频转写处理器，顺便看一下官网资料。",
-          "expect": {
-            "versions": 0
-          }
-        },
-        {
-          "kind": "confirm",
-          "expect": {
-            "versions": 0,
-            "outcome": "collect",
-            "require_tools": [
-              "search_local"
-            ],
-            "model_input_contains": [
-              "语义检索当前不可用",
-              "资料服务暂时不可用或超时"
-            ]
-          }
-        },
-        {
-          "kind": "message",
-          "text": "那先用已有资料继续比较。",
-          "expect": {
-            "versions": 0,
-            "outcome": "collect",
-            "require_tools": [
-              "search_local"
-            ],
-            "forbid_tools": [
-              "search_web",
-              "read_page"
-            ],
-            "model_input_contains": [
-              "previous_proposal"
-            ],
-            "fields": {
-              "budget_cny": {
-                "status": "active",
-                "value": 7000
-              }
-            }
-          }
-        },
-        {
-          "kind": "refresh",
-          "expect": {
-            "versions": 0,
             "builder_calls": 0
           }
         }

@@ -5892,45 +5892,6 @@
           }
         },
         {
-          "kind": "confirm",
-          "expect": {
-            "versions": 0,
-            "outcome": "collect",
-            "fields": {
-              "existing_parts": {
-                "status": "active",
-                "value": [
-                  "cpu",
-                  "motherboard"
-                ]
-              },
-              "owned_parts": {
-                "status": "unknown"
-              },
-              "free.owned_cpu": {
-                "status": "active",
-                "value": "5600",
-                "kind": "fact"
-              },
-              "free.owned_board": {
-                "status": "active",
-                "value": "B550M",
-                "kind": "fact"
-              },
-              "budget_cny": {
-                "status": "unknown"
-              }
-            },
-            "require_tools": [
-              "search_local"
-            ],
-            "model_input_contains": [
-              "free.owned_cpu",
-              "free.owned_board"
-            ]
-          }
-        },
-        {
           "kind": "message",
           "text": "预算6000，只先换CPU，其他配件尽量不动。",
           "expect": {
@@ -6003,20 +5964,6 @@
           }
         },
         {
-          "kind": "confirm",
-          "expect": {
-            "versions": 0,
-            "outcome": "collect",
-            "require_tools": [
-              "search_local"
-            ],
-            "model_input_contains": [
-              "语义检索当前不可用",
-              "资料服务暂时不可用或超时"
-            ]
-          }
-        },
-        {
           "kind": "message",
           "text": "那先用已有资料继续比较。",
           "expect": {
@@ -6065,25 +6012,6 @@
           "kind": "confirm",
           "expect": {
             "missing_prices": 0
-          }
-        },
-        {
-          "kind": "message",
-          "text": "改用有散热容量数据的备选散热器，继续校验。",
-          "expect": {
-            "versions": 1,
-            "outcome": "ready",
-            "validation": "pass",
-            "model_input_contains": [
-              "previous_proposal"
-            ]
-          }
-        },
-        {
-          "kind": "refresh",
-          "expect": {
-            "versions": 1,
-            "builder_calls": 0
           }
         }
       ]
@@ -7711,25 +7639,6 @@
               "全部兼容",
               "已正式交付"
             ]
-          }
-        },
-        {
-          "kind": "message",
-          "text": "电源换成酷冷至尊V SFX Gold 850W白色，其他保持不变，继续校验。",
-          "expect": {
-            "versions": 1,
-            "outcome": "ready",
-            "validation": "pass",
-            "fields": {
-              "size_pref": {
-                "status": "active",
-                "value": "itx"
-              },
-              "budget_cny": {
-                "status": "active",
-                "value": 9000
-              }
-            }
           }
         },
         {

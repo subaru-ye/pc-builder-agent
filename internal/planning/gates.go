@@ -99,7 +99,7 @@ func (x *execution) budgetGateFeedback(outcome string) string {
 		"ceiling_cny": upper.FloatString(2), "total_cny": total.FloatString(2),
 		"budget_alternatives": map[string]any{"candidates": filtered},
 	})
-	return "预算自纠反馈：" + string(payload) + "\n当前总价超出 must 预算硬上限，且上述品类存在严格更便宜的有报价候选；这属于你可以自行决定的调整，不得停在 clarify 等待用户取舍，也不得带着未处理的超预算直接交付 proposal。请本轮直接替换选定候选（同品类、容量或性能档位不降）并重新输出 draft 触发 evaluate；只有每个品类都比较过更便宜候选后仍无法压回预算时，才允许 clarify 并说明必须牺牲的具体用户硬性要求。"
+	return "预算自纠反馈：" + string(payload) + "\n当前总价超出 must 预算硬上限，且上述品类存在严格更便宜的有报价候选；这属于你可以自行决定的调整，不得停在 clarify 等待用户取舍，也不得带着未处理的超预算直接交付 proposal。请本轮直接替换选定候选（同品类、容量或性能档位不降）并重新输出 draft 触发 evaluate；只有每个品类都比较过更便宜候选后仍无法压回预算时，才交付标注偏差的 proposal（issues 列明必须牺牲的具体用户硬性要求），不得停在 clarify 等待用户取舍。"
 }
 
 // unknownAlternatives 对校验 unknown 的缺失字段列出同品类字段完整且有报价的未选中候选

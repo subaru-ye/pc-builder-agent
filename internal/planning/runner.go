@@ -34,7 +34,7 @@ read_evidence: {id:来源编号,query?:要定位的词,offset?:0,limit?:16000}�
 register_candidate: {id:本地候选原编号或ext-唯一编号,category:cpu|gpu|motherboard|memory|ssd|psu|case|cooler,brand:品牌,model:完整型号,specs:{规范字段:值},price_cny:null,evidence:[来源编号],field_evidence:{model:来源编号,每个specs键:来源编号},unknown:[缺失或冲突说明]}。只能提取已读取正文的规格事实；不明确的参数省略，不猜测。本地配件缺规格时使用原编号和准确品类、品牌、型号，仅提交待补字段；补充保存在本次会话快照，保留本地报价，不覆盖已知规格或全局目录。新型号用ext-编号，网页价格不进入报价。
 注册时同时提供field_quotes:{字段:支持该值的逐字正文摘录}。非兼容性字段（接口数量、噪声等）可放specs，会另存为attributes供推理。多来源冲突放unknown；不能只附链接却编造数值。
 规格来源字段推荐使用完整路径，例如field_evidence:{"specs.socket":"source-1"}及field_quotes:{"specs.socket":"AM4接口"}；工具也兼容socket这样的短键。注册结果会返回实际保留的candidate及unknown；registered不表示所有参数已核实。收到缺项应优先补查厂商规格再更新候选，不要沿用被剔除的数据宣称兼容。可以在同一回复调用多个独立工具；注意每次反馈中的剩余往返额度，首次 evaluate 应在工具额度过半前完成，之后优先用反馈修正，避免额度耗尽时仍未核验。
-evaluate: {draft:{schema_version:1,requirement_ref:current,build_ref:proposal,selection:{cpu:候选id,gpu:候选id或null,motherboard:候选id,memory:候选id,ssd:[{sku:候选id,quantity:1}],psu:候选id,case:候选id,cooler:候选id},rationale:{品类:简短选型理由}}}，兼容性和报价反馈供你继续修复，不自动终止对话。超预算时反馈附budget_alternatives（各品类最便宜的有报价候选，未做兼容核验）：先基于它自行替换压回预算，只有必须牺牲用户硬性要求时才留待解决。
+evaluate: {draft:{schema_version:1,requirement_ref:current,build_ref:proposal,selection:{cpu:候选id,gpu:候选id或null,motherboard:候选id,memory:候选id,ssd:[{sku:候选id,quantity:1}],psu:候选id,case:候选id,cooler:候选id},rationale:{品类:简短选型理由}}}，兼容性和报价反馈供你继续修复，不自动终止对话。超预算时反馈附budget_alternatives（各品类最便宜的有报价候选，未做兼容核验）：先基于它自行替换压回预算，替换优先同品类且容量或性能档位不降，不得为压预算单方面削减与用途相关的容量或档位（如内存容量、显卡档次），只有必须牺牲用户硬性要求时才交付proposal留待用户取舍。
 最终只输出JSON：{outcome:collect|clarify|proposal|ready,reply:简短中文回复,draft:完整draft或null,assessments:[{field:需求字段,status:met|unmet|unknown,explanation:依据和取舍,evidence:[来源编号或local:候选id]}],issues:[待解决问题],assumptions:[与用户要求区分的执行假设]}。
 完整选配先evaluate，按反馈自主修正；即使有冲突也可输出proposal。每项active constraint必须在assessments中说明，must未知或未满足时不能ready。不得仅因有来源链接就宣称条件满足，证据必须支持该条件；静音等主观条件无法保证时诚实标为unknown。只有完整、已校验且要求已解决的配置才能ready。collect/clarify是正常对话，不是报错。
 回复重点写方案方向、关键取舍和需要用户回答的问题，不倾倒SKU、内部JSON、工具参数或技术标识。outcome是你的下一步意图，最终是否交付由工具事实与服务端核验决定；完整且条件已解决的proposal也会自动交付。确有必要等待用户回答时用clarify，不要仅在reply中藏一个必要问题。可选升级或用户未表达的偏好不属于待解决问题，不放入issues。用途表现是基于资料的选型评估，不等于实测保证；软偏好存在取舍应在assessments说明，不要谎称满足。reply不自行宣称已保存正式版本，由服务端在成功落库后通知。
@@ -761,7 +761,7 @@ func (x *execution) budgetAlternatives(quote validate.Quote, draft schemas.Build
 		return nil
 	}
 	return map[string]any{"candidates": alts,
-		"note": "当前报价超出预算硬上限。以上是各品类最便宜的有报价候选（按价格排序，未做兼容核验）；结合已选配件价格决定替换项，仍无法压回时再如实说明。"}
+		"note": "当前报价超出预算硬上限。以上是各品类最便宜的有报价候选（按价格排序，未做兼容核验）；替换时选同品类中价格合适且容量或性能档位不降的候选（如内存保持容量、显卡保持档次），不得为压预算单方面削减与用途相关的容量或档位；同类替换仍无法压回时交付proposal如实说明取舍，不要擅自砍容量后直接交付。"}
 }
 
 // Initial catalog samples can be selected without a search_local call. Preserve

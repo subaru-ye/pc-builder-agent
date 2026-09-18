@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/planning"
@@ -372,6 +374,26 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 		}
 		check("preserved_other_parts", ok, "")
 	}
+	// "其他配件尽量不动" is a soft preference: absorbing a budget squeeze via
+	// cheaper same-category parts is allowed, but cutting the GPU tier or
+	// memory capacity silently is not.
+	if e.PreserveEssentialParts {
+		ok := false
+		detail := ""
+		if r.Result != nil && previous != nil && previous.Result != nil {
+			a, ea := schemas.DecodeBuildDraft(r.Result.Draft)
+			b, eb := schemas.DecodeBuildDraft(previous.Result.Draft)
+			if ea == nil && eb == nil {
+				ok = deref(a.Selection.GPU) == deref(b.Selection.GPU)
+				oldCap, newCap := memoryCapacityGB(b.Selection.Memory), memoryCapacityGB(a.Selection.Memory)
+				if newCap < oldCap {
+					ok = false
+					detail = fmt.Sprintf("memory capacity %dGB -> %dGB", oldCap, newCap)
+				}
+			}
+		}
+		check("preserved_essential_parts", ok, detail)
+	}
 	if e.CPUChanged {
 		ok := false
 		if r.Result != nil && previous != nil && previous.Result != nil {
@@ -415,4 +437,23 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 			break
 		}
 	}
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// ponytail: capacity comes from the frozen SKU id shape (mem-*-<GB>-<MTS>[...]);
+// catalog specs carry no capacity field. Revisit if id shapes change.
+func memoryCapacityGB(sku string) int {
+	for _, m := range regexp.MustCompile(`\d+`).FindAllString(sku, -1) {
+		n, _ := strconv.Atoi(m)
+		if n >= 8 && n <= 512 {
+			return n
+		}
+	}
+	return 0
 }

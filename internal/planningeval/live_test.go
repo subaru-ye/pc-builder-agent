@@ -130,6 +130,41 @@ func TestCPUChangeRequiresDifferentSelectionAndPreviousDraft(t *testing.T) {
 	}
 }
 
+func TestPreserveEssentialPartsAllowsCheapSwapsButNotCapacityCuts(t *testing.T) {
+	raw, err := os.ReadFile("../planning/testdata/budget_accounting_recording.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved struct{ Result planning.Result }
+	if err := json.Unmarshal(raw, &saved); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name  string
+		edit  func(parts map[string]any)
+		valid bool
+	}{
+		{"cheaper_same_capacity_psu", func(parts map[string]any) { parts["psu"] = "psu-cheap-650w" }, true},
+		{"memory_capacity_upgrade", func(parts map[string]any) { parts["memory"] = "mem-kit-32-3600" }, true},
+		{"memory_capacity_cut", func(parts map[string]any) { parts["memory"] = "mem-stick-8-3200" }, false},
+		{"gpu_tier_change", func(parts map[string]any) { parts["gpu"] = "gpu-cheap-5060" }, false},
+	} {
+		var draft map[string]any
+		if err := json.Unmarshal(saved.Result.Draft, &draft); err != nil {
+			t.Fatal(err)
+		}
+		tc.edit(draft["selection"].(map[string]any))
+		encoded, _ := json.Marshal(draft)
+		r := StepRecord{Result: &planning.Result{Draft: encoded}}
+		Grade(&r, Expect{PreserveEssentialParts: true}, &StepRecord{Result: &saved.Result})
+		for _, c := range r.Checks {
+			if c.Name == "preserved_essential_parts" && c.Pass != tc.valid {
+				t.Fatalf("wrong essential parts grade for %s: %+v", tc.name, c)
+			}
+		}
+	}
+}
+
 func TestPreservedPartsIgnoreNewReferenceButDetectHardwareChanges(t *testing.T) {
 	raw, err := os.ReadFile("../planning/testdata/budget_accounting_recording.json")
 	if err != nil {

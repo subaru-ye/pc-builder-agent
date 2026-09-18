@@ -1,7 +1,7 @@
 {
-  "model_requests_limit": 120,
+  "model_requests_limit": 200,
   "model_requests_used": 0,
-  "model_requests_reserved": 120,
+  "model_requests_reserved": 200,
   "external_search_limit": 3,
   "external_search_used": 0,
   "page_read_limit": 6,

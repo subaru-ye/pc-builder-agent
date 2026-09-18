@@ -56,14 +56,11 @@ func TestChatUpgradeContinuesIntoToolsWithoutReconfirmation(t *testing.T) {
 	if initial.Session.VersionCount != 0 || initial.Session.Phase != store.PhaseRequirementReady {
 		t.Fatal("initial confirmation skipped")
 	}
-	// Even a mistaken model plan before the first confirmation cannot execute.
-	initial = message("没有具体偏好，直接继续选配")
-	if initial.Session.VersionCount != 0 || len(initial.Proposal) > 0 {
-		t.Fatal("model skipped initial confirmation")
-	}
-	first := wait(service.StartConfirm(ctx, owner, ws.ID, uuid.NewString()))
-	if first.Session.VersionCount != 1 {
-		t.Fatalf("no baseline %s", first.Proposal)
+	// The first message always hands back an explicit confirmation. The user's
+	// own follow-up words are the authorization: no separate confirm call.
+	first := message("没有具体偏好，直接继续选配")
+	if first.Session.VersionCount != 1 || first.Session.Phase != store.PhaseReady {
+		t.Fatalf("follow-up execution did not build: %s", first.Proposal)
 	}
 	v1, err := st.BuildByVersion(ctx, ws.ID, 1)
 	if err != nil {

@@ -96,8 +96,8 @@ func replayScreening(ctx context.Context, input product.ScreenInput, output stri
 			}
 		}
 	}
-	if m.calls != 1 {
-		return product.ScreenResult{}, fmt.Errorf("offline screening calls=%d, expected one", m.calls)
+	if m.calls > 2 {
+		return product.ScreenResult{}, fmt.Errorf("offline screening calls=%d, expected at most two (one collect fallback retry)", m.calls)
 	}
 	update, err := schemas.DecodeRequirementUpdate(pipeline.ExtractPayload(text))
 	return product.ScreenResult{Kind: product.ScreenRequirement, Text: text, RequirementUpdate: &update}, err

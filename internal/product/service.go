@@ -240,9 +240,10 @@ func (s *Service) executeScreening(ctx context.Context, r store.AgentRun, ownerI
 			return
 		}
 		state, mergeErr := schemas.ApplyRequirementUpdate(*input.RequirementState, *result.RequirementUpdate, input.RequirementSource)
-		if mergeErr == nil && state.NextAction == "plan" {
-			// A chat command authorizing execution in the user's own words is the
-			// confirmation; continue the same run when the store supports it.
+		if mergeErr == nil && state.NextAction == "plan" && input.Conversation.CanPlan {
+			// A follow-up chat command authorizing execution in the user's own
+			// words is the confirmation; continue the same run when the store
+			// supports it. First messages keep the explicit confirmation.
 			continuable := false
 			if _, ok := s.store.(interface {
 				ContinueScreeningRun(context.Context, string, string, string, schemas.RequirementState) (store.AgentRun, json.RawMessage, error)
@@ -256,7 +257,10 @@ func (s *Service) executeScreening(ctx context.Context, r store.AgentRun, ownerI
 				}
 				return
 			}
-			// Legacy stores keep the explicit confirmation handoff.
+		}
+		if mergeErr == nil && state.NextAction == "plan" && !input.Conversation.CanPlan {
+			// Initial requirement confirmation remains explicit. A model action
+			// cannot silently skip it or claim execution before it starts.
 			state.NextAction, state.Reply = "confirm", ScreeningReadyMessage
 		}
 		if mergeErr == nil {

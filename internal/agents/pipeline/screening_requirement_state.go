@@ -45,9 +45,9 @@ const requirementStateInstruction = `你负责本轮需求更新与下一步交�
 装机对象独立记录：本轮明确为朋友、同事、家人等其他人装机或整理选配信息时，set recipient为用户说的对象，即使暂不选配、用途或预算未知也要保留；没有说明对象时不补默认“自己”，不写长期个人画像。
 
 动作决策（先判断本轮是否要求执行，再判断信息与确认状态）：
-- collect：本轮只要求记录、讨论、比较备选，或明确暂不选配/暂不生成时优先使用。更新预算或补齐其他字段本身不是要求执行，不能因此改成confirm或plan；reply直接回应，不催促核对确认。另有影响下一步的真实歧义时也可collect，说明具体影响并提问；可选信息未知不构成必须追问。用户本轮已明确提出执行（如“开始吧”“直接换”“给我配一台”）时不得用collect重新索要已给出的执行授权，也不得只回一句“请确认”。
-- confirm：用户要选配但本轮没有明确要求执行、且尚未在面板确认过时使用。reply简短说明已记录内容并提示核对需求面板，不追加可选问题。确认不要求预算、分辨率或偏好填齐；预算未定不是collect的理由，例如首次说“做一台本地转写用的机器，预算还没定”应confirm，未定预算交给Builder按已有信息选配。
-- plan：用户本轮要求选配、升级、替换或继续解决时使用，用户本轮亲口提出的执行要求本身就是授权，不需要can_plan=true或面板已确认。Builder会在本轮检索、比较、校验；reply只说明本轮执行方向，不再要求确认、不让用户提供本可检索的型号或性能档次。
+- collect：本轮只要求记录、答疑、讨论观点，不需要Builder检索或生成任何结果时使用；说明具体影响并提问，可选信息未知不构成必须追问。凡用户要求Builder本轮去检索、比较、继续比较、生成或修改配置的，一律不是collect，而是plan，由Builder检索比较后自行决定如何收口。用户本轮已明确提出执行（如“开始吧”“直接换”“给我配一台”）时不得用collect重新索要已给出的执行授权，也不得只回一句“请确认”。
+- confirm：会话尚无任何选配结果、本轮是首次提出完整装机意图且没有点名要求立即执行时使用。reply简短说明已记录内容并提示核对需求面板，不追加可选问题。确认不要求预算、分辨率或偏好填齐；预算未定不是collect的理由，例如首次说“做一台本地转写用的机器，预算还没定”应confirm，未定预算交给Builder按已有信息选配。
+- plan：用户本轮要求选配、升级、替换、继续比较或继续解决时使用，用户本轮亲口提出的执行要求本身就是授权，不需要can_plan=true或面板已确认。Builder会在本轮检索、比较、校验；reply只说明本轮执行方向，不再要求确认、不让用户提供本可检索的型号或性能档次。
 游戏名称、品牌、静音和外观可以后续补充。用户已回答上轮问题、说不知道/稍后补充/没有其他要求时，依照当前信息推进；不要再追问同一项或轮流列举其他可选偏好。不把未知改成不限，也不把你的选配假设写成用户要求。
 例如：首次说“预算8000，主要玩游戏”可直接confirm并保留分辨率未知；接着说“改6000，分辨率等下补充”仍confirm；再说“用2K”只更新目标并confirm，不开启新一轮游戏名/静音/外观追问。首次说“预算8000，直接开始配”用plan。已确认配置后说“换更好的CPU，其他尽量不动”用plan，即使还没在面板再确认；“只先换CPU”这类点名本轮执行范围的表达也是plan；“如果换Intel有什么区别”用collect讨论备选，不执行换件。
 
@@ -168,11 +168,11 @@ func (g screeningGuard) generateRequirementState(ctx context.Context, req *model
 	}
 }
 
-const collectFallbackInstruction = `纠偏：当前权威需求状态已包含开始选配所需的预算与用途，且用户本轮原文已明确提出执行；不得用collect重新索要执行授权或只回复确认提示。请重新输出完整JSON：next_action=plan，reply简短说明本轮执行方向。operations仍只包含本轮原文明确表达的变动。`
+const collectFallbackInstruction = `纠偏：请重新审视用户本轮原文与动作决策。若本轮确实要求执行或继续比较（没有"先别执行/先不改/暂不"这类明确暂缓），不得用collect重新索要执行授权或只回复确认提示，请输出 next_action=plan，reply简短说明本轮执行方向；若用户明确暂缓执行，保持collect并直接回答。请重新输出完整JSON。operations仍只包含本轮原文明确表达的变动。`
 
-// planningReadyState 权威状态里预算金额与用途类型均已明确时，视为已可开始选配。
+// planningReadyState 权威状态里预算金额已明确时，视为已可交给Builder行动。
 func planningReadyState(state schemas.RequirementState) bool {
-	return state.Fields["budget_cny"].Status == "active" && state.Fields["use_case.type"].Status == "active"
+	return state.Fields["budget_cny"].Status == "active"
 }
 
 // 校验每个字段后一起提交。坏字段只保留原文，不撤回同轮其他可靠信息。

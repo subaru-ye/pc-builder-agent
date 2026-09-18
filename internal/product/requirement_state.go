@@ -290,7 +290,10 @@ func (s *Service) attachRequirementState(ctx context.Context, ownerID string, r 
 	}
 	input.RequirementState = &state
 	input.HasBuild = ws.VersionCount > 0
-	input.Conversation.CanPlan = len(ws.ConfirmedRequirement) > 0
+	// The first message of a session always hands back an explicit confirmation;
+	// later messages (and confirmed requirements) may continue into planning
+	// directly — the user's own follow-up is the authorization.
+	input.Conversation.CanPlan = len(ws.ConfirmedRequirement) > 0 || state.Revision > 0 || len(ws.PendingRequirement) > 0
 	if st, ok := s.store.(proposalStore); ok {
 		if ws.VersionCount > 0 {
 			base, err := st.BuildByVersion(ctx, r.SessionID, ws.VersionCount)

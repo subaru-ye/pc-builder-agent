@@ -25,7 +25,7 @@ request是本轮已授权执行的用户原话，base_draft是本会话已有正
 使用 planning_action 工具，参数 action 和 payload（JSON字符串）：
 search_local: {query?:相关性排序词,category?:品类,order_by?:relevance|price_asc|price_desc,offset?:0,limit?:16}，默认relevance；查更便宜或不同价位时明确指定price_asc/price_desc，价格排序优先于关键词，不把“便宜”当作价格条件。价格排序页额外返回query_matched_count（本品类query命中总数）和keyword_hits（命中候选，最多8个）：命中者未进当前页不代表目录没有，应直接比较keyword_hits或改用默认relevance。query_matched_count为0说明关键词未命中任何候选，先换更通用的规格词重查，仍为0才能断言该品类缺少该规格。query不排除其他路径；category是你指定的过滤条件，可翻页或调整查询。price_range_cny统计本次品类的全部候选，不只当前页，也不只关键词命中者；更低价可能属于不同平台，不能直接证明兼容。无价项保留并在价格排序中放最后。sources按候选编号返回字段来源索引，需原文或链接时用read_evidence按id读取；索引不代表你已经阅读全文。缺少噪声等参数时可先比较现有候选，不能声称目录没有这类商品。
 search_local_batch: {queries:[上述search_local参数,...]}，一次提交最多8个独立本地查询，每个子查询仍占1次工具额度。可一起比较CPU/主板/内存或多个平台，为evaluate和修正保留往返。按顺序返回results，未执行项列在pending_queries。new_count是本次首次检索到的候选数，seen_in_scope是该品类此前及本次检索已返回的总数；它们不包括初始样本。重复查询不会自动排除旧结果；已遍历整个品类时，应比较现有候选或调整路径，不反复改关键词查同一页。
-owned_candidates逐项对应用户当前明确提供的已有件，matches只按品类和完整型号匹配（可含品牌前缀），附当前规格及报价。空matches表示尚未准确对应，不表示市场无此型号；多个matches需比较变体，不能擅自认定唯一SKU。已有件简称仍可自主检索，不能从初始样本推断用户型号。缺价不等于缺型号，已有件采购金额仍由evaluate核对数量后计算。用户已有件在目录无匹配时，先用search_local以型号词检索，以query_matched_count=0为证才能断言缺失；确认缺失后按品类选一个关键规格（代数、频率、容量等）最接近的目录候选作为核验替身交付proposal，服务端按已有件品类核账、不计价，reply不得把替身说成用户已有件或已购型号；确实没有任何规格相近的候选时才clarify并告知用户可补充来源或改购新件。
+owned_candidates逐项对应用户当前明确提供的已有件，matches只按品类和完整型号匹配（可含品牌前缀），附当前规格及报价。空matches表示尚未准确对应，不表示市场无此型号；多个matches需比较变体，不能擅自认定唯一SKU。已有件简称仍可自主检索，不能从初始样本推断用户型号。缺价不等于缺型号，已有件采购金额仍由evaluate核对数量后计算。用户已有件在目录无匹配时，先用search_local以型号词检索，以query_matched_count=0为证才能断言缺失；确认缺失后，保留已有件还是改购新件是用户的计价取舍：clarify说明目录无此型号，请用户选择保留该已有件（服务端按品类核账、不计入采购合计）或改购新件，不得擅自替用户决定。仅当用户原文已明确表态沿用该件且不介意无法计价时，才按品类选一个关键规格（代数、频率、容量等）最接近的目录候选作为核验替身交付proposal，服务端按已有件品类核账、不计价，reply不得把替身说成用户已有件或已购型号。
 search_semantic: {query:自然语言需求,category?:品类}，复用本地语义检索；语义命中只表示相关，不能当作规格核验。
 联网范围：仅用于装机相关的公开型号规格、兼容性/BIOS支持、安装排障指南、配件知识和性能资料，优先厂商官网与官方文档。不得联网查询具体价格、优惠、库存或商家购买信息；用户询价时使用本地价格快照并说明观察日期，缺价明确未知，不以搜索摘要、网页标价、首发价或模型记忆补价。不要因为缺价反复调用联网工具；仍可查询规格并保存待解决方案。目录已有准确型号时使用本地候选编号及其报价，不要另建外部候选替代已有报价。
 search_web: {query:搜索词}，搜索上述装机技术资料和官网链接，不用于查价；返回来源编号。
@@ -882,6 +882,11 @@ func (x *execution) finalize() Result {
 			// together by deliveryIssues from the quote and stated requirements.
 			// A second model assessment must neither veto nor override that math.
 			if field == "budget_cny" || field == "budget_basis" || field == "budget_flex" {
+				continue
+			}
+			if field == "size_pref" && x.sizePrefViolated(v) {
+				x.result.Outcome = "proposal"
+				x.result.Issues = append(x.result.Issues, schemas.RequirementFieldLabel(field)+"（ITX）与已选主板板型不一致，目录无法满足该硬性板型")
 				continue
 			}
 			a, ok := assessed[field]

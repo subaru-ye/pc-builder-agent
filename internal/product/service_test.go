@@ -329,17 +329,31 @@ func TestFirstExecutionMessageGoesStraightToBuilder(t *testing.T) {
 		t.Fatalf("StartMessage=%+v err=%v", started, err)
 	}
 	sink.wait(t)
-	// 用户原话就是执行授权：首轮直接进入 Builder，不再经过 confirm 交接。
+	// 会话首条消息保留显式确认：screening 的 plan 交接为 confirm，不直接进 Builder。
+	if st.latest != 0 {
+		t.Fatalf("首条消息不应进 Builder: latest=%d", st.latest)
+	}
+	ws, _ := st.WebSessionByOwner(context.Background(), "owner-1", "session-1")
+	if ws.Phase != store.PhaseRequirementReady || len(ws.PendingRequirement) == 0 {
+		t.Fatalf("首条消息后应停在 requirement_ready: %+v", ws)
+	}
+	// 后续消息是用户自己的执行授权，直接进入 Builder。
+	started2, err := svc.StartMessage(context.Background(), "owner-1", "session-1",
+		"00000000-0000-4000-8000-000000000004", "预算8000，直接开始配一台游戏主机")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink.wait(t)
 	if st.latest != 1 {
 		t.Fatalf("builder 未运行: latest=%d", st.latest)
 	}
-	ws, _ := st.WebSessionByOwner(context.Background(), "owner-1", "session-1")
+	ws, _ = st.WebSessionByOwner(context.Background(), "owner-1", "session-1")
 	if ws.Phase != store.PhaseReady {
 		t.Fatalf("builder 完成后会话状态不正确: %+v", ws)
 	}
-	run, _ := st.RunByOwner(context.Background(), "owner-1", started.Run.ID)
-	if run.Kind != store.RunBuild {
-		t.Fatalf("screening run 未升级为 build: %+v", run)
+	run2, _ := st.RunByOwner(context.Background(), "owner-1", started2.Run.ID)
+	if run2.Kind != store.RunBuild {
+		t.Fatalf("后续消息 run 未升级为 build: %+v", run2)
 	}
 	var sent schemas.PlanningInput
 	if err := json.Unmarshal(agent.remotePayload, &sent); err != nil || sent.SchemaVersion != 2 ||

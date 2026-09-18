@@ -106,7 +106,9 @@ func TestLocalBatchLeavesTurnsForRealValidation(t *testing.T) {
 			return genai.NewContentFromText(`{"outcome":"ready","reply":"完成选配","issues":[]}`, genai.RoleModel)
 		}
 	}}
-	result, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), schemas.PlanningInput{SchemaVersion: 2, State: schemas.NewRequirementState()})
+	state := schemas.NewRequirementState()
+	state.Fields["budget_cny"] = schemas.RequirementField{Status: "active", Kind: "constraint", Strength: "prefer", Value: json.RawMessage("6000")}
+	result, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), schemas.PlanningInput{SchemaVersion: 2, State: state})
 	if err != nil || result.Outcome != "ready" || result.ToolCalls != 9 || result.ModelCalls != 3 || result.SearchRequests != 0 || result.PageCalls != 0 {
 		t.Fatalf("batch did not reach delivery within original budget: %+v %v", result, err)
 	}

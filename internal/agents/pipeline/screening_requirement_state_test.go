@@ -156,6 +156,16 @@ func TestScreeningCollectFallbackRetriesOnceWhenStateReady(t *testing.T) {
 	if !corrective {
 		t.Fatal("missing corrective instruction in retry request")
 	}
+	// 用途未知但预算已明确时，继续比较类请求同样应回环为 plan。
+	state = schemas.NewRequirementState()
+	state.Fields["budget_cny"] = schemas.RequirementField{Status: "active", Value: json.RawMessage("7000")}
+	m = &sequenceModel{outputs: []string{
+		`{"operations":[],"next_action":"collect","reply":"好的，我先用现有资料继续比较，稍后同步结果。"}`,
+		`{"operations":[],"next_action":"plan","reply":"继续本轮比较。"}`,
+	}}
+	if delivered = runScreeningState(t, state, m); m.calls != 2 || !strings.Contains(delivered, `"next_action":"plan"`) {
+		t.Fatalf("budget-only state must retry: %d calls %s", m.calls, delivered)
+	}
 }
 
 func TestScreeningCollectFallbackStaysOutWhenNotApplicable(t *testing.T) {

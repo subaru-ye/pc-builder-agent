@@ -13,7 +13,7 @@ import (
 // deliveryGateCounters bounds how often the server loops the model back on a
 // final delivery decision; every gate fires only while repair turns remain.
 type deliveryGateCounters struct {
-	budget, unknown, hardreq, total int
+	budget, unknown, hardreq, nobudget, stalled, total int
 }
 
 // budgetCeiling 返回 must 预算硬上限（含用户明确表达的弹性）。未表达 must 预算时为 false；
@@ -227,10 +227,115 @@ func (x *execution) hardRequirementGateFeedback() string {
 	return "must交付核验：" + string(payload) + "\n上述 must 未满足且尚未证明目录无法满足；先检索可行替代（含平台联动：连带换CPU/主板等），能交付标注偏差与联动原因的 proposal 就交付；只有确认无候选可满足，或调整必须牺牲用户明确表达的硬性条件时才允许 clarify 并说明具体取舍。若检索额度已用完，直接交付标注偏差的 proposal。"
 }
 
-// deliveryGate 按预算→unknown→must 顺序检测终局交付决策，命中时返回回环反馈。
+// sizePrefViolated 服务端核验硬性 ITX 板型：已选主板不是 ITX 时 must 板型未满足，
+// 不采信模型自评。临时放宽（scope=temporary）与未知板型不触发。
+func (x *execution) sizePrefViolated(v schemas.RequirementField) bool {
+	if v.Scope == "temporary" {
+		return false
+	}
+	var want string
+	if json.Unmarshal(v.Value, &want) != nil {
+		return false
+	}
+	if want != "itx" {
+		return false
+	}
+	draft, err := schemas.DecodeBuildDraft(x.result.Draft)
+	if err != nil || draft.Selection.Motherboard == "" {
+		return false
+	}
+	for _, c := range x.candidates {
+		if c.Category != schemas.CategoryMotherboard || c.ID != draft.Selection.Motherboard {
+			continue
+		}
+		specs := map[string]json.RawMessage{}
+		if json.Unmarshal(c.Specs, &specs) != nil {
+			return false
+		}
+		var got string
+		if json.Unmarshal(specs["form_factor"], &got) != nil {
+			return false
+		}
+		return got != "" && got != "itx"
+	}
+	return false
+}
+
+// noBudgetGateFeedback 权威状态中没有用户表达的预算金额时，交付配置是把关键
+// 取舍（花多少钱）替用户做掉；此时应检索比较后以 collect 收口列出待确认项。
+func (x *execution) noBudgetGateFeedback(outcome string) string {
+	if outcome != "ready" && outcome != "proposal" {
+		return ""
+	}
+	if x.result.Validation == nil {
+		return ""
+	}
+	if f, ok := x.input.State.Fields["budget_cny"]; ok && f.Status == "active" {
+		return ""
+	}
+	return "预算未定收口反馈：当前权威状态没有用户表达的预算金额，不能交付配置或候选方案，也不得自行假设预算。请完成必要的检索比较后，以 outcome=collect 收口，reply 列出为开始选配仍需用户确认的信息（首先是整机预算上限）。"
+}
+
+// stalledProposalGateFeedback 当模型交付的 proposal 已通过校验、全部硬性要求满足、
+// 总价在 must 预算内且不存在未匹配已有件时，其议题属于可自行决定的调整，不是用户
+// 取舍；此时应直接交付 ready。已有件缺匹配（notes 非空）是真实的用户决策，不适用。
+func (x *execution) stalledProposalGateFeedback() string {
+	if x.result.Outcome != "proposal" || x.result.Validation == nil || x.result.Quote == nil {
+		return ""
+	}
+	// 校验仍有 unknown 时，unknown 门负责判断是否存在字段完整替代；真无解的
+	// unknown 必须如实保留，不得被本门强制 ready。
+	if x.result.Validation.OverallStatus != schemas.OverallPass {
+		return ""
+	}
+	if len(x.result.Issues) == 0 {
+		return ""
+	}
+	if _, notes := x.deliveryIssues(); len(notes) > 0 {
+		return ""
+	}
+	assessed := map[string]Assessment{}
+	for _, a := range x.result.Assessments {
+		assessed[a.Field] = a
+	}
+	for field, v := range x.input.State.Fields {
+		if v.Status != "active" || v.Strength != "must" || v.Kind == "fact" || v.Kind == "context" {
+			continue
+		}
+		if field == "budget_cny" || field == "budget_basis" || field == "budget_flex" {
+			continue
+		}
+		if assessed[field].Status != "met" {
+			return ""
+		}
+	}
+	budgetNote := ""
+	if upper, ok := x.budgetCeiling(); ok {
+		quote := *x.result.Quote
+		spec := x.accountingSpec()
+		if spec.BudgetBasis == "new_purchase" && quote.PurchaseTotalCNY != nil {
+			quote.TotalCNY, quote.MissingCount = *quote.PurchaseTotalCNY, quote.PurchaseMissingCount
+		}
+		total, valid := new(big.Rat).SetString(quote.TotalCNY)
+		if !valid || total.Cmp(upper) > 0 {
+			return ""
+		}
+		budgetNote = "、总价在预算内"
+	}
+	return "stalled交付核验：当前草稿已通过校验、全部硬性要求满足" + budgetNote + "，不存在必须由用户取舍的问题；你列出的议题属于可自行决定的调整。若个别候选仍缺字段，先改选字段完整的候选并重新 evaluate，然后直接输出 outcome=ready 交付当前 draft；不得以自创取舍的 proposal 收尾。"
+}
+
+// deliveryGate 按预算→unknown→must→自纠门顺序检测终局交付决策，命中时返回回环反馈。
 func (x *execution) deliveryGate(outcome string, clarifiesEvaluatedDraft bool, gates *deliveryGateCounters, turn, turns int) string {
 	if turn >= turns-2 || gates.total >= 3 {
 		return ""
+	}
+	if gates.nobudget < 1 {
+		if fb := x.noBudgetGateFeedback(outcome); fb != "" {
+			gates.nobudget++
+			gates.total++
+			return fb
+		}
 	}
 	if gates.budget < 2 {
 		if fb := x.budgetGateFeedback(outcome); fb != "" {
@@ -249,6 +354,13 @@ func (x *execution) deliveryGate(outcome string, clarifiesEvaluatedDraft bool, g
 	if gates.hardreq < 1 && outcome == "clarify" {
 		if fb := x.hardRequirementGateFeedback(); fb != "" {
 			gates.hardreq++
+			gates.total++
+			return fb
+		}
+	}
+	if gates.stalled < 1 && outcome == "proposal" {
+		if fb := x.stalledProposalGateFeedback(); fb != "" {
+			gates.stalled++
 			gates.total++
 			return fb
 		}

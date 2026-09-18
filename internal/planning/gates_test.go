@@ -173,3 +173,82 @@ func TestGatesSmokeInRunnerLoop(t *testing.T) {
 	}
 	_ = store.CatalogSnapshot{}
 }
+
+func TestNoBudgetGateForcesCollectInsteadOfDelivery(t *testing.T) {
+	input, record, _ := completeRecording(t)
+	delete(input.State.Fields, "budget_cny")
+	x := gateExecution(input, record, recordedCatalog{})
+	if fb := x.noBudgetGateFeedback("proposal"); !strings.Contains(fb, "预算未定收口反馈") {
+		t.Fatalf("delivery without stated budget must loop back to collect: %q", fb)
+	}
+	if fb := x.noBudgetGateFeedback("ready"); !strings.Contains(fb, "预算未定收口反馈") {
+		t.Fatalf("ready without stated budget must loop back: %q", fb)
+	}
+	if fb := x.noBudgetGateFeedback("collect"); fb != "" {
+		t.Fatalf("collect must not be gated: %q", fb)
+	}
+	mustBudget(t, &input, "6000", "must")
+	if fb := x.noBudgetGateFeedback("proposal"); fb != "" {
+		t.Fatalf("stated budget must not gate: %q", fb)
+	}
+}
+
+func TestStalledProposalGateForcesReadyWhenNothingUserFacingRemains(t *testing.T) {
+	input, record, _ := completeRecording(t)
+	mustBudget(t, &input, "6000", "must")
+	x := gateExecution(input, record, recordedCatalog{})
+	x.result.Outcome = "proposal"
+	x.result.Issues = []string{"内存从32GB降至16GB以满足预算"}
+	if fb := x.stalledProposalGateFeedback(); !strings.Contains(fb, "stalled交付核验") || !strings.Contains(fb, "总价在预算内") {
+		t.Fatalf("self-created tradeoff proposal must be forced to ready: %q", fb)
+	}
+	// 有未满足 must（如 must 静音）时 proposal 是合法交付。
+	input.State.Fields["noise_pref"] = schemas.RequirementField{Status: "active", Kind: "constraint", Strength: "must", Value: json.RawMessage(`"silent"`)}
+	if fb := x.stalledProposalGateFeedback(); fb != "" {
+		t.Fatalf("unmet must proposal must not be gated: %q", fb)
+	}
+	delete(input.State.Fields, "noise_pref")
+	// 超预算时不强制 ready（预算门负责）。
+	mustBudget(t, &input, "1000", "must")
+	if fb := x.stalledProposalGateFeedback(); fb != "" {
+		t.Fatalf("over-budget proposal must be left to the budget gate: %q", fb)
+	}
+	// 模型未列议题时无需干预（finalize 会自动提升 ready）。
+	mustBudget(t, &input, "6000", "must")
+	x.result.Issues = nil
+	if fb := x.stalledProposalGateFeedback(); fb != "" {
+		t.Fatalf("clean proposal must not be gated: %q", fb)
+	}
+	// 校验仍有 unknown（且 unknown 门无替代可列）时必须如实保留，不得强制 ready。
+	x.result.Issues = []string{"散热器缺散热容量数据"}
+	x.result.Validation.OverallStatus = schemas.OverallReview
+	if fb := x.stalledProposalGateFeedback(); fb != "" {
+		t.Fatalf("unknown validation must be left to the unknown gate: %q", fb)
+	}
+}
+
+func TestSizePrefViolationIsVerifiedServerSide(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["size_pref"] = schemas.RequirementField{
+		Status: "active", Kind: "constraint", Strength: "must", Value: json.RawMessage(`"itx"`),
+	}
+	for i := range catalog.Candidates {
+		if catalog.Candidates[i].Category == schemas.CategoryMotherboard {
+			catalog.Candidates[i].Specs = json.RawMessage(strings.Replace(string(catalog.Candidates[i].Specs), "ATX", "atx", 1))
+		}
+	}
+	x := gateExecution(input, record, catalog)
+	v := input.State.Fields["size_pref"]
+	if !x.sizePrefViolated(v) {
+		t.Fatal("mATX/ATX board must violate must-ITX size_pref")
+	}
+	v.Value = json.RawMessage(`"atx"`)
+	if x.sizePrefViolated(v) {
+		t.Fatal("matching form factor must not violate")
+	}
+	v.Value = json.RawMessage(`"itx"`)
+	v.Scope = "temporary"
+	if x.sizePrefViolated(v) {
+		t.Fatal("temporary relaxation must not violate")
+	}
+}

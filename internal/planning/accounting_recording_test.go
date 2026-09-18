@@ -118,6 +118,15 @@ func TestLiveOwnedPurchaseDeliveryUsesTheVerifiedBudgetBasis(t *testing.T) {
 				if got.Outcome != "ready" || got.Delivery.Status != "eligible" || len(got.Issues) != 0 || got.Quote.MissingCount != 1 || got.Quote.PurchaseMissingCount != 0 || got.Quote.PurchaseTotalCNY == nil || *got.Quote.PurchaseTotalCNY != purchase {
 					t.Fatalf("valid purchase quote rejected: outcome=%s quote=%+v issues=%v", got.Outcome, got.Quote, got.Issues)
 				}
+			} else if mode == "wrong_owned_model" {
+				// 已有件按品类核账：用户型号不在目录时替身候选不计采购价，
+				// 降级为非阻塞 note，不再把会计缺口当交付问题。
+				if got.Outcome != "ready" || got.Quote.PurchaseTotalCNY == nil || *got.Quote.PurchaseTotalCNY != purchase || got.Quote.PurchaseMissingCount != 0 {
+					t.Fatalf("category-level ownership accounting failed: outcome=%s quote=%+v", got.Outcome, got.Quote)
+				}
+				if len(got.Delivery.Notes) != 1 || !strings.Contains(got.Delivery.Notes[0], "different memory") {
+					t.Fatalf("missing ownership note: %+v", got.Delivery)
+				}
 			} else if got.Outcome != "proposal" || len(got.Issues) == 0 {
 				t.Fatalf("unverified price/ownership or overbudget accepted: %+v", got)
 			}

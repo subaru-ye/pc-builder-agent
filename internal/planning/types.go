@@ -31,6 +31,7 @@ type Evidence struct {
 type Delivery struct {
 	Status string   `json:"status"`
 	Issues []string `json:"issues"`
+	Notes  []string `json:"notes,omitempty"`
 }
 
 type Candidate struct {

@@ -149,7 +149,8 @@ func TestNonemptyProposalCanSearchAndRepairAfterDeliveryFeedback(t *testing.T) {
 			copy.Issues = []string{"当前候选超预算"}
 		case 2:
 			feedback := req.Contents[len(req.Contents)-1].Parts[0].Text
-			if !strings.Contains(feedback, "候选价格超过已表达的预算范围") || len(req.Config.Tools) == 0 {
+			// 超预算交付现在先过预算自纠门（替代价目反馈），或走既有一次性核验。
+			if !(strings.Contains(feedback, "候选价格超过已表达的预算范围") || strings.Contains(feedback, "预算自纠反馈")) || len(req.Config.Tools) == 0 {
 				t.Fatalf("proposal ended without actual budget feedback and repair tools: %s", feedback)
 			}
 			return function("search_local", `{"category":"cpu"}`)
@@ -207,7 +208,7 @@ func TestUnfinishedDeliveryRetainsExternalAlternatives(t *testing.T) {
 	}
 }
 
-func TestUnmatchedOwnedPartsAggregateIntoOneIssue(t *testing.T) {
+func TestUnmatchedOwnedPartsBecomeNonBlockingNotes(t *testing.T) {
 	input, record, catalog := completeRecording(t)
 	input.State.Fields["owned_parts"] = schemas.RequirementField{
 		Status: "active",
@@ -222,17 +223,13 @@ func TestUnmatchedOwnedPartsAggregateIntoOneIssue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	count := 0
-	for _, s := range got.Issues {
-		if strings.Contains(s, "已有配件尚未对应到候选中的准确型号") {
-			count++
-			if !strings.Contains(s, "旧风冷A、旧电源B") {
-				t.Fatalf("aggregation lost models: %q", s)
-			}
-		}
+	if len(got.Delivery.Notes) != 1 || !strings.Contains(got.Delivery.Notes[0], "旧风冷A、旧电源B") {
+		t.Fatalf("want one aggregated ownership note: %+v", got.Delivery)
 	}
-	if count != 1 {
-		t.Fatalf("want one aggregated issue, got %d: %v", count, got.Issues)
+	for _, s := range got.Issues {
+		if strings.Contains(s, "旧风冷A") || strings.Contains(s, "旧电源B") {
+			t.Fatalf("ownership mismatch downgraded delivery: %v", got.Issues)
+		}
 	}
 }
 

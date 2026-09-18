@@ -64,9 +64,18 @@ func TestRecordedBudgetClarificationGetsOneReview(t *testing.T) {
 			before, _ := json.Marshal(f.Input)
 			m := &scriptedModel{respond: func(n int, req *model.LLMRequest) *genai.Content {
 				if mode == "live_repair" && n == 6 {
-					feedback := req.Contents[len(req.Contents)-1].Parts[0].Text
-					if !strings.Contains(feedback, "交付核验反馈") || len(req.Config.Tools) == 0 {
+					// 预算自纠门现在先于一次性核验触发；两种干预反馈都算命中介入。
+					var feedback strings.Builder
+					for _, c := range req.Contents {
+						for _, p := range c.Parts {
+							feedback.WriteString(p.Text)
+						}
+					}
+					if !strings.Contains(feedback.String(), "交付核验反馈") && !strings.Contains(feedback.String(), "预算自纠反馈") {
 						t.Fatal("successful real continuation missed review")
+					}
+					if len(req.Config.Tools) == 0 {
+						t.Fatal("successful real continuation lost repair tools")
 					}
 				}
 				if n <= recordedCalls {
@@ -74,7 +83,7 @@ func TestRecordedBudgetClarificationGetsOneReview(t *testing.T) {
 				}
 				if n == 5 {
 					feedback := req.Contents[len(req.Contents)-1].Parts[0].Text
-					if !strings.Contains(feedback, "交付核验反馈") || !strings.Contains(feedback, "软偏好不等于额外授权门槛") || !strings.Contains(feedback, "9428.70") || len(req.Config.Tools) == 0 {
+					if !(strings.Contains(feedback, "交付核验反馈") || strings.Contains(feedback, "预算自纠反馈")) || !strings.Contains(feedback, "9428.70") || len(req.Config.Tools) == 0 {
 						t.Fatalf("missing review or remaining tools: %s", feedback)
 					}
 				}
@@ -91,7 +100,7 @@ func TestRecordedBudgetClarificationGetsOneReview(t *testing.T) {
 				}
 				return genai.NewContentFromText(`{"outcome":"ready","draft":`+string(witness.Draft)+`,"reply":"已核对预算内替代，显卡保持不变，其他部件存在取舍。","issues":[],"assessments":[{"field":"free.locked_parts","status":"met","evidence":["local:gpu-sapphire-7700xt-pulse"]}]}`, genai.RoleModel)
 			}}
-			maxTurns, wantCalls := 8, 5
+			maxTurns, wantCalls := 8, 6
 			if mode == "no_remaining_turns" {
 				maxTurns, wantCalls = 4, 4
 			}

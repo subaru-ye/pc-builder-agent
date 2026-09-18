@@ -2,7 +2,6 @@ package planning
 
 import (
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"regexp"
 	"strings"
@@ -43,10 +42,10 @@ func (x *execution) accountingSpec() schemas.RequirementSpec {
 	return spec
 }
 
-func (x *execution) deliveryIssues() []string {
-	issues := []string{}
+func (x *execution) deliveryIssues() (issues, notes []string) {
+	issues = []string{}
 	if x.result.Validation == nil {
-		return []string{"候选尚未完成兼容性核验"}
+		return []string{"候选尚未完成兼容性核验"}, nil
 	}
 	for _, c := range x.result.Validation.Checks {
 		if c.Outcome != schemas.OutcomePass {
@@ -58,10 +57,11 @@ func (x *execution) deliveryIssues() []string {
 		}
 	}
 	if x.result.Quote == nil {
-		return append(issues, "报价尚未核验")
+		return append(issues, "报价尚未核验"), nil
 	}
 	spec := x.accountingSpec()
-	// Ownership has already been matched by exact model and quantity at evaluate.
+	// Ownership has been verified at category level at evaluate; purchase
+	// accounting already excludes verified categories.
 	quote := *x.result.Quote
 	if spec.BudgetBasis == "new_purchase" && quote.PurchaseTotalCNY != nil {
 		quote.TotalCNY, quote.MissingCount = *quote.PurchaseTotalCNY, quote.PurchaseMissingCount
@@ -69,14 +69,8 @@ func (x *execution) deliveryIssues() []string {
 	if quote.MissingCount > 0 {
 		issues = append(issues, "部分配件价格未知，合计尚不完整")
 	}
-	if spec.BudgetCNY > 0 && x.input.State.Fields["budget_cny"].Strength == "must" {
-		total, ok := new(big.Rat).SetString(quote.TotalCNY)
-		upper := new(big.Rat).SetInt64(int64(spec.BudgetCNY))
-		flex, _ := new(big.Rat).SetString(fmt.Sprint(spec.BudgetFlex))
-		if flex != nil {
-			upper.Mul(upper, new(big.Rat).Add(big.NewRat(1, 1), flex))
-		}
-		if ok && total.Cmp(upper) > 0 {
+	if upper, ok := x.budgetCeiling(); ok {
+		if total, ok := new(big.Rat).SetString(quote.TotalCNY); ok && total.Cmp(upper) > 0 {
 			issues = append(issues, "候选价格超过已表达的预算范围，需继续调整或讨论取舍")
 		}
 	}
@@ -96,35 +90,38 @@ func (x *execution) deliveryIssues() []string {
 		}
 	}
 	if len(unmatched) > 0 {
-		issues = append(issues, "已有配件尚未对应到候选中的准确型号："+strings.Join(unmatched, "、"))
+		notes = append(notes, "已有配件未匹配到目录准确型号（"+strings.Join(unmatched, "、")+"）；相应品类已按用户已有件核账，不计入采购合计。")
 	}
-	return issues
+	return issues, notes
 }
 
+// verifiedOwnership 已有件按品类核账：用户明确断言的 owned_part 在 draft
+// 对应品类恰好选了一件即视为核验，替身候选不计采购价；SSD 以品类内总数量
+// 一致防多盘误豁免。目录精确匹配与否只影响 note，不影响核账。
 func (x *execution) verifiedOwnership(draft schemas.BuildDraft) schemas.RequirementSpec {
 	spec := x.accountingSpec()
 	owned := spec.OwnedParts
 	spec.OwnedParts = nil
+	selected := map[schemas.Category]bool{}
+	for _, id := range draft.Selection.SKUs() {
+		for _, c := range x.candidates {
+			if c.ID == id {
+				selected[c.Category] = true
+			}
+		}
+	}
 	for _, p := range owned {
-		matched, total := false, 0
-		for _, id := range draft.Selection.SKUs() {
-			for _, c := range x.candidates {
-				if c.ID != id || c.Category != p.Category {
-					continue
-				}
-				total++
-				matched = matchesOwnedPart(c, p)
-			}
-		}
-		quantity := max(1, p.Quantity)
 		if p.Category == schemas.CategorySSD {
+			total := 0
 			for _, s := range draft.Selection.SSDs {
-				if s.Quantity != quantity {
-					matched = false
-				}
+				total += s.Quantity
 			}
+			if total == max(1, p.Quantity) {
+				spec.OwnedParts = append(spec.OwnedParts, p)
+			}
+			continue
 		}
-		if matched && total == 1 {
+		if selected[p.Category] {
 			spec.OwnedParts = append(spec.OwnedParts, p)
 		}
 	}

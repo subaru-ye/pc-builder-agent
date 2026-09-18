@@ -25,7 +25,7 @@ request是本轮已授权执行的用户原话，base_draft是本会话已有正
 使用 planning_action 工具，参数 action 和 payload（JSON字符串）：
 search_local: {query?:相关性排序词,category?:品类,order_by?:relevance|price_asc|price_desc,offset?:0,limit?:16}，默认relevance；查更便宜或不同价位时明确指定price_asc/price_desc，价格排序优先于关键词，不把“便宜”当作价格条件。价格排序页额外返回query_matched_count（本品类query命中总数）和keyword_hits（命中候选，最多8个）：命中者未进当前页不代表目录没有，应直接比较keyword_hits或改用默认relevance。query_matched_count为0说明关键词未命中任何候选，先换更通用的规格词重查，仍为0才能断言该品类缺少该规格。query不排除其他路径；category是你指定的过滤条件，可翻页或调整查询。price_range_cny统计本次品类的全部候选，不只当前页，也不只关键词命中者；更低价可能属于不同平台，不能直接证明兼容。无价项保留并在价格排序中放最后。sources按候选编号返回字段来源索引，需原文或链接时用read_evidence按id读取；索引不代表你已经阅读全文。缺少噪声等参数时可先比较现有候选，不能声称目录没有这类商品。
 search_local_batch: {queries:[上述search_local参数,...]}，一次提交最多8个独立本地查询，每个子查询仍占1次工具额度。可一起比较CPU/主板/内存或多个平台，为evaluate和修正保留往返。按顺序返回results，未执行项列在pending_queries。new_count是本次首次检索到的候选数，seen_in_scope是该品类此前及本次检索已返回的总数；它们不包括初始样本。重复查询不会自动排除旧结果；已遍历整个品类时，应比较现有候选或调整路径，不反复改关键词查同一页。
-owned_candidates逐项对应用户当前明确提供的已有件，matches只按品类和完整型号匹配（可含品牌前缀），附当前规格及报价。空matches表示尚未准确对应，不表示市场无此型号；多个matches需比较变体，不能擅自认定唯一SKU。已有件简称仍可自主检索，不能从初始样本推断用户型号。缺价不等于缺型号，已有件采购金额仍由evaluate核对数量后计算。用户已有件在目录无匹配时，先用search_local以型号词检索，以query_matched_count=0为证才能断言缺失；确认缺失后clarify告知用户可补充来源或改购新件，不得不检索就断言缺失，也不得把该槽位留空或以目录内其他SKU占位交付proposal——占位件既不是用户已有件也不是用户确认要买的型号。
+owned_candidates逐项对应用户当前明确提供的已有件，matches只按品类和完整型号匹配（可含品牌前缀），附当前规格及报价。空matches表示尚未准确对应，不表示市场无此型号；多个matches需比较变体，不能擅自认定唯一SKU。已有件简称仍可自主检索，不能从初始样本推断用户型号。缺价不等于缺型号，已有件采购金额仍由evaluate核对数量后计算。用户已有件在目录无匹配时，先用search_local以型号词检索，以query_matched_count=0为证才能断言缺失；确认缺失后按品类选一个关键规格（代数、频率、容量等）最接近的目录候选作为核验替身交付proposal，服务端按已有件品类核账、不计价，reply不得把替身说成用户已有件或已购型号；确实没有任何规格相近的候选时才clarify并告知用户可补充来源或改购新件。
 search_semantic: {query:自然语言需求,category?:品类}，复用本地语义检索；语义命中只表示相关，不能当作规格核验。
 联网范围：仅用于装机相关的公开型号规格、兼容性/BIOS支持、安装排障指南、配件知识和性能资料，优先厂商官网与官方文档。不得联网查询具体价格、优惠、库存或商家购买信息；用户询价时使用本地价格快照并说明观察日期，缺价明确未知，不以搜索摘要、网页标价、首发价或模型记忆补价。不要因为缺价反复调用联网工具；仍可查询规格并保存待解决方案。目录已有准确型号时使用本地候选编号及其报价，不要另建外部候选替代已有报价。
 search_web: {query:搜索词}，搜索上述装机技术资料和官网链接，不用于查价；返回来源编号。
@@ -173,6 +173,7 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 		turns = 8
 	}
 	decisionReviewed := false
+	gates := deliveryGateCounters{}
 	for turn := 0; turn < turns; turn++ {
 		if turn == turns-1 {
 			request.Config.Tools = nil
@@ -259,9 +260,22 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 		// Initial questions and searches without an evaluated draft end normally.
 		clarifiesEvaluatedDraft := final.Outcome == "clarify" && x.result.Validation != nil && x.result.ToolCalls > 0
 		reviewDecision := (final.Outcome == "proposal" || clarifiesEvaluatedDraft) && !decisionReviewed && turn < turns-2 && x.result.ToolCalls < 24
+		if gate := x.deliveryGate(final.Outcome, clarifiesEvaluatedDraft, &gates, turn, turns); gate != "" {
+			decisionReviewed = true
+			request.Contents = append(request.Contents, genai.NewContentFromText(gate, genai.RoleUser))
+			continue
+		}
 		if (final.Outcome == "ready" || (final.Outcome == "proposal" && len(final.Issues) == 0) || reviewDecision) && finished.Outcome != "ready" && turn < turns-1 {
 			decisionReviewed = true
-			feedback, _ := json.Marshal(map[string]any{"validation": finished.Validation, "quote": finished.Quote, "issues": finished.Issues})
+			feedbackMap := map[string]any{"validation": finished.Validation, "quote": finished.Quote, "issues": finished.Issues}
+			if finished.Quote != nil {
+				if draft, err := schemas.DecodeBuildDraft(x.result.Draft); err == nil {
+					if alts := x.budgetAlternatives(*finished.Quote, draft); alts != nil {
+						feedbackMap["budget_alternatives"] = alts
+					}
+				}
+			}
+			feedback, _ := json.Marshal(feedbackMap)
 			request.Contents = append(request.Contents, genai.NewContentFromText("交付核验反馈："+string(feedback)+"\n请复核是否还能用剩余额度检索或修正，例如比较其他有报价的候选解决超预算；由你决定取舍，不预设替换型号。追问前核对权威需求与来源：已有方案不等于必须保留，软偏好不等于额外授权门槛，不要把自己的执行假设当作用户限制。已授权的调整先检索并核验替代，真正缺少用户信息或需要改变其必须条件才追问。issues只保留用户有效条件或交付事实的缺项，未要求具体性能实测时可把选型局限写进说明。若仍不能解决，可直接保持proposal并说明已尝试的路径；真正需用户决定用clarify。不得编造证据、放宽必须条件或把未知改为已通过。", genai.RoleUser))
 			continue
 		}
@@ -686,6 +700,9 @@ func (x *execution) evaluate(ctx context.Context, raw json.RawMessage) map[strin
 	if alts := x.budgetAlternatives(ownedQuote, draft); alts != nil {
 		feedback["budget_alternatives"] = alts
 	}
+	if ua := x.unknownAlternatives(&result.Report, draft); ua != nil {
+		feedback["unknown_alternatives"] = ua
+	}
 	if previous, err := schemas.DecodeBuildDraft(previousDraft); err == nil && previousValidation != nil && previousQuote != nil {
 		// Compare verified facts, not narrative/build IDs. Always re-evaluate:
 		// a selected external candidate may have acquired new specifications.
@@ -836,8 +853,10 @@ func (x *execution) finalize() Result {
 			}
 		}
 	}
+	issues, notes := []string(nil), []string(nil)
 	if wasReady || len(x.result.Draft) > 0 {
-		x.result.Issues = append(x.result.Issues, x.deliveryIssues()...)
+		issues, notes = x.deliveryIssues()
+		x.result.Issues = append(x.result.Issues, issues...)
 		x.normalizeUnresolvedClaims()
 		x.result.Issues = stripInternalIssueCodes(x.result.Issues)
 	}
@@ -933,21 +952,21 @@ func (x *execution) finalize() Result {
 		return index(x.result.Candidates[i]) < index(x.result.Candidates[j])
 	})
 	seen := map[string]bool{}
-	issues := []string{}
+	deduped := []string{}
 	for _, issue := range x.result.Issues {
 		if !seen[issue] {
-			issues = append(issues, issue)
+			deduped = append(deduped, issue)
 			seen[issue] = true
 		}
 	}
-	x.result.Issues = issues
+	x.result.Issues = deduped
 	status := "not_applicable"
-	if wasReady || (len(x.result.Draft) > 0 && len(issues) > 0) {
+	if wasReady || (len(x.result.Draft) > 0 && len(deduped) > 0) {
 		status = "unresolved"
 		if x.result.Outcome == "ready" {
 			status = "eligible"
 		}
 	}
-	x.result.Delivery = &Delivery{Status: status, Issues: append([]string{}, issues...)}
+	x.result.Delivery = &Delivery{Status: status, Issues: append([]string{}, deduped...), Notes: notes}
 	return x.result
 }

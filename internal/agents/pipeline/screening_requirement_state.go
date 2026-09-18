@@ -72,7 +72,7 @@ kind 与 strength 独立：fact 表示用途、工作负载、已有件、装机
 - alternative：仅比较、询问“如果换成”“方案B”“考虑一下”，未表示采用时只记录备选；不能 set 当前字段。用户后来明确采用备选才 set。
 - conflict：同轮相互矛盾、无法判断最终选择的字段用此操作，value 可省略或保存一个合法候选，evidence=uncertain；由你判断该冲突是否需要追问，其他可靠信息仍可更新和讨论。明确的后来更正直接 set，不制造冲突。
 - scope=temporary："这次先用""这次可以例外"等明确临时放宽/覆盖；保留原值，直到用户明确恢复。scope=session 为当前装机会话常规要求。不是跨会话个人偏好。用户"恢复原要求"时 op=restore，value省略。
-- strength=must 表示必须、只要、不能妥协、硬上限；prefer 表示尽量、优先、喜欢、可让步。静音/品牌/尺寸/外观未明确硬性时用prefer。预算、用途、分辨率、已有件事实用must；不可将尽量安静变必须。预算数值与是否允许超预算分别记录。value 与 strength 是不同字段，不要把 prefer、must、unknown、uncertain 写成 value；枚举字段（如 noise_pref）的 value 只能取其枚举值。
+- strength=must 表示必须、只要、不能妥协、硬上限；prefer 表示尽量、优先、喜欢、可让步。静音/品牌/尺寸/外观未明确硬性时用prefer。预算、用途、分辨率、已有件事实用must；不可将尽量安静变必须。预算数值与是否允许超预算分别记录。value 与 strength 是不同字段，不要把 prefer、must、unknown、uncertain 写成 value；枚举字段（如 noise_pref）的 value 只能取其枚举值。示例：用户说"静音改成尽量安静"应输出 set noise_pref value=silent strength=prefer，不是 value=normal，也不是 value=prefer。
 
 字段与值（必须采用以下点路径）：
 budget_cny 正整数整机或新增采购预算；budget_flex 非负比例，仅明确预算弹性才给，严格不超可设0，未说不能填默认0.1；budget_basis new_purchase|full_build，仅明确费用口径且不得由“其他都要新买”推断。

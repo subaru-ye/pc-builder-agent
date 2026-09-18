@@ -1,8 +1,8 @@
 {
-  "source": "artifacts\\evalplanning\\live-r6-20260918",
+  "source": "artifacts\\evalplanning\\live-r7-20260918",
   "source_suite_sha256": "488c7534c44b88464ccc203dcf1c1d935bc97138e3304978f7c644f208449155",
-  "source_report_sha256": "f72d9ff7539e0891bead74d75ea460b38137a4912a929718a6d4589d23e4c328",
-  "suite_sha256": "fea23ac43b9946ad8d7b5bc3cd2be18ae644d574021dc60e9f33aea4d520b97a",
+  "source_report_sha256": "7e31c35cdf9279ba421c2bd349bbe2e137b2f18e22b0f6c4e4b1f2e52a13fa63",
+  "suite_sha256": "fdc884d71aed1c876e6300224b71ecacbadb47f7b95a5c1944fe67ae021efe11",
   "expectations_changed": false,
   "actual_model_requests": 0,
   "external_requests": 0

@@ -65,10 +65,10 @@ def main():
             # later message/refresh steps still exercise plan and continuation.
             steps = [s for i, s in enumerate(steps) if not (i == 1 and s.get("kind") == "confirm")]
         cases.append(case)
-    suite = dict(version="current-178-live-mechanisms-20260917-r2", live=True,
-                 provenance="全量10场景真实模型：oracle剥离，保留authored业务交付断言与本地工具要求（离线工具要求剔除），不额外强加工具断言；模型选型自由，外部工具离线。目录为 current-178-20260917 冻结快照11（126件active）。r1批次（2026-09-17，96次调用）曾以强加require_tools的套件执行，结果与分解见 docs/eval/planning-v2/current-178-20260917.md。",
+    suite = dict(version="current-178-live-mechanisms-20260918-r3", live=True,
+                 provenance="全量10场景真实模型：oracle剥离，保留authored业务交付断言与本地工具要求（离线工具要求剔除），不额外强加工具断言；模型选型自由，外部工具离线。目录为 current-178-20260917 冻结快照11（126件active）。相对r2套件：B2-002/003剔除被用户明确推迟配置所阻挡的step2 confirm（r1/r2证据，见 docs/eval/planning-v2/current-178-20260917.md）；待验证修复含keyword_hits检索、budget_alternatives、evaluate时机、noise_pref与confirm时机提示词。",
                  catalog=suite["catalog"], pages={}, cases=cases)
-    target = ROOT / "internal/planningeval/testdata/current-178-live-20260917"
+    target = ROOT / "internal/planningeval/testdata/current-178-live-20260918"
     assert not target.exists()
     write(target / "suite.json", suite)
     write(target / "provenance.json", dict(suite_sha256=sha(target / "suite.json"), source_suite_sha256=sha(source),

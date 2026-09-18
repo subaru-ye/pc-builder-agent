@@ -1,0 +1,26 @@
+{
+  "model_requests_limit": 120,
+  "model_requests_used": 0,
+  "model_requests_reserved": 120,
+  "external_search_limit": 3,
+  "external_search_used": 0,
+  "page_read_limit": 6,
+  "page_read_used": 0,
+  "embedding_requests": 0,
+  "buyer_requests": 0,
+  "registered_cases": [
+    "C123-001",
+    "C123-002",
+    "C123-003",
+    "C123-004",
+    "C123-005",
+    "C123-006",
+    "C123-007",
+    "B2-001",
+    "B2-002",
+    "B2-003"
+  ],
+  "status": "registered_not_executed",
+  "model_pin": "docs/eval/planning-v2/baseline-20260915.json",
+  "policy": "One batch; every provider attempt counts; no automatic retries or supplemental batch."
+}

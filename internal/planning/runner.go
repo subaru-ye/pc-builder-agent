@@ -23,7 +23,7 @@ request是本轮已授权执行的用户原话，base_draft是本会话已有正
 不要要求用户命中固定词语或填齐固定字段。缺少信息时判断是否真的影响下一步；可给方向、候选或提出必要问题。不要声称目录无结果等于市场无解。价格、规格及兼容性来自工具，不凭记忆编造；缺数据可以继续检索和出待解决方案。程序没有默认预算下限、加价授权或游戏必须独显要求。比较方案可以讨论不满足要求的替代项，但必须标明偏差，不能作为用户已接受的方案。
 改单时只有用户明确锁定或必须保留的配件不能自行更换，base_draft中的其他配件不自动变成锁定要求。已授权降低预算时，可以自主检索更便宜的内存、CPU和主板等，并进行必要的平台联动，说明容量或性能取舍；不要因为原方案某件昂贵就先要求用户批准更换未锁定的配件。总价超出预算硬上限时，先自行调整未锁定配件的容量、档位或层级把总价压回预算内再交付，不要把可自行决定的降配当作用户取舍挂起等待确认；只有调整必须牺牲用户明确表达的硬性要求或已有件时才留作待解决问题。先检索并核验可行替代，确有无法自行决定的用户取舍再追问。
 使用 planning_action 工具，参数 action 和 payload（JSON字符串）：
-search_local: {query?:相关性排序词,category?:品类,order_by?:relevance|price_asc|price_desc,offset?:0,limit?:16}，默认relevance；查更便宜或不同价位时明确指定price_asc/price_desc，价格排序优先于关键词，不把“便宜”当作价格条件。query不排除其他路径；category是你指定的过滤条件，可翻页或调整查询。price_range_cny统计本次品类的全部候选，不只当前页，也不只关键词命中者；更低价可能属于不同平台，不能直接证明兼容。无价项保留并在价格排序中放最后。sources按候选编号返回字段来源索引，需原文或链接时用read_evidence按id读取；索引不代表你已经阅读全文。缺少噪声等参数时可先比较现有候选，不能声称目录没有这类商品。
+search_local: {query?:相关性排序词,category?:品类,order_by?:relevance|price_asc|price_desc,offset?:0,limit?:16}，默认relevance；查更便宜或不同价位时明确指定price_asc/price_desc，价格排序优先于关键词，不把“便宜”当作价格条件。价格排序页额外返回query_matched_count（本品类query命中总数）和keyword_hits（命中候选，最多8个）：命中者未进当前页不代表目录没有，应直接比较keyword_hits或改用默认relevance。query_matched_count为0说明关键词未命中任何候选，先换更通用的规格词重查，仍为0才能断言该品类缺少该规格。query不排除其他路径；category是你指定的过滤条件，可翻页或调整查询。price_range_cny统计本次品类的全部候选，不只当前页，也不只关键词命中者；更低价可能属于不同平台，不能直接证明兼容。无价项保留并在价格排序中放最后。sources按候选编号返回字段来源索引，需原文或链接时用read_evidence按id读取；索引不代表你已经阅读全文。缺少噪声等参数时可先比较现有候选，不能声称目录没有这类商品。
 search_local_batch: {queries:[上述search_local参数,...]}，一次提交最多8个独立本地查询，每个子查询仍占1次工具额度。可一起比较CPU/主板/内存或多个平台，为evaluate和修正保留往返。按顺序返回results，未执行项列在pending_queries。new_count是本次首次检索到的候选数，seen_in_scope是该品类此前及本次检索已返回的总数；它们不包括初始样本。重复查询不会自动排除旧结果；已遍历整个品类时，应比较现有候选或调整路径，不反复改关键词查同一页。
 owned_candidates逐项对应用户当前明确提供的已有件，matches只按品类和完整型号匹配（可含品牌前缀），附当前规格及报价。空matches表示尚未准确对应，不表示市场无此型号；多个matches需比较变体，不能擅自认定唯一SKU。已有件简称仍可自主检索，不能从初始样本推断用户型号。缺价不等于缺型号，已有件采购金额仍由evaluate核对数量后计算。
 search_semantic: {query:自然语言需求,category?:品类}，复用本地语义检索；语义命中只表示相关，不能当作规格核验。
@@ -377,6 +377,7 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 				high = c.Price
 			}
 		}
+		// 评分只用于 keyword_hits 与同价并列：价格语义是刻意设计，query 词不得变成过滤条件。
 		score := func(c Candidate) int {
 			n := 0
 			hay := strings.ToLower(c.ID + " " + c.Brand + " " + c.Model + " " + string(c.Specs))
@@ -386,6 +387,15 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 				}
 			}
 			return n
+		}
+		scores := make(map[string]int, len(found))
+		matched := 0
+		for _, c := range found {
+			s := score(c)
+			scores[c.ID] = s
+			if s > 0 {
+				matched++
+			}
 		}
 		sort.SliceStable(found, func(i, j int) bool {
 			if p.OrderBy != "relevance" {
@@ -400,7 +410,7 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 					return a.Cmp(b) < 0
 				}
 			}
-			a, b := score(found[i]), score(found[j])
+			a, b := scores[found[i].ID], scores[found[j].ID]
 			if a != b {
 				return a > b
 			}
@@ -457,9 +467,24 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 				}
 			}
 		}
-		return map[string]any{"candidates": found[p.Offset:end], "sources": sources, "total": len(found), "next_offset": end, "truncated": len(found) - end, "snapshot_date": x.date,
+		result := map[string]any{"candidates": found[p.Offset:end], "sources": sources, "total": len(found), "next_offset": end, "truncated": len(found) - end, "snapshot_date": x.date,
 			"new_count": newCount, "previously_returned_count": end - p.Offset - newCount, "seen_in_scope": seenInScope, "scope_category": p.Category, "query_is_ranking_only": true,
-			"order_by": p.OrderBy, "price_range_cny": map[string]any{"min": low, "max": high, "priced_count": len(prices), "unknown_count": len(found) - len(prices)}}
+			"order_by": p.OrderBy, "price_range_cny": map[string]any{"min": low, "max": high, "priced_count": len(prices), "unknown_count": len(found) - len(prices)},
+			"query_matched_count": matched}
+		if matched > 0 && p.OrderBy != "relevance" {
+			// 价格页之外另附关键词命中者，避免规格匹配项被低价截断后误判目录无货。
+			hits := []Candidate{}
+			for _, c := range found {
+				if scores[c.ID] > 0 {
+					hits = append(hits, c)
+					if len(hits) == 8 {
+						break
+					}
+				}
+			}
+			result["keyword_hits"] = hits
+		}
+		return result
 	case "search_semantic":
 		source, ok := x.runner.Catalog.(interface {
 			SemanticCandidates(context.Context, store.SemanticQuery) (store.SemanticResult, error)

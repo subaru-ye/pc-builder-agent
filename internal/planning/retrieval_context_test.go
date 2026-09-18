@@ -3,6 +3,7 @@ package planning
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"reflect"
 	"testing"
@@ -185,6 +186,38 @@ func TestPriceOrderingAndRangeKeepUnpricedAlternatives(t *testing.T) {
 		if *rangeInfo["min"].(*string) != "9.99" || *rangeInfo["max"].(*string) != "9007199254740993.02" || rangeInfo["priced_count"] != 4 || rangeInfo["unknown_count"] != 1 {
 			t.Fatalf("wrong category-wide range: %+v", rangeInfo)
 		}
+	}
+}
+
+func TestKeywordHitsExposeMatchesTruncatedByPriceOrder(t *testing.T) {
+	price := func(value string) *string { return &value }
+	candidates := []Candidate{}
+	for i := 0; i < 9; i++ {
+		candidates = append(candidates, Candidate{
+			ID: fmt.Sprintf("psu-atx-%02d", i), Category: schemas.CategoryPSU, Model: "ATX 650W", Price: price(fmt.Sprintf("%d.00", 100+i)),
+		})
+	}
+	candidates = append(candidates, Candidate{ID: "psu-cm-v850sfx", Category: schemas.CategoryPSU, Model: "V850 SFX Gold", Price: price("999.00")})
+	x := execution{candidates: candidates, seen: map[string]bool{}}
+	response := x.call(context.Background(), map[string]any{"action": "search_local", "payload": `{"category":"psu","query":"SFX ITX","order_by":"price_asc","limit":8}`})
+	page := response["candidates"].([]Candidate)
+	if len(page) != 8 || page[0].ID != "psu-atx-00" {
+		t.Fatalf("price page disturbed: %+v", page)
+	}
+	if response["query_matched_count"] != 1 {
+		t.Fatalf("matched count wrong: %v", response["query_matched_count"])
+	}
+	hits := response["keyword_hits"].([]Candidate)
+	if len(hits) != 1 || hits[0].ID != "psu-cm-v850sfx" {
+		t.Fatalf("keyword hits wrong: %+v", hits)
+	}
+	x2 := execution{candidates: candidates, seen: map[string]bool{}}
+	response2 := x2.call(context.Background(), map[string]any{"action": "search_local", "payload": `{"category":"psu","query":"FlexATX","order_by":"price_asc"}`})
+	if response2["query_matched_count"] != 0 {
+		t.Fatalf("expected zero matches: %v", response2["query_matched_count"])
+	}
+	if _, ok := response2["keyword_hits"]; ok {
+		t.Fatalf("keyword_hits should be absent when nothing matched")
 	}
 }
 

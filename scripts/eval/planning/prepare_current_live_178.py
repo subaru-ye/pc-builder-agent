@@ -57,6 +57,15 @@ def main():
             # model decision; record whatever delivery results without pinning.
             steps = [steps[0], steps[1]]
             steps[1]["expect"] = {"missing_prices": 0}
+        if case["id"] == "C123-001":
+            # r2 evidence: v1 spent 7381/7500 and the 5700X upgrade adds 510,
+            # so step-3 cannot both preserve every part and stay under the
+            # must budget; the catalog has no cheaper 32GB DDR4 kit. Grade
+            # "尽量不动" by its substance: GPU tier kept, memory capacity not
+            # silently reduced; cheaper same-category swaps remain allowed.
+            for s in steps:
+                if s.get("expect", {}).pop("preserve_other_parts", None):
+                    s["expect"]["preserve_essential_parts"] = True
         if case["id"] in ("B2-002", "B2-003"):
             # r1/r2 evidence: the authored step-2 confirm cannot run because the
             # user explicitly deferred configuration ("先看看升级方向" /
@@ -66,7 +75,7 @@ def main():
             steps = [s for i, s in enumerate(steps) if not (i == 1 and s.get("kind") == "confirm")]
         cases.append(case)
     suite = dict(version="current-178-live-mechanisms-20260918-r3", live=True,
-                 provenance="全量10场景真实模型：oracle剥离，保留authored业务交付断言与本地工具要求（离线工具要求剔除），不额外强加工具断言；模型选型自由，外部工具离线。目录为 current-178-20260917 冻结快照11（126件active）。相对r2套件：B2-002/003剔除被用户明确推迟配置所阻挡的step2 confirm（r1/r2证据，见 docs/eval/planning-v2/current-178-20260917.md）；待验证修复含keyword_hits检索、budget_alternatives、evaluate时机、noise_pref与confirm时机提示词。",
+                 provenance="全量10场景真实模型：oracle剥离，保留authored业务交付断言与本地工具要求（离线工具要求剔除），不额外强加工具断言；模型选型自由，外部工具离线。目录为 current-178-20260917 冻结快照11（126件active）。相对r2套件：B2-002/003剔除被用户明确推迟配置所阻挡的step2 confirm，C123-001 step3的preserve_other_parts改为preserve_essential_parts（r2证据：逐件相等与预算硬上限在v1余量119元+CPU差价510元下不可同时满足，见 docs/eval/planning-v2/current-178-20260917.md）；待验证修复含keyword_hits检索、budget_alternatives、evaluate时机、noise_pref与confirm时机提示词、超预算最小替换策略。",
                  catalog=suite["catalog"], pages={}, cases=cases)
     target = ROOT / "internal/planningeval/testdata/current-178-live-20260918"
     assert not target.exists()

@@ -21,7 +21,8 @@ import sys
 from collections import Counter
 
 FACT_EXACT = {"final_outcome", "allowed_outcome", "server_delivery",
-              "meaningful_planning_progress", "preserved_other_parts", "changed_cpu"}
+              "meaningful_planning_progress", "preserved_other_parts",
+              "preserved_essential_parts", "changed_cpu"}
 FACT_PREFIX = ("selected_", "candidate_fact:")
 
 

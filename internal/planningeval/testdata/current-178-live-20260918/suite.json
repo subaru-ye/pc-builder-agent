@@ -1,7 +1,7 @@
 {
   "version": "current-178-live-mechanisms-20260918-r3",
   "live": true,
-  "provenance": "全量10场景真实模型：oracle剥离，保留authored业务交付断言与本地工具要求（离线工具要求剔除），不额外强加工具断言；模型选型自由，外部工具离线。目录为 current-178-20260917 冻结快照11（126件active）。相对r2套件：B2-002/003剔除被用户明确推迟配置所阻挡的step2 confirm（r1/r2证据，见 docs/eval/planning-v2/current-178-20260917.md）；待验证修复含keyword_hits检索、budget_alternatives、evaluate时机、noise_pref与confirm时机提示词。",
+  "provenance": "全量10场景真实模型：oracle剥离，保留authored业务交付断言与本地工具要求（离线工具要求剔除），不额外强加工具断言；模型选型自由，外部工具离线。目录为 current-178-20260917 冻结快照11（126件active）。相对r2套件：B2-002/003剔除被用户明确推迟配置所阻挡的step2 confirm，C123-001 step3的preserve_other_parts改为preserve_essential_parts（r2证据：逐件相等与预算硬上限在v1余量119元+CPU差价510元下不可同时满足，见 docs/eval/planning-v2/current-178-20260917.md）；待验证修复含keyword_hits检索、budget_alternatives、evaluate时机、noise_pref与confirm时机提示词、超预算最小替换策略。",
   "catalog": {
     "date": "2026-09-17",
     "candidates": [
@@ -5753,7 +5753,6 @@
             "versions": 2,
             "outcome": "ready",
             "cpu_changed": true,
-            "preserve_other_parts": true,
             "require_tools": [
               "search_local_batch",
               "evaluate"
@@ -5776,7 +5775,8 @@
             "reply_forbidden": [
               "预算是多少",
               "CPU是什么"
-            ]
+            ],
+            "preserve_essential_parts": true
           }
         },
         {

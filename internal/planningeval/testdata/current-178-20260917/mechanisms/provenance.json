@@ -1,19 +1,9 @@
 {
-  "suite_sha256": "3aa8294eda86830a17613e50c563924bd247fd9a8aad306fa095b4f36a8518ae",
-  "database_snapshot_sha256": "ceb4d2d9b4bec9898d763ccdc635061a25ec90a6065820bf5b8b5ceaff3a4c63",
-  "generator_sha256": "f3d989d728c95f2a2c4bef2319b4faba9b40f78490b27d546fa31c91391b1103",
-  "source_files": {
-    "internal/planning/testdata/complete_proposal_recording.json": "9f428eb7368c8ae115f836e2aa6ff9828658f985e1d55f3d814f6828e5c3e19c",
-    "artifacts/current-178-freeze-20260917/manifest.json": "b2594a0826090e9638810df06a48fa522edc37df49531e60f8a033e58c106713"
-  },
-  "source_commit": "5f12d548b38d384423b4a7982919fe29a2c6e122",
-  "snapshot_id": 11,
-  "active_parts": 126,
-  "limitations": [
-    "Offline authored decisions or frozen real responses, not a fresh model quality score.",
-    "Current-catalog variants are separate from original historical results.",
-    "Existing compatibility rules do not cover all physical fit, BIOS, noise or performance evidence.",
-    "RX 6600/7600 and 5600G/5700G intake is deferred; see docs/data/数据获取与发布规则.md §5.4.",
-    "10 coolers still have unknown cooling_capacity_w after buyer recheck; scenarios keep unknown honestly."
-  ]
+  "source": "artifacts\\evalplanning\\live-r6-20260918",
+  "source_suite_sha256": "488c7534c44b88464ccc203dcf1c1d935bc97138e3304978f7c644f208449155",
+  "source_report_sha256": "f72d9ff7539e0891bead74d75ea460b38137a4912a929718a6d4589d23e4c328",
+  "suite_sha256": "fea23ac43b9946ad8d7b5bc3cd2be18ae644d574021dc60e9f33aea4d520b97a",
+  "expectations_changed": false,
+  "actual_model_requests": 0,
+  "external_requests": 0
 }

@@ -57,6 +57,13 @@ def main():
             # model decision; record whatever delivery results without pinning.
             steps = [steps[0], steps[1]]
             steps[1]["expect"] = {"missing_prices": 0}
+        if case["id"] in ("B2-002", "B2-003"):
+            # r1/r2 evidence: the authored step-2 confirm cannot run because the
+            # user explicitly deferred configuration ("先看看升级方向" /
+            # "先比较处理器"), so screening correctly stays collecting and the
+            # session never reaches requirement_ready. Drop that confirm; the
+            # later message/refresh steps still exercise plan and continuation.
+            steps = [s for i, s in enumerate(steps) if not (i == 1 and s.get("kind") == "confirm")]
         cases.append(case)
     suite = dict(version="current-178-live-mechanisms-20260917-r2", live=True,
                  provenance="全量10场景真实模型：oracle剥离，保留authored业务交付断言与本地工具要求（离线工具要求剔除），不额外强加工具断言；模型选型自由，外部工具离线。目录为 current-178-20260917 冻结快照11（126件active）。r1批次（2026-09-17，96次调用）曾以强加require_tools的套件执行，结果与分解见 docs/eval/planning-v2/current-178-20260917.md。",

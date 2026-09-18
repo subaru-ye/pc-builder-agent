@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/subaru-ye/pc-builder-agent/internal/agents/validate"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 	"google.golang.org/adk/v2/model"
@@ -220,6 +221,56 @@ func TestKeywordHitsExposeMatchesTruncatedByPriceOrder(t *testing.T) {
 		t.Fatalf("keyword_hits should be absent when nothing matched")
 	}
 }
+
+func TestBudgetAlternativesAttachCheapestOnOverspend(t *testing.T) {
+	price := func(value string) *string { return &value }
+	x := execution{
+		candidates: []Candidate{
+			{ID: "mem-a", Category: schemas.CategoryMemory, Price: price("1759.00")},
+			{ID: "mem-b", Category: schemas.CategoryMemory, Price: price("999.00")},
+			{ID: "mem-c", Category: schemas.CategoryMemory, Price: price("1299.00")},
+			{ID: "cpu-a", Category: schemas.CategoryCPU, Price: price("436.00")},
+			{ID: "psu-a", Category: schemas.CategoryPSU},
+		},
+		input: schemas.PlanningInput{State: schemas.RequirementState{Fields: map[string]schemas.RequirementField{
+			"budget_cny": {Value: json.RawMessage(`6000`), Status: "active", Strength: "must"},
+		}}},
+	}
+	draft := schemas.BuildDraft{SchemaVersion: 1, Selection: schemas.BuildSelection{Memory: "mem-a"}}
+	quote := validate.Quote{
+		PurchaseTotalCNY: strPtr("6561.50"),
+		Lines:            []validate.QuoteLine{{Category: schemas.CategoryMemory, SKU: "mem-a", Quantity: 1}, {Category: schemas.CategoryCPU, SKU: "cpu-a", Quantity: 1}},
+	}
+	alts := x.budgetAlternatives(quote, draft)
+	if alts == nil {
+		t.Fatal("expected alternatives on overspend")
+	}
+	candidates := alts["candidates"].(map[string]any)
+	mem := candidates["memory"].([]Candidate)
+	if len(mem) != 2 || mem[0].ID != "mem-b" || mem[1].ID != "mem-c" {
+		t.Fatalf("memory alternatives wrong: %+v", mem)
+	}
+	cpu := candidates["cpu"].([]Candidate)
+	if len(cpu) != 1 || cpu[0].ID != "cpu-a" {
+		t.Fatalf("cpu alternatives wrong: %+v", cpu)
+	}
+	if _, ok := candidates["psu"]; ok {
+		t.Fatalf("unpriced category should be omitted: %+v", candidates)
+	}
+	// 预算内或无预算时不附 alternatives。
+	x2 := x
+	x2.input = schemas.PlanningInput{}
+	if x2.budgetAlternatives(quote, draft) != nil {
+		t.Fatal("no budget field should yield nil")
+	}
+	x3 := x
+	x3.input.State.Fields = map[string]schemas.RequirementField{"budget_cny": {Value: json.RawMessage(`7000`)}}
+	if x3.budgetAlternatives(quote, draft) != nil {
+		t.Fatal("within budget should yield nil")
+	}
+}
+
+func strPtr(value string) *string { return &value }
 
 func TestRecordedExpensiveMemoryQueryCanExploreAnotherPlatform(t *testing.T) {
 	raw, err := os.ReadFile("../planningeval/testdata/legacy-retrieval-recheck-20260915/suite.json")

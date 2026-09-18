@@ -61,6 +61,7 @@ type execution struct {
 	evidence   []Evidence
 	date       string
 	seen       map[string]bool
+	priceAsc   map[string]bool
 }
 
 type localSearchQuery struct {
@@ -75,6 +76,7 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 	started := time.Now()
 	x := execution{runner: r, input: input, result: Result{SchemaVersion: 1, Outcome: "proposal", Reply: "已保存本轮选配进展，可以继续补充或调整。", Issues: []string{}, Assessments: []Assessment{}, Assumptions: []string{}, StageMS: map[string]int64{}}}
 	x.seen = map[string]bool{}
+	x.priceAsc = map[string]bool{}
 	defer func() { out.DurationMS = time.Since(started).Milliseconds() }()
 	if r.Web != nil {
 		web := *r.Web
@@ -359,6 +361,16 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		}
 		if p.OrderBy != "relevance" && p.OrderBy != "price_asc" && p.OrderBy != "price_desc" {
 			return map[string]any{"error": "order_by仅允许relevance、price_asc或price_desc"}
+		}
+		if p.OrderBy == "price_asc" {
+			if x.priceAsc == nil {
+				x.priceAsc = map[string]bool{}
+			}
+			if p.Category == "" {
+				x.priceAsc["*"] = true
+			} else {
+				x.priceAsc[p.Category] = true
+			}
 		}
 		found := []Candidate{}
 		for _, c := range x.candidates {

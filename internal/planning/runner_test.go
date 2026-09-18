@@ -265,7 +265,7 @@ func TestOpenRequirementsReachPlanningAndTools(t *testing.T) {
 					if !strings.Contains(r.Contents[0].Parts[0].Text, tc.value) {
 						t.Fatal("requirement missing from actual input")
 					}
-					return function("search_local", `{"category":"cpu"}`)
+					return function("search_local", `{"category":"cpu","order_by":"price_asc"}`)
 				}
 				return genai.NewContentFromText(`{"outcome":"proposal","reply":"先保留候选并继续检索","draft":`+string(draft)+`,"issues":["要求仍需比较核实"],"assessments":[],"assumptions":[]}`, genai.RoleModel)
 			}}

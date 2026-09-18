@@ -61,12 +61,17 @@ func TestBudgetGateLoopsBackOnlyWithCheaperAlternatives(t *testing.T) {
 	if fb = x.budgetGateFeedback("clarify"); fb != "" {
 		t.Fatalf("within-budget delivery gated: %q", fb)
 	}
-	// 没有严格更便宜的同品类候选：那是合法用户取舍，不触发。
+	// 没有严格更便宜的同品类候选且已用 price_asc 核验：那是合法用户取舍，不触发。
 	field.Value = json.RawMessage("1000")
 	input.State.Fields["budget_cny"] = field
-	x = &execution{input: input, result: record}
+	x = &execution{input: input, result: record, priceAsc: map[string]bool{"psu": true}}
 	if fb = x.budgetGateFeedback("clarify"); fb != "" {
 		t.Fatalf("no cheaper alternative must not gate: %q", fb)
+	}
+	// 没有更便宜候选但从未用 price_asc 核验：要求先核验，不得以"已遍历"终局。
+	x = &execution{input: input, result: record}
+	if fb = x.budgetGateFeedback("clarify"); fb == "" || !strings.Contains(fb, "price_asc") {
+		t.Fatalf("unverified exhaustive claim must demand price_asc evidence: %q", fb)
 	}
 	// 非 must 预算不构成硬上限。
 	field.Strength = "prefer"

@@ -62,9 +62,6 @@ func (x *execution) budgetGateFeedback(outcome string) string {
 		return ""
 	}
 	alts := x.budgetAlternatives(quote, draft)
-	if alts == nil {
-		return ""
-	}
 	selected := map[schemas.Category]*big.Rat{}
 	for _, line := range quote.Lines {
 		if line.UnitPriceCNY == nil {
@@ -93,7 +90,17 @@ func (x *execution) budgetGateFeedback(outcome string) string {
 		}
 	}
 	if len(filtered) == 0 {
-		return ""
+		// 无严格更便宜候选时，只有本轮已用 price_asc 核验过目录低价才允许
+		// 超预算终局；否则"已遍历"是不可采信的自述，要求先核验。
+		// ponytail: 只校验"出现过 price_asc 查询"，不逐品类核对——按品类核对需
+		// 兼容性知识，先以有界回环压制未核验声明，升级路径是按超支品类核对。
+		if len(x.priceAsc) > 0 {
+			return ""
+		}
+		payload, _ := json.Marshal(map[string]any{
+			"ceiling_cny": upper.FloatString(2), "total_cny": total.FloatString(2),
+		})
+		return "预算自纠反馈：" + string(payload) + "\n当前总价超出 must 预算硬上限，而本轮尚未用 order_by=price_asc 检索过目录低价；未核验的\"已遍历所有品类更便宜候选\"声明不可作为交付依据。请先用 search_local（order_by=price_asc）核对超支品类及可下调品类的最低价，能压回预算就替换并重新 evaluate；确认每个品类都无更低价后才交付标注偏差的 proposal（issues 列明牺牲项），不得停在 clarify。"
 	}
 	payload, _ := json.Marshal(map[string]any{
 		"ceiling_cny": upper.FloatString(2), "total_cny": total.FloatString(2),
@@ -344,7 +351,7 @@ func (x *execution) deliveryGate(outcome string, clarifiesEvaluatedDraft bool, g
 			return fb
 		}
 	}
-	if gates.unknown < 1 && (outcome == "proposal" || clarifiesEvaluatedDraft) {
+	if gates.unknown < 2 && (outcome == "proposal" || clarifiesEvaluatedDraft) {
 		if fb := x.unknownGateFeedback(outcome, clarifiesEvaluatedDraft); fb != "" {
 			gates.unknown++
 			gates.total++

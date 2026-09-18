@@ -82,7 +82,7 @@ def main():
              "C123-002", "C123-003", "C123-004", "C123-005", "C123-006"]
     cases.sort(key=lambda c: order.index(c["id"]))
     suite = dict(version="current-178-live-mechanisms-20260918-r3", live=True,
-                 provenance="全量10场景真实模型：oracle剥离，保留authored业务交付断言与本地工具要求（离线工具要求剔除），不额外强加工具断言；模型选型自由，外部工具离线。目录为 current-178-20260917 冻结快照11（126件active）。相对r2套件：B2-002/003剔除被用户明确推迟配置所阻挡的step2 confirm，C123-001 step3的preserve_other_parts改为preserve_essential_parts（r2证据：逐件相等与预算硬上限在v1余量119元+CPU差价510元下不可同时满足，见 docs/eval/planning-v2/current-178-20260917.md）；执行顺序B2与C123-007在前（r1/r2证据：C123-001单例消耗~35次调用导致队尾case饿死0调用，B2修复从未被现场验证）；待验证修复含keyword_hits检索、budget_alternatives、evaluate时机、noise_pref与confirm时机提示词、超预算最小替换策略。",
+                 provenance="全量10场景真实模型：oracle剥离，保留authored业务交付断言与本地工具要求（离线工具要求剔除），不额外强加工具断言；模型选型自由，外部工具离线。目录为 current-178-20260917 冻结快照11（126件active）。相对r2套件：B2-002/003剔除被用户明确推迟配置所阻挡的step2 confirm，C123-001 step3的preserve_other_parts改为preserve_essential_parts（r2证据：逐件相等与预算硬上限在v1余量119元+CPU差价510元下不可同时满足，见 docs/eval/planning-v2/current-178-20260917.md）；执行顺序B2与C123-007在前（r1/r2证据：C123-001单例消耗~35次调用导致队尾case饿死0调用，B2修复从未被现场验证）；待验证修复含keyword_hits检索、budget_alternatives、evaluate时机、noise_pref与confirm时机提示词、超预算最小替换策略、已有件缺失检索取证与clarify、缺字段候选换选重试。",
                  catalog=suite["catalog"], pages={}, cases=cases)
     target = ROOT / "internal/planningeval/testdata/current-178-live-20260918"
     assert not target.exists()

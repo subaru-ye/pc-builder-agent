@@ -161,6 +161,41 @@ func (f *fakeProductStore) InterruptRunning(context.Context, json.RawMessage) ([
 	return nil, nil
 }
 
+// planningFakeStore 在基础假 store 上补齐增量协议能力（proposalStore +
+// ContinueScreeningRun），模拟生产 Store 的能力面；旧协议测试继续用基础版。
+type planningFakeStore struct{ *fakeProductStore }
+
+func (f *planningFakeStore) LatestProposal(context.Context, string) (json.RawMessage, error) {
+	return nil, nil
+}
+func (f *planningFakeStore) BuildByVersion(_ context.Context, _ string, version int) (store.BuildVersion, error) {
+	return store.BuildVersion{Version: version}, nil
+}
+func (f *planningFakeStore) CompletePlanningRun(ctx context.Context, p store.CompletePlanningParams) (store.PlanningCompletion, error) {
+	if _, err := f.CompleteRun(ctx, p.Completion); err != nil {
+		return store.PlanningCompletion{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.latest++
+	return store.PlanningCompletion{Result: p.Result, Version: f.latest}, nil
+}
+func (f *planningFakeStore) ContinueScreeningRun(_ context.Context, _, _, runID string, state schemas.RequirementState) (store.AgentRun, json.RawMessage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r := f.runs[runID]
+	r.Kind = store.RunBuild
+	f.runs[runID] = r
+	pending, err := schemas.PlanningRequirement(state)
+	if err != nil {
+		return store.AgentRun{}, nil, err
+	}
+	f.session.Phase = store.PhaseBuilding
+	f.session.PendingRequirement = pending
+	f.session.ConfirmedRequirement = pending
+	return r, pending, nil
+}
+
 type fakeAgent struct {
 	store            *fakeProductStore
 	screen           ScreenResult
@@ -270,6 +305,46 @@ func TestServiceRequirementConfirmBuild(t *testing.T) {
 		if got[i] != wantOrder[i] {
 			t.Fatalf("事件[%d]=%s want=%s,all=%v", i, got[i], wantOrder[i], got)
 		}
+	}
+}
+
+func TestFirstExecutionMessageGoesStraightToBuilder(t *testing.T) {
+	st := &planningFakeStore{newFakeProductStore()}
+	update := &schemas.RequirementUpdate{
+		Operations: []schemas.RequirementOperation{
+			{Op: "set", Field: "budget_cny", Value: json.RawMessage("8000"), Kind: "constraint", Strength: "must", Scope: "session", Evidence: "stated", Quote: "预算8000"},
+			{Op: "set", Field: "use_case.type", Value: json.RawMessage(`"gaming"`), Kind: "fact", Strength: "must", Scope: "session", Evidence: "stated", Quote: "游戏"},
+		},
+		NextAction: "plan", Reply: "开始为本轮检索选配。",
+	}
+	agent := &fakeAgent{store: st.fakeProductStore, screen: ScreenResult{RequirementUpdate: update}, contextAvailable: true}
+	sink := newFakeSink()
+	svc, err := NewService(context.Background(), st, agent, sink)
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, err := svc.StartMessage(context.Background(), "owner-1", "session-1",
+		"00000000-0000-4000-8000-000000000003", "预算8000，直接开始配一台游戏主机")
+	if err != nil || started.Run.Kind != store.RunScreening {
+		t.Fatalf("StartMessage=%+v err=%v", started, err)
+	}
+	sink.wait(t)
+	// 用户原话就是执行授权：首轮直接进入 Builder，不再经过 confirm 交接。
+	if st.latest != 1 {
+		t.Fatalf("builder 未运行: latest=%d", st.latest)
+	}
+	ws, _ := st.WebSessionByOwner(context.Background(), "owner-1", "session-1")
+	if ws.Phase != store.PhaseReady {
+		t.Fatalf("builder 完成后会话状态不正确: %+v", ws)
+	}
+	run, _ := st.RunByOwner(context.Background(), "owner-1", started.Run.ID)
+	if run.Kind != store.RunBuild {
+		t.Fatalf("screening run 未升级为 build: %+v", run)
+	}
+	var sent schemas.PlanningInput
+	if err := json.Unmarshal(agent.remotePayload, &sent); err != nil || sent.SchemaVersion != 2 ||
+		string(sent.State.Fields["budget_cny"].Value) != "8000" || string(sent.State.Fields["use_case.type"].Value) != `"gaming"` {
+		t.Fatalf("Remote 未收到合并后的需求: %s err=%v", agent.remotePayload, err)
 	}
 }
 

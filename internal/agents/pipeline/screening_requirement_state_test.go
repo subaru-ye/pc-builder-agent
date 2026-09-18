@@ -92,3 +92,87 @@ func TestScreeningStateOwnedPatchCanKeepOtherGroundedModels(t *testing.T) {
 		t.Fatal("old model restored without current evidence")
 	}
 }
+
+type sequenceModel struct {
+	outputs []string
+	calls   int
+	lastReq *model.LLMRequest
+}
+
+func (m *sequenceModel) Name() string { return "offline-sequence" }
+func (m *sequenceModel) GenerateContent(_ context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
+	return func(yield func(*model.LLMResponse, error) bool) {
+		i := m.calls
+		if i >= len(m.outputs) {
+			i = len(m.outputs) - 1
+		}
+		m.calls++
+		m.lastReq = req
+		yield(&model.LLMResponse{Content: genai.NewContentFromText(m.outputs[i], genai.RoleModel)}, nil)
+	}
+}
+
+func planReadyStateFixture() schemas.RequirementState {
+	state := schemas.NewRequirementState()
+	state.Fields["budget_cny"] = schemas.RequirementField{Status: "active", Value: json.RawMessage("8000")}
+	state.Fields["use_case.type"] = schemas.RequirementField{Status: "active", Value: json.RawMessage(`"gaming"`)}
+	return state
+}
+
+func runScreeningState(t *testing.T, state schemas.RequirementState, m *sequenceModel) string {
+	t.Helper()
+	ctx := WithRequirementState(context.Background(), state, schemas.RequirementSource{Kind: "chat", MessageID: "message-new", Quote: "预算8000，直接开始配"})
+	req := &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText("用户：预算8000，直接开始配", genai.RoleUser)}}
+	var delivered string
+	for response, err := range (screeningGuard{LLM: m}).GenerateContent(ctx, req, true) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		delivered = screeningText(response.Content)
+	}
+	return delivered
+}
+
+func TestScreeningCollectFallbackRetriesOnceWhenStateReady(t *testing.T) {
+	state := planReadyStateFixture()
+	m := &sequenceModel{outputs: []string{
+		`{"operations":[],"next_action":"collect","reply":"好的，本轮信息已记录。"}`,
+		`{"operations":[],"next_action":"plan","reply":"开始为本轮选配。"}`,
+	}}
+	delivered := runScreeningState(t, state, m)
+	if m.calls != 2 {
+		t.Fatalf("collect fallback must retry exactly once: %d calls", m.calls)
+	}
+	if !strings.Contains(delivered, `"next_action":"plan"`) {
+		t.Fatalf("retry result not adopted: %s", delivered)
+	}
+	// 纠正提示跟随在首轮模型输出之后。
+	var corrective bool
+	for _, c := range m.lastReq.Contents {
+		if strings.Contains(screeningText(c), "纠偏") {
+			corrective = true
+		}
+	}
+	if !corrective {
+		t.Fatal("missing corrective instruction in retry request")
+	}
+}
+
+func TestScreeningCollectFallbackStaysOutWhenNotApplicable(t *testing.T) {
+	for _, tc := range []struct {
+		name, output string
+		state        schemas.RequirementState
+	}{
+		{"state-not-ready", `{"operations":[],"next_action":"collect","reply":"预算定了告诉我。"}`, schemas.NewRequirementState()},
+		{"reply-asks-question", `{"operations":[],"next_action":"collect","reply":"需要独显吗？"}`, planReadyStateFixture()},
+		{"plan-not-collect", `{"operations":[],"next_action":"plan","reply":"开始为本轮选配。"}`, planReadyStateFixture()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &sequenceModel{outputs: []string{tc.output}}
+			delivered := runScreeningState(t, tc.state, m)
+			if m.calls != 1 || !strings.Contains(delivered, "next_action") {
+				t.Fatalf("unexpected retry: %d calls %s", m.calls, delivered)
+			}
+		})
+	}
+}

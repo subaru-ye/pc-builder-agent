@@ -241,15 +241,22 @@ func (s *Service) executeScreening(ctx context.Context, r store.AgentRun, ownerI
 		}
 		state, mergeErr := schemas.ApplyRequirementUpdate(*input.RequirementState, *result.RequirementUpdate, input.RequirementSource)
 		if mergeErr == nil && state.NextAction == "plan" {
-			if input.Conversation.CanPlan {
+			// A chat command authorizing execution in the user's own words is the
+			// confirmation; continue the same run when the store supports it.
+			continuable := false
+			if _, ok := s.store.(interface {
+				ContinueScreeningRun(context.Context, string, string, string, schemas.RequirementState) (store.AgentRun, json.RawMessage, error)
+			}); ok {
+				continuable = true
+			}
+			if continuable {
 				mergeErr = s.planFromScreening(ctx, ownerID, r, state, input.RequirementSource)
 				if mergeErr != nil {
 					s.failInternal(ctx, r, store.PhaseCollecting, "")
 				}
 				return
 			}
-			// Initial requirement confirmation remains explicit. A model action
-			// cannot silently skip it or claim execution before it starts.
+			// Legacy stores keep the explicit confirmation handoff.
 			state.NextAction, state.Reply = "confirm", ScreeningReadyMessage
 		}
 		if mergeErr == nil {

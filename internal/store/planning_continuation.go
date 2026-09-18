@@ -9,7 +9,9 @@ import (
 
 // ContinueScreeningRun moves an explicitly authorized chat request into planning
 // without ending its run or opening a race for a second message/confirmation.
-// Historical builds and their requirement snapshots remain immutable.
+// The user's own execution request in the current message is the authorization;
+// revision consistency guards stale writes. Historical builds and their
+// requirement snapshots remain immutable.
 func (s *Store) ContinueScreeningRun(ctx context.Context, ownerID, sessionID, runID string, state schemas.RequirementState) (AgentRun, json.RawMessage, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -17,13 +19,10 @@ func (s *Store) ContinueScreeningRun(ctx context.Context, ownerID, sessionID, ru
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var revision int
-	var confirmed, hasBuild bool
-	if err = tx.QueryRow(ctx, `SELECT COALESCE((requirement_state->>'revision')::int,0), confirmed_requirement IS NOT NULL,
-		EXISTS(SELECT 1 FROM builds WHERE session_id=$1) FROM web_sessions WHERE id=$1 AND owner_id=$2 FOR UPDATE`, sessionID, ownerID).Scan(&revision, &confirmed, &hasBuild); err != nil {
+	var hasBuild bool
+	if err = tx.QueryRow(ctx, `SELECT COALESCE((requirement_state->>'revision')::int,0),
+		EXISTS(SELECT 1 FROM builds WHERE session_id=$1) FROM web_sessions WHERE id=$1 AND owner_id=$2 FOR UPDATE`, sessionID, ownerID).Scan(&revision, &hasBuild); err != nil {
 		return AgentRun{}, nil, err
-	}
-	if !confirmed {
-		return AgentRun{}, nil, ErrInvalidSessionPhase
 	}
 	if state.Revision != revision+1 {
 		return AgentRun{}, nil, ErrRequirementRevision

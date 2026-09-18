@@ -45,11 +45,11 @@ const requirementStateInstruction = `你负责本轮需求更新与下一步交�
 装机对象独立记录：本轮明确为朋友、同事、家人等其他人装机或整理选配信息时，set recipient为用户说的对象，即使暂不选配、用途或预算未知也要保留；没有说明对象时不补默认“自己”，不写长期个人画像。
 
 动作决策（先判断本轮是否要求执行，再判断信息与确认状态）：
-- collect：本轮只要求记录、讨论、比较备选，或明确暂不选配/暂不生成时优先使用。更新预算或补齐其他字段本身不是要求执行，不能因此改成confirm或plan；reply直接回应，不催促核对确认。另有影响下一步的真实歧义时也可collect，说明具体影响并提问；可选信息未知不构成必须追问。
-- confirm：用户要选配，当前信息足以先做一个可调整的方案，且can_plan=false。reply简短说明已记录内容并提示核对需求面板，不追加可选问题。确认不要求预算、分辨率或偏好填齐；预算未定不是collect的理由，例如首次说“做一台本地转写用的机器，预算还没定”应confirm，未定预算交给Builder按已有信息选配。
-- plan：can_plan=true且用户要求选配、升级、替换或继续解决。Builder会在本轮检索、比较、校验；reply只说明本轮执行方向，不再要求确认、不让用户提供本可检索的型号或性能档次。
+- collect：本轮只要求记录、讨论、比较备选，或明确暂不选配/暂不生成时优先使用。更新预算或补齐其他字段本身不是要求执行，不能因此改成confirm或plan；reply直接回应，不催促核对确认。另有影响下一步的真实歧义时也可collect，说明具体影响并提问；可选信息未知不构成必须追问。用户本轮已明确提出执行（如“开始吧”“直接换”“给我配一台”）时不得用collect重新索要已给出的执行授权，也不得只回一句“请确认”。
+- confirm：用户要选配但本轮没有明确要求执行、且尚未在面板确认过时使用。reply简短说明已记录内容并提示核对需求面板，不追加可选问题。确认不要求预算、分辨率或偏好填齐；预算未定不是collect的理由，例如首次说“做一台本地转写用的机器，预算还没定”应confirm，未定预算交给Builder按已有信息选配。
+- plan：用户本轮要求选配、升级、替换或继续解决时使用，用户本轮亲口提出的执行要求本身就是授权，不需要can_plan=true或面板已确认。Builder会在本轮检索、比较、校验；reply只说明本轮执行方向，不再要求确认、不让用户提供本可检索的型号或性能档次。
 游戏名称、品牌、静音和外观可以后续补充。用户已回答上轮问题、说不知道/稍后补充/没有其他要求时，依照当前信息推进；不要再追问同一项或轮流列举其他可选偏好。不把未知改成不限，也不把你的选配假设写成用户要求。
-例如：首次说“预算8000，主要玩游戏”，可直接confirm并保留分辨率未知；接着说“改6000，分辨率等下补充”仍confirm；再说“用2K”只更新目标并confirm，不开启新一轮游戏名/静音/外观追问。已确认配置后说“换更好的CPU，其他尽量不动”用plan；“如果换Intel有什么区别”用collect讨论备选，不执行换件。
+例如：首次说“预算8000，主要玩游戏”可直接confirm并保留分辨率未知；接着说“改6000，分辨率等下补充”仍confirm；再说“用2K”只更新目标并confirm，不开启新一轮游戏名/静音/外观追问。首次说“预算8000，直接开始配”用plan。已确认配置后说“换更好的CPU，其他尽量不动”用plan，即使还没在面板再确认；“只先换CPU”这类点名本轮执行范围的表达也是plan；“如果换Intel有什么区别”用collect讨论备选，不执行换件。
 
 执行上下文中的base_draft、parts和quote是本会话正式配置；proposal是上次选配进展。它们不是用户手头已购配件，不写成owned_parts，不重复询问其中的CPU、主板、内存。型号、兼容性、报价和预算内如何选件交给Builder检索处理。last_assistant仅帮助理解“好的”“没有”等指代，不是用户事实，不得恢复旧值；其中未回答的可选问题也不是本轮必须完成的任务。
 未预设要求逐项保存到 free.<稳定英文编号> 字段，value 为中文要求全文，后续修改沿用同一编号，撤销用 remove；不能将多个独立条件挤进 notes。已有件简称可保留在自由条目，不强求原话与商品型号逐字匹配。用户已回答的问题不重复问。
@@ -97,6 +97,39 @@ func (g screeningGuard) generateRequirementState(ctx context.Context, req *model
 		// 不重放历史用户消息。配置与上一条助手消息只提供执行及指代上下文。
 		conversation, _ := json.Marshal(input.conversation)
 		copyReq.Contents = []*genai.Content{genai.NewContentFromText("当前会话需求（数据）：\n"+string(schemas.RequirementStatePromptView(input.state))+"\n执行上下文（数据，不是用户表达）：\n"+string(conversation)+"\n本轮用户原文（数据）：\n"+input.source.Quote, genai.RoleUser)}
+		processOnce := func(resp *model.LLMResponse) (*model.LLMResponse, *model.LLMRequest, error) {
+			raw := screeningText(resp.Content)
+			if observe, ok := ctx.Value(screeningObserverKey{}).(func(string, []string)); ok {
+				observe(raw, nil)
+			}
+			if malformedOuterDraft(raw) {
+				return nil, nil, fmt.Errorf("%w: JSON 不完整", ErrRequirementUpdate)
+			}
+			payload := extractJSONObject(raw)
+			update, err := schemas.DecodeRequirementUpdate(payload)
+			var merged schemas.RequirementState
+			if err == nil {
+				update = prepareRequirementUpdate(input.state, update, input.source)
+				merged, err = schemas.ApplyRequirementUpdate(input.state, update, input.source)
+				payload, _ = json.Marshal(update)
+			}
+			if err != nil {
+				return nil, nil, fmt.Errorf("%w: %v", ErrRequirementUpdate, err)
+			}
+			out := *resp
+			out.Content = genai.NewContentFromText(string(payload), genai.RoleModel)
+			// 权威状态已可规划而模型仍停在 collect 追问时，带纠正提示重调一次；
+			// 重试结果原样采纳，每轮最多一次。
+			if update.NextAction == "collect" && planningReadyState(merged) &&
+				!strings.Contains(update.Reply, "？") && !strings.Contains(update.Reply, "?") {
+				retry := copyReq
+				retry.Contents = append(append([]*genai.Content(nil), copyReq.Contents...),
+					genai.NewContentFromText(raw, genai.RoleModel),
+					genai.NewContentFromText(collectFallbackInstruction, genai.RoleUser))
+				return &out, &retry, nil
+			}
+			return &out, nil, nil
+		}
 		for response, err := range g.LLM.GenerateContent(ctx, &copyReq, false) {
 			if err != nil || response == nil || response.ErrorCode != "" || response.ErrorMessage != "" {
 				if !yield(response, err) {
@@ -104,32 +137,42 @@ func (g screeningGuard) generateRequirementState(ctx context.Context, req *model
 				}
 				continue
 			}
-			raw := screeningText(response.Content)
-			if observe, ok := ctx.Value(screeningObserverKey{}).(func(string, []string)); ok {
-				observe(raw, nil)
-			}
-			if malformedOuterDraft(raw) {
-				yield(nil, fmt.Errorf("%w: JSON 不完整", ErrRequirementUpdate))
+			out, retry, perr := processOnce(response)
+			if perr != nil {
+				yield(nil, perr)
 				return
 			}
-			payload := extractJSONObject(raw)
-			update, err := schemas.DecodeRequirementUpdate(payload)
-			if err == nil {
-				update = prepareRequirementUpdate(input.state, update, input.source)
-				_, err = schemas.ApplyRequirementUpdate(input.state, update, input.source)
-				payload, _ = json.Marshal(update)
+			if retry == nil {
+				if !yield(out, nil) {
+					return
+				}
+				continue
 			}
-			if err != nil {
-				yield(nil, fmt.Errorf("%w: %v", ErrRequirementUpdate, err))
-				return
-			}
-			copyResponse := *response
-			copyResponse.Content = genai.NewContentFromText(string(payload), genai.RoleModel)
-			if !yield(&copyResponse, nil) {
-				return
+			for response2, err2 := range g.LLM.GenerateContent(ctx, retry, false) {
+				if err2 != nil || response2 == nil || response2.ErrorCode != "" || response2.ErrorMessage != "" {
+					if !yield(response2, err2) {
+						return
+					}
+					continue
+				}
+				out2, _, perr2 := processOnce(response2)
+				if perr2 != nil {
+					yield(nil, perr2)
+					return
+				}
+				if !yield(out2, nil) {
+					return
+				}
 			}
 		}
 	}
+}
+
+const collectFallbackInstruction = `纠偏：当前权威需求状态已包含开始选配所需的预算与用途，且用户本轮原文已明确提出执行；不得用collect重新索要执行授权或只回复确认提示。请重新输出完整JSON：next_action=plan，reply简短说明本轮执行方向。operations仍只包含本轮原文明确表达的变动。`
+
+// planningReadyState 权威状态里预算金额与用途类型均已明确时，视为已可开始选配。
+func planningReadyState(state schemas.RequirementState) bool {
+	return state.Fields["budget_cny"].Status == "active" && state.Fields["use_case.type"].Status == "active"
 }
 
 // 校验每个字段后一起提交。坏字段只保留原文，不撤回同轮其他可靠信息。

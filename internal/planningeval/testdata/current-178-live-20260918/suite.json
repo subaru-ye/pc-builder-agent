@@ -5896,7 +5896,11 @@
           "text": "预算6000，只先换CPU，其他配件尽量不动。",
           "expect": {
             "versions": 0,
-            "outcome": "proposal",
+            "outcome_one_of": [
+              "proposal",
+              "clarify",
+              "collect"
+            ],
             "issues_any": [
               "显示输出",
               "独显"

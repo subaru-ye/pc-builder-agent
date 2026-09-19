@@ -217,15 +217,24 @@ type budgetSacrifice struct {
 	SavingCNY string           `json:"saving_cny"`
 }
 
-func (f *budgetFix) notes() []string {
+func (f *budgetFix) notes(kind string) []string {
 	out := []string{}
 	for _, r := range f.Replacements {
 		plural := ""
 		if r.Quantity > 1 {
 			plural = fmt.Sprintf("×%d", r.Quantity)
 		}
-		out = append(out, fmt.Sprintf("服务端预算替换：%s 从 %s(%s元) 换为 %s(%s元)%s，省 %s 元；依据：目录内同品类更低价有报价候选、%s、替换组合已重新通过全部兼容与报价校验。",
-			categoryLabel(r.Category), r.FromName, r.FromPrice, r.ToName, r.ToPrice, plural, r.SavingCNY, r.Basis))
+		delta := ""
+		if v, ok := new(big.Rat).SetString(r.SavingCNY); ok {
+			switch {
+			case v.Sign() > 0:
+				delta = fmt.Sprintf("，省 %s 元", r.SavingCNY)
+			case v.Sign() < 0:
+				delta = fmt.Sprintf("，涨价 %s 元", new(big.Rat).Neg(v).FloatString(2))
+			}
+		}
+		out = append(out, fmt.Sprintf("服务端%s：%s 从 %s(%s元) 换为 %s(%s元)%s%s；依据：目录内同品类候选、%s、替换组合已重新通过全部兼容与报价校验。",
+			kind, categoryLabel(r.Category), r.FromName, r.FromPrice, r.ToName, r.ToPrice, plural, delta, r.Basis))
 	}
 	return out
 }
@@ -440,6 +449,29 @@ func (x *execution) searchBudgetFix(ctx context.Context, draft schemas.BuildDraf
 	return dfs(0, over)
 }
 
+// applySlotSwap 把一个槽位替换为新 SKU。
+func applySlotSwap(sel *schemas.BuildSelection, cat schemas.Category, ssdIndex int, id string) {
+	switch {
+	case ssdIndex >= 0:
+		sel.SSDs[ssdIndex].SKU = id
+	case cat == schemas.CategoryCPU:
+		sel.CPU = id
+	case cat == schemas.CategoryGPU:
+		gpu := id
+		sel.GPU = &gpu
+	case cat == schemas.CategoryMotherboard:
+		sel.Motherboard = id
+	case cat == schemas.CategoryMemory:
+		sel.Memory = id
+	case cat == schemas.CategoryPSU:
+		sel.PSU = id
+	case cat == schemas.CategoryCase:
+		sel.Case = id
+	case cat == schemas.CategoryCooler:
+		sel.Cooler = id
+	}
+}
+
 // verifyBudgetSelection 把选中组合写回 selection 并重新通过全部校验规则；
 // 校验未全过或总价仍未压回时该组合作废，搜索继续。
 func (x *execution) verifyBudgetSelection(ctx context.Context, draft schemas.BuildDraft, slots []budgetSlot, chosen []int, upper *big.Rat) *budgetFix {
@@ -452,33 +484,16 @@ func (x *execution) verifyBudgetSelection(ctx context.Context, draft schemas.Bui
 			continue
 		}
 		c := slot.Options[chosen[si]]
-		switch {
-		case slot.SSDIndex >= 0:
-			sel.SSDs[slot.SSDIndex].SKU = c.ID
-		case slot.Category == schemas.CategoryCPU:
-			sel.CPU = c.ID
-		case slot.Category == schemas.CategoryGPU:
-			gpu := c.ID
-			sel.GPU = &gpu
-		case slot.Category == schemas.CategoryMotherboard:
-			sel.Motherboard = c.ID
-		case slot.Category == schemas.CategoryMemory:
-			sel.Memory = c.ID
-		case slot.Category == schemas.CategoryPSU:
-			sel.PSU = c.ID
-		case slot.Category == schemas.CategoryCase:
-			sel.Case = c.ID
-		case slot.Category == schemas.CategoryCooler:
-			sel.Cooler = c.ID
-		}
+		old := byIDFallback(x.candidates, slot.OldID)
+		applySlotSwap(&sel, slot.Category, slot.SSDIndex, c.ID)
 		save := new(big.Rat).Sub(slot.OldPrice, parsePriceRat(c.Price))
 		save.Mul(save, new(big.Rat).SetInt64(int64(slot.Quantity)))
 		replacements = append(replacements, budgetReplacement{
 			Category: slot.Category, SSDIndex: slot.SSDIndex,
-			FromID: slot.OldID, FromName: slot.OldName, FromPrice: priceText(byIDFallback(x.candidates, slot.OldID)),
+			FromID: slot.OldID, FromName: slot.OldName, FromPrice: priceText(old),
 			ToID: c.ID, ToName: displayName(c), ToPrice: priceText(c),
 			SavingCNY: save.FloatString(2), Quantity: slot.Quantity,
-			Basis: tierBasis(slot.Category, byIDFallback(x.candidates, slot.OldID), c),
+			Basis: tierBasis(slot.Category, old, c),
 		})
 	}
 	res, err := validate.New(snapshotResolver{snapshotID: x.snapshotID, candidates: x.candidates, date: x.date}).Evaluate(ctx, sel)
@@ -502,8 +517,10 @@ func byIDFallback(candidates []Candidate, id string) Candidate {
 }
 
 // minBudgetSacrifice 档位不降约束下无解时，找唯一能单笔压回预算的最小牺牲：
-// 在所有未锁定槽位的更低价候选中取省额最小且覆盖超支额的一笔。
-func (x *execution) minBudgetSacrifice(draft schemas.BuildDraft, locked map[schemas.Category]bool, over *big.Rat) *budgetSacrifice {
+// 在所有未锁定槽位的更低价候选中取省额最小且覆盖超支额的一笔。牺牲候选必须
+// 重新通过全部校验规则——与用途硬条件冲突的降档（如以无核显 CPU 替代核显
+// 点亮）不是可执行的牺牲方案，直接跳过。
+func (x *execution) minBudgetSacrifice(ctx context.Context, draft schemas.BuildDraft, locked map[schemas.Category]bool, over *big.Rat) *budgetSacrifice {
 	var best *budgetSacrifice
 	var bestSaving *big.Rat
 	for _, slot := range x.budgetSlots(draft, locked, true) {
@@ -515,6 +532,12 @@ func (x *execution) minBudgetSacrifice(draft schemas.BuildDraft, locked map[sche
 			save := new(big.Rat).Sub(slot.OldPrice, p)
 			save.Mul(save, new(big.Rat).SetInt64(int64(slot.Quantity)))
 			if save.Cmp(over) < 0 {
+				continue
+			}
+			if best != nil && bestSaving != nil && save.Cmp(bestSaving) > 0 {
+				continue // 已有更小省额的合格牺牲
+			}
+			if !x.sacrificePasses(ctx, draft, slot, c) {
 				continue
 			}
 			if bestSaving == nil || save.Cmp(bestSaving) < 0 || (save.Cmp(bestSaving) == 0 && c.ID < best.ToID) {
@@ -529,6 +552,37 @@ func (x *execution) minBudgetSacrifice(draft schemas.BuildDraft, locked map[sche
 	return best
 }
 
+// sacrificePasses 验证单笔牺牲不引入新的校验失败或新的 unknown——与用途硬
+// 条件冲突的降档（如以无核显 CPU 替代核显点亮）被过滤；原 draft 已有的
+// unknown 不阻断牺牲方案的成立。
+func (x *execution) sacrificePasses(ctx context.Context, draft schemas.BuildDraft, slot budgetSlot, c Candidate) bool {
+	if x.result.Validation == nil {
+		return false
+	}
+	baseFails, baseUnknowns := validationCounts(x.result.Validation)
+	sel := draft.Selection
+	sel.SSDs = append([]schemas.SSDSelection(nil), draft.Selection.SSDs...)
+	applySlotSwap(&sel, slot.Category, slot.SSDIndex, c.ID)
+	res, err := validate.New(snapshotResolver{snapshotID: x.snapshotID, candidates: x.candidates, date: x.date}).Evaluate(ctx, sel)
+	if err != nil || res.Quote.MissingCount != 0 {
+		return false
+	}
+	fails, unknowns := validationCounts(&res.Report)
+	return fails <= baseFails && unknowns <= baseUnknowns
+}
+
+func validationCounts(report *schemas.ValidationReport) (fails, unknowns int) {
+	for _, check := range report.Checks {
+		switch check.Outcome {
+		case schemas.OutcomeFail:
+			fails++
+		case schemas.OutcomeUnknown:
+			unknowns++
+		}
+	}
+	return fails, unknowns
+}
+
 // solveBudget 求解入口：返回可行替换组合；无解时返回最小牺牲。
 func (x *execution) solveBudget(ctx context.Context, draft schemas.BuildDraft) (*budgetFix, *budgetSacrifice, bool) {
 	over, upper, ok := x.budgetOverrun()
@@ -539,7 +593,7 @@ func (x *execution) solveBudget(ctx context.Context, draft schemas.BuildDraft) (
 	if fix := x.searchBudgetFix(ctx, draft, x.budgetSlots(draft, locked, false), upper, over); fix != nil {
 		return fix, nil, true
 	}
-	return nil, x.minBudgetSacrifice(draft, locked, over), true
+	return nil, x.minBudgetSacrifice(ctx, draft, locked, over), true
 }
 
 // patchDraftJSON 只改写 selection 中被替换的槽位，rationale 等其余字段原样保留。
@@ -648,7 +702,7 @@ func (x *execution) applyBudgetFix(ctx context.Context) {
 		}
 		x.evaluate(ctx, raw)
 		x.result.Issues = dropStaleBudgetIssues(x.result.Issues)
-		x.result.Issues = append(x.result.Issues, fix.notes()...)
+		x.result.Issues = append(x.result.Issues, fix.notes("预算替换")...)
 		return
 	}
 	if sacrifice != nil {
@@ -656,4 +710,277 @@ func (x *execution) applyBudgetFix(ctx context.Context) {
 		return
 	}
 	x.result.Issues = append(x.result.Issues, "预算压价求解：当前配置超出预算硬上限，且各未锁定品类已无目录内更低价候选与可牺牲项。")
+}
+
+// unknownCategoryFields 汇总校验报告中 unknown 检查涉及的品类与缺失字段。
+func unknownCategoryFields(report *schemas.ValidationReport) map[schemas.Category][]string {
+	if report == nil {
+		return nil
+	}
+	out := map[schemas.Category][]string{}
+	for _, check := range report.Checks {
+		if check.Outcome != schemas.OutcomeUnknown {
+			continue
+		}
+		for _, missing := range check.MissingFields {
+			dot := strings.Index(missing, ".")
+			if dot <= 0 {
+				continue
+			}
+			cat, key := schemas.Category(missing[:dot]), missing[dot+1:]
+			out[cat] = append(out[cat], key)
+		}
+	}
+	return out
+}
+
+// unknownFixDue 判定是否轮到服务端确定性 unknown 修复：终局交付校验未全过、
+// 存在 unknown 缺失字段，且 unknown 门回环已耗尽（与 budgetFixDue 同一保守
+// 停用条件）。unknown 与兼容性仍以校验规则为准：修复只做"缺字段候选 →
+// 字段完整候选"的目录内换选并重新通过全部校验，换不回 pass 就如实保留。
+func (x *execution) unknownFixDue(outcome string, clarifiesEvaluatedDraft bool, gates *deliveryGateCounters, turn, turns int) bool {
+	if outcome != "ready" && outcome != "proposal" && !clarifiesEvaluatedDraft {
+		return false
+	}
+	if len(unknownCategoryFields(x.result.Validation)) == 0 {
+		return false
+	}
+	for key, f := range x.input.State.Fields {
+		if schemas.FreeField(key) && f.Status == "active" && f.Strength == "must" && f.Kind == "constraint" {
+			return false
+		}
+	}
+	return turn >= turns-2 || gates.unknown >= 2 || gates.total >= 3
+}
+
+// unknownSwapTierOK unknown 换选的档位约束（宽松版）：原候选缺失的字段
+//（unknown 的来源）跳过比较——换选本就是"字段补全"；其余可比档位字段
+// 仍必须不降，防止借补全之名降档（如 B650→A620、水冷→风冷）。
+func unknownSwapTierOK(cat schemas.Category, old, new Candidate) bool {
+	o, n := candidateSpecs(old), candidateSpecs(new)
+	notLowerInt := func(key string) bool {
+		ov, nv := specInt(o, key), specInt(n, key)
+		return ov == nil || (nv != nil && *nv >= *ov)
+	}
+	switch cat {
+	case schemas.CategoryPSU:
+		return notLowerInt("wattage_w")
+	case schemas.CategoryMotherboard:
+		return notLowerInt("m2_slots") && notLowerInt("memory_speed_max_mts")
+	case schemas.CategoryCooler:
+		ot, nt := specString(o, "type"), specString(n, "type")
+		if ot == nil || nt == nil || *ot != *nt {
+			return false
+		}
+		if *ot == "air" {
+			return notLowerInt("cooling_capacity_w")
+		}
+		return notLowerInt("radiator_size_mm")
+	case schemas.CategoryMemory:
+		og, ng := specString(o, "generation"), specString(n, "generation")
+		if og != nil && (ng == nil || !strings.EqualFold(*og, *ng)) {
+			return false
+		}
+		oc, nc := candidateCapacityGB(old), candidateCapacityGB(new)
+		if oc > 0 && nc < oc {
+			return false
+		}
+		return notLowerInt("speed_mts")
+	case schemas.CategorySSD:
+		of, nf := specString(o, "form_factor"), specString(n, "form_factor")
+		if of != nil && (nf == nil || *of != *nf) {
+			return false
+		}
+		oc, nc := candidateCapacityGB(old), candidateCapacityGB(new)
+		return oc == 0 || nc >= oc
+	}
+	return true
+}
+
+// solveUnknownFix 对每个 unknown 品类槽位枚举缺失字段完整的目录内候选
+//（价格升序、最小涨价优先），回溯找第一个重新通过全部校验的组合。
+// 预算不在此判定：unknown 消除优先，超支交给压价阶段处理。
+func (x *execution) solveUnknownFix(ctx context.Context, draft schemas.BuildDraft) (*budgetFix, bool) {
+	missing := unknownCategoryFields(x.result.Validation)
+	if len(missing) == 0 {
+		return nil, false
+	}
+	locked := x.solverLockedCategories(draft)
+	byID := map[string]Candidate{}
+	for _, c := range x.candidates {
+		byID[c.ID] = c
+	}
+	var slots []budgetSlot
+	for _, cat := range schemas.AllCategories {
+		keys, ok := missing[cat]
+		if !ok || locked[cat] {
+			continue
+		}
+		sel := draft.Selection
+		oldID := ""
+		switch cat {
+		case schemas.CategoryCPU:
+			oldID = sel.CPU
+		case schemas.CategoryGPU:
+			if sel.GPU != nil {
+				oldID = *sel.GPU
+			}
+		case schemas.CategoryMotherboard:
+			oldID = sel.Motherboard
+		case schemas.CategoryMemory:
+			oldID = sel.Memory
+		case schemas.CategoryPSU:
+			oldID = sel.PSU
+		case schemas.CategoryCase:
+			oldID = sel.Case
+		case schemas.CategoryCooler:
+			oldID = sel.Cooler
+		default:
+			for _, s := range sel.SSDs {
+				if _, seen := missing[schemas.CategorySSD]; seen {
+					oldID = s.SKU
+					break
+				}
+			}
+		}
+		if oldID == "" {
+			continue
+		}
+		old, ok := byID[oldID]
+		if !ok {
+			continue
+		}
+		slot := budgetSlot{Category: cat, SSDIndex: -1, OldID: oldID, OldName: displayName(old), OldPrice: parsePriceRat(old.Price), Quantity: 1, MaxSave: new(big.Rat)}
+		for _, c := range x.candidates {
+			if c.Category != cat || c.ID == oldID || c.External || c.Price == nil {
+				continue
+			}
+			specs := candidateSpecs(c)
+			complete := true
+			for _, key := range keys {
+				raw := specs[key]
+				if len(raw) == 0 || string(raw) == "null" {
+					complete = false
+					break
+				}
+			}
+			if complete && unknownSwapTierOK(cat, old, c) {
+				slot.Options = append(slot.Options, c)
+			}
+		}
+		if len(slot.Options) == 0 {
+			continue
+		}
+		sort.SliceStable(slot.Options, func(i, j int) bool {
+			pi, pj := parsePriceRat(slot.Options[i].Price), parsePriceRat(slot.Options[j].Price)
+			if pi == nil || pj == nil {
+				return pj == nil
+			}
+			if pi.Cmp(pj) != 0 {
+				return pi.Cmp(pj) < 0 // 价格升序：消 unknown 顺带最小涨价
+			}
+			return slot.Options[i].ID < slot.Options[j].ID
+		})
+		slots = append(slots, slot)
+	}
+	if len(slots) == 0 {
+		return nil, false
+	}
+	chosen := make([]int, len(slots))
+	for i := range chosen {
+		chosen[i] = -1
+	}
+	nodes := 0
+	const maxNodes = 200000
+	var dfs func(i int) *budgetFix
+	dfs = func(i int) *budgetFix {
+		if i == len(slots) {
+			return x.verifyUnknownSelection(ctx, draft, slots, chosen)
+		}
+		if nodes++; nodes > maxNodes {
+			return nil
+		}
+		if fix := dfs(i + 1); fix != nil {
+			return fix
+		}
+		for oi := range slots[i].Options {
+			chosen[i] = oi
+			if fix := dfs(i + 1); fix != nil {
+				return fix
+			}
+			chosen[i] = -1
+		}
+		return nil
+	}
+	fix := dfs(0)
+	return fix, fix != nil
+}
+
+// verifyUnknownSelection 校验换选组合：全部规则通过且零缺价即成立。
+func (x *execution) verifyUnknownSelection(ctx context.Context, draft schemas.BuildDraft, slots []budgetSlot, chosen []int) *budgetFix {
+	sel := draft.Selection
+	sel.SSDs = append([]schemas.SSDSelection(nil), draft.Selection.SSDs...)
+	replacements := []budgetReplacement{}
+	for si, slot := range slots {
+		if chosen[si] < 0 {
+			continue
+		}
+		c := slot.Options[chosen[si]]
+		old := byIDFallback(x.candidates, slot.OldID)
+		applySlotSwap(&sel, slot.Category, slot.SSDIndex, c.ID)
+		replacements = append(replacements, budgetReplacement{
+			Category: slot.Category,
+			FromID:   slot.OldID, FromName: slot.OldName, FromPrice: priceText(old),
+			ToID: c.ID, ToName: displayName(c), ToPrice: priceText(c),
+			SavingCNY: new(big.Rat).Sub(slot.OldPrice, parsePriceRat(c.Price)).FloatString(2),
+			Basis:     "字段补全（原候选规格缺失，新候选字段完整）",
+		})
+	}
+	res, err := validate.New(snapshotResolver{snapshotID: x.snapshotID, candidates: x.candidates, date: x.date}).Evaluate(ctx, sel)
+	if err != nil || res.Report.OverallStatus != schemas.OverallPass || res.Quote.MissingCount != 0 {
+		return nil
+	}
+	total := quoteAmount(res.Quote, x.accountingSpec().BudgetBasis)
+	if total == nil {
+		return nil
+	}
+	return &budgetFix{Replacements: replacements, TotalCNY: total.FloatString(2)}
+}
+
+// applyUnknownFix unknown 门回环耗尽后的确定性换选终局：找到"字段完整候选"
+// 组合则改写 draft 并重新 evaluate 后交付；换不回 pass 就不动，unknown 如实
+// 保留。本函数不发出任何模型请求。
+func (x *execution) applyUnknownFix(ctx context.Context) {
+	draft, err := schemas.DecodeBuildDraft(x.result.Draft)
+	if err != nil {
+		return
+	}
+	fix, ok := x.solveUnknownFix(ctx, draft)
+	if !ok {
+		return
+	}
+	raw, err := patchDraftJSON(x.result.Draft, fix)
+	if err != nil {
+		return
+	}
+	if _, err := schemas.DecodeBuildDraft(raw); err != nil {
+		return
+	}
+	x.evaluate(ctx, raw)
+	x.result.Outcome = "proposal"
+	x.result.Issues = dropStaleSpecIssues(x.result.Issues)
+	x.result.Issues = append(x.result.Issues, fix.notes("unknown 修复换选")...)
+}
+
+// dropStaleSpecIssues 移除已被换选解决的"规格字段缺失"自述议题。
+// ponytail: 窄文本特征识别，升级路径是结构化 issue 分类。
+func dropStaleSpecIssues(issues []string) []string {
+	out := make([]string, 0, len(issues))
+	for _, s := range issues {
+		if strings.Contains(s, "字段缺失") || strings.Contains(s, "无法判定") {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
 }

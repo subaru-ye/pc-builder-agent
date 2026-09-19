@@ -267,9 +267,17 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 			request.Contents = append(request.Contents, genai.NewContentFromText(gate, genai.RoleUser))
 			continue
 		}
-		// 预算回环耗尽后仍超预算的终局交付：服务端确定性压价（不发模型请求）。
+		// 服务端确定性修复（均不发模型请求）：先补 unknown 再压预算，任一生效即终局。
+		fixed := false
+		if x.unknownFixDue(final.Outcome, clarifiesEvaluatedDraft, &gates, turn, turns) {
+			x.applyUnknownFix(ctx)
+			fixed = true
+		}
 		if x.budgetFixDue(final.Outcome, clarifiesEvaluatedDraft, &gates, turn, turns) {
 			x.applyBudgetFix(ctx)
+			fixed = true
+		}
+		if fixed {
 			return x.finish(), nil
 		}
 		if (final.Outcome == "ready" || (final.Outcome == "proposal" && len(final.Issues) == 0) || reviewDecision) && finished.Outcome != "ready" && turn < turns-1 {
@@ -839,6 +847,11 @@ func (x *execution) finish() Result {
 //（applyBudgetFix）在预算回环耗尽后的目录内确定性替换，其每笔替换以独立
 // issue 留痕于 Issues。
 func (x *execution) finalize() Result {
+	// 已有件占位交付不是可交付方案：保留还是改购是用户计价取舍，强转 clarify。
+	if x.result.Outcome == "proposal" && x.placeholderDelivery() {
+		x.result.Outcome = "clarify"
+		x.result.Issues = append(x.result.Issues, "已有件在目录无精确型号匹配：保留已有件（按品类核账、不计入采购合计）还是改购新件，是计价取舍，需用户确认后继续。")
+	}
 	wasReady := x.result.Outcome == "ready" || x.result.Outcome == "proposal"
 	if wasReady {
 		x.result.Outcome = "ready"

@@ -54,7 +54,7 @@ func TestBudgetSolverFindsTierPreservingReplacement(t *testing.T) {
 	if fix.TotalCNY != "4420.90" {
 		t.Fatalf("fixed total must stay under ceiling: %s", fix.TotalCNY)
 	}
-	for _, n := range fix.notes() {
+	for _, n := range fix.notes("预算替换") {
 		if !strings.Contains(n, "服务端预算替换") || !strings.Contains(n, "依据") {
 			t.Fatalf("note must record what/why/basis: %q", n)
 		}
@@ -297,5 +297,150 @@ func TestBudgetSolverTruthAuditAgainstFrozenCatalog(t *testing.T) {
 	amount := quoteAmount(*x2.result.Quote, "new_purchase")
 	if amount == nil || amount.Cmp(new(big.Rat).SetInt64(6000)) > 0 || amount.FloatString(2) != "4667.00" {
 		t.Fatalf("b2-002 purchase total must stay within budget: %v", amount)
+	}
+}
+
+// unknown 换选：缺字段候选在门耗尽后被字段完整候选确定性替换，重新通过校验。
+func TestUnknownFixReplacesIncompleteCandidate(t *testing.T) {
+	x, _ := solverRecording(t, "6000")
+	x.result.Draft = json.RawMessage(strings.Replace(string(x.result.Draft), "cooler-deepcool-ag400", "cooler-hyper-blank", 1))
+	x.candidates = append(x.candidates, Candidate{
+		ID: "cooler-hyper-blank", Category: schemas.CategoryCooler, Brand: "Test", Model: "Hyper Blank",
+		Specs: json.RawMessage(`{"type":"air","height_mm":150,"radiator_size_mm":null}`), Price: strPtr("54.50"),
+	})
+	x.evaluate(context.Background(), x.result.Draft)
+	if x.result.Validation == nil || x.result.Validation.OverallStatus == schemas.OverallPass {
+		t.Fatalf("incomplete candidate must fail validation first: %+v", x.result.Validation)
+	}
+	gates := &deliveryGateCounters{unknown: 2}
+	if !x.unknownFixDue("proposal", false, gates, 0, 8) {
+		t.Fatal("exhausted unknown gate must arm the fix")
+	}
+	x.applyUnknownFix(context.Background())
+	if x.result.Validation == nil || x.result.Validation.OverallStatus != schemas.OverallPass {
+		t.Fatalf("fix must restore full validation: %+v", x.result.Validation)
+	}
+	draft, err := schemas.DecodeBuildDraft(x.result.Draft)
+	if err != nil || draft.Selection.Cooler != "cooler-deepcool-ag400" {
+		t.Fatalf("cooler must be replaced with the field-complete candidate: %s", draft.Selection.Cooler)
+	}
+	joined := strings.Join(x.result.Issues, "\n")
+	if !strings.Contains(joined, "unknown 修复换选") || !strings.Contains(joined, "字段补全") {
+		t.Fatalf("fix must be recorded with basis: %q", joined)
+	}
+	if strings.Contains(joined, "字段缺失") {
+		t.Fatalf("stale missing-field issue must be dropped: %q", joined)
+	}
+}
+
+// must 静音锁定 cooler：unknown 无换选空间时如实保留，不得强行替换。
+func TestUnknownFixRespectsLocks(t *testing.T) {
+	x, _ := solverRecording(t, "6000")
+	x.result.Draft = json.RawMessage(strings.Replace(string(x.result.Draft), "cooler-deepcool-ag400", "cooler-hyper-blank", 1))
+	x.candidates = append(x.candidates, Candidate{
+		ID: "cooler-hyper-blank", Category: schemas.CategoryCooler, Brand: "Test", Model: "Hyper Blank",
+		Specs: json.RawMessage(`{"type":"air","height_mm":150}`), Price: strPtr("54.50"),
+	})
+	mustField(t, &x.input, "noise_pref", `"silent"`, "must", "constraint")
+	x.evaluate(context.Background(), x.result.Draft)
+	x.applyUnknownFix(context.Background())
+	if x.result.Validation == nil || x.result.Validation.OverallStatus == schemas.OverallPass {
+		t.Fatal("locked cooler must keep its unknown state")
+	}
+}
+
+// unknown 门未耗尽时不触发修复。
+func TestUnknownFixDueGating(t *testing.T) {
+	x, _ := solverRecording(t, "6000")
+	x.result.Draft = json.RawMessage(strings.Replace(string(x.result.Draft), "cooler-deepcool-ag400", "cooler-hyper-blank", 1))
+	x.candidates = append(x.candidates, Candidate{
+		ID: "cooler-hyper-blank", Category: schemas.CategoryCooler, Brand: "Test", Model: "Hyper Blank",
+		Specs: json.RawMessage(`{"type":"air","height_mm":150}`), Price: strPtr("54.50"),
+	})
+	x.evaluate(context.Background(), x.result.Draft)
+	gates := &deliveryGateCounters{}
+	if x.unknownFixDue("proposal", false, gates, 0, 8) {
+		t.Fatal("unexhausted unknown gate must not arm the fix")
+	}
+	if x.unknownFixDue("collect", false, gates, 6, 8) {
+		t.Fatal("collect is not a delivery outcome")
+	}
+}
+
+// 牺牲候选与用途硬条件冲突时被过滤：以无核显 CPU 替代核显点亮不是可执行牺牲。
+func TestMinSacrificeFiltersDisplayConflict(t *testing.T) {
+	x, _ := solverRecording(t, "2700") // 去独显后总价 2780.90，超支 80.90
+	// 去掉独显、换带核显 CPU：无核显候选作为牺牲将触发 DISPLAY_OUTPUT 失败。
+	x.result.Draft = json.RawMessage(strings.Replace(string(x.result.Draft), `"gpu-sapphire-6600-pulse"`, `null`, 1))
+	x.result.Draft = json.RawMessage(strings.Replace(string(x.result.Draft), "cpu-r5-5600", "cpu-igpu", 1))
+	x.candidates = append(x.candidates,
+		Candidate{
+			ID: "cpu-igpu", Category: schemas.CategoryCPU, Brand: "Test", Model: "Ryzen igpu",
+			Specs: json.RawMessage(`{"has_igpu":true,"socket":"AM4","tdp_w":65,"supported_chipsets":["B550"]}`), Price: strPtr("629.00"),
+		},
+		Candidate{
+			ID: "cpu-noigpu-cheap", Category: schemas.CategoryCPU, Brand: "Test", Model: "Ryzen no-igpu",
+			Specs: json.RawMessage(`{"has_igpu":false,"socket":"AM4","tdp_w":65,"supported_chipsets":["B550"]}`), Price: strPtr("429.00"),
+		},
+	)
+	x.evaluate(context.Background(), x.result.Draft)
+	current, err := schemas.DecodeBuildDraft(x.result.Draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.Selection.GPU != nil {
+		t.Fatal("gpu must be removed for this scenario")
+	}
+	fix, sacrifice, ok := x.solveBudget(context.Background(), current)
+	if !ok || fix != nil {
+		t.Fatalf("no tier-preserving fix expected: %+v %v", fix, ok)
+	}
+	if sacrifice != nil && sacrifice.ToID == "cpu-noigpu-cheap" {
+		t.Fatalf("display-output-conflicting sacrifice must be filtered: %+v", sacrifice)
+	}
+}
+
+// 占位交付强转 clarify：已有件无精确匹配且模型自述替身时，proposal 不是可交付形态。
+func TestPlaceholderDeliveryForcedToClarify(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"memory","model":"G.Skill Ripjaws V 32GB DDR4-3200","quantity":1}]`),
+	}
+	record.Outcome = "proposal"
+	record.Reply = "目录未精确匹配用户已有的 G.Skill Ripjaws V 32GB，当前以同系列候选作为核验替身；实际装机沿用用户已有内存，服务端按品类核账、不计入采购合计。如用户希望改购新内存需另行确认。"
+	record.Issues = []string{"已有件无精确匹配，以替身占位"}
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome != "clarify" {
+		t.Fatalf("placeholder delivery must end as clarify: %+v", got)
+	}
+	if !strings.Contains(strings.Join(got.Issues, "\n"), "计价取舍") {
+		t.Fatalf("forced clarify must record the tradeoff: %q", got.Issues)
+	}
+}
+
+// 升级改单交付（无替身自述）不受占位强转影响。
+func TestPlaceholderDeliveryKeepsUpgradeDelivery(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"memory","model":"G.Skill Ripjaws V 32GB (2x16GB) DDR4-3200 CL16","quantity":1}]`),
+	}
+	record.Outcome = "proposal"
+	record.Reply = "已按预算完成选配，显卡品牌符合要求。"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil || got.Outcome != "ready" {
+		t.Fatalf("normal delivery must not be forced to clarify: %+v %v", got, err)
 	}
 }

@@ -95,11 +95,53 @@ func (x *execution) deliveryIssues() (issues, notes []string) {
 	return issues, notes
 }
 
+// placeholderDelivery 检测"已有件占位交付"：已有件在目录无精确型号匹配、
+// draft 仍以其他候选占住该品类，且模型自述把替身说成用户已有件。保留已有件
+// 还是改购新件是用户的计价取舍，模型必须 clarify 而非以占位配置交付。
+// ponytail: "用户已表态沿用"无法程序判定，只能以模型自述中的替身措辞窄特征
+// 收敛已知的占位交付形态；升级路径是模型结构化声明替身意图字段。
+func (x *execution) placeholderDelivery() bool {
+	if x.result.Validation == nil || len(x.result.Draft) == 0 {
+		return false
+	}
+	draft, err := schemas.DecodeBuildDraft(x.result.Draft)
+	if err != nil {
+		return false
+	}
+	selected := map[schemas.Category]bool{}
+	for _, id := range draft.Selection.SKUs() {
+		for _, c := range x.candidates {
+			if c.ID == id {
+				selected[c.Category] = true
+			}
+		}
+	}
+	unmatched := false
+	for _, p := range x.accountingSpec().OwnedParts {
+		if p.Category == schemas.CategorySSD {
+			continue
+		}
+		matched := false
+		for _, c := range x.candidates {
+			if matchesOwnedPart(c, p) {
+				matched = true
+			}
+		}
+		if !matched && selected[p.Category] {
+			unmatched = true
+		}
+	}
+	if !unmatched {
+		return false
+	}
+	text := x.result.Reply + strings.Join(x.result.Issues, "")
+	return strings.Contains(text, "替身") || strings.Contains(text, "沿用用户")
+}
+
 // verifiedOwnership 已有件按品类核账：用户明确断言的 owned_part 在 draft
 // 对应品类恰好选了一件即视为核验，替身候选不计采购价；SSD 以品类内总数量
 // 一致防多盘误豁免。目录精确匹配与否只影响 note，不影响核账。
-func (x *execution) verifiedOwnership(draft schemas.BuildDraft) schemas.RequirementSpec {
-	spec := x.accountingSpec()
+func (x *execution) verifiedOwnership(draft schemas.BuildDraft) schemas.RequirementSpec {	spec := x.accountingSpec()
 	owned := spec.OwnedParts
 	spec.OwnedParts = nil
 	selected := map[schemas.Category]bool{}

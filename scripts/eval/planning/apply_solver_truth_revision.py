@@ -13,6 +13,7 @@ import hashlib
 import json
 
 LIVE = "internal/planningeval/testdata/current-178-live-20260918/suite.json"
+LIVE_PROV = "internal/planningeval/testdata/current-178-live-20260918/provenance.json"
 MECH = "internal/planningeval/testdata/current-178-20260917/mechanisms/suite.json"
 PROV = "internal/planningeval/testdata/current-178-20260917/mechanisms/provenance.json"
 
@@ -22,6 +23,8 @@ C123_NOTE = "2026-09-19 修订：C123-003 step2 与 B2-002 step1 的 authored �
 def revise_case(suite, case_id, step_index):
     expect = suite["cases"][[c["id"] for c in suite["cases"]].index(case_id)]["steps"][step_index]["expect"]
     if case_id == "C123-003":
+        if expect.get("outcome") == "proposal" and "issues_any" in expect:
+            return  # already revised
         assert expect.get("outcome") == "ready" and expect.get("purchase_budget") is True, expect
         expect["outcome"] = "proposal"
         del expect["purchase_budget"]
@@ -34,6 +37,8 @@ def revise_case(suite, case_id, step_index):
         expect.clear()
         expect.update(rebuilt)
     else:
+        if expect.get("outcome") == "proposal" and "issues_any" in expect:
+            return  # already revised
         assert expect.get("outcome") == "clarify", expect
         expect["outcome"] = "proposal"
         rebuilt = {}
@@ -66,6 +71,14 @@ def main():
         live_sha = hashlib.sha256(fh.read()).hexdigest()
     with open(MECH, "rb") as fh:
         mech_sha = hashlib.sha256(fh.read()).hexdigest()
+    # live 套件自身的 provenance 校验 suite_sha256，须与修订后套件一致。
+    with open(LIVE_PROV, encoding="utf-8") as fh:
+        live_prov = json.load(fh)
+    live_prov["suite_sha256"] = live_sha
+    with open(LIVE_PROV, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(live_prov, fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+    print(LIVE_PROV, "updated")
     with open(PROV, encoding="utf-8") as fh:
         prov = json.load(fh)
     prov["source_suite_sha256"] = live_sha

@@ -676,7 +676,8 @@ func (x *execution) budgetFixDue(outcome string, clarifiesEvaluatedDraft bool, g
 	if _, _, ok := x.budgetOverrun(); !ok {
 		return false
 	}
-	return turn >= turns-2 || gates.budget >= 2 || len(x.priceAsc) > 0
+	// 总门耗尽（可能被其他门占用配额）同样构成预算回环耗尽。
+	return turn >= turns-2 || gates.budget >= 2 || gates.total >= 3 || len(x.priceAsc) > 0
 }
 
 // applyBudgetFix 预算回环耗尽后的确定性压价终局：找到目录内可行替换则改写

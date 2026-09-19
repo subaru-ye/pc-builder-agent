@@ -174,6 +174,10 @@ func TestBudgetFixDueGating(t *testing.T) {
 	if !x.budgetFixDue("ready", false, exhausted, 0, 8) {
 		t.Fatal("exhausted budget gate must arm the solver")
 	}
+	totalExhausted := &deliveryGateCounters{budget: 1, total: 3}
+	if !x.budgetFixDue("ready", false, totalExhausted, 0, 8) {
+		t.Fatal("gate quota consumed by other gates must still arm the solver")
+	}
 	if x.budgetFixDue("collect", false, exhausted, 6, 8) {
 		t.Fatal("collect is not a delivery outcome")
 	}

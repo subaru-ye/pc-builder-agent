@@ -37,6 +37,13 @@ func (x *execution) budgetCeiling() (*big.Rat, bool) {
 
 // budgetGateFeedback 在模型把"存在严格更便宜同品类候选"的超预算交付为 clarify/proposal 时
 // 返回回环反馈；没有更便宜候选时返回空串——那才是合法的用户取舍。
+//
+// 约束口径（2026-09-19 修订）：服务端不得静默改写 draft。但预算门检测到超预算
+// 且回环耗尽时，服务端可执行确定性替换（budget_solver.go）：候选只能来自本地
+// 目录（有报价、有规格），只动未锁定品类，替换后容量/性能档位不降，必须重新
+// 通过全部校验规则；每次替换在 Issues 中显式标注（换成什么、为什么、依据）。
+// 除此之外的任何 draft 字段仍不可由服务端修改；不引入目录外候选，不碰用户
+// must/锁定件/用途相关容量，不改 rationale 语义（替换理由以独立 issue 追加）。
 func (x *execution) budgetGateFeedback(outcome string) string {
 	if outcome != "clarify" && outcome != "proposal" {
 		return ""
@@ -333,6 +340,8 @@ func (x *execution) stalledProposalGateFeedback() string {
 }
 
 // deliveryGate 按预算→unknown→must→自纠门顺序检测终局交付决策，命中时返回回环反馈。
+// 各门回环耗尽后模型仍交付超预算 draft 时，由 budget_solver.go 的确定性压价接手
+//（见 Run 循环中 deliveryGate 之后的 budgetFixDue 分支）。
 func (x *execution) deliveryGate(outcome string, clarifiesEvaluatedDraft bool, gates *deliveryGateCounters, turn, turns int) string {
 	if turn >= turns-2 || gates.total >= 3 {
 		return ""

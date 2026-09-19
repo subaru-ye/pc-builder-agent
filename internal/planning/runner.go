@@ -267,6 +267,11 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 			request.Contents = append(request.Contents, genai.NewContentFromText(gate, genai.RoleUser))
 			continue
 		}
+		// 预算回环耗尽后仍超预算的终局交付：服务端确定性压价（不发模型请求）。
+		if x.budgetFixDue(final.Outcome, clarifiesEvaluatedDraft, &gates, turn, turns) {
+			x.applyBudgetFix(ctx)
+			return x.finish(), nil
+		}
 		if (final.Outcome == "ready" || (final.Outcome == "proposal" && len(final.Issues) == 0) || reviewDecision) && finished.Outcome != "ready" && turn < turns-1 {
 			decisionReviewed = true
 			feedbackMap := map[string]any{"validation": finished.Validation, "quote": finished.Quote, "issues": finished.Issues}
@@ -733,6 +738,8 @@ func (x *execution) evaluate(ctx context.Context, raw json.RawMessage) map[strin
 
 // budgetAlternatives 在报价超出预算硬上限时附各品类最便宜的有报价候选。
 // 只按价格排序，不做兼容核验；目的是让模型无需额外检索就能判断能否自行压回预算。
+// 回环耗尽后模型仍不服从时，服务端按 budget_solver.go 的确定性压价接手；
+// 除该求解器外，服务端不得静默改写 draft 的任何字段。
 func (x *execution) budgetAlternatives(quote validate.Quote, draft schemas.BuildDraft) map[string]any {
 	field, ok := x.input.State.Fields["budget_cny"]
 	if !ok || len(field.Value) == 0 {
@@ -828,6 +835,9 @@ func (x *execution) finish() Result {
 	return copyExecution.finalize()
 }
 
+// finalize 汇聚交付判定。服务端不静默改写 draft；唯一例外是预算压价求解器
+//（applyBudgetFix）在预算回环耗尽后的目录内确定性替换，其每笔替换以独立
+// issue 留痕于 Issues。
 func (x *execution) finalize() Result {
 	wasReady := x.result.Outcome == "ready" || x.result.Outcome == "proposal"
 	if wasReady {

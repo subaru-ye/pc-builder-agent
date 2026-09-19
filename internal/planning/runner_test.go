@@ -249,12 +249,17 @@ func TestExternalSpecsValidateWithoutImportingWebPrices(t *testing.T) {
 }
 
 func TestOpenRequirementsReachPlanningAndTools(t *testing.T) {
-	for _, tc := range []struct{ name, key, value string }{
-		{"unlisted_workload", "free.workload", `"制作天文延时与声场测量"`},
-		{"small_budget", "budget_cny", `100`},
-		{"unknown_existing_model", "free.owned_gpu", `"已有一张老黄卡"`},
-		{"outside_catalog_brand", "free.brand", `"希望看看目录外品牌"`},
-		{"portable_shape", "free.portable", `"塞进背包且两个网口"`},
+	for _, tc := range []struct {
+		name, key, value string
+		wantCalls        int
+	}{
+		// small_budget：模型已用 price_asc 检索，超预算 proposal 由压价求解器
+		// 直接终局裁决（无可行替换，追加求解标注），不再走预算门回环。
+		{"unlisted_workload", "free.workload", `"制作天文延时与声场测量"`, 3},
+		{"small_budget", "budget_cny", `100`, 2},
+		{"unknown_existing_model", "free.owned_gpu", `"已有一张老黄卡"`, 3},
+		{"outside_catalog_brand", "free.brand", `"希望看看目录外品牌"`, 3},
+		{"portable_shape", "free.portable", `"塞进背包且两个网口"`, 3},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			catalog, draft := fixture(t)
@@ -270,7 +275,7 @@ func TestOpenRequirementsReachPlanningAndTools(t *testing.T) {
 				return genai.NewContentFromText(`{"outcome":"proposal","reply":"先保留候选并继续检索","draft":`+string(draft)+`,"issues":["要求仍需比较核实"],"assessments":[],"assumptions":[]}`, genai.RoleModel)
 			}}
 			result, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), schemas.PlanningInput{SchemaVersion: 2, State: state})
-			if err != nil || result.ModelCalls != 3 || result.ToolCalls != 1 || len(result.Candidates) == 0 || result.Validation == nil || state.Fields[tc.key].Strength != "must" {
+			if err != nil || result.ModelCalls != tc.wantCalls || result.ToolCalls != 1 || len(result.Candidates) == 0 || result.Validation == nil || state.Fields[tc.key].Strength != "must" {
 				t.Fatalf("flow blocked or state weakened: %+v %v", result, err)
 			}
 		})

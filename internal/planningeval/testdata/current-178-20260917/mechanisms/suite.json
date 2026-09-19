@@ -6106,7 +6106,11 @@
           "text": "预算6000，只先换CPU，其他配件尽量不动。",
           "expect": {
             "versions": 0,
-            "outcome": "clarify",
+            "outcome": "proposal",
+            "issues_any": [
+              "显示输出",
+              "独显"
+            ],
             "fields": {
               "existing_parts": {
                 "status": "active",
@@ -8582,8 +8586,11 @@
           "text": "那内存也买新的，只保留已有AMD Ryzen 5 5600，新增采购预算仍为6000，继续选配。",
           "expect": {
             "versions": 1,
-            "outcome": "ready",
-            "purchase_budget": true,
+            "outcome": "proposal",
+            "issues_any": [
+              "内存",
+              "牺牲"
+            ],
             "fields": {
               "budget_cny": {
                 "status": "active",

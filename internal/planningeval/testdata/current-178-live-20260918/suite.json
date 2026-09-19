@@ -1,7 +1,7 @@
 {
   "version": "current-178-live-mechanisms-20260918-r3",
   "live": true,
-  "provenance": "全量10场景真实模型：oracle剥离，保留authored业务交付断言与本地工具要求（离线工具要求剔除），不额外强加工具断言；模型选型自由，外部工具离线。目录为 current-178-20260917 冻结快照11（126件active）。相对r2套件：B2-002/003剔除被用户明确推迟配置所阻挡的step2 confirm，C123-001 step3的preserve_other_parts改为preserve_essential_parts（r2证据：逐件相等与预算硬上限在v1余量119元+CPU差价510元下不可同时满足，见 docs/eval/planning-v2/current-178-20260917.md）；执行顺序B2与C123-007在前（r1/r2证据：C123-001单例消耗~35次调用导致队尾case饿死0调用，B2修复从未被现场验证）；待验证修复含keyword_hits检索、budget_alternatives、evaluate时机、noise_pref与confirm时机提示词、超预算最小替换策略、已有件缺失检索取证与clarify、缺字段候选换选重试。",
+  "provenance": "全量10场景真实模型：oracle剥离，保留authored业务交付断言与本地工具要求（离线工具要求剔除），不额外强加工具断言；模型选型自由，外部工具离线。目录为 current-178-20260917 冻结快照11（126件active）。相对r2套件：B2-002/003剔除被用户明确推迟配置所阻挡的step2 confirm，C123-001 step3的preserve_other_parts改为preserve_essential_parts（r2证据：逐件相等与预算硬上限在v1余量119元+CPU差价510元下不可同时满足，见 docs/eval/planning-v2/current-178-20260917.md）；执行顺序B2与C123-007在前（r1/r2证据：C123-001单例消耗~35次调用导致队尾case饿死0调用，B2修复从未被现场验证）；待验证修复含keyword_hits检索、budget_alternatives、evaluate时机、noise_pref与confirm时机提示词、超预算最小替换策略、已有件缺失检索取证与clarify、缺字段候选换选重试。2026-09-19 修订：C123-003 step2 与 B2-002 step1 的 authored 期望按服务端压价求解器对冻结目录的真值核验结论定版（C123-003 step2 档位不降约束下无 sub-6000 组合，期望改为最小牺牲标注 proposal；B2-002 step1 预算内存在可行组合、显卡联动属必要偏差，期望由 clarify 定版为标注 proposal），理由与求解过程见 docs/eval/planning-v2/current-178-20260917.md。",
   "catalog": {
     "date": "2026-09-17",
     "candidates": [
@@ -5896,7 +5896,11 @@
           "text": "预算6000，只先换CPU，其他配件尽量不动。",
           "expect": {
             "versions": 0,
-            "outcome": "clarify",
+            "outcome": "proposal",
+            "issues_any": [
+              "显示输出",
+              "独显"
+            ],
             "fields": {
               "existing_parts": {
                 "status": "active",
@@ -7523,8 +7527,11 @@
           "text": "那内存也买新的，只保留已有AMD Ryzen 5 5600，新增采购预算仍为6000，继续选配。",
           "expect": {
             "versions": 1,
-            "outcome": "ready",
-            "purchase_budget": true,
+            "outcome": "proposal",
+            "issues_any": [
+              "内存",
+              "牺牲"
+            ],
             "fields": {
               "budget_cny": {
                 "status": "active",

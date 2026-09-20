@@ -23,11 +23,12 @@ def main():
     parser.add_argument('--local-postgres', action='store_true', help='Create only a fresh peval_ database in the existing local PostgreSQL container; requires PLANNING_EVAL_ADMIN_DSN')
     parser.add_argument('--intake-packet', help='Rehearse a reviewed intake using its real files in the isolated database')
     parser.add_argument('--live', action='store_true', help='Explicit real chat models; web remains offline')
+    parser.add_argument('--plan-live', action='store_true', help='Validate pinned model settings against the environment with zero model and database calls')
     parser.add_argument('--max-calls', type=int, default=0, help='Positive shared cap required with --live')
     parser.add_argument('--model-pin', default='docs/eval/planning-v2/baseline-20260915.json')
     args = parser.parse_args()
-    if args.live and (args.max_calls <= 0 or args.intake_packet or args.go_tests):
-        parser.error('--live requires a positive --max-calls and cannot run intake or Go tests')
+    if (args.live or args.plan_live) and (args.max_calls <= 0 or args.intake_packet or args.go_tests):
+        parser.error('--live and --plan-live require a positive --max-calls and cannot run intake or Go tests')
     out = Path(args.out).resolve()
     if out.exists():
         raise SystemExit('Use a new output directory')
@@ -78,8 +79,9 @@ def main():
                 (out / 'tests.log').write_bytes((result.stdout + result.stderr).encode('utf-8'))
                 print(result.stdout + result.stderr)
             else:
-                command = [str(exe), '-mode', 'live' if args.live else 'replay', '-suite', args.suite, '-out', str(out)]
-                if args.live:
+                mode = 'plan-live' if args.plan_live else 'live' if args.live else 'replay'
+                command = [str(exe), '-mode', mode, '-suite', args.suite, '-out', str(out)]
+                if args.live or args.plan_live:
                     command += ['-max-calls', str(args.max_calls), '-model-pin', args.model_pin]
                 result = subprocess.run(command, cwd=ROOT, env=env)
             if out.is_dir():
@@ -93,6 +95,7 @@ def main():
                     'shared_services_restarted': False,
                     'external_web_requests': 0,
                     'live_models': args.live,
+                    'run_mode': 'plan-live' if args.plan_live else 'live' if args.live else 'go-tests' if args.go_tests else 'intake' if args.intake_packet else 'replay',
                     'max_model_requests': args.max_calls,
                     'exit_code': result.returncode,
                     'go_tests': args.go_tests,

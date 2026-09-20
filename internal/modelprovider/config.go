@@ -137,8 +137,9 @@ func Load(role Role) (Config, error) {
 				// 用 BUILDER_REASONING_EFFORT 显式覆盖。
 				cfg.ReasoningEffort = "none"
 			case provider == ProviderBailian && role == RoleBuilder && cfg.Model == DefaultBuilderModel:
-				// 2026-08-12 真实 Responses 检查:该固定版本传 low 会返回
-				// 400 InvalidParameter，none 的 function calling 正常。
+				// 默认仍 none：2026-08-12 旧网关实测该版本传 low 返回 400。
+				// 2026-09-20 在业务空间端点复测 minimal/low/medium 均被接受且
+				// reasoning token 随档位变化，显式设置 *_REASONING_EFFORT 即可提档。
 				cfg.ReasoningEffort = "none"
 			case provider == ProviderBailian && role == RoleBuilder:
 				cfg.ReasoningEffort = "low"
@@ -151,9 +152,6 @@ func Load(role Role) (Config, error) {
 		}
 		if provider == ProviderMiMo && role == RoleBuilder && cfg.ReasoningEffort != "none" {
 			return Config{}, fmt.Errorf("MiMo builder 当前只允许 reasoning.effort=none:ADK 无法无损回传工具轮次 reasoning history")
-		}
-		if provider == ProviderBailian && role == RoleBuilder && cfg.Model == DefaultBuilderModel && cfg.ReasoningEffort != "none" {
-			return Config{}, fmt.Errorf("%s 当前 Responses 实测只允许 reasoning.effort=none", cfg.Model)
 		}
 	}
 	if role == RoleEmbedding {

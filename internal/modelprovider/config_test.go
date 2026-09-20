@@ -44,7 +44,7 @@ func TestLoadBailianDefaultsAndRoleOverrides(t *testing.T) {
 	}
 }
 
-func TestLoadPinnedBailianBuilderUsesVerifiedNonReasoningMode(t *testing.T) {
+func TestLoadPinnedBailianBuilderReasoningEffort(t *testing.T) {
 	cleanModelEnv(t)
 	t.Setenv("DASHSCOPE_API_KEY", "provider-key")
 	cfg, err := Load(RoleBuilder)
@@ -54,9 +54,12 @@ func TestLoadPinnedBailianBuilderUsesVerifiedNonReasoningMode(t *testing.T) {
 	if cfg.Model != DefaultBuilderModel || cfg.ReasoningEffort != "none" {
 		t.Fatalf("builder defaults=%+v", cfg.Redacted())
 	}
+	// 2026-09-20 起业务空间端点接受 low（旧网关 400 的守卫已随证据移除），
+	// 显式提档不再被静态拒绝。
 	t.Setenv("BUILDER_REASONING_EFFORT", "low")
-	if _, err := Load(RoleBuilder); err == nil || !strings.Contains(err.Error(), "只允许") {
-		t.Fatalf("固定版本 low 应静态失败,got %v", err)
+	cfg, err = Load(RoleBuilder)
+	if err != nil || cfg.ReasoningEffort != "low" {
+		t.Fatalf("explicit low must load: %+v %v", cfg.Redacted(), err)
 	}
 }
 

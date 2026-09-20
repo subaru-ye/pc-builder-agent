@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "historical_run": "artifacts/eval/20260909-134447-3770035618",
+  "files": {
+    "meta.json": "573c88986ef5382af5b5f50c8770bb849ad0016e5a4a2576a10982ec77378ffc",
+    "cases.json": "a33135d22a16c77a747e0d36e63cff49f7b228cccd9790d307dab7a738ded60b",
+    "results.jsonl": "28e8b1e349670e7554dceb0ce0e938bc4229c3b075cb6a5373d54c70c5adb804"
+  },
+  "suite_sha256": "5a3a4fdf5b6badc42a5369febb21c4c2eab009f1ddadc38b931a92f99ca19ad3",
+  "historical_code": {
+    "checkout_commit": "a7c5878f91467056c98962e9ad84d97e6b368159",
+    "checkout_dirty": true,
+    "binary_sha256": "0b8f9ed004f4a3f88790d4330aac53989c59770a2b63e6ac3a38fbbe45cc3609",
+    "go_version": "go1.26.5"
+  },
+  "current_code": "9d80b4130ccad2ec04fce7ffbdf36725b1bf935f",
+  "models": {
+    "builder": {
+      "base_host": "llm-hporymaafo8arsh5.cn-beijing.maas.aliyuncs.com",
+      "dimensions": 0,
+      "max_retries": 0,
+      "model": "glm-5.3",
+      "model_chain": [],
+      "provider": "bailian",
+      "reasoning_effort": "none",
+      "role": "builder",
+      "session_cache": true,
+      "timeout": "3m0s"
+    },
+    "embedding": {
+      "base_host": "llm-hporymaafo8arsh5.cn-beijing.maas.aliyuncs.com",
+      "dimensions": 1024,
+      "max_retries": 0,
+      "model": "qwen3.7-text-embedding",
+      "model_chain": [],
+      "provider": "bailian",
+      "reasoning_effort": "",
+      "role": "embedding",
+      "session_cache": true,
+      "timeout": "1m0s"
+    },
+    "screening": {
+      "base_host": "llm-hporymaafo8arsh5.cn-beijing.maas.aliyuncs.com",
+      "dimensions": 0,
+      "max_retries": 0,
+      "model": "deepseek-v4-flash-0731",
+      "model_chain": [],
+      "provider": "bailian",
+      "reasoning_effort": "none",
+      "role": "screening",
+      "session_cache": true,
+      "timeout": "1m0s"
+    }
+  },
+  "historical_passed": 150,
+  "historical_cases": 50,
+  "repeats": 3,
+  "historical_usage": {
+    "model_calls": 224,
+    "embedding_calls": 15,
+    "usage_responses": 224,
+    "input_tokens": 489092,
+    "output_tokens": 25077,
+    "total_tokens": 514169
+  },
+  "summed_case_duration_ms": 627609,
+  "limitations": [
+    "Old executor and scoring are historical; 150/150 is not a new planning score.",
+    "Usage counts logical model calls; historical HTTP retries and embedding tokens were not recorded.",
+    "Summed case duration is not process wall-clock time or a causal performance comparison.",
+    "New data effects and changed execution/scoring must be reported separately."
+  ]
+}

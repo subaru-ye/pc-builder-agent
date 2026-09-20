@@ -499,3 +499,43 @@ func TestPlaceholderDeliveryKeepsUpgradeDelivery(t *testing.T) {
 		t.Fatalf("normal delivery must not be forced to clarify: %+v %v", got, err)
 	}
 }
+
+// 本轮刚被改动的槽位（draft 与 base_draft 同品类不同 SKU）必须冻结：
+// 压价回退等于撤销用户/改单的方向性决定（C123-001 教训：刚指定的 5700X
+// 升级被压价换回 5600，触发 changed_cpu 与 final_outcome 双失败）。
+func TestBudgetSolverFreezesJustChangedSlots(t *testing.T) {
+	x, draft := solverRecording(t, "4430")
+	x.candidates = append(x.candidates, Candidate{
+		ID: "cpu-solver", Category: schemas.CategoryCPU, Brand: "AMD", Model: "Ryzen 5 5600",
+		Specs: byIDFallback(x.candidates, "cpu-r5-5600").Specs, Price: strPtr("470.00"),
+	})
+	// patchDraftJSON 产出 wire 格式（BuildDraft 结构体 marshal 是 Go 字段名，
+	// 无法过 decodeStrict）。
+	raw, err := patchDraftJSON(x.result.Draft, &budgetFix{Replacements: []budgetReplacement{{
+		Category: schemas.CategoryCPU, SSDIndex: -1, ToID: "cpu-r7-5700x",
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	x.input.BaseDraft = raw
+	fix, sacrifice, ok := x.solveBudget(context.Background(), draft)
+	if !ok || fix != nil || sacrifice != nil {
+		t.Fatalf("just-changed cpu slot must stay locked: %+v %+v %v", fix, sacrifice, ok)
+	}
+
+	// base_draft 与当前 draft 一致时不冻结：同档替换照常成立。
+	same, err := json.Marshal(draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	x2, draft2 := solverRecording(t, "4430")
+	x2.candidates = append(x2.candidates, Candidate{
+		ID: "cpu-solver", Category: schemas.CategoryCPU, Brand: "AMD", Model: "Ryzen 5 5600",
+		Specs: byIDFallback(x2.candidates, "cpu-r5-5600").Specs, Price: strPtr("470.00"),
+	})
+	x2.input.BaseDraft = same
+	fix, _, ok = x2.solveBudget(context.Background(), draft2)
+	if !ok || fix == nil || len(fix.Replacements) != 1 || fix.Replacements[0].ToID != "cpu-solver" {
+		t.Fatalf("unchanged slot must stay swappable: %+v %v", fix, ok)
+	}
+}

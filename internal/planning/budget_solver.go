@@ -298,7 +298,9 @@ func (x *execution) budgetOverrun() (over, upper *big.Rat, ok bool) {
 }
 
 // solverLockedCategories 服务端压价不可触碰的品类：已有件按品类核账的替身、
-// must 品牌（替换可能违背品牌要求）与静音/外观（替换后无法程序保证）。
+// must 品牌（替换可能违背品牌要求）与静音/外观（替换后无法程序保证）；
+// 以及本轮相对 base_draft 刚被改动的槽位——那是用户/改单的方向性决定，
+// 压价回退等于撤销（教训：C123-001 刚指定的 5700X 升级被压价换回 5600）。
 func (x *execution) solverLockedCategories(draft schemas.BuildDraft) map[schemas.Category]bool {
 	locked := map[schemas.Category]bool{}
 	for _, p := range x.verifiedOwnership(draft).OwnedParts {
@@ -322,6 +324,51 @@ func (x *execution) solverLockedCategories(draft schemas.BuildDraft) map[schemas
 	}
 	if activeMust("appearance") {
 		locked[schemas.CategoryCase] = true
+	}
+	if len(x.input.BaseDraft) > 0 {
+		if base, err := schemas.DecodeBuildDraft(x.input.BaseDraft); err == nil {
+			sameSSD := func(a, b []schemas.SSDSelection) bool {
+				if len(a) != len(b) {
+					return false
+				}
+				for i := range a {
+					if a[i].SKU != b[i].SKU || a[i].Quantity != b[i].Quantity {
+						return false
+					}
+				}
+				return true
+			}
+			s := draft.Selection
+			b := base.Selection
+			changed := map[schemas.Category]bool{}
+			if b.CPU != "" && b.CPU != s.CPU {
+				changed[schemas.CategoryCPU] = true
+			}
+			if b.GPU != nil && *b.GPU != "" && (s.GPU == nil || *s.GPU != *b.GPU) {
+				changed[schemas.CategoryGPU] = true
+			}
+			if b.Motherboard != "" && b.Motherboard != s.Motherboard {
+				changed[schemas.CategoryMotherboard] = true
+			}
+			if b.Memory != "" && b.Memory != s.Memory {
+				changed[schemas.CategoryMemory] = true
+			}
+			if len(b.SSDs) > 0 && !sameSSD(b.SSDs, s.SSDs) {
+				changed[schemas.CategorySSD] = true
+			}
+			if b.PSU != "" && b.PSU != s.PSU {
+				changed[schemas.CategoryPSU] = true
+			}
+			if b.Case != "" && b.Case != s.Case {
+				changed[schemas.CategoryCase] = true
+			}
+			if b.Cooler != "" && b.Cooler != s.Cooler {
+				changed[schemas.CategoryCooler] = true
+			}
+			for cat := range changed {
+				locked[cat] = true
+			}
+		}
 	}
 	return locked
 }

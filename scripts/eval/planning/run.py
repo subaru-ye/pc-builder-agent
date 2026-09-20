@@ -34,7 +34,11 @@ def main():
         raise SystemExit('Use a new output directory')
     suffix = uuid.uuid4().hex[:12]
     name, db = 'pcbuilder-planning-eval-' + suffix, 'peval_' + suffix
-    env = dict(os.environ, POSTGRES_PASSWORD=secrets.token_hex(24), POSTGRES_DB=db)
+    env = dict(os.environ, POSTGRES_PASSWORD=secrets.token_hex(24), POSTGRES_DB=db,
+               # Evaluation pins forbid model retries; force the harness-side zero
+               # so a deployment .env that enables transient retries cannot make
+               # a live batch non-reproducible.
+               MODEL_MAX_RETRIES='0')
     image = 'pgvector/pgvector:pg16'
     # Default creates a dedicated container; explicit local mode only creates
     # a uniquely named database. Neither mode performs shared Compose changes.

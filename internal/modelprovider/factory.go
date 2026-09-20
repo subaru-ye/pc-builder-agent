@@ -17,7 +17,9 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/upstream"
 )
 
-// NewChat 创建带供应商参数、零自动重试、错误分类和脱敏指标的 ADK 模型。
+// NewChat 创建带供应商参数、错误分类和脱敏指标的 ADK 模型。默认零自动重试；
+// MODEL_MAX_RETRIES=1 时只对本层判定的瞬时上游错误(截断/不可用/超时)在同模型
+// 上追加一次尝试——openai-go 自带的重试不重发这类响应,见 transientUpstream。
 // 配置了 *_MODEL_CHAIN 时返回额度降级链(chain.go):候选按序自动切换。
 func NewChat(ctx context.Context, cfg Config, component string) (model.LLM, error) {
 	if cfg.Role != RoleScreening && cfg.Role != RoleBuilder {
@@ -64,7 +66,7 @@ func buildChat(ctx context.Context, cfg Config, component string) (model.LLM, er
 	if err != nil {
 		return nil, err
 	}
-	return &classifiedModel{inner: inner, provider: cfg.Provider, role: cfg.Role}, nil
+	return &classifiedModel{inner: inner, provider: cfg.Provider, role: cfg.Role, retries: cfg.MaxRetries}, nil
 }
 
 // NewEmbedding 创建通用 /embeddings 客户端；MiMo 已在 Load 阶段拒绝。
@@ -83,28 +85,45 @@ type classifiedModel struct {
 	inner    model.LLM
 	provider Provider
 	role     Role
+	retries  int
 }
 
 func (m *classifiedModel) Name() string { return m.inner.Name() }
 
 func (m *classifiedModel) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {
-		m.inner.GenerateContent(ctx, req, stream)(func(resp *model.LLMResponse, err error) bool {
-			if err == nil {
-				if resp == nil || (resp.ErrorCode == "" && resp.ErrorMessage == "") {
-					return yield(resp, nil)
+		for attempt := 0; ; attempt++ {
+			delivered, retry := false, false
+			m.inner.GenerateContent(ctx, req, stream)(func(resp *model.LLMResponse, err error) bool {
+				var wrapped *upstream.Error
+				if err == nil {
+					if resp == nil || (resp.ErrorCode == "" && resp.ErrorMessage == "") {
+						delivered = true
+						return yield(resp, nil)
+					}
+					cause := errors.New("provider returned response error")
+					wrapped = upstream.New(string(m.provider), string(m.role),
+						upstream.Classify(0, resp.ErrorCode, cause), 0, resp.ErrorCode, cause)
+					resp = nil
+				} else {
+					status, code := 0, ""
+					var apiErr *openai.Error
+					if errors.As(err, &apiErr) {
+						status, code = apiErr.StatusCode, apiErr.Code
+					}
+					wrapped = upstream.New(string(m.provider), string(m.role),
+						upstream.Classify(status, code, err), status, code, err)
 				}
-				kind := upstream.Classify(0, resp.ErrorCode, errors.New("provider returned response error"))
-				return yield(nil, upstream.New(string(m.provider), string(m.role), kind, 0,
-					resp.ErrorCode, errors.New("provider returned response error")))
+				// 已向消费者产出过成功后不再重试，避免重复计费与半截输出拼接。
+				if !delivered && attempt < m.retries && transientUpstream(wrapped) {
+					retry = true
+					return false
+				}
+				return yield(resp, wrapped)
+			})
+			if !retry {
+				return
 			}
-			status, code := 0, ""
-			var apiErr *openai.Error
-			if errors.As(err, &apiErr) {
-				status, code = apiErr.StatusCode, apiErr.Code
-			}
-			wrapped := upstream.New(string(m.provider), string(m.role), upstream.Classify(status, code, err), status, code, err)
-			return yield(resp, wrapped)
-		})
+		}
 	}
 }

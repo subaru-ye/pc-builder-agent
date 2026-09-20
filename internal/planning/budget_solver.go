@@ -113,6 +113,18 @@ func specString(specs map[string]json.RawMessage, key string) *string {
 	return &v
 }
 
+func specBool(specs map[string]json.RawMessage, key string) *bool {
+	raw := specs[key]
+	if len(raw) == 0 {
+		return nil
+	}
+	var v bool
+	if json.Unmarshal(raw, &v) != nil {
+		return nil
+	}
+	return &v
+}
+
 func specIntText(specs map[string]json.RawMessage, key string) string {
 	if v := specInt(specs, key); v != nil {
 		return strconv.Itoa(*v)
@@ -127,12 +139,24 @@ func specStringText(specs map[string]json.RawMessage, key string) string {
 	return "?"
 }
 
+func specBoolText(specs map[string]json.RawMessage, key string) string {
+	if v := specBool(specs, key); v != nil {
+		return strconv.FormatBool(*v)
+	}
+	return "?"
+}
+
 // tierNotLower 判定替换候选在程序可证明的容量/性能档位上不低于原选择；
 // 任一关键档位字段缺失即视为不可比，保守拒绝替换。canonical 规格不含
-// CPU 核心数与 GPU 显存，这两类的档位无法程序证明，不参与确定性替换。
+// CPU 核心数与 GPU 显存：CPU 只能以 TDP 与核显存在性证明，GPU 不可证明，
+// 因此不参与确定性替换。
 func tierNotLower(cat schemas.Category, old, new Candidate) bool {
 	o, n := candidateSpecs(old), candidateSpecs(new)
 	switch cat {
+	case schemas.CategoryCPU:
+		ow, nw := specInt(o, "tdp_w"), specInt(n, "tdp_w")
+		oi, ni := specBool(o, "has_igpu"), specBool(n, "has_igpu")
+		return ow != nil && nw != nil && *nw >= *ow && oi != nil && ni != nil && (!*oi || *ni)
 	case schemas.CategoryPSU:
 		ow, nw := specInt(o, "wattage_w"), specInt(n, "wattage_w")
 		return ow != nil && nw != nil && *nw >= *ow
@@ -169,6 +193,9 @@ func tierNotLower(cat schemas.Category, old, new Candidate) bool {
 func tierBasis(cat schemas.Category, old, new Candidate) string {
 	o, n := candidateSpecs(old), candidateSpecs(new)
 	switch cat {
+	case schemas.CategoryCPU:
+		return "CPU TDP " + specIntText(o, "tdp_w") + "W→" + specIntText(n, "tdp_w") + "W、核显 " +
+			specBoolText(o, "has_igpu") + "→" + specBoolText(n, "has_igpu")
 	case schemas.CategoryPSU:
 		return "电源功率 " + specIntText(o, "wattage_w") + "W→" + specIntText(n, "wattage_w") + "W"
 	case schemas.CategoryMotherboard:

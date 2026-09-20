@@ -74,6 +74,57 @@ func TestBudgetSolverRejectsTierDowngrades(t *testing.T) {
 	}
 }
 
+// CPU 档位以 TDP 与核显存在性证明：r10/r11 真值里 5600/5500 都是预算内的剪辑
+// 方案，故同 TDP、核显形态不丢的更便宜 CPU 属于档位不降；TDP 更低或丢失核显
+// （核显点亮场景）不参与确定性替换。
+func TestBudgetSolverCPUTierSwap(t *testing.T) {
+	base := Candidate{ID: "cpu-r5-5600", Category: schemas.CategoryCPU, Specs: json.RawMessage(`{"tdp_w":65,"socket":"AM4","has_igpu":false}`)}
+	igpu := Candidate{ID: "cpu-r5-4600g", Category: schemas.CategoryCPU, Specs: json.RawMessage(`{"tdp_w":65,"socket":"AM4","has_igpu":true}`)}
+	if !tierNotLower(schemas.CategoryCPU, base, Candidate{Specs: json.RawMessage(`{"tdp_w":65,"has_igpu":false}`)}) {
+		t.Fatal("equal TDP with unchanged iGPU is tier-preserving")
+	}
+	if tierNotLower(schemas.CategoryCPU, base, Candidate{Specs: json.RawMessage(`{"tdp_w":45,"has_igpu":false}`)}) {
+		t.Fatal("lower TDP must not count as tier-preserving")
+	}
+	if tierNotLower(schemas.CategoryCPU, igpu, Candidate{Specs: json.RawMessage(`{"tdp_w":105,"has_igpu":false}`)}) {
+		t.Fatal("losing the integrated GPU breaks iGPU-powered builds")
+	}
+	if !tierNotLower(schemas.CategoryCPU, base, Candidate{Specs: json.RawMessage(`{"tdp_w":65,"has_igpu":true}`)}) {
+		t.Fatal("gaining an integrated GPU is not a downgrade")
+	}
+	if tierNotLower(schemas.CategoryCPU, base, Candidate{Specs: json.RawMessage(`{"socket":"AM4"}`)}) {
+		t.Fatal("missing tier fields stay incomparable")
+	}
+
+	x, draft := solverRecording(t, "4430") // 超支 149.90，夹具 CPU 629.00 → 同档 470.00 可省 159
+	x.candidates = append(x.candidates, Candidate{
+		ID: "cpu-solver", Category: schemas.CategoryCPU, Brand: "AMD", Model: "Ryzen 5 5600",
+		Specs: byIDFallback(x.candidates, "cpu-r5-5600").Specs, Price: strPtr("470.00"),
+	})
+	fix, sacrifice, ok := x.solveBudget(context.Background(), draft)
+	if !ok || fix == nil || sacrifice != nil {
+		t.Fatalf("tier-equal cpu swap must be an executable fix: %+v %+v %v", fix, sacrifice, ok)
+	}
+	if len(fix.Replacements) != 1 || fix.Replacements[0].ToID != "cpu-solver" || fix.Replacements[0].SavingCNY != "159.00" {
+		t.Fatalf("wrong replacement: %+v", fix.Replacements)
+	}
+	if !strings.Contains(fix.Replacements[0].Basis, "TDP 65W→65W") || !strings.Contains(fix.Replacements[0].Basis, "核显 false→false") {
+		t.Fatalf("basis must prove the CPU tier argument: %q", fix.Replacements[0].Basis)
+	}
+
+	// 只有降 TDP 的更便宜 CPU 时不得替换，也不得静默降级为牺牲之外的交付。
+	x2, draft2 := solverRecording(t, "4430")
+	x2.candidates = append(x2.candidates, Candidate{
+		ID: "cpu-45w", Category: schemas.CategoryCPU, Brand: "AMD", Model: "Ryzen 5 4500",
+		Specs: json.RawMessage(`{"tdp_w":45,"socket":"AM4","has_igpu":false,"supported_chipsets":["A520","B450","B550","X470","X570"]}`),
+		Price: strPtr("436.00"),
+	})
+	fix, _, ok = x2.solveBudget(context.Background(), draft2)
+	if !ok || fix != nil {
+		t.Fatalf("lower-TDP cpu must not be selected as a replacement: %+v %v", fix, ok)
+	}
+}
+
 // 锁定保护：已有件品类、must 静音、更小容量的内存都不允许作为替换。
 func TestBudgetSolverProtectsLockedSlots(t *testing.T) {
 	x, draft := solverRecording(t, "4430")

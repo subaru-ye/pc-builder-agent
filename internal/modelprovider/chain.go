@@ -47,6 +47,22 @@ func switchWorthy(err error) bool {
 	return strings.Contains(code, "quota") || strings.Contains(code, "allocation")
 }
 
+// transientUpstream 是同模型值得再试一次的瞬时错误:响应体被截断(protocol)、
+// 上游不可用(unavailable)与超时(timeout)。openai-go 的 WithMaxRetries 实测
+// 不会重发被截断的 200 响应(请求数仍为 1),所以这类失败只能在本层吸收;
+// 额度与鉴权类错误不在此列,交给模型链或如实抛给调用方。
+func transientUpstream(err error) bool {
+	var ue *upstream.Error
+	if !errors.As(err, &ue) {
+		return false
+	}
+	switch ue.Kind {
+	case upstream.KindProtocol, upstream.KindUnavailable, upstream.KindTimeout:
+		return true
+	}
+	return false
+}
+
 // chainCandidate 是链上一个候选;inner 由 factory 惰性构建,构建失败视为该
 // 候选不可用(如模型名错误),同样切换下一个。
 type chainCandidate struct {

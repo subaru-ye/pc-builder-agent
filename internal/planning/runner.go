@@ -50,6 +50,10 @@ type Runner struct {
 	Catalog  Catalog
 	Web      *Web
 	MaxTurns int // Optional smaller diagnostic budget; never exceeds the default 8.
+	// ShouldCancel 在每轮开头由 buildsvc 注入检查(读 agent_runs.cancel_requested_at):
+	// 请求断连不会取消 A2A 服务端执行,取消级联必须显式轮询(F6 实测结论)。
+	// 返回 true 时 Runner 以 context.Canceled 结束,由上游按"取消 ≠ 失败"处理。
+	ShouldCancel func() bool
 }
 
 type execution struct {
@@ -189,6 +193,9 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 	decisionReviewed := false
 	gates := deliveryGateCounters{}
 	for turn := 0; turn < turns; turn++ {
+		if r.ShouldCancel != nil && r.ShouldCancel() {
+			return x.finish(), fmt.Errorf("planning: %w", context.Canceled)
+		}
 		if turn == turns-1 {
 			request.Config.Tools = nil
 			request.Contents = append(request.Contents, genai.NewContentFromText("本轮工具阶段结束，请根据已有证据输出最终JSON，未解决的问题保存为proposal，不要伪造已解决。", genai.RoleUser))

@@ -30,7 +30,15 @@ func NewRemotePlanning(cfg Config) (agent.Agent, error) {
 				yield(nil, fmt.Errorf("planning requires version 2 state snapshot"))
 				return
 			}
-			result, e := r.Run(ctx, input)
+			// F6 实测:A2A 服务端执行与请求 ctx 分离(local_manager WithoutCancel),
+			// 客户端断连不会取消生成;按 run 轮询产品侧取消标志,每轮开头一次。
+			runner := r
+			if input.RunID != "" {
+				cancelPoll := context.WithoutCancel(ctx)
+				runID := input.RunID
+				runner.ShouldCancel = func() bool { return cfg.Store.RunCancelRequested(cancelPoll, runID) }
+			}
+			result, e := runner.Run(ctx, input)
 			if e != nil {
 				// 客户端取消/断连不是生成服务故障:保留已完成候选与草稿供后续
 				// 轮次恢复,不得覆盖为 technical_fault(§F1:取消 ≠ 失败)。

@@ -44,8 +44,23 @@ func TestExternalSearchQuotaAndReadableEvidence(t *testing.T) {
 		t.Fatalf("%+v %v", page, err)
 	}
 	quota.err = errors.New("quota exhausted")
-	if _, err := w.Search(context.Background(), "another product"); err == nil || searches != 1 {
-		t.Fatal("failed quota reservation sent a search")
+	rows, err = w.Search(context.Background(), "another product")
+	// F7:请求成功后才结算;结算失败按未知消耗记录,不打断已完成的搜索。
+	if err != nil || searches != 2 || quota.calls != 2 || len(rows) != 1 {
+		t.Fatalf("settle failure must not discard a paid search: %+v %v", rows, err)
+	}
+	// 额度耗尽在请求前被拦下:剩余不足两次(account + search)。
+	server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/account.json":
+			fmt.Fprint(w, `{"plan_name":"Free","this_month_usage":239,"total_searches_left":1}`)
+		default:
+			w.WriteHeader(404)
+		}
+	})
+	quota.err = nil
+	if _, err := w.Search(context.Background(), "third query"); err == nil || searches != 2 || quota.calls != 2 {
+		t.Fatal("exhausted quota must be refused before the search request")
 	}
 }
 

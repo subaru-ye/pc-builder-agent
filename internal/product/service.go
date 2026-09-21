@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -21,6 +22,15 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 	"github.com/subaru-ye/pc-builder-agent/internal/upstream"
 )
+
+// envInt 读取非负整数环境变量;缺失或非法返回 fallback(F7 预算,0 = 不限)。
+func envInt(key string) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if n, err := strconv.Atoi(raw); err == nil && n >= 0 {
+		return n
+	}
+	return 0
+}
 
 // screeningModelFor 返回执行环境的初筛模型口径;非 screening run 返回空。
 // 与 builder 不同,初筛同进程执行,身份来自执行环境而非远端回传。
@@ -574,6 +584,18 @@ func parseDeterministicGPUBrandSwap(text string) (string, bool) {
 }
 
 func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID string, payload json.RawMessage) {
+	// F7:日 token 预算硬限(DAILY_TOKEN_BUDGET,0 = 不限);超限拒绝新规划运行。
+	if budget := envInt("DAILY_TOKEN_BUDGET"); budget > 0 {
+		if used, ok := s.store.(interface {
+			TokensUsedToday(context.Context) (int, error)
+		}); ok {
+			if consumed, err := used.TokensUsedToday(ctx); err == nil && consumed >= budget {
+				s.fail(ctx, r, NewProblem("daily_budget_exceeded", "今日生成额度已用完", 429,
+					"今天的生成任务已达预算上限，明天可继续；已有对话与配置保持不变。", r.ClientRequestID), recoveryFor(r.Kind), "")
+				return
+			}
+		}
+	}
 	s.progress(ctx, r.ID, "remote_processing", "正在生成并校验配置", 2)
 	before, _, err := s.store.LatestBuildVersion(ctx, r.SessionID)
 	if err != nil {

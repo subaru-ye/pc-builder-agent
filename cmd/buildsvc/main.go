@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
@@ -91,6 +92,7 @@ func main() {
 		Store:           st,
 		QueryEmbedder:   embedder,
 		BuilderIdentity: &planning.BuilderIdentity{Provider: string(builderCfg.Provider), Role: string(builderCfg.Role), Model: builderCfg.Model},
+		TokenBudget:     envInt("RUN_TOKEN_BUDGET", 0),
 	}
 	var root agent.Agent
 	if harnessMode == buildharness.ModePlanning {
@@ -144,6 +146,18 @@ func main() {
 	if err := http.ListenAndServe(addr, logMiddleware(mux)); err != nil {
 		log.Fatalf("[buildsvc] A2A 服务退出: %v", err)
 	}
+}
+
+// envInt 读取非负整数环境变量;缺失或非法返回 fallback(F7 预算,0 = 不限)。
+func envInt(key string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	if n, err := strconv.Atoi(raw); err == nil && n >= 0 {
+		return n
+	}
+	return fallback
 }
 
 // publicBaseURL 由监听地址推出对外基址(":8081" → http://localhost:8081)。

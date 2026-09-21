@@ -29,6 +29,7 @@ type Config struct {
 	Store           *store.Store
 	QueryEmbedder   tools.QueryEmbedder // P3 语义检索的 query 向量化(host 注入端点实现)
 	BuilderIdentity *planning.BuilderIdentity
+	TokenBudget     int // planning 单轮 token 硬上限(RUN_TOKEN_BUDGET);0 = 不限(F7)
 }
 
 // New 装配完整单进程流水线根 agent(挂给 launcher;集成测试与 P5 前的默认形态)。

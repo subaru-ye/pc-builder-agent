@@ -33,6 +33,7 @@ func NewRemotePlanning(cfg Config) (agent.Agent, error) {
 			// F6 实测:A2A 服务端执行与请求 ctx 分离(local_manager WithoutCancel),
 			// 客户端断连不会取消生成;按 run 轮询产品侧取消标志,每轮开头一次。
 			runner := r
+			runner.TokenBudget = cfg.TokenBudget
 			if input.RunID != "" {
 				cancelPoll := context.WithoutCancel(ctx)
 				runID := input.RunID

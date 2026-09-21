@@ -544,3 +544,63 @@ func TestPlanningReplayDegradesDivergentVerification(t *testing.T) {
 	}
 	t.Fatal("run timeout")
 }
+
+// F7:DAILY_TOKEN_BUDGET 超限时拒绝新的规划运行,已有数据保持不变。
+func TestPlanningDailyTokenBudgetRefusesNewRuns(t *testing.T) {
+	_, service, _ := requirementIntegrationAPI(t, true)
+	ctx := context.Background()
+	owner := strings.Repeat("p", 43)
+	ws, e := service.CreateSession(ctx, owner, uuid.NewString())
+	if e != nil {
+		t.Fatal(e)
+	}
+	edit := func() {
+		d, e := service.GetSession(ctx, owner, ws.ID)
+		if e != nil {
+			t.Fatal(e)
+		}
+		var state schemas.RequirementState
+		_ = json.Unmarshal(d.Session.RequirementState, &state)
+		if _, e = service.EditRequirement(ctx, owner, ws.ID, uuid.NewString(), product.RequirementEdit{ExpectedRevision: state.Revision, Operations: []schemas.RequirementOperation{{Op: "set", Field: "budget_cny", Value: json.RawMessage(`12000`), Strength: "must"}}}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	confirm := func() error {
+		r, e := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString())
+		if e != nil {
+			t.Fatal(e)
+		}
+		for i := 0; i < 200; i++ {
+			run, e := service.GetRun(ctx, owner, r.Run.ID)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if run.Status == store.RunRunning {
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+			if run.Status != store.RunSucceeded {
+				return fmt.Errorf("run: %s %s", run.Status, run.Error)
+			}
+			return nil
+		}
+		return fmt.Errorf("run timeout")
+	}
+	// 第一轮正常完成并记录 token 消耗;随后把日预算压到已消耗之下。
+	edit()
+	if err := confirm(); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DAILY_TOKEN_BUDGET", "1")
+	edit()
+	if err := confirm(); err == nil || !strings.Contains(err.Error(), "daily_budget_exceeded") {
+		t.Fatalf("expected daily budget refusal: %v", err)
+	}
+	detail, e := service.GetSession(ctx, owner, ws.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if detail.Session.VersionCount != 1 {
+		t.Fatalf("unexpected version count: %d", detail.Session.VersionCount)
+	}
+}

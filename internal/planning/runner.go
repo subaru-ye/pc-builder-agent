@@ -54,6 +54,9 @@ type Runner struct {
 	// 请求断连不会取消 A2A 服务端执行,取消级联必须显式轮询(F6 实测结论)。
 	// 返回 true 时 Runner 以 context.Canceled 结束,由上游按"取消 ≠ 失败"处理。
 	ShouldCancel func() bool
+	// TokenBudget 是本轮 token 硬上限(F7,RUN_TOKEN_BUDGET):0 = 不限。
+	// 超限后立即进入整理轮(摘除工具),未解决问题保留为 proposal。
+	TokenBudget int
 }
 
 type execution struct {
@@ -192,11 +195,15 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 	}
 	decisionReviewed := false
 	gates := deliveryGateCounters{}
+	windDownSent := false
 	for turn := 0; turn < turns; turn++ {
 		if r.ShouldCancel != nil && r.ShouldCancel() {
 			return x.finish(), fmt.Errorf("planning: %w", context.Canceled)
 		}
-		if turn == turns-1 {
+		// F7:token 预算耗尽立即进入整理轮,未解决问题保留为 proposal。
+		budgetOut := r.TokenBudget > 0 && x.result.Tokens >= int32(r.TokenBudget)
+		if (turn == turns-1 || budgetOut) && !windDownSent {
+			windDownSent = true
 			request.Config.Tools = nil
 			request.Contents = append(request.Contents, genai.NewContentFromText("本轮工具阶段结束，请根据已有证据输出最终JSON，未解决的问题保存为proposal，不要伪造已解决。", genai.RoleUser))
 		}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -128,7 +129,8 @@ func (w *Web) Search(ctx context.Context, query string) ([]Evidence, error) {
 	}
 	account, e := w.api(ctx, "/account.json", url.Values{})
 	if e != nil {
-		return nil, e
+		// PG 故障与额度耗尽分开表述(F7);此处是服务不可达,不是额度问题。
+		return nil, fmt.Errorf("外部搜索服务暂时不可用，无法核验额度")
 	}
 	plan, _ := account["plan_name"].(string)
 	if plan == "" {
@@ -139,21 +141,24 @@ func (w *Web) Search(ctx context.Context, query string) ([]Evidence, error) {
 	if !rok {
 		remaining, rok = account["plan_searches_left"].(float64)
 	}
-	if !ok || !rok || (w.RequireFree && !strings.Contains(strings.ToLower(plan), "free")) || int(usage) >= w.Budget || remaining < 1 {
-		return nil, fmt.Errorf("外部搜索额度或套餐条件不满足，已保留已有资料")
+	// account.json 本身是计费请求(F7):口径上先扣 1 次,搜索还需 1 次。
+	if !ok || !rok || (w.RequireFree && !strings.Contains(strings.ToLower(plan), "free")) || int(usage)+1 >= w.Budget || remaining < 2 {
+		return nil, fmt.Errorf("本月外部搜索额度已用完或套餐条件不满足，已保留已有资料")
 	}
 	if w.Quota == nil {
 		return nil, fmt.Errorf("搜索额度计量服务不可用")
 	}
-	if e = w.Quota.ReserveSearch(ctx, int(usage), w.Budget); e != nil {
-		return nil, fmt.Errorf("本月搜索额度已用完或无法核验")
+	result, e := w.api(ctx, "/search.json", url.Values{"engine": {"baidu"}, "q": {query}, "device": {"mobile"}})
+	if e != nil {
+		return nil, e
 	}
 	if w.OnSearchRequest != nil {
 		w.OnSearchRequest()
 	}
-	result, e := w.api(ctx, "/search.json", url.Values{"engine": {"baidu"}, "q": {query}, "device": {"mobile"}})
-	if e != nil {
-		return nil, e
+	// F7:请求成功后才结算本地额度;请求失败不占用。结算失败(额度耗尽或
+	// 计量故障)只按未知消耗记录,不打断已完成的搜索。
+	if e = w.Quota.ReserveSearch(ctx, int(usage), w.Budget); e != nil {
+		log.Printf("[planning] 搜索额度结算失败(按未知消耗记录):%v", e)
 	}
 	items, _ := result["organic_results"].([]any)
 	rows := []Evidence{}

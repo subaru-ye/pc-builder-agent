@@ -20,6 +20,14 @@ func (s *Store) RunCancelRequested(ctx context.Context, runID string) bool {
 	return e == nil && requested
 }
 
+// TokensUsedToday 汇总今日非 screening run 的 token 消耗(F7 日预算口径)。
+func (s *Store) TokensUsedToday(ctx context.Context) (int, error) {
+	var used int
+	e := s.pool.QueryRow(ctx, `SELECT COALESCE(SUM(tokens),0) FROM agent_runs
+		WHERE kind <> 'screening' AND started_at >= date_trunc('day', now())`).Scan(&used)
+	return used, e
+}
+
 // RunObservability 汇总单个 run 的模型身份、计量与镜像状态;NULL 计量归零(未知 ≠ 零由列本身区分)。
 type RunObservability struct {
 	BuilderModel     string

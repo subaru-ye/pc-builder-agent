@@ -204,6 +204,7 @@ const PlanningResult = z
       "proposal",
       "ready",
       "technical_fault",
+      "interrupted",
     ]),
     model_outcome: z.string().optional(),
     build_version: z.number().int().gte(1).optional(),
@@ -269,6 +270,11 @@ const PlanningResult = z
     tokens: z.number().int().optional(),
     duration_ms: z.number().int().optional(),
     stage_ms: z.record(z.string(), z.number().int()).optional(),
+    builder: z
+      .object({ provider: z.string(), role: z.string(), model: z.string() })
+      .passthrough()
+      .optional(),
+    catalog_snapshot_id: z.number().int().optional(),
   })
   .passthrough();
 const SessionProposal = z

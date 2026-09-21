@@ -15,11 +15,24 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
+	"github.com/subaru-ye/pc-builder-agent/internal/modelprovider"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 	"github.com/subaru-ye/pc-builder-agent/internal/upstream"
 )
+
+// screeningModelFor 返回执行环境的初筛模型口径;非 screening run 返回空。
+// 与 builder 不同,初筛同进程执行,身份来自执行环境而非远端回传。
+func (s *Service) screeningModelFor(kind store.RunKind) string {
+	if kind != store.RunScreening {
+		return ""
+	}
+	if cfg, err := modelprovider.Load(modelprovider.RoleScreening); err == nil {
+		return cfg.ModelDescription()
+	}
+	return ""
+}
 
 // RunTimeout 与 agent_runs.expires_at(store.RunLifetime)保持单一来源。
 const RunTimeout = store.RunLifetime
@@ -347,6 +360,7 @@ func (s *Service) succeedRequirement(ctx context.Context, r store.AgentRun, requ
 		RunID: r.ID, SessionID: r.SessionID, AssistantMessageID: uuid.NewString(),
 		AssistantContent: assistant, Status: store.RunSucceeded, Phase: store.PhaseRequirementReady,
 		PendingRequirement: requirement, SetPending: true,
+		ScreeningModel: s.screeningModelFor(r.Kind),
 	})
 	if err != nil {
 		log.Printf("[api] run %s 完成需求落库失败:%v", r.ID, err)
@@ -571,7 +585,7 @@ func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID s
 		s.failInternal(ctx, r, recoveryFor(r.Kind), "")
 		return
 	}
-	s.captureEvidence(ctx, r.ID, "build_input", map[string]any{"payload": payload, "actual_builder_model": nil, "model_evidence_source": "remote_identity_unavailable"})
+	s.captureEvidence(ctx, r.ID, "build_input", map[string]any{"payload": payload})
 	result, err := s.agent.Remote(ctx, ownerID, r.SessionID, payload)
 	if err != nil {
 		s.failFromError(ctx, r, err, recoveryFor(r.Kind), "")
@@ -629,6 +643,7 @@ func (s *Service) succeed(ctx context.Context, r store.AgentRun, phase store.Ses
 		AssistantContent: assistant, Status: store.RunSucceeded, Phase: phase,
 		DisplayContent: display, BuildVersion: buildVersion,
 		PendingRequirement: pending, SetPending: setPending,
+		ScreeningModel: s.screeningModelFor(r.Kind),
 	})
 	if err != nil {
 		log.Printf("[api] run %s 完成落库失败:%v", r.ID, err)
@@ -698,9 +713,12 @@ func (s *Service) fail(ctx context.Context, r store.AgentRun, problem Problem,
 	status := store.RunFailed
 	if s.ctx.Err() == nil && errors.Is(ctx.Err(), context.Canceled) {
 		problem = NewProblem("run_cancelled", "已停止本次生成", 409,
-			"本次生成已取消，此前的对话与数据保持不变，可重新发起请求。", r.ID)
+			"本次生成已取消，此前的对话与数据保持不变，可重新发起请求。", r.ClientRequestID)
 		status = store.RunInterrupted
 	}
+	// request_id 语义:HTTP 请求 id 归 request_id,run id 单列,日志与 DB 可对齐。
+	problem.RunID = r.ID
+	problem.RequestID = r.ClientRequestID
 	display := problem.Title + "。"
 	if problem.Detail != "" {
 		display += "\n\n" + problem.Detail
@@ -737,9 +755,28 @@ func (s *Service) progress(ctx context.Context, runID, stage, label string, sequ
 	})
 }
 
+// mirrorEvents 是要镜像进 PG 的终态事件;SSE 热路径仍走 Redis。
+var mirrorEvents = map[string]bool{
+	"run.completed": true, "run.failed": true, "build.saved": true, "requirement.ready": true,
+}
+
 func (s *Service) publish(ctx context.Context, runID, event string, payload any) {
-	if _, err := s.events.Append(context.WithoutCancel(ctx), runID, event, payload); err != nil {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("[api] run %s 事件 %s 序列化失败:%v", runID, event, err)
+		return
+	}
+	if _, err := s.events.Append(context.WithoutCancel(ctx), runID, event, raw); err != nil {
 		log.Printf("[api] run %s 写事件 %s 失败:%v", runID, event, err)
+	}
+	if mirrorEvents[event] {
+		if st, ok := s.store.(interface {
+			AppendRunEvent(context.Context, string, string, json.RawMessage) error
+		}); ok {
+			if err := st.AppendRunEvent(context.WithoutCancel(ctx), runID, event, raw); err != nil {
+				log.Printf("[api] run %s 镜像事件 %s 失败:%v", runID, event, err)
+			}
+		}
 	}
 }
 

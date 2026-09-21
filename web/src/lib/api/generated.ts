@@ -867,7 +867,7 @@ export interface components {
             /** @constant */
             schema_version: 1;
             /** @enum {string} */
-            outcome: "collect" | "clarify" | "proposal" | "ready" | "technical_fault";
+            outcome: "collect" | "clarify" | "proposal" | "ready" | "technical_fault" | "interrupted";
             /** @description 模型原始意图，不是服务端交付结论 */
             model_outcome?: string;
             /** @description 原子保存后关联的正式版本 */
@@ -922,6 +922,17 @@ export interface components {
             stage_ms?: {
                 [key: string]: number;
             };
+            /** @description 生成服务回传的模型身份(不含部署密钥);旧记录可缺省 */
+            builder?: {
+                provider: string;
+                role: string;
+                model: string;
+            };
+            /**
+             * Format: int64
+             * @description 本轮使用的目录价格快照;缺省为未知
+             */
+            catalog_snapshot_id?: number;
         };
         SavedPlanningAssessment: {
             field: string;

@@ -29,6 +29,8 @@ type SaveBuildVersionParams struct {
 	Draft             json.RawMessage // BuildDraft 全文
 	Validation        json.RawMessage // ValidationReport
 	Quote             json.RawMessage // Quote(含 snapshot_date)
+	RunID             string          // 产生本版本的 run;历史行与 legacy 写入为空
+	CatalogSnapshotID int64           // 0 = 未知(历史行)
 }
 
 // SavedBuild 落库结果:版本号由 DB 侧派生(会话内最大版本 +1),是版本号唯一真值。
@@ -97,11 +99,11 @@ func saveBuildVersionTx(ctx context.Context, tx pgx.Tx, p SaveBuildVersionParams
 	// 版本号 = 会话内最大版本 +1(UNIQUE(session_id, version) 兜底并发冲突)。
 	var out SavedBuild
 	err = tx.QueryRow(ctx,
-		`INSERT INTO builds (session_id, version, parent_id, requirement_id, change, draft, validation, quote, candidate_snapshot)
-		 SELECT $1, COALESCE(MAX(version), 0) + 1, $2, $3, $4, $5, $6, $7, $8
+		`INSERT INTO builds (session_id, version, parent_id, requirement_id, change, draft, validation, quote, candidate_snapshot, run_id, catalog_snapshot_id)
+		 SELECT $1, COALESCE(MAX(version), 0) + 1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9,'')::uuid, NULLIF($10,0)
 		   FROM builds WHERE session_id = $1
 		 RETURNING id, version`,
-		p.SessionID, p.ParentID, reqID, nullableJSON(p.Change), p.Draft, p.Validation, p.Quote, nullableJSON(p.CandidateSnapshot)).
+		p.SessionID, p.ParentID, reqID, nullableJSON(p.Change), p.Draft, p.Validation, p.Quote, nullableJSON(p.CandidateSnapshot), p.RunID, p.CatalogSnapshotID).
 		Scan(&out.ID, &out.Version)
 	if err != nil {
 		return SavedBuild{}, fmt.Errorf("store: 插入版本失败: %w", err)

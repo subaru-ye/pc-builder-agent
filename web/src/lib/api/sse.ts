@@ -44,7 +44,7 @@ export class SSEParser {
 }
 
 const eventNames = new Set<RunEventName>([
-  "run.started", "run.progress", "requirement.ready", "requirement.updated", "assistant.delta",
+  "run.started", "run.progress", "requirement.ready", "requirement.updated",
   "assistant.completed", "build.saved", "run.failed", "run.cancelled", "run.completed",
 ]);
 

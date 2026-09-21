@@ -18,15 +18,17 @@ import (
 
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/tools"
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/validate"
+	"github.com/subaru-ye/pc-builder-agent/internal/planning"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
 // Config 流水线装配参数:两档模型(初筛低价 / 生成旗舰)+ 数据层 + 查询向量化。
 type Config struct {
-	ScreeningModel model.LLM
-	BuilderModel   model.LLM
-	Store          *store.Store
-	QueryEmbedder  tools.QueryEmbedder // P3 语义检索的 query 向量化(host 注入端点实现)
+	ScreeningModel  model.LLM
+	BuilderModel    model.LLM
+	Store           *store.Store
+	QueryEmbedder   tools.QueryEmbedder // P3 语义检索的 query 向量化(host 注入端点实现)
+	BuilderIdentity *planning.BuilderIdentity
 }
 
 // New 装配完整单进程流水线根 agent(挂给 launcher;集成测试与 P5 前的默认形态)。

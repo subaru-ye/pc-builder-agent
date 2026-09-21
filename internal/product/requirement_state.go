@@ -177,6 +177,7 @@ func (s *Service) completeRequirementState(ctx context.Context, ownerID string, 
 		RunID: r.ID, SessionID: r.SessionID, AssistantMessageID: uuid.NewString(),
 		AssistantContent: assistant, Status: store.RunSucceeded, Phase: phase,
 		PendingRequirement: pending, SetPending: true, RequirementState: raw, SetRequirementState: true,
+		ScreeningModel: s.screeningModelFor(r.Kind),
 	})
 	if err != nil {
 		return err

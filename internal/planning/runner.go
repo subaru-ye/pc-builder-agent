@@ -91,6 +91,7 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 	x.result.StageMS["catalog"] = time.Since(started).Milliseconds()
 	x.date = catalog.Snapshot.SnapshotDate.Format("2006-01-02")
 	x.snapshotID = catalog.Snapshot.ID
+	x.result.CatalogSnapshotID = x.snapshotID
 	for _, c := range catalog.Candidates {
 		x.candidates = append(x.candidates, Candidate{ID: c.SKU, Category: c.Category, Brand: c.Brand, Model: c.Model, Specs: c.Specs, Price: c.PriceCNY, Evidence: []string{"local:" + c.SKU}})
 	}

@@ -208,6 +208,7 @@ func (*planningReplayModel) Name() string { return "offline-planning-recording" 
 func (m *planningReplayModel) GenerateContent(_ context.Context, req *model.LLMRequest, _ bool) iter.Seq2[*model.LLMResponse, error] {
 	return func(y func(*model.LLMResponse, error) bool) {
 		m.calls++
+		usage := &genai.GenerateContentResponseUsageMetadata{TotalTokenCount: int32(100 + m.calls)}
 		if m.input.Request != nil && m.calls == 2 && strings.Contains(string(m.draft), "cpu-r7-5700x") {
 			toolResults, _ := json.Marshal(req.Contents[len(req.Contents)-1])
 			if !strings.Contains(string(toolResults), "cpu-r7-5700x") {
@@ -243,7 +244,7 @@ func (m *planningReplayModel) GenerateContent(_ context.Context, req *model.LLMR
 			raw, _ := json.Marshal(map[string]any{"outcome": outcome, "reply": "已整理候选方案，选型与待解决问题可在右侧查看。", "draft": m.draft, "issues": issues, "assessments": assessments, "assumptions": []string{}})
 			content = genai.NewContentFromText(string(raw), genai.RoleModel)
 		}
-		y(&model.LLMResponse{Content: content}, nil)
+		y(&model.LLMResponse{Content: content, UsageMetadata: usage}, nil)
 	}
 }
 
@@ -425,6 +426,17 @@ func TestPlanningResultArchivedAndTransportDegraded(t *testing.T) {
 	}
 	if _, e = st.PlanningArtifact(ctx, gateway.runIDs[1]); e != nil {
 		t.Fatal(e)
+	}
+	// F3:一次 planning run 后,单条 SQL 能答出 run 的模型身份与全部计量。
+	obs, e := st.RunObservability(ctx, gateway.runIDs[0])
+	if e != nil {
+		t.Fatal(e)
+	}
+	if obs.ModelCalls == 0 || obs.ToolCalls == 0 || obs.Tokens == 0 || obs.DurationMS == 0 || obs.CatalogSnapshotI == 0 || obs.BuildsLinked != 1 {
+		t.Fatalf("planning run metrics not persisted: %+v", obs)
+	}
+	if obs.MirroredEvents < 2 {
+		t.Fatalf("terminal events not mirrored: %+v", obs)
 	}
 }
 

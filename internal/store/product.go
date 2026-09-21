@@ -556,6 +556,16 @@ type CompleteRunParams struct {
 	RequirementState                                       json.RawMessage
 	SetRequirementState                                    bool
 	Error                                                  json.RawMessage
+	// F3 可观测性:模型身份与计量沿用 planning.Result 口径;0/空写 NULL(未知 ≠ 零)。
+	ScreeningModel, BuilderModel string
+	ModelCalls                   int
+	ToolCalls                    int
+	SearchCalls                  int
+	PageCalls                    int
+	Tokens                       int
+	DurationMS                   int64
+	CatalogSnapshotID            int64
+	RetryCount                   int
 }
 
 // CompleteRun 原子完成 run、可选 assistant 消息与产品会话最终状态。
@@ -580,8 +590,15 @@ func (s *Store) completeRunStandalone(ctx context.Context, tx pgx.Tx, p Complete
 }
 
 func completeRunTx(ctx context.Context, tx pgx.Tx, p CompleteRunParams) (*WebMessage, error) {
-	cmd, err := tx.Exec(ctx, `UPDATE agent_runs SET status = $2, error = $3, finished_at = now()
-		WHERE id = $1 AND session_id = $4 AND status = 'running'`, p.RunID, p.Status, nullableJSON(p.Error), p.SessionID)
+	cmd, err := tx.Exec(ctx, `UPDATE agent_runs SET status = $2, error = $3, finished_at = now(),
+		screening_model = NULLIF($5,''), builder_model = NULLIF($6,''),
+		model_calls = NULLIF($7,0), tool_calls = NULLIF($8,0), search_calls = NULLIF($9,0),
+		page_calls = NULLIF($10,0), tokens = NULLIF($11,0), duration_ms = NULLIF($12,0),
+		catalog_snapshot_id = NULLIF($13,0), retry_count = NULLIF($14,0)
+		WHERE id = $1 AND session_id = $4 AND status = 'running'`,
+		p.RunID, p.Status, nullableJSON(p.Error), p.SessionID,
+		p.ScreeningModel, p.BuilderModel, p.ModelCalls, p.ToolCalls, p.SearchCalls,
+		p.PageCalls, p.Tokens, p.DurationMS, p.CatalogSnapshotID, p.RetryCount)
 	if err != nil {
 		return nil, fmt.Errorf("store: 完成运行失败: %w", err)
 	}

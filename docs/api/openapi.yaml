@@ -1084,7 +1084,7 @@ components:
       required: [schema_version, outcome, reply, issues, assumptions, candidates, evidence]
       properties:
         schema_version: {type: integer, const: 1}
-        outcome: {type: string, enum: [collect, clarify, proposal, ready, technical_fault]}
+        outcome: {type: string, enum: [collect, clarify, proposal, ready, technical_fault, interrupted]}
         model_outcome: {type: string, description: 模型原始意图，不是服务端交付结论}
         build_version: {type: integer, minimum: 1, description: 原子保存后关联的正式版本}
         delivery:
@@ -1138,6 +1138,15 @@ components:
         tokens: {type: integer}
         duration_ms: {type: integer}
         stage_ms: {type: object, additionalProperties: {type: integer}}
+        builder:
+          type: object
+          description: 生成服务回传的模型身份(不含部署密钥);旧记录可缺省
+          required: [provider, role, model]
+          properties:
+            provider: {type: string}
+            role: {type: string}
+            model: {type: string}
+        catalog_snapshot_id: {type: integer, format: int64, description: 本轮使用的目录价格快照;缺省为未知}
     SavedPlanningAssessment:
       type: object
       required: [field, status, explanation, evidence]

@@ -59,31 +59,40 @@ type Assessment struct {
 	Evidence    []string `json:"evidence"`
 }
 
+// BuilderIdentity 是生成服务在 control plane 回传的模型身份；不含部署密钥。
+type BuilderIdentity struct {
+	Provider string `json:"provider"`
+	Role     string `json:"role"`
+	Model    string `json:"model"`
+}
+
 // Result persists the proposal and evidence even when a final build is not ready.
 type Result struct {
-	ModelOutcome   string                    `json:"model_outcome,omitempty"`
-	Delivery       *Delivery                 `json:"delivery,omitempty"`
-	BuildVersion   int                       `json:"build_version,omitempty"`
-	SchemaVersion  int                       `json:"schema_version"`
-	Outcome        string                    `json:"outcome"`
-	Reply          string                    `json:"reply"`
-	Draft          json.RawMessage           `json:"draft,omitempty"`
-	Assessments    []Assessment              `json:"assessments"`
-	Issues         []string                  `json:"issues"`
-	Assumptions    []string                  `json:"assumptions"`
-	Candidates     []Candidate               `json:"candidates"`
-	Evidence       []Evidence                `json:"evidence"`
-	Validation     *schemas.ValidationReport `json:"validation,omitempty"`
-	Quote          *validate.Quote           `json:"quote,omitempty"`
-	ModelCalls     int                       `json:"model_calls"`
-	ToolCalls      int                       `json:"tool_calls"`
-	SearchCalls    int                       `json:"search_calls"`
-	SearchRequests int                       `json:"search_requests"`
-	PageCalls      int                       `json:"page_calls"`
-	ReadAttempts   []ReadAttempt             `json:"read_attempts,omitempty"`
-	Tokens         int32                     `json:"tokens"`
-	DurationMS     int64                     `json:"duration_ms"`
-	StageMS        map[string]int64          `json:"stage_ms"`
+	ModelOutcome      string                    `json:"model_outcome,omitempty"`
+	Delivery          *Delivery                 `json:"delivery,omitempty"`
+	BuildVersion      int                       `json:"build_version,omitempty"`
+	SchemaVersion     int                       `json:"schema_version"`
+	Outcome           string                    `json:"outcome"`
+	Reply             string                    `json:"reply"`
+	Draft             json.RawMessage           `json:"draft,omitempty"`
+	Assessments       []Assessment              `json:"assessments"`
+	Issues            []string                  `json:"issues"`
+	Assumptions       []string                  `json:"assumptions"`
+	Candidates        []Candidate               `json:"candidates"`
+	Evidence          []Evidence                `json:"evidence"`
+	Validation        *schemas.ValidationReport `json:"validation,omitempty"`
+	Quote             *validate.Quote           `json:"quote,omitempty"`
+	Builder           *BuilderIdentity          `json:"builder,omitempty"`
+	CatalogSnapshotID int64                     `json:"catalog_snapshot_id,omitempty"`
+	ModelCalls        int                       `json:"model_calls"`
+	ToolCalls         int                       `json:"tool_calls"`
+	SearchCalls       int                       `json:"search_calls"`
+	SearchRequests    int                       `json:"search_requests"`
+	PageCalls         int                       `json:"page_calls"`
+	ReadAttempts      []ReadAttempt             `json:"read_attempts,omitempty"`
+	Tokens            int32                     `json:"tokens"`
+	DurationMS        int64                     `json:"duration_ms"`
+	StageMS           map[string]int64          `json:"stage_ms"`
 }
 
 type Catalog interface {

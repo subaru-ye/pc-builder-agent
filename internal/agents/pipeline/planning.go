@@ -39,6 +39,7 @@ func NewRemotePlanning(cfg Config) (agent.Agent, error) {
 				result.Reply = "本轮生成已取消，已保存已有候选和资料。可以继续对话或重新确认后重试。"
 				result.Issues = append(result.Issues, "本轮已取消，进度已保留")
 			}
+			result.Builder = cfg.BuilderIdentity
 			// F2 第一步:完整产物按 run 归档到共享 PG,跨进程只回传降级副本。
 			degraded, archiveErr := planning.ArchiveAndDegrade(context.WithoutCancel(ctx), cfg.Store, input.RunID, ctx.Session().ID(), result)
 			if archiveErr != nil {

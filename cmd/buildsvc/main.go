@@ -26,6 +26,7 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/buildharness"
 	"github.com/subaru-ye/pc-builder-agent/internal/dotenv"
 	"github.com/subaru-ye/pc-builder-agent/internal/modelprovider"
+	"github.com/subaru-ye/pc-builder-agent/internal/planning"
 	"github.com/subaru-ye/pc-builder-agent/internal/redisstore"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
@@ -86,9 +87,10 @@ func main() {
 		string(embeddingCfg.Provider), embeddingCfg.Model)
 
 	pipelineConfig := pipeline.Config{
-		BuilderModel:  builderModel,
-		Store:         st,
-		QueryEmbedder: embedder,
+		BuilderModel:    builderModel,
+		Store:           st,
+		QueryEmbedder:   embedder,
+		BuilderIdentity: &planning.BuilderIdentity{Provider: string(builderCfg.Provider), Role: string(builderCfg.Role), Model: builderCfg.Model},
 	}
 	var root agent.Agent
 	if harnessMode == buildharness.ModePlanning {

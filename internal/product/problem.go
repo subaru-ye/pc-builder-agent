@@ -15,6 +15,7 @@ type Problem struct {
 	Instance  string `json:"instance,omitempty"`
 	Code      string `json:"code"`
 	RequestID string `json:"request_id"`
+	RunID     string `json:"run_id,omitempty"`
 }
 
 func NewProblem(code, title string, status int, detail, requestID string) Problem {

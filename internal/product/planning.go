@@ -85,6 +85,14 @@ func (s *Service) planningContext(ctx context.Context, sessionID, runID string, 
 	return json.Marshal(input)
 }
 
+// builderIdentity 把生成服务回传的身份压成单列口径;缺省(旧协议)返回空。
+func builderIdentity(b *planning.BuilderIdentity) string {
+	if b == nil {
+		return ""
+	}
+	return b.Provider + "/" + b.Model
+}
+
 func (s *Service) completePlanning(ctx context.Context, r store.AgentRun, payload json.RawMessage, result planning.Result, before int) error {
 	st, ok := s.store.(proposalStore)
 	if !ok {
@@ -112,14 +120,17 @@ func (s *Service) completePlanning(ctx context.Context, r store.AgentRun, payloa
 		validation, _ := json.Marshal(result.Validation)
 		quote, _ := json.Marshal(result.Quote)
 		snapshot, _ := json.Marshal(map[string]any{"candidates": result.Candidates, "evidence": result.Evidence, "assessments": result.Assessments, "assumptions": result.Assumptions, "reply": result.Reply})
-		build = &store.SaveBuildVersionParams{SessionID: r.SessionID, ParentID: parent, RequirementSpec: payload, Draft: result.Draft, Validation: validation, Quote: quote, CandidateSnapshot: snapshot}
+		build = &store.SaveBuildVersionParams{SessionID: r.SessionID, ParentID: parent, RequirementSpec: payload, Draft: result.Draft, Validation: validation, Quote: quote, CandidateSnapshot: snapshot, RunID: r.ID, CatalogSnapshotID: result.CatalogSnapshotID}
 		phase = store.PhaseReady
 	} else if result.Outcome == "collect" || result.Outcome == "clarify" {
 		phase = store.PhaseCollecting
 	}
 	// A proposal is a successful conversation outcome, not a generation outage.
 	out, e := st.CompletePlanningRun(context.WithoutCancel(ctx), store.CompletePlanningParams{
-		Completion:  store.CompleteRunParams{RunID: r.ID, SessionID: r.SessionID, AssistantMessageID: uuid.NewString(), AssistantContent: result.Reply, Status: store.RunSucceeded, Phase: phase},
+		Completion: store.CompleteRunParams{RunID: r.ID, SessionID: r.SessionID, AssistantMessageID: uuid.NewString(), AssistantContent: result.Reply, Status: store.RunSucceeded, Phase: phase,
+			BuilderModel: builderIdentity(result.Builder),
+			ModelCalls:   result.ModelCalls, ToolCalls: result.ToolCalls, SearchCalls: result.SearchCalls, PageCalls: result.PageCalls,
+			Tokens: int(result.Tokens), DurationMS: result.DurationMS, CatalogSnapshotID: result.CatalogSnapshotID},
 		Requirement: payload, Result: raw, ExpectedRevision: input.State.Revision, ParentVersion: before, Build: build,
 	})
 	if e != nil {

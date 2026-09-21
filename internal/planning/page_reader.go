@@ -102,7 +102,7 @@ func (w *Web) readHTTPPage(ctx context.Context, link string) (Evidence, error) {
 	if err != nil {
 		return page, pageFailure("network", "资料服务暂时不可用或超时；可改查其他公开来源")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	page.HTTPStatus = resp.StatusCode
 	page.FinalURL = resp.Request.URL.String()
 	if resp.StatusCode != http.StatusOK {

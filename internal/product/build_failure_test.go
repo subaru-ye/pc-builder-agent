@@ -37,7 +37,7 @@ func TestBuildBusinessFailurePersistsSafeReasonAndKeepsVersions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer svc.Shutdown(context.Background())
+	defer func() { _ = svc.Shutdown(context.Background()) }()
 	_, err = svc.StartConfirm(context.Background(), "owner-1", "session-1", "00000000-0000-4000-8000-000000000028")
 	if err != nil {
 		t.Fatal(err)

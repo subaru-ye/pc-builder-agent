@@ -68,7 +68,7 @@ func (w *Web) readWithCrawler(ctx context.Context, link string) (Evidence, error
 	if err != nil {
 		return Evidence{}, fmt.Errorf("网页读取服务暂时不可用或超时，已保留已有资料")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return Evidence{}, fmt.Errorf("网页读取服务返回HTTP %d，已保留已有资料", resp.StatusCode)
 	}

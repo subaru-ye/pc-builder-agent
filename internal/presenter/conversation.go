@@ -174,9 +174,10 @@ func RenderConversation(view BuildView, parent *BuildView) string {
 		if label == "" {
 			label = "配件适配情况"
 		}
-		if check.Outcome == schemas.OutcomeFail {
+		switch check.Outcome {
+		case schemas.OutcomeFail:
 			failed = append(failed, label)
-		} else if check.Outcome == schemas.OutcomeUnknown {
+		case schemas.OutcomeUnknown:
 			unknown = append(unknown, label)
 		}
 	}

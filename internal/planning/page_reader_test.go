@@ -14,21 +14,21 @@ import (
 
 func TestHTTPFirstAndExplicitBrowser(t *testing.T) {
 	crawlCalls := 0
-	crawler := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { crawlCalls++; fmt.Fprint(w, crawlPageFixture) }))
+	crawler := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { crawlCalls++; _, _ = fmt.Fprint(w, crawlPageFixture) }))
 	defer crawler.Close()
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		switch r.URL.Path {
 		case "/shell":
-			fmt.Fprint(w, `<div id="root"></div><script src="app.js"></script>`)
+			_, _ = fmt.Fprint(w, `<div id="root"></div><script src="app.js"></script>`)
 		case "/login":
-			fmt.Fprint(w, `<title>登录</title><input type="password"><script src="app.js"></script>`)
+			_, _ = fmt.Fprint(w, `<title>登录</title><input type="password"><script src="app.js"></script>`)
 		case "/challenge":
-			fmt.Fprint(w, `<title>Just a moment</title>Verify you are human`)
+			_, _ = fmt.Fprint(w, `<title>Just a moment</title>Verify you are human`)
 		case "/limited":
 			w.WriteHeader(429)
 		default:
-			fmt.Fprint(w, `<h1>CPU</h1><table><tr><td>插槽</td><td>AM4</td></tr></table>`)
+			_, _ = fmt.Fprint(w, `<h1>CPU</h1><table><tr><td>插槽</td><td>AM4</td></tr></table>`)
 		}
 	}))
 	defer server.Close()
@@ -80,7 +80,7 @@ func TestGBKAndTableBoundaries(t *testing.T) {
 	}
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=gbk")
-		w.Write(raw)
+		_, _ = w.Write(raw)
 	}))
 	defer server.Close()
 	w := &Web{Client: server.Client()}

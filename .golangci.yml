@@ -30,6 +30,16 @@ linters:
             - github.com/subaru-ye/pc-builder-agent/internal/rules
             - github.com/subaru-ye/pc-builder-agent/internal/store
 
+  exclusions:
+    paths:
+      # 本机 git-ignore 的草稿产物不进仓库与 CI(示例程序与生成快照)
+      - artifacts/
+      - var/
+
 formatters:
   enable:
     - gofmt
+  exclusions:
+    paths:
+      - artifacts/
+      - var/

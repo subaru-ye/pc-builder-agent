@@ -875,7 +875,7 @@ func (x *execution) finish() Result {
 }
 
 // finalize 汇聚交付判定。服务端不静默改写 draft；唯一例外是预算压价求解器
-//（applyBudgetFix）在预算回环耗尽后的目录内确定性替换，其每笔替换以独立
+// （applyBudgetFix）在预算回环耗尽后的目录内确定性替换，其每笔替换以独立
 // issue 留痕于 Issues。
 func (x *execution) finalize() Result {
 	// 已有件占位交付不是可交付方案：保留还是改购是用户计价取舍，强转 clarify。

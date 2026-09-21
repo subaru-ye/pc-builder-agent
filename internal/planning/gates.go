@@ -341,7 +341,7 @@ func (x *execution) stalledProposalGateFeedback() string {
 
 // deliveryGate 按预算→unknown→must→自纠门顺序检测终局交付决策，命中时返回回环反馈。
 // 各门回环耗尽后模型仍交付超预算 draft 时，由 budget_solver.go 的确定性压价接手
-//（见 Run 循环中 deliveryGate 之后的 budgetFixDue 分支）。
+// （见 Run 循环中 deliveryGate 之后的 budgetFixDue 分支）。
 func (x *execution) deliveryGate(outcome string, clarifiesEvaluatedDraft bool, gates *deliveryGateCounters, turn, turns int) string {
 	if turn >= turns-2 || gates.total >= 3 {
 		return ""

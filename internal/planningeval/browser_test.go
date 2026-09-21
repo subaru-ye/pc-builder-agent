@@ -98,7 +98,7 @@ func TestRecordedBudgetBrowserServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer svc.Shutdown(ctx)
+	defer func() { _ = svc.Shutdown(ctx) }()
 	owner := base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("b", 32)))
 	ws, err := svc.CreateSession(ctx, owner, uuid.NewString())
 	if err != nil {
@@ -151,10 +151,10 @@ func TestRecordedBudgetBrowserServer(t *testing.T) {
 	})
 	mux.HandleFunc("POST /__offline/shutdown", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-		go server.Shutdown(ctx)
+		go func() { _ = server.Shutdown(ctx) }()
 	})
 	server.Handler = mux
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 	if err = server.ListenAndServe(); err != http.ErrServerClosed {
 		t.Fatal(err)
 	}

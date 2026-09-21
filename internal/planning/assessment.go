@@ -141,7 +141,8 @@ func (x *execution) placeholderDelivery() bool {
 // verifiedOwnership 已有件按品类核账：用户明确断言的 owned_part 在 draft
 // 对应品类恰好选了一件即视为核验，替身候选不计采购价；SSD 以品类内总数量
 // 一致防多盘误豁免。目录精确匹配与否只影响 note，不影响核账。
-func (x *execution) verifiedOwnership(draft schemas.BuildDraft) schemas.RequirementSpec {	spec := x.accountingSpec()
+func (x *execution) verifiedOwnership(draft schemas.BuildDraft) schemas.RequirementSpec {
+	spec := x.accountingSpec()
 	owned := spec.OwnedParts
 	spec.OwnedParts = nil
 	selected := map[schemas.Category]bool{}

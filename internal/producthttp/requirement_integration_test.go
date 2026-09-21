@@ -445,7 +445,7 @@ func TestRequirementStatePersistentWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer restored.Shutdown(ctx)
+	defer func() { _ = restored.Shutdown(ctx) }()
 	fresh, err := restored.GetSession(ctx, owner, ws.ID)
 	if err != nil || !reflect.DeepEqual(fresh.Session.RequirementState, detail.Session.RequirementState) {
 		t.Fatal("刷新未恢复服务端真值")

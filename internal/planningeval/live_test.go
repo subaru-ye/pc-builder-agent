@@ -182,9 +182,10 @@ func TestPreservedPartsIgnoreNewReferenceButDetectHardwareChanges(t *testing.T) 
 		draft["build_ref"] = "new-upgrade-draft"
 		parts := draft["selection"].(map[string]any)
 		parts["cpu"] = "cpu-r7-5700x"
-		if change == "memory" {
+		switch change {
+		case "memory":
 			parts["memory"] = "mem-other"
-		} else if change == "quantity" {
+		case "quantity":
 			parts["ssd"].([]any)[0].(map[string]any)["quantity"] = 2
 		}
 		encoded, _ := json.Marshal(draft)

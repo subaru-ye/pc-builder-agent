@@ -92,7 +92,7 @@ func Prepare(ctx context.Context, dsn string, fixture CatalogFixture) error {
 	if err != nil {
 		return fmt.Errorf("cannot connect to isolated evaluation database")
 	}
-	defer c.Close(ctx)
+	defer func() { _ = c.Close(ctx) }()
 	var n int
 	if err = c.QueryRow(ctx, "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'").Scan(&n); err != nil || n != 0 {
 		return fmt.Errorf("evaluation database must be empty")

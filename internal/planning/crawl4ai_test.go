@@ -26,7 +26,7 @@ func TestCrawlPageToolContract(t *testing.T) {
 		if len(body) != 1 || body["url"] != "https://1.1.1.1/spec" {
 			t.Errorf("unexpected config %+v", body)
 		}
-		fmt.Fprint(w, crawlPageFixture)
+		_, _ = fmt.Fprint(w, crawlPageFixture)
 	}))
 	defer server.Close()
 	w := &Web{CrawlerURL: server.URL, CrawlerToken: "test-token"}

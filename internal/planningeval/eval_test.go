@@ -197,7 +197,7 @@ func TestFixtureTransportNeverFallsBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	body, _ := io.ReadAll(res.Body)
-	res.Body.Close()
+	_ = res.Body.Close()
 	if string(body) != "AM4" {
 		t.Fatal("fixture lost")
 	}

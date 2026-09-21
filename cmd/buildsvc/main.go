@@ -95,11 +95,12 @@ func main() {
 		TokenBudget:     envInt("RUN_TOKEN_BUDGET", 0),
 	}
 	var root agent.Agent
-	if harnessMode == buildharness.ModePlanning {
+	switch harnessMode {
+	case buildharness.ModePlanning:
 		root, err = pipeline.NewRemotePlanning(pipelineConfig)
-	} else if harnessMode == buildharness.ModeV2 {
+	case buildharness.ModeV2:
 		root, err = pipeline.NewRemoteV2(pipelineConfig)
-	} else {
+	default:
 		root, err = pipeline.NewRemote(pipelineConfig)
 	}
 	if err != nil {

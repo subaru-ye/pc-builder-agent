@@ -150,7 +150,7 @@ func TestNonemptyProposalCanSearchAndRepairAfterDeliveryFeedback(t *testing.T) {
 		case 2:
 			feedback := req.Contents[len(req.Contents)-1].Parts[0].Text
 			// 超预算交付现在先过预算自纠门（替代价目反馈），或走既有一次性核验。
-			if !(strings.Contains(feedback, "候选价格超过已表达的预算范围") || strings.Contains(feedback, "预算自纠反馈")) || len(req.Config.Tools) == 0 {
+			if (!strings.Contains(feedback, "候选价格超过已表达的预算范围") && !strings.Contains(feedback, "预算自纠反馈")) || len(req.Config.Tools) == 0 {
 				t.Fatalf("proposal ended without actual budget feedback and repair tools: %s", feedback)
 			}
 			return function("search_local", `{"category":"cpu"}`)

@@ -25,7 +25,7 @@ type limitedGitOutput struct{ bytes.Buffer }
 
 func (b *limitedGitOutput) Write(p []byte) (int, error) {
 	if b.Len()+len(p) > 256<<10 {
-		return 0, errors.New("Git output limit")
+		return 0, errors.New("git output limit")
 	}
 	return b.Buffer.Write(p)
 }
@@ -137,7 +137,7 @@ func parseCommitFiles(raw []byte) ([]CommitFile, bool, error) {
 			omitted = true
 			continue
 		}
-		status, label := "other", "其他变化"
+		var status, label string
 		switch string(fields[i]) {
 		case "A":
 			status, label = "added", "新增"

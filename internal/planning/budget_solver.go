@@ -386,7 +386,7 @@ type budgetSlot struct {
 }
 
 // budgetSlots 展开 draft 的全部未锁定槽位。forSacrifice=true 时不做档位过滤
-//（牺牲路径本就是降档），但锁定品类仍排除。
+// （牺牲路径本就是降档），但锁定品类仍排除。
 func (x *execution) budgetSlots(draft schemas.BuildDraft, locked map[schemas.Category]bool, forSacrifice bool) []budgetSlot {
 	byID := map[string]Candidate{}
 	for _, c := range x.candidates {
@@ -473,7 +473,7 @@ func (x *execution) budgetSlots(draft schemas.BuildDraft, locked map[schemas.Cat
 }
 
 // searchBudgetFix 贪心（按省额降序）+ 回溯：每槽先试保留再试更低价候选
-//（最小降幅优先），首个总价回到上限内且重新通过全部校验的组合即中选，
+// （最小降幅优先），首个总价回到上限内且重新通过全部校验的组合即中选，
 // 因此解的总降幅贴近超支额、改动最小。
 func (x *execution) searchBudgetFix(ctx context.Context, draft schemas.BuildDraft, slots []budgetSlot, upper, over *big.Rat) *budgetFix {
 	if len(slots) == 0 || over.Sign() <= 0 {
@@ -829,7 +829,7 @@ func (x *execution) unknownFixDue(outcome string, clarifiesEvaluatedDraft bool, 
 }
 
 // unknownSwapTierOK unknown 换选的档位约束（宽松版）：原候选缺失的字段
-//（unknown 的来源）跳过比较——换选本就是"字段补全"；其余可比档位字段
+// （unknown 的来源）跳过比较——换选本就是"字段补全"；其余可比档位字段
 // 仍必须不降，防止借补全之名降档（如 B650→A620、水冷→风冷）。
 func unknownSwapTierOK(cat schemas.Category, old, new Candidate) bool {
 	o, n := candidateSpecs(old), candidateSpecs(new)
@@ -873,7 +873,7 @@ func unknownSwapTierOK(cat schemas.Category, old, new Candidate) bool {
 }
 
 // solveUnknownFix 对每个 unknown 品类槽位枚举缺失字段完整的目录内候选
-//（价格升序、最小涨价优先），回溯找第一个重新通过全部校验的组合。
+// （价格升序、最小涨价优先），回溯找第一个重新通过全部校验的组合。
 // 预算不在此判定：unknown 消除优先，超支交给压价阶段处理。
 func (x *execution) solveUnknownFix(ctx context.Context, draft schemas.BuildDraft) (*budgetFix, bool) {
 	missing := unknownCategoryFields(x.result.Validation)

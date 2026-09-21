@@ -83,7 +83,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		defer journal.Close()
+		defer func() { _ = journal.Close() }()
 		models.Journal = func(value any) error {
 			if err := json.NewEncoder(journal).Encode(value); err != nil {
 				return err

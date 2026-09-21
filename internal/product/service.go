@@ -155,7 +155,7 @@ func (s *Service) ReplaceRequirement(ctx context.Context, ownerID, sessionID str
 		return err
 	}
 	if len(ws.RequirementState) > 0 {
-		if ws.Phase != store.PhaseRequirementReady && !(ws.Phase == store.PhaseError && ws.RecoveryPhase != nil && *ws.RecoveryPhase == store.PhaseRequirementReady) {
+		if ws.Phase != store.PhaseRequirementReady && (ws.Phase != store.PhaseError || ws.RecoveryPhase == nil || *ws.RecoveryPhase != store.PhaseRequirementReady) {
 			return store.ErrInvalidSessionPhase
 		}
 		state, err := decodeSessionRequirements(ws.RequirementState)

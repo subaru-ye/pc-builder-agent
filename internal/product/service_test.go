@@ -626,7 +626,9 @@ func (blockingAgent) Remote(ctx context.Context, _, _ string, _ json.RawMessage)
 	<-ctx.Done()
 	return RemoteResult{}, ctx.Err()
 }
-func (blockingAgent) ContextAvailable(context.Context, string, string) (bool, error) { return true, nil }
+func (blockingAgent) ContextAvailable(context.Context, string, string) (bool, error) {
+	return true, nil
+}
 
 func TestServiceCancelInterruptsRun(t *testing.T) {
 	st := newFakeProductStore()

@@ -83,7 +83,7 @@ func TestRecordedBudgetClarificationGetsOneReview(t *testing.T) {
 				}
 				if n == 5 {
 					feedback := req.Contents[len(req.Contents)-1].Parts[0].Text
-					if !(strings.Contains(feedback, "交付核验反馈") || strings.Contains(feedback, "预算自纠反馈")) || !strings.Contains(feedback, "9428.70") || len(req.Config.Tools) == 0 {
+					if (!strings.Contains(feedback, "交付核验反馈") && !strings.Contains(feedback, "预算自纠反馈")) || !strings.Contains(feedback, "9428.70") || len(req.Config.Tools) == 0 {
 						t.Fatalf("missing review or remaining tools: %s", feedback)
 					}
 				}

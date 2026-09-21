@@ -93,7 +93,7 @@ func (w *Web) get(ctx context.Context, target string) ([]byte, error) {
 	if e != nil {
 		return nil, fmt.Errorf("资料服务暂时不可用")
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != 200 {
 		return nil, fmt.Errorf("资料服务返回HTTP %d", response.StatusCode)
 	}

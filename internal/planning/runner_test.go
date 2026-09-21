@@ -194,7 +194,9 @@ func TestExternalSpecsValidateWithoutImportingWebPrices(t *testing.T) {
 	// A saved product/spec/price in an offline HTML fixture: incidental web
 	// prices must not become quotes, while valid specifications still validate.
 	pageText := selected.Model + " " + string(selected.Specs) + " price " + *selected.PriceCNY
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "<html><body>"+pageText+"</body></html>") }))
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, "<html><body>"+pageText+"</body></html>")
+	}))
 	defer server.Close()
 	var specs map[string]json.RawMessage
 	_ = json.Unmarshal(selected.Specs, &specs)

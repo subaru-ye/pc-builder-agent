@@ -190,7 +190,8 @@ func (s *Service) completePlanning(ctx context.Context, r store.AgentRun, payloa
 	}
 	var build *store.SaveBuildVersionParams
 	phase := store.PhaseRequirementReady
-	if result.Outcome == "ready" {
+	switch result.Outcome {
+	case "ready":
 		var parent *int64
 		if before > 0 {
 			base, e := st.BuildByVersion(ctx, r.SessionID, before)
@@ -204,7 +205,7 @@ func (s *Service) completePlanning(ctx context.Context, r store.AgentRun, payloa
 		snapshot, _ := json.Marshal(map[string]any{"candidates": result.Candidates, "evidence": result.Evidence, "assessments": result.Assessments, "assumptions": result.Assumptions, "reply": result.Reply})
 		build = &store.SaveBuildVersionParams{SessionID: r.SessionID, ParentID: parent, RequirementSpec: payload, Draft: result.Draft, Validation: validation, Quote: quote, CandidateSnapshot: snapshot, RunID: r.ID, CatalogSnapshotID: result.CatalogSnapshotID}
 		phase = store.PhaseReady
-	} else if result.Outcome == "collect" || result.Outcome == "clarify" {
+	case "collect", "clarify":
 		phase = store.PhaseCollecting
 	}
 	// A proposal is a successful conversation outcome, not a generation outage.

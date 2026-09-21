@@ -92,18 +92,15 @@ pnpm dev
 # 浏览器访问 http://localhost:3000
 ```
 
-P11 数据自动化已完成。以下命令只使用确定性代码，不调用大模型；首次安装计划任务前仍应先人工运行并检查一次：
+P11 数据发布只走显式人工流程，不使用本机定时任务。以下命令只使用确定性代码，不调用大模型：
 
 ```powershell
 uv run --project scripts/data pcdata source check
 uv run --project scripts/data pcdata bootstrap
-uv run --project scripts/data pcdata scheduled-run --profile weekly
-
-# 确认上述命令正常后，显式安装本机隐藏任务；不会由普通项目启动自动安装。
-powershell -ExecutionPolicy Bypass -File scripts/data/ops/install-tasks.ps1 -SkipBootstrap
+uv run --project scripts/data pcdata health
 ```
 
-当前启用的首个外部来源是 13 个固定映射的 AMD 官方 CPU 具体型号页。每周串行条件请求，严格核对型号并只生成 socket、支持芯片组、TDP、核显和官方名称的确定性 evidence；政策、身份或页面结构变化会隔离来源。
+采集需要逐个来源显式执行 `pcdata collect` → `normalize` → `review` → `publish`，步骤与门禁见[发布管道](docs/tech/数据获取与发布管道.md)。当前唯一外部来源是固定映射的 AMD 官方 CPU 具体型号页，串行条件请求，严格核对型号并只生成 socket、支持芯片组、TDP、核显和官方名称的确定性 evidence；政策、身份或页面结构变化会隔离来源。
 
 人工价格 observation、安全选价和动态过期提示可用；自动价格来源和每日任务保持禁用。操作见[价格任务](docs/ops/价格任务.md)，依据见[数据来源决策](docs/data/数据来源决策.md)，未完成工作见[路线图](docs/product/路线图.md)。
 

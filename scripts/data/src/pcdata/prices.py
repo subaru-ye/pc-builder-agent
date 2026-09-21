@@ -83,13 +83,9 @@ def _current_price(paths: DataPaths) -> Path:
     return paths.runtime_root / "current-price.json"
 
 
-def _price_inbox(paths: DataPaths) -> Path:
-    return paths.runtime_root / "price-inbox"
-
-
 def _ensure(paths: DataPaths) -> None:
     paths.ensure()
-    for target in (_price_runs(paths), _price_releases(paths), _price_inbox(paths)):
+    for target in (_price_runs(paths), _price_releases(paths)):
         target.mkdir(parents=True, exist_ok=True)
 
 
@@ -610,30 +606,5 @@ def price_health(paths: DataPaths) -> dict[str, Any]:
         "selected": len(selection),
         "max_age_days": max(ages) if ages else None,
         "mean_age_days": round(sum(ages) / len(ages), 2) if ages else None,
-        "model_used": False,
-    }
-
-
-def process_price_inbox(paths: DataPaths) -> dict[str, Any]:
-    """按文件名串行处理本机 inbox；失败留档且不影响 P11 规格发布。"""
-    _ensure(paths)
-    files = sorted(_price_inbox(paths).glob("*.csv"))
-    results: list[dict[str, Any]] = []
-    for csv_path in files:
-        run_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"pcdata-price-inbox:{sha256_file(csv_path)}"))
-        try:
-            import_price_csv(paths, csv_path, run_id=run_id)
-            review = create_price_review(paths, run_id)
-            result = publish_price_review(paths, run_id, policy="manual")
-            results.append({"file": csv_path.name, "status": result["status"], "run_id": run_id})
-            csv_path.replace(csv_path.with_suffix(".processed"))
-        except (PipelineError, OSError, json.JSONDecodeError) as exc:
-            results.append({"file": csv_path.name, "status": "partial", "error_code": getattr(exc, "code", "invalid_data")})
-    return {
-        "schema_version": 1,
-        "status": "partial" if any(item["status"] == "partial" for item in results) else (
-            "published" if any(item["status"] == "published" for item in results) else "no_change"
-        ),
-        "files": results,
         "model_used": False,
     }

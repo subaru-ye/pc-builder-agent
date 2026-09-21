@@ -1,7 +1,7 @@
-"""P11 本机数据运行、采集、审核、发布与恢复基座。
+"""P11 数据采集、审核、发布与恢复基座。
 
-本模块刻意只依赖标准库。常规定时主链没有模型入口；网络适配器只能保存
-原始快照，只有确定性 normalized parts 才可能进入风险分类和发布。
+本模块刻意只依赖标准库。数据主链没有模型入口；网络适配器只能保存原始
+快照，只有确定性 normalized parts 才可能进入风险分类和发布。
 """
 
 from __future__ import annotations
@@ -33,7 +33,6 @@ from urllib.parse import urlsplit, urlunsplit
 from .amd import build_amd_evidence, load_amd_products, parse_amd_cpu_html
 from .canonical import CATEGORIES, SpecError
 from .coverage import ERROR_LEVEL_FIELDS, load_parts_jsonl
-from .registry import DEFAULT_REGISTRY_PATH, load_registry
 from .sources import get_source
 
 __all__ = [
@@ -46,7 +45,6 @@ __all__ = [
     "create_review",
     "bootstrap_release",
     "publish_reviewed_release",
-    "run_scheduled",
     "health_report",
 ]
 
@@ -1252,22 +1250,6 @@ def _default_importer(repo_root: Path, release_dir: Path) -> None:
         raise PipelineError("database_import_failed", f"Go 导入器失败，退出码 {result.returncode}")
 
 
-def sync_run_to_database(repo_root: Path, manifest_path: Path) -> None:
-    """调用固定 Go 命令同步 run；不接受环境中的任意命令字符串。"""
-    result = subprocess.run(
-        ["go", "run", "./cmd/datajob", "-manifest", str(manifest_path)],
-        cwd=repo_root,
-        check=False,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=120,
-    )
-    if result.returncode != 0:
-        raise PipelineError("job_record_failed", f"run 数据库同步失败，退出码 {result.returncode}")
-
-
 def _stage_release(
     *,
     paths: DataPaths,
@@ -1520,16 +1502,6 @@ def publish_reviewed_release(
         )
 
 
-def _source_due(source: dict[str, Any], profile: str) -> bool:
-    if not source["enabled"]:
-        return False
-    if profile == "monthly":
-        return source["schedule"] in {"daily", "weekly", "monthly"}
-    if profile in {"weekly", "retry"}:
-        return source["schedule"] in {"daily", "weekly"}
-    return False
-
-
 def locked_source_result(source: dict[str, Any], data_root: Path) -> dict[str, Any]:
     """验证 registry 中的锁定数据集/包确实与 sources.lock.json 一致。"""
     lock_names = {"pc_part_dataset": "pc-part-dataset", "dbgpu": "dbgpu"}
@@ -1644,188 +1616,6 @@ def _collect_amd_cpu_source(
 
 def _write_run_manifest(run_dir: Path, manifest: dict[str, Any]) -> None:
     _atomic_json(run_dir / "manifest.json", manifest)
-
-
-def run_scheduled(
-    paths: DataPaths,
-    *,
-    profile: str,
-    trigger: str,
-    scheduled_for: datetime,
-    registry_path: Path = DEFAULT_REGISTRY_PATH,
-    collector: HTTPCollector | None = None,
-    importer: Importer | None = None,
-) -> dict[str, Any]:
-    """执行一次定时主链；同 profile/scheduled_for 在同一工作区幂等。"""
-    if profile not in {"health", "weekly", "monthly", "retry"}:
-        raise PipelineError("invalid_profile", f"非法 profile {profile!r}")
-    if trigger not in {"manual", "schedule", "startup_catch_up"}:
-        raise PipelineError("invalid_trigger", f"非法 trigger {trigger!r}")
-    paths.ensure()
-    scheduled = scheduled_for.astimezone(UTC).replace(microsecond=0)
-    run_id = str(
-        uuid.uuid5(
-            uuid.NAMESPACE_URL,
-            f"pcdata:{paths.repo_root.resolve()}:{profile}:{scheduled.isoformat()}",
-        )
-    )
-    run_dir = paths.runs / run_id
-    final_manifest_path = run_dir / "manifest.json"
-
-    with RunLock(paths.scheduler / "pipeline.lock"):
-        recovered = _recover_pending_activation(paths, importer=importer)
-        if final_manifest_path.exists():
-            existing = json.loads(final_manifest_path.read_text(encoding="utf-8"))
-            if existing.get("status") != "running":
-                retryable = existing.get("status") in {"failed", "partial"} and (
-                    trigger == "startup_catch_up" or profile == "retry"
-                )
-                if not retryable:
-                    return existing
-                if recovered is None:
-                    # 启动补跑/失败来源重试复用同一幂等 run_id，但重新尝试安全主链。
-                    pass
-                elif recovered.get("run_id") == run_id:
-                    existing.update(
-                        {
-                            "status": "published",
-                            "finished_at": _rfc3339(),
-                            "summary": {"decision": "recovered", "release_id": recovered["release_id"]},
-                            "error": None,
-                        }
-                    )
-                    _write_run_manifest(run_dir, existing)
-                    return existing
-        started = _rfc3339()
-        manifest: dict[str, Any] = {
-            "schema_version": SCHEMA_VERSION,
-            "run_id": run_id,
-            "profile": profile,
-            "trigger": trigger,
-            "scheduled_for": _rfc3339(scheduled),
-            "started_at": started,
-            "finished_at": None,
-            "status": "running",
-            "model_used": False,
-            "sources": [],
-            "summary": {},
-            "error": None,
-        }
-        run_dir.mkdir(parents=True, exist_ok=True)
-        _write_run_manifest(run_dir, manifest)
-        try:
-            if profile == "health":
-                report = health_report(paths)
-                manifest["status"] = "no_change" if report["healthy"] else "blocked"
-                manifest["summary"] = report
-            else:
-                sources = load_registry(registry_path)
-                checkpoints = CheckpointStore(paths.checkpoints)
-                http = collector or HTTPCollector()
-                base_release_id, base_parts = _current_parts(paths)
-                current_records = _load_parts(base_parts or paths.seed_parts)
-                base_evidence = _current_evidence(paths, base_release_id)
-                evidence = _load_evidence(base_evidence)
-                candidate = run_dir / "normalized" / "parts"
-                candidate_evidence = run_dir / "normalized" / "evidence.jsonl"
-                _copy_parts(base_parts or paths.seed_parts, candidate)
-                isolated_failures: list[dict[str, str]] = []
-                for source in sources.values():
-                    if not _source_due(source, profile):
-                        continue
-                    try:
-                        if source["adapter"] == "local_parts":
-                            result = {
-                                "source_id": source["id"],
-                                "status": "collected",
-                                "content_sha256": _parts_digest(paths.seed_parts),
-                            }
-                        elif source["adapter"] == "http_snapshot":
-                            result = http.collect(source, run_dir / "raw", checkpoints)
-                        elif source["adapter"] == "amd_cpu_official":
-                            result = _collect_amd_cpu_source(
-                                source=source,
-                                paths=paths,
-                                run_dir=run_dir,
-                                checkpoints=checkpoints,
-                                collector=http,
-                                current_parts=current_records,
-                                evidence=evidence,
-                            )
-                        else:
-                            # 锁定数据集/包只记录当前锁，升级必须显式改 sources.lock.json。
-                            result = locked_source_result(source, paths.data_root)
-                        manifest["sources"].append(result)
-                    except (PipelineError, SpecError, OSError, json.JSONDecodeError) as exc:
-                        if source["failure_mode"] == "block_run":
-                            raise
-                        code = exc.code if isinstance(exc, PipelineError) else "source_failed"
-                        failure = {"source_id": source["id"], "status": "failed", "error_code": code}
-                        manifest["sources"].append(failure)
-                        isolated_failures.append({"source_id": source["id"], "error_code": code})
-                _write_evidence(candidate_evidence, evidence.values())
-                review = create_review(
-                    run_id=run_id,
-                    candidate_parts=candidate,
-                    base_parts=base_parts,
-                    base_release_id=base_release_id,
-                    candidate_evidence=candidate_evidence,
-                    base_evidence=base_evidence,
-                    model_used=False,
-                )
-                _write_review(run_dir, review)
-                if review["decision"] == "no_change":
-                    manifest["status"] = "partial" if isolated_failures else "no_change"
-                    manifest["summary"] = {
-                        "decision": "no_change",
-                        "changes": 0,
-                        "evidence_changes": 0,
-                        "source_failures": isolated_failures,
-                    }
-                elif review["decision"] == "auto_publish" and isolated_failures:
-                    manifest["status"] = "partial"
-                    manifest["summary"] = {
-                        "decision": "withheld_source_partial",
-                        "changes": len(review["changes"]),
-                        "evidence_changes": len(review["evidence_changes"]),
-                        "source_failures": isolated_failures,
-                    }
-                elif review["decision"] == "auto_publish":
-                    release = _publish_reviewed_release_unlocked(
-                        paths,
-                        run_id=run_id,
-                        candidate_parts=candidate,
-                        candidate_evidence=candidate_evidence,
-                        review=review,
-                        policy="auto",
-                        importer=importer,
-                    )
-                    manifest["status"] = "published"
-                    manifest["summary"] = {
-                        "decision": "auto_publish",
-                        "release_id": release["release_id"],
-                        "source_failures": isolated_failures,
-                    }
-                else:
-                    quarantine_dir = paths.quarantine / run_id
-                    quarantine_dir.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(run_dir / "review.json", quarantine_dir / "review.json")
-                    shutil.copy2(run_dir / "review.md", quarantine_dir / "review.md")
-                    shutil.copy2(candidate_evidence, quarantine_dir / "evidence.jsonl")
-                    manifest["status"] = "blocked" if review["decision"] == "manual_required" else "quarantined"
-                    manifest["summary"] = {
-                        "decision": review["decision"],
-                        "changes": len(review["changes"]),
-                        "risks": len(review["risks"]),
-                        "source_failures": isolated_failures,
-                    }
-        except (PipelineError, SpecError, OSError, json.JSONDecodeError) as exc:
-            code = exc.code if isinstance(exc, PipelineError) else "pipeline_failed"
-            manifest["status"] = "failed"
-            manifest["error"] = {"code": code, "message": str(exc)}
-        manifest["finished_at"] = _rfc3339()
-        _write_run_manifest(run_dir, manifest)
-        return manifest
 
 
 def health_report(paths: DataPaths) -> dict[str, Any]:

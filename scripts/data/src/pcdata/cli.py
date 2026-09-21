@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 import uuid
-from datetime import datetime, time, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +17,6 @@ from .automation import (
     PipelineError,
     _copy_parts,
     _collect_amd_cpu_source,
-    _atomic_json,
     _current_evidence,
     _current_parts,
     _load_evidence,
@@ -30,8 +29,6 @@ from .automation import (
     health_report,
     locked_source_result,
     publish_reviewed_release,
-    run_scheduled,
-    sync_run_to_database,
 )
 from .canonical import SpecError
 from .registry import DEFAULT_REGISTRY_PATH, load_registry
@@ -39,7 +36,6 @@ from .prices import (
     create_price_review,
     import_price_csv,
     price_health,
-    process_price_inbox,
     publish_price_review,
 )
 from .serpapi_baidu import collect_serpapi_baidu
@@ -48,27 +44,6 @@ from .serpapi_baidu import collect_serpapi_baidu
 def _json(value: Any) -> None:
     json.dump(value, sys.stdout, ensure_ascii=False, sort_keys=True, indent=2)
     print()
-
-
-def _scheduled_for(profile: str) -> datetime:
-    """返回本地时区中最近一个该 profile 的计划时刻。"""
-    now = datetime.now().astimezone()
-    if profile == "health":
-        candidate = datetime.combine(now.date(), time(3, 30), tzinfo=now.tzinfo)
-        return candidate if candidate <= now else candidate - timedelta(days=1)
-    if profile == "price-daily":
-        candidate = datetime.combine(now.date(), time(3, 45), tzinfo=now.tzinfo)
-        return candidate if candidate <= now else candidate - timedelta(days=1)
-    if profile in {"weekly", "retry"}:
-        weekday = 0 if profile == "weekly" else 2
-        days = (now.weekday() - weekday) % 7
-        candidate = datetime.combine(now.date() - timedelta(days=days), time(4, 0), tzinfo=now.tzinfo)
-        return candidate if candidate <= now else candidate - timedelta(days=7)
-    candidate = datetime.combine(now.date().replace(day=1), time(4, 30), tzinfo=now.tzinfo)
-    if candidate <= now:
-        return candidate
-    previous = (candidate.replace(day=1) - timedelta(days=1)).replace(day=1)
-    return datetime.combine(previous.date(), time(4, 30), tzinfo=now.tzinfo)
 
 
 def _parse_datetime(value: str) -> datetime:
@@ -227,55 +202,6 @@ def _cmd_health(args: argparse.Namespace) -> int:
     return 0 if report["healthy"] else 1
 
 
-def _cmd_scheduled(args: argparse.Namespace) -> int:
-    trigger = "startup_catch_up" if args.catch_up else "schedule"
-    scheduled_for = args.scheduled_for or _scheduled_for(args.profile)
-    if args.profile == "price-daily":
-        started = datetime.now().astimezone()
-        price_result = collect_serpapi_baidu(_paths(args), mode="daily", scheduled_for=scheduled_for)
-        finished = datetime.now().astimezone()
-        status = price_result["status"] if price_result["status"] in {"no_change", "published"} else "partial"
-        result = {
-            "schema_version": 1,
-            "run_id": price_result["run_id"],
-            "profile": "price-daily",
-            "trigger": trigger,
-            "scheduled_for": scheduled_for.isoformat(),
-            "started_at": started.isoformat(),
-            "finished_at": finished.isoformat(),
-            "status": status,
-            "model_used": False,
-            "sources": [{"source_id": "serpapi_baidu", "status": status, "captured_at": finished.isoformat()}],
-            "summary": {"calls": price_result["calls"], "shopping_result_skus": price_result["shopping_result_skus"], "dual_match_skus": price_result["dual_match_skus"]},
-            "error": None,
-        }
-        manifest_path = _paths(args).runs / result["run_id"] / "manifest.json"
-        _atomic_json(manifest_path, result)
-        sync_run_to_database(_paths(args).repo_root, manifest_path)
-        _json(result)
-        return 0 if status in {"no_change", "published"} else 1
-    result = run_scheduled(
-        _paths(args),
-        profile=args.profile,
-        trigger=trigger,
-        scheduled_for=scheduled_for,
-        registry_path=Path(args.registry),
-    )
-    if args.profile in {"weekly", "retry"}:
-        price_result = process_price_inbox(_paths(args))
-        result["summary"]["price_pipeline"] = price_result
-        if price_result["status"] == "partial" and result["status"] in {"no_change", "published"}:
-            result["status"] = "partial"
-        manifest_path = _paths(args).runs / result["run_id"] / "manifest.json"
-        _atomic_json(manifest_path, result)
-    sync_run_to_database(
-        _paths(args).repo_root,
-        _paths(args).runs / result["run_id"] / "manifest.json",
-    )
-    _json(result)
-    return 0 if result["status"] in {"no_change", "published"} else 1
-
-
 def _cmd_price_import(args: argparse.Namespace) -> int:
     _json(import_price_csv(_paths(args), Path(args.file), run_id=args.run_id))
     return 0
@@ -361,12 +287,6 @@ def _parser() -> argparse.ArgumentParser:
     price_collect.add_argument("--mode", choices=("canary", "daily"), required=True)
     price_collect.add_argument("--scheduled-for", type=_parse_datetime)
     price_collect.set_defaults(func=_cmd_price_collect)
-
-    scheduled = sub.add_parser("scheduled-run", help="执行一次幂等定时主链")
-    scheduled.add_argument("--profile", choices=("health", "price-daily", "weekly", "monthly", "retry"), required=True)
-    scheduled.add_argument("--scheduled-for", type=_parse_datetime)
-    scheduled.add_argument("--catch-up", action="store_true")
-    scheduled.set_defaults(func=_cmd_scheduled)
     return parser
 
 

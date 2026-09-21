@@ -1,4 +1,4 @@
-"""P11 自动运行、HTTP 安全、风险分类和 last-known-good。"""
+"""P11 采集运行、HTTP 安全、风险分类和 last-known-good。"""
 
 import hashlib
 import json
@@ -24,7 +24,6 @@ from pcdata.automation import (
     health_report,
     locked_source_result,
     publish_reviewed_release,
-    run_scheduled,
     stable_json_bytes,
 )
 
@@ -489,35 +488,6 @@ def test_current切换失败补偿回滚数据库投影(paths, monkeypatch):
     assert imported[-1] == current["release_id"]
     assert json.loads(paths.current.read_text(encoding="utf-8"))["release_id"] == current["release_id"]
     assert not paths.pending_activation.exists()
-
-
-def test_scheduled_run无变化_幂等且不调用导入(paths):
-    bootstrap_release(paths, importer=lambda *_args: None)
-    imports = []
-    when = __import__("datetime").datetime(2026, 8, 24, 4, 0, tzinfo=__import__("datetime").UTC)
-    first = run_scheduled(
-        paths,
-        profile="weekly",
-        trigger="schedule",
-        scheduled_for=when,
-        registry_path=REAL_DATA / "sources.registry.json",
-        importer=lambda *args: imports.append(args),
-    )
-    second = run_scheduled(
-        paths,
-        profile="weekly",
-        trigger="startup_catch_up",
-        scheduled_for=when,
-        registry_path=REAL_DATA / "sources.registry.json",
-        importer=lambda *args: imports.append(args),
-    )
-    assert first["run_id"] == second["run_id"]
-    assert first["status"] == second["status"] == "partial"
-    assert first["summary"] == second["summary"]
-    assert first["trigger"] == "schedule"
-    assert second["trigger"] == "startup_catch_up"
-    assert first["model_used"] is False
-    assert imports == []
 
 
 def test_run_lock阻止并发(tmp_path):

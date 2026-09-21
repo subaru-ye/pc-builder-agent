@@ -380,7 +380,7 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 	if e.PreserveEssentialParts {
 		ok := false
 		detail := ""
-		if r.Result != nil && previous != nil && previous.Result != nil {
+		if r.Result != nil && len(r.Result.Draft) > 0 && previous != nil && previous.Result != nil {
 			a, ea := schemas.DecodeBuildDraft(r.Result.Draft)
 			b, eb := schemas.DecodeBuildDraft(previous.Result.Draft)
 			if ea == nil && eb == nil {
@@ -391,6 +391,10 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 					detail = fmt.Sprintf("memory capacity %dGB -> %dGB", oldCap, newCap)
 				}
 			}
+		} else if r.Result != nil && len(r.Result.Draft) == 0 {
+			// An undelivered turn cannot change the delivered config.
+			ok = true
+			detail = "no new draft"
 		}
 		check("preserved_essential_parts", ok, detail)
 	}
@@ -403,6 +407,25 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 		}
 		// Identity change proves execution, not a performance improvement.
 		check("changed_cpu", ok, "performance benefit needs separate evidence review")
+	}
+	// cpu_target asserts the user-requested CPU model in the delivered config
+	// regardless of the starting point: a model that already chose the target
+	// part earlier and honestly reports no change is as correct as one that
+	// performs the swap. With no new draft the previous delivery stays
+	// authoritative; a ready result with an undecodable draft still fails.
+	if e.CPUTarget != "" {
+		ok := false
+		detail := e.CPUTarget
+		if r.Result != nil && len(r.Result.Draft) > 0 {
+			if d, err := schemas.DecodeBuildDraft(r.Result.Draft); err == nil {
+				ok = d.Selection.CPU == e.CPUTarget
+			}
+		} else if previous != nil && previous.Result != nil {
+			if p, err := schemas.DecodeBuildDraft(previous.Result.Draft); err == nil {
+				ok, detail = p.Selection.CPU == e.CPUTarget, "no new draft; previous "+p.Selection.CPU
+			}
+		}
+		check("cpu_target", ok, detail)
 	}
 	// A delivered result must be server linked, not merely model 'ready'.
 	if r.Result != nil && r.Result.Outcome == "ready" {

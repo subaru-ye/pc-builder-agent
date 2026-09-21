@@ -10,7 +10,7 @@
   无缺价   -> missing_prices
   事实正确 -> final_outcome / allowed_outcome / server_delivery /
               meaningful_planning_progress / selected_* / candidate_fact:* /
-              preserved_other_parts / changed_cpu
+              preserved_other_parts / changed_cpu / cpu_target
 其余 check（require_tools、state:*、tool_*、version_count 等）是机制/评估侧
 口径，不计入交付质量门。
 
@@ -22,7 +22,7 @@ from collections import Counter
 
 FACT_EXACT = {"final_outcome", "allowed_outcome", "server_delivery",
               "meaningful_planning_progress", "preserved_other_parts",
-              "preserved_essential_parts", "changed_cpu"}
+              "preserved_essential_parts", "changed_cpu", "cpu_target"}
 FACT_PREFIX = ("selected_", "candidate_fact:")
 
 

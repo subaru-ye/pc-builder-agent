@@ -73,6 +73,7 @@ type Expect struct {
 	PurchaseBudget         bool                                  `json:"purchase_budget,omitempty"`
 	NextAction             string                                `json:"next_action,omitempty"`
 	CPUChanged             bool                                  `json:"cpu_changed,omitempty"`
+	CPUTarget              string                                `json:"cpu_target,omitempty"`
 	BudgetCeilingCNY       string                                `json:"budget_ceiling_cny,omitempty"`
 	Versions               int                                   `json:"versions"`
 	Fields                 map[string]FieldExpect                `json:"fields,omitempty"`

@@ -118,6 +118,8 @@ const builderInstruction = `你是装机配置单生成专家。根据下面的�
 - gpu 只有在 CPU 带核显且需求非游戏时才可为 null。
 - 候选的 specs 已给出规则所需字段;只要预算与兼容性允许,必须优先选择这些字段非 null 的候选,避免产生可消除的 unknown。尤其散热器优先选择 cooling_capacity_w 非 null 的型号;确定性校验若返回 review 且 unknown 能通过改选字段完整的候选消除,必须换件后重新输出。
 - 校验反馈(上一轮 validator_agent 的消息)里列出的失败项必须定向修复:换掉冲突零件,而不是从头乱换。
+- 预算超支时,先对可压价品类并行发出 order_by=price_asc 的检索看目录底价,再决定换件或交付取舍;issues/说明里写明已比较过的更便宜候选与价格;不得在未检索底价前宣称"没有更便宜候选"。
+- 收敛优先:候选能通过 evaluate 就立即交付 ready,不要继续无新信息的检索;工具响应里 remaining.tool_calls ≤ 6 时,立即整理已有候选输出最终 JSON(ready 或带已尝试路径的 proposal),不再发起新检索。
 
 输出要求(严格遵守):
 - 只输出一个 BuildDraft JSON 对象,不要 markdown 代码块、不要解释文字、不要把思考/分析过程写进回复。

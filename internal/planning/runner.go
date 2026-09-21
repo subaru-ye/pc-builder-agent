@@ -221,7 +221,12 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 					action, _ := f.Args["action"].(string)
 					x.result.StageMS[action] += time.Since(toolStarted).Milliseconds()
 				}
-				value["remaining"] = map[string]int{"model_turns": turns - turn - 1, "tool_turns": max(0, turns-turn-2), "tool_calls": 24 - x.result.ToolCalls, "search_calls": 3 - x.result.SearchCalls, "page_calls": 6 - x.result.PageCalls}
+				remaining := map[string]int{"model_turns": turns - turn - 1, "tool_turns": max(0, turns-turn-2), "tool_calls": 24 - x.result.ToolCalls, "search_calls": 3 - x.result.SearchCalls, "page_calls": 6 - x.result.PageCalls}
+				value["remaining"] = remaining
+				// 弱模型不看 remaining 数字：额度临界必须以文本硬警告逼收口。
+				if remaining["tool_calls"] <= 6 {
+					value["warning"] = "工具额度即将用尽：这是最后的整理机会，下一个响应必须输出最终 JSON（候选能过校验就 ready，否则 proposal 并列出已尝试路径），不要再调用工具。"
+				}
 				responses.Parts = append(responses.Parts, &genai.Part{FunctionResponse: &genai.FunctionResponse{ID: f.ID, Name: f.Name, Response: value}})
 			} else {
 				text.WriteString(part.Text)

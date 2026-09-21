@@ -281,3 +281,49 @@ func TestOpenRequirementsReachPlanningAndTools(t *testing.T) {
 		})
 	}
 }
+
+// 额度临界（tool_calls ≤ 6）时工具响应必须带文本硬警告：弱模型不看 remaining
+// 数字，r17/r18 在 C123-006 连续烧满额度未收敛即此缺口。
+func TestConvergenceWarningNearToolCap(t *testing.T) {
+	catalog, _ := fixture(t)
+	sawWarning := false
+	m := &scriptedModel{respond: func(call int, req *model.LLMRequest) *genai.Content {
+		if call > 1 {
+			var last map[string]any
+			for i := len(req.Contents) - 1; i >= 0 && last == nil; i-- {
+				for _, pt := range req.Contents[i].Parts {
+					if pt.FunctionResponse != nil {
+						last = pt.FunctionResponse.Response
+						break
+					}
+				}
+			}
+			if last == nil {
+				return function("search_local", `{"category":"cpu"}`)
+			}
+			_ = last
+			rem := last["remaining"].(map[string]int)
+			warn, hasWarn := last["warning"]
+			if hasWarn && warn != "" {
+				if rem["tool_calls"] > 6 {
+					t.Fatalf("warning must not appear above the threshold: tool_calls=%d", rem["tool_calls"])
+				}
+				sawWarning = true
+			} else if rem["tool_calls"] <= 6 {
+				t.Fatalf("missing convergence warning at tool_calls=%d: %+v", rem["tool_calls"], last)
+			}
+		}
+		parts := make([]*genai.Part, 0, 4)
+		for i := 0; i < 4; i++ {
+			parts = append(parts, &genai.Part{FunctionCall: &genai.FunctionCall{ID: fmt.Sprintf("call-%d-%d", call, i), Name: "planning_action", Args: map[string]any{"action": "search_local", "payload": fmt.Sprintf(`{"category":"cpu","offset":%d}`, call*4+i)}}})
+		}
+		return &genai.Content{Role: "model", Parts: parts}
+	}}
+	result, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), schemas.PlanningInput{SchemaVersion: 2, State: schemas.NewRequirementState()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sawWarning || result.ToolCalls != 24 {
+		t.Fatalf("expected warning path exercised: warning=%v toolCalls=%d", sawWarning, result.ToolCalls)
+	}
+}

@@ -1,7 +1,7 @@
 {
  "version": "current-178-live-mechanisms-20260918-r4",
  "live": true,
- "provenance": "r4 revision of frozen r3 (sha 970f3805): C123-001 step2 语义更正——cpu_changed:true 改为 cpu_target=cpu-r7-5700x（终态断言，允许第1步已选5700X后诚实收口：outcome_one_of [ready,collect]，无新draft时沿用上一版本判定），剔除轨迹绑定的 model_input_contains cpu-r5-5600；preserved_essential_parts/require_tools/validation/budget 断言不变。断代点：本套件起的 hard-pass 分数与 r3 及更早批次不可直接对比。",
+ "provenance": "r4 revision of frozen r3 (sha 970f3805): C123-001 step2 语义更正——cpu_changed:true 改为 cpu_target=cpu-r7-5700x（终态断言，允许第1步已选5700X后诚实收口：outcome_one_of [ready,proposal,collect]（升级触发预算vs必备件取舍时proposal按pending_with_evidence计），无新draft时沿用上一版本判定），剔除轨迹绑定的 model_input_contains cpu-r5-5600；preserved_essential_parts/require_tools/validation/budget 断言不变。断代点：本套件起的 hard-pass 分数与 r3 及更早批次不可直接对比。 v2: step2 增补 issues_any [内存,预算]。",
  "catalog": {
   "date": "2026-09-17",
   "candidates": [
@@ -6081,7 +6081,12 @@
       "cpu_target": "cpu-r7-5700x",
       "outcome_one_of": [
        "ready",
+       "proposal",
        "collect"
+      ],
+      "issues_any": [
+       "内存",
+       "预算"
       ]
      }
     },

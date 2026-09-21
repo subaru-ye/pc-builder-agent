@@ -79,7 +79,7 @@ func TestPlanningLiveBounded(t *testing.T) {
 		return liveBudgetModel{LLM: llm, count: &count, records: &records}
 	}
 	screen := screeningGuard{LLM: load(modelprovider.RoleScreening, "deepseek-v4-flash-0731")}
-	builder := load(modelprovider.RoleBuilder, "qwen3.8-max-0902")
+	builder := load(modelprovider.RoleBuilder, "deepseek-v4-flash-0731")
 	state := schemas.NewRequirementState()
 	for i, text := range []string{"预算6000元，主要剪4K视频，尽量安静", "静音改成必须满足，其他要求不变"} {
 		source := schemas.RequirementSource{Kind: "chat", MessageID: fmt.Sprint(i + 1), Quote: text}

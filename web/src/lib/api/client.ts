@@ -128,6 +128,11 @@ export const api = {
       params: { path: { session_id: id }, header: { "Idempotency-Key": key } },
     }));
   },
+  async cancelRun(id: string, runID: string): Promise<Run> {
+    return unwrap(await client.POST("/api/v1/sessions/{session_id}/runs/{run_id}/cancel", {
+      params: { path: { session_id: id, run_id: runID } },
+    }));
+  },
   async getRun(id: string): Promise<Run> {
     return unwrap(await client.GET("/api/v1/runs/{run_id}", { params: { path: { run_id: id } } }));
   },

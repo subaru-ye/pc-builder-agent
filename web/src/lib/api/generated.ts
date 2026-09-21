@@ -261,6 +261,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{session_id}/runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["SessionID"];
+                run_id: components["parameters"]["RunID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 请求取消当前运行
+         * @description 对 running 状态的 run 置位取消标志并取消服务端执行;幂等,重复调用返回当前状态。
+         *     取消成功后 run 终态为 interrupted,会话立即恢复可用;run 已终态时为无操作。
+         *     SSE 侧随后发出 run.cancelled 与 run.completed(interrupted)。
+         */
+        post: operations["cancelRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}": {
         parameters: {
             query?: never;
@@ -1684,6 +1709,30 @@ export interface operations {
                 };
             };
             /** @description build run 已开始 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    cancelRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["SessionID"];
+                run_id: components["parameters"]["RunID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 取消请求已受理(或 run 已终态,原样返回) */
             202: {
                 headers: {
                     [name: string]: unknown;

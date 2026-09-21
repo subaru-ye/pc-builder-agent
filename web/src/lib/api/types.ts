@@ -57,6 +57,7 @@ export type RunEventName =
   | "assistant.completed"
   | "build.saved"
   | "run.failed"
+  | "run.cancelled"
   | "run.completed";
 
 export interface RunEvent {

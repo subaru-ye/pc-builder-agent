@@ -72,6 +72,10 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
     if (event.event === "requirement.ready" || event.event === "requirement.updated" || event.event === "assistant.completed") void refreshSession();
     if (event.event === "build.saved") void refreshBuilds(Number(event.data.payload.version));
     if (event.event === "run.failed") toast.error(String(event.data.payload.title ?? "运行失败"));
+    if (event.event === "run.cancelled") {
+      toast.info(String(event.data.payload.title ?? "已停止本次生成"));
+      setRun(null); setStage(null); void refreshSession();
+    }
     if (event.event === "run.completed") { setRun(null); setStage(null); setPollExpired(false); void client.invalidateQueries({ queryKey: queryKeys.run(event.data.run_id) }); void refreshSession(); }
   }, [client, refreshBuilds, refreshSession]);
   const connection = useRunStream(currentRun, onEvent, () => { setRun(null); setPollExpired(true); void refreshSession(); });
@@ -123,6 +127,11 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
       return api.confirmRequirement(sessionID, crypto.randomUUID());
     },
     onSuccess: (nextRun) => { followLatest.current = true; setRun(nextRun); setStage("remote_processing"); afterDetailClose.current = focusRequirementsEntry; setDetailsOpen(false); setInspectorTab("build"); void refreshSession(); },
+  });
+  const cancel = useMutation({
+    mutationFn: (runID: string) => api.cancelRun(sessionID, runID),
+    onSuccess: () => { toast.info("已请求停止本次生成"); },
+    onError: (error) => { toast.error(userMessage(error)); void refreshSession(); },
   });
   const retry = () => {
     const snapshot = session.data;
@@ -207,7 +216,7 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
           <div className={`mb-5 min-h-11 items-center justify-between gap-3 text-xs text-[var(--ink-muted)] ${data.messages.length === 0 ? "flex lg:hidden" : "flex"}`}><span>{data.status_label || phaseLabels[data.phase]}</span><Button variant="ghost" size="sm" className="lg:hidden" aria-label="查看配置详情" onClick={() => openDetails("build")}><PanelRight size={15} />{data.version_count ? `查看配置 · ${data.version_count} 个版本` : "查看配置"}</Button></div>
           {data.messages.length === 0 && <div className="my-auto flex w-full flex-col items-center py-8 text-center" data-testid="conversation-welcome"><MessageSquare size={24} className="mb-4 text-[var(--ink-subtle)]" aria-hidden="true" /><h1 className="text-xl font-semibold">开始新的装机对话</h1><p className="mt-2 max-w-md text-sm text-[var(--ink-muted)]">先说说预算和主要用途，其他偏好可以边聊边补充。</p><SuggestedPrompts centered onSelect={setDraft} /></div>}
           <div className="space-y-5">{data.messages.map((message) => <ChatMessage key={message.id} message={message} activeRunID={currentRun?.id} />)}</div>
-          {busy && <RunProgress stage={stage} connection={connection} />}
+          {busy && <RunProgress stage={stage} connection={connection} onCancel={currentRun ? () => cancel.mutate(currentRun.id) : undefined} cancelPending={cancel.isPending} />}
           {data.phase === "requirement_ready" && (!data.proposal || data.requirement_status === "modified") && <div className="mt-6 rounded-md border border-[var(--primary)]/45 bg-[var(--primary)]/5 p-4 text-sm"><p className="font-medium">可以开始选配</p><p className="mt-1 text-[var(--ink-muted)]">请核对当前需求后开始选配。未知项会保留，可继续讨论。</p><Button variant="outline" className="mt-3" onClick={() => openDetails("requirement")}>核对当前需求</Button></div>}
           {data.phase === "error" && <div role="alert" className="mt-6 border-l-2 border-l-[var(--error)] bg-[var(--surface-1)] p-4"><p className="font-medium status-fail">{data.last_error?.title ?? "本次运行失败"}</p>{!errorExplainedInChat && <p className="mt-1 text-sm text-[var(--ink-muted)]">{data.last_error ? userMessage(new ApiError(data.last_error)) : "已保存此前数据，你可以显式重试。"}</p>}<div className="mt-3 flex flex-wrap gap-2">{data.requirement_state && <Button variant="outline" disabled={busy} onClick={() => openDetails("requirement")}>查看或补充需求</Button>}<Button variant="outline" disabled={send.isPending || confirm.isPending} onClick={retry}><RefreshCw size={15} />重试上一步</Button></div></div>}
           {(send.isError || confirm.isError) && <p role="alert" className="mt-4 status-fail">{userMessage(send.error ?? confirm.error)}</p>}
@@ -236,7 +245,7 @@ function focusRequirementsEntry() {
   (document.querySelector<HTMLElement>('[aria-label="需求摘要"] button') ?? document.getElementById("conversation-workspace"))?.focus();
 }
 
-function RunProgress({ stage, connection }: { stage: string | null; connection: string }) {
+function RunProgress({ stage, connection, onCancel, cancelPending }: { stage: string | null; connection: string; onCancel?: () => void; cancelPending: boolean }) {
   const message = connection === "unstable" ? "连接不稳定，正在自动重连" : connection === "long" ? "任务仍在服务端执行，已超过 60 秒" : connection === "polling" ? "事件已过期，正在查询最终状态" : stageLabels[stage ?? ""] ?? "正在处理";
-  return <div role="status" aria-live="polite" className="mt-6 flex items-center gap-3 border-l-2 border-l-[var(--primary)] bg-[var(--surface-1)] p-4"><Loader2 className="animate-spin text-[var(--primary)]" size={17} /><div><p className="text-sm font-medium">{message}</p><p className="mt-0.5 text-xs text-[var(--ink-muted)]">离开页面不会取消任务，返回后会自动恢复。</p></div></div>;
+  return <div role="status" aria-live="polite" className="mt-6 flex items-center gap-3 border-l-2 border-l-[var(--primary)] bg-[var(--surface-1)] p-4"><Loader2 className="animate-spin text-[var(--primary)]" size={17} /><div className="min-w-0 flex-1"><p className="text-sm font-medium">{message}</p><p className="mt-0.5 text-xs text-[var(--ink-muted)]">离开页面不会取消任务，返回后会自动恢复。</p></div>{onCancel && <Button variant="outline" size="sm" disabled={cancelPending} onClick={onCancel}>{cancelPending ? "正在停止…" : "停止本次生成"}</Button>}</div>;
 }

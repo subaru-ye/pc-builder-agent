@@ -356,6 +356,26 @@ paths:
               schema: {$ref: "#/components/schemas/Run"}
         "4XX":
           $ref: "#/components/responses/Problem"
+  /api/v1/sessions/{session_id}/runs/{run_id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+      - $ref: "#/components/parameters/RunID"
+    post:
+      summary: 请求取消当前运行
+      tags: [runs]
+      operationId: cancelRun
+      description: |
+        对 running 状态的 run 置位取消标志并取消服务端执行;幂等,重复调用返回当前状态。
+        取消成功后 run 终态为 interrupted,会话立即恢复可用;run 已终态时为无操作。
+        SSE 侧随后发出 run.cancelled 与 run.completed(interrupted)。
+      responses:
+        "202":
+          description: 取消请求已受理(或 run 已终态,原样返回)
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Run"}
+        "4XX":
+          $ref: "#/components/responses/Problem"
   /api/v1/runs/{run_id}:
     parameters:
       - $ref: "#/components/parameters/RunID"

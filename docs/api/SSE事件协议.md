@@ -139,6 +139,14 @@ payload 是 application/problem+json 的 JSON 对象投影,至少含 type、titl
 
 不得把技术堆栈、SQL、模型请求体、API key 或上游原始响应写入 detail。
 
+### 3.7.1 run.cancelled
+
+用户通过 `POST /api/v1/sessions/{session_id}/runs/{run_id}/cancel` 请求取消后,由服务端在 run 落成 interrupted 终态时发送一次。payload 与 run.failed 相同,是 problem+json 投影,code 固定为 `run_cancelled`。
+
+- 取消不是故障:run.failed 不得用于记录用户取消。
+- 之后必须紧跟 run.completed(interrupted);前端收到任一事件即可放开输入。
+- 服务端回收已取消标志的遗留行(进程死亡兜底)时同样补发本事件。
+
 ### 3.8 run.completed
 
 ```json
@@ -203,12 +211,19 @@ run.failed
 run.completed(failed)
 ```
 
+```text
+run.started
+run.progress(...)
+run.cancelled
+run.completed(interrupted)
+```
+
 禁止:
 
 - run.started 之前出现业务事件。
 - build.saved 先于数据库提交。
 - run.failed 后继续发送 delta 或 build.saved。
-- run.completed 后继续发送任何业务事件。
+- run.cancelled 或 run.completed 后继续发送任何业务事件。
 - 同一 run 发送多个 requirement.ready 或 build.saved。
 
 ## 6. 降级模式

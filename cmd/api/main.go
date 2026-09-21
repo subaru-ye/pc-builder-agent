@@ -68,6 +68,7 @@ func main() {
 	if err := service.RecoverInterrupted(rootCtx); err != nil {
 		log.Fatalf("恢复遗留运行失败:%v", err)
 	}
+	service.ReclaimStaleRuns(rootCtx)
 
 	publicWebBaseURL := envOr("PUBLIC_WEB_BASE_URL", "http://localhost:3000")
 	shareTokens, err := sharing.NewTokenCodec(os.Getenv("SHARE_TOKEN_SECRET"))

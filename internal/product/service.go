@@ -21,7 +21,8 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/upstream"
 )
 
-const RunTimeout = 10 * time.Minute
+// RunTimeout 与 agent_runs.expires_at(store.RunLifetime)保持单一来源。
+const RunTimeout = store.RunLifetime
 
 type EventSink interface {
 	Append(context.Context, string, string, any) (string, error)
@@ -44,6 +45,8 @@ type ProductStore interface {
 	CompleteRun(context.Context, store.CompleteRunParams) (*store.WebMessage, error)
 	LatestBuildVersion(context.Context, string) (int, bool, error)
 	InterruptRunning(context.Context, json.RawMessage) ([]store.InterruptedRun, error)
+	RequestRunCancel(context.Context, string, string, string) (store.AgentRun, bool, error)
+	ReclaimStaleRuns(context.Context, string) ([]store.InterruptedRun, error)
 }
 
 type SessionDetail struct {
@@ -66,9 +69,10 @@ type Service struct {
 	agent  AgentGateway
 	events EventSink
 
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	ctx     context.Context
+	cancel  context.CancelFunc
+	wg      sync.WaitGroup
+	cancels sync.Map // runID → context.CancelFunc,用户取消与 Shutdown 共用
 }
 
 func NewService(parent context.Context, st ProductStore, agent AgentGateway, events EventSink) (*Service, error) {
@@ -149,6 +153,7 @@ func (s *Service) ReplaceRequirement(ctx context.Context, ownerID, sessionID str
 }
 
 func (s *Service) StartMessage(ctx context.Context, ownerID, sessionID, requestID, text string) (StartResult, error) {
+	s.reclaimStale(ctx, sessionID)
 	if existing, found, err := s.store.MessageRunByRequest(ctx, ownerID, sessionID, requestID, text); err != nil {
 		return StartResult{}, err
 	} else if found {
@@ -178,6 +183,7 @@ func (s *Service) StartMessage(ctx context.Context, ownerID, sessionID, requestI
 }
 
 func (s *Service) StartConfirm(ctx context.Context, ownerID, sessionID, requestID string) (StartResult, error) {
+	s.reclaimStale(ctx, sessionID)
 	r, pending, duplicate, err := s.store.StartConfirmRun(ctx, store.StartConfirmRunParams{
 		OwnerID: ownerID, SessionID: sessionID, RequestID: requestID, RunID: uuid.NewString(),
 	})
@@ -195,13 +201,59 @@ func (s *Service) StartConfirm(ctx context.Context, ownerID, sessionID, requestI
 }
 
 func (s *Service) launch(r store.AgentRun, ownerID, text string, payload json.RawMessage) {
+	// WithoutCancel:用户取消只走本 run 的 cancelFunc;Shutdown 显式取消所有
+	// 已注册 run 后再等 wg,进程关闭语义保持由 InterruptRunning 收尾。
+	// 注册在 launch 同步完成,保证 StartMessage 返回后 cancel 端点必能命中。
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), RunTimeout)
+	s.cancels.Store(r.ID, cancel)
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		ctx, cancel := context.WithTimeout(s.ctx, RunTimeout)
-		defer cancel()
+		defer func() {
+			s.cancels.Delete(r.ID)
+			cancel()
+		}()
 		s.execute(ctx, r, ownerID, text, payload)
 	}()
+}
+
+// RequestCancel 记录用户取消意图并取消本进程内的执行 ctx;runID 不在本进程
+// (进程重启后的遗留行)时仅置位 DB 标志,由 ReclaimStaleRuns 兜底回收。
+func (s *Service) RequestCancel(ctx context.Context, ownerID, sessionID, runID string) (store.AgentRun, bool, error) {
+	r, requested, err := s.store.RequestRunCancel(ctx, ownerID, sessionID, runID)
+	if err != nil || !requested {
+		return r, requested, err
+	}
+	if cancel, ok := s.cancels.Load(runID); ok {
+		cancel.(context.CancelFunc)()
+	}
+	return r, true, nil
+}
+
+// ReclaimStaleRuns 回收全部会话的遗留 running 行(启动时调用,与
+// RecoverInterrupted 互为兜底;每次发消息前的会话级回收见 reclaimStale)。
+func (s *Service) ReclaimStaleRuns(ctx context.Context) {
+	s.reclaimStale(ctx, "")
+}
+
+// reclaimStale 回收本会话已取消/已超时的遗留 running 行并补发终态事件,
+// 让被进程死亡锁死的会话在下一条消息前恢复可用。
+func (s *Service) reclaimStale(ctx context.Context, sessionID string) {
+	items, err := s.store.ReclaimStaleRuns(ctx, sessionID)
+	if err != nil {
+		log.Printf("[api] 会话 %s 回收过期运行失败:%v", sessionID, err)
+		return
+	}
+	for _, item := range items {
+		problem := NewProblem("run_cancelled", "已停止本次生成", 409,
+			"本次生成已取消，此前的对话与数据保持不变，可重新发起请求。", item.ID)
+		if item.CancelRequestedAt == nil {
+			problem = NewProblem("run_interrupted", "运行已中断", 409,
+				"运行超过时限已回收，此前的对话与数据保持不变，请使用新请求重试。", item.ID)
+		}
+		s.publish(ctx, item.ID, "run.cancelled", problem)
+		s.publish(ctx, item.ID, "run.completed", map[string]any{"status": "interrupted"})
+	}
 }
 
 func (s *Service) execute(ctx context.Context, r store.AgentRun, ownerID, text string, payload json.RawMessage) {
@@ -631,6 +683,14 @@ func (s *Service) failInternal(ctx context.Context, r store.AgentRun, recovery s
 
 func (s *Service) fail(ctx context.Context, r store.AgentRun, problem Problem,
 	recovery store.SessionPhase, assistant string) {
+	// 用户取消不是故障:统一改记 interrupted,任何上游错误形态都不得落成
+	// technical_fault/内部错误(不变量:取消 ≠ 失败)。
+	status := store.RunFailed
+	if s.ctx.Err() == nil && errors.Is(ctx.Err(), context.Canceled) {
+		problem = NewProblem("run_cancelled", "已停止本次生成", 409,
+			"本次生成已取消，此前的对话与数据保持不变，可重新发起请求。", r.ID)
+		status = store.RunInterrupted
+	}
 	display := problem.Title + "。"
 	if problem.Detail != "" {
 		display += "\n\n" + problem.Detail
@@ -642,7 +702,7 @@ func (s *Service) fail(ctx context.Context, r store.AgentRun, problem Problem,
 	}
 	msg, err := s.store.CompleteRun(context.WithoutCancel(ctx), store.CompleteRunParams{
 		RunID: r.ID, SessionID: r.SessionID, AssistantMessageID: uuid.NewString(),
-		AssistantContent: assistant, Status: store.RunFailed, Phase: store.PhaseError,
+		AssistantContent: assistant, Status: status, Phase: store.PhaseError,
 		DisplayContent: display,
 		RecoveryPhase:  &recovery, Error: problem.JSON(),
 	})
@@ -653,8 +713,12 @@ func (s *Service) fail(ctx context.Context, r store.AgentRun, problem Problem,
 	if msg != nil {
 		s.publish(ctx, r.ID, "assistant.completed", map[string]any{"message": messagePayload(*msg)})
 	}
-	s.publish(ctx, r.ID, "run.failed", problem)
-	s.publish(ctx, r.ID, "run.completed", map[string]any{"status": "failed"})
+	if status == store.RunInterrupted {
+		s.publish(ctx, r.ID, "run.cancelled", problem)
+	} else {
+		s.publish(ctx, r.ID, "run.failed", problem)
+	}
+	s.publish(ctx, r.ID, "run.completed", map[string]any{"status": status})
 }
 
 func (s *Service) progress(ctx context.Context, runID, stage, label string, sequence int) {
@@ -697,6 +761,10 @@ func (s *Service) RecoverInterrupted(ctx context.Context) error {
 
 func (s *Service) Shutdown(ctx context.Context) error {
 	s.cancel()
+	s.cancels.Range(func(_, value any) bool {
+		value.(context.CancelFunc)()
+		return true
+	})
 	done := make(chan struct{})
 	go func() {
 		s.wg.Wait()

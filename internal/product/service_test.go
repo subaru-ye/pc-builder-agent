@@ -160,6 +160,26 @@ func (f *fakeProductStore) LatestBuildVersion(context.Context, string) (int, boo
 func (f *fakeProductStore) InterruptRunning(context.Context, json.RawMessage) ([]store.InterruptedRun, error) {
 	return nil, nil
 }
+func (f *fakeProductStore) RequestRunCancel(_ context.Context, _, _, runID string) (store.AgentRun, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r, ok := f.runs[runID]
+	if !ok {
+		return store.AgentRun{}, false, store.ErrRunNotFound
+	}
+	if r.Status != store.RunRunning {
+		return r, false, nil
+	}
+	if r.CancelRequestedAt == nil {
+		now := time.Now()
+		r.CancelRequestedAt = &now
+		f.runs[runID] = r
+	}
+	return r, true, nil
+}
+func (f *fakeProductStore) ReclaimStaleRuns(context.Context, string) ([]store.InterruptedRun, error) {
+	return nil, nil
+}
 
 // planningFakeStore 在基础假 store 上补齐增量协议能力（proposalStore +
 // ContinueScreeningRun），模拟生产 Store 的能力面；旧协议测试继续用基础版。
@@ -592,5 +612,58 @@ func TestTitleFromText(t *testing.T) {
 	long := "一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三"
 	if got := TitleFromText(long); len([]rune(got)) != 32 {
 		t.Fatalf("长标题 rune=%d", len([]rune(got)))
+	}
+}
+
+// blockingAgent 模拟阻塞中的 A2A 调用:直到 ctx 取消才返回错误。
+type blockingAgent struct{}
+
+func (blockingAgent) Screen(ctx context.Context, _, _ string, _ ScreenInput) (ScreenResult, error) {
+	<-ctx.Done()
+	return ScreenResult{}, ctx.Err()
+}
+func (blockingAgent) Remote(ctx context.Context, _, _ string, _ json.RawMessage) (RemoteResult, error) {
+	<-ctx.Done()
+	return RemoteResult{}, ctx.Err()
+}
+func (blockingAgent) ContextAvailable(context.Context, string, string) (bool, error) { return true, nil }
+
+func TestServiceCancelInterruptsRun(t *testing.T) {
+	st := newFakeProductStore()
+	sink := newFakeSink()
+	svc, err := NewService(context.Background(), st, blockingAgent{}, sink)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = svc.Shutdown(context.Background()) }()
+	started, err := svc.StartMessage(context.Background(), "owner-1", "session-1",
+		"00000000-0000-4000-8000-000000000011", "8000 元 2K 玩黑神话")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, requested, err := svc.RequestCancel(context.Background(), "owner-1", "session-1", started.Run.ID); err != nil || !requested {
+		t.Fatalf("RequestCancel requested=%v err=%v", requested, err)
+	}
+	sink.wait(t)
+	st.mu.Lock()
+	run := st.runs[started.Run.ID]
+	lastError := st.session.LastError
+	st.mu.Unlock()
+	if run.Status != store.RunInterrupted {
+		t.Fatalf("取消后 run 状态=%s, want interrupted", run.Status)
+	}
+	var problem struct{ Code string }
+	if err := json.Unmarshal(lastError, &problem); err != nil || problem.Code != "run_cancelled" {
+		t.Fatalf("取消 problem=%s err=%v", lastError, err)
+	}
+	names := sink.names()
+	if !strings.Contains(strings.Join(names, ","), "run.cancelled") {
+		t.Fatalf("缺少 run.cancelled 事件:%v", names)
+	}
+	// 取消后的会话可以立即再发消息(锁已释放由真实 store 唯一索引保证)。
+	next, err := svc.StartMessage(context.Background(), "owner-1", "session-1",
+		"00000000-0000-4000-8000-000000000012", "再试一次")
+	if err != nil || next.Run.Status != store.RunRunning {
+		t.Fatalf("取消后新消息应可启动:%+v err=%v", next, err)
 	}
 }

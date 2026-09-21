@@ -59,6 +59,12 @@ func (f *fakeService) StartMessage(context.Context, string, string, string, stri
 func (f *fakeService) StartConfirm(context.Context, string, string, string) (product.StartResult, error) {
 	return product.StartResult{Run: f.run}, nil
 }
+func (f *fakeService) RequestCancel(_ context.Context, _, _, runID string) (store.AgentRun, bool, error) {
+	if runID != f.run.ID {
+		return store.AgentRun{}, false, store.ErrRunNotFound
+	}
+	return f.run, f.run.Status == store.RunRunning, nil
+}
 
 type fakeDB struct{ err error }
 
@@ -149,6 +155,31 @@ func TestCreateSessionSetsAnonymousCookie(t *testing.T) {
 	}
 	if service.session.OwnerID != c.Value {
 		t.Fatalf("owner=%q cookie=%q", service.session.OwnerID, c.Value)
+	}
+}
+
+func TestCancelRunEndpoint(t *testing.T) {
+	api, service := newTestAPI(t, runevents.NewMemory())
+	owner := strings.Repeat("A", 43)
+	service.session.OwnerID = owner
+	service.run = store.AgentRun{ID: "run-1", SessionID: "session-1", Kind: store.RunBuild, Status: store.RunRunning}
+	for name, tc := range map[string]struct {
+		runID string
+		want  int
+	}{
+		"running run":     {runID: "run-1", want: http.StatusAccepted},
+		"unknown run":     {runID: "run-other", want: http.StatusNotFound},
+		"malformed runID": {runID: "not-a-uuid", want: http.StatusNotFound},
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/sessions/session-1/runs/"+tc.runID+"/cancel", nil)
+			req.AddCookie(&http.Cookie{Name: anonymousCookieName, Value: owner})
+			rec := httptest.NewRecorder()
+			api.Handler().ServeHTTP(rec, req)
+			if rec.Code != tc.want {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+		})
 	}
 }
 

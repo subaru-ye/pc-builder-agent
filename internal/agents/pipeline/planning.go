@@ -30,10 +30,12 @@ func NewRemotePlanning(cfg Config) (agent.Agent, error) {
 			}
 			result, e := r.Run(ctx, input)
 			if e != nil {
-				result.Outcome = "technical_fault"
-				result.Delivery = &planning.Delivery{Status: "not_applicable", Issues: []string{"本轮服务中断，尚未完成交付核验"}}
-				result.Reply = "生成服务本轮中断，已保存已有候选和资料。可以继续对话或重新确认后重试。"
-				result.Issues = append(result.Issues, "生成服务暂时不可用，本轮进度已保留")
+				// 客户端取消/断连不是生成服务故障:保留已完成候选与草稿供后续
+				// 轮次恢复,不得覆盖为 technical_fault(§F1:取消 ≠ 失败)。
+				result.Outcome = "interrupted"
+				result.Delivery = &planning.Delivery{Status: "not_applicable", Issues: []string{"本轮已取消，尚未完成交付核验"}}
+				result.Reply = "本轮生成已取消，已保存已有候选和资料。可以继续对话或重新确认后重试。"
+				result.Issues = append(result.Issues, "本轮已取消，进度已保留")
 			}
 			part, e := PlanningResultPart(result)
 			if e != nil {

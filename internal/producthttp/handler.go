@@ -44,6 +44,7 @@ type ProductService interface {
 	ReplaceRequirement(context.Context, string, string, json.RawMessage) error
 	StartMessage(context.Context, string, string, string, string) (product.StartResult, error)
 	StartConfirm(context.Context, string, string, string) (product.StartResult, error)
+	RequestCancel(context.Context, string, string, string) (store.AgentRun, bool, error)
 }
 
 type BuildPresenter interface {
@@ -135,6 +136,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/sessions/{session_id}", a.manageSession)
 	mux.HandleFunc("DELETE /api/v1/sessions/{session_id}", a.manageSession)
 	mux.HandleFunc("POST /api/v1/sessions/{session_id}/messages", a.createMessageRun)
+	mux.HandleFunc("POST /api/v1/sessions/{session_id}/runs/{run_id}/cancel", a.cancelRun)
 	mux.HandleFunc("PATCH /api/v1/sessions/{session_id}/requirement", a.replaceRequirement)
 	mux.HandleFunc("PATCH /api/v1/sessions/{session_id}/requirement-state", a.editRequirementState)
 	mux.HandleFunc("POST /api/v1/sessions/{session_id}/requirement/confirm", a.confirmRequirement)
@@ -424,6 +426,19 @@ func (a *API) createMessageRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.writeStartResult(w, result)
+}
+
+func (a *API) cancelRun(w http.ResponseWriter, r *http.Request) {
+	owner, ok := a.ownerForSession(w, r, r.PathValue("session_id"))
+	if !ok {
+		return
+	}
+	run, _, err := a.service.RequestCancel(r.Context(), owner, r.PathValue("session_id"), r.PathValue("run_id"))
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, toRun(run))
 }
 
 func (a *API) replaceRequirement(w http.ResponseWriter, r *http.Request) {

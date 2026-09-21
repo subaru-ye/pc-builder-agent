@@ -171,3 +171,56 @@ func TestRequirementStateOwnedRemovalClearsAssociatedModels(t *testing.T) {
 		t.Fatal("withdrawn owned passed to builder")
 	}
 }
+
+// F9:视图超限时按优先级裁剪并显式声明,未展示不等于不存在。
+func TestRequirementStatePromptViewIsBoundedAndDeclaresTruncation(t *testing.T) {
+	small := completeRequirementState(t)
+	view := RequirementStatePromptView(small)
+	if strings.Contains(string(view), "view_note") {
+		t.Fatal("small state must not declare truncation")
+	}
+	if !strings.Contains(string(view), `"budget_cny"`) {
+		t.Fatal("structured fields missing from small view")
+	}
+
+	state := completeRequirementState(t)
+	var big strings.Builder
+	big.WriteString("这条观察记录非常长，用于撑爆视图上限。")
+	for i := 0; i < 60; i++ {
+		big.WriteString("历史观察原文内容持续追加，确保超过二十四千字节的上限。")
+	}
+	for i := 0; i < 8; i++ {
+		state.Observations = append(state.Observations, RequirementObservation{
+			Field: "notes", Text: big.String(), Source: RequirementSource{Kind: "chat", Quote: big.String()},
+		})
+	}
+	view = RequirementStatePromptView(state)
+	if len(view) > promptViewMaxBytes {
+		t.Fatalf("view not bounded: %d bytes", len(view))
+	}
+	if !strings.Contains(string(view), "view_note") || !strings.Contains(string(view), "按未知处理") {
+		t.Fatal("truncation not declared")
+	}
+	var payload struct {
+		Fields       map[string]any `json:"fields"`
+		Observations []any          `json:"observations"`
+	}
+	if err := json.Unmarshal(view, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Fields["budget_cny"] == nil {
+		t.Fatal("structured must field was trimmed")
+	}
+	for key := range payload.Fields {
+		field := state.Fields[key]
+		if key == "budget_cny" {
+			continue
+		}
+		if field.Status == "unknown" && len(field.Value) == 0 {
+			t.Fatalf("unknown field %s should have been trimmed first", key)
+		}
+	}
+	if len(payload.Observations) == 0 || len(payload.Observations) >= 8 {
+		t.Fatalf("observations not trimmed: %d", len(payload.Observations))
+	}
+}

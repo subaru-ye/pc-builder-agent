@@ -575,6 +575,10 @@ func RequirementFieldLabel(key string) string {
 	return key
 }
 
+// promptViewMaxBytes 是需求视图的总量上限:超限按活跃度与来源强度裁剪,
+// 并在视图里显式声明,未展示不等于不存在(完整状态始终在产品面板)。
+const promptViewMaxBytes = 24 << 10
+
 // RequirementStatePromptView 不把完整历史送给模型，只有当前值、撤销墓碑和备选。
 // 来源按需展示在产品里；模型通过本轮原文增量更新，不能再次提取过去的旧要求。
 func RequirementStatePromptView(state RequirementState) json.RawMessage {
@@ -600,6 +604,59 @@ func RequirementStatePromptView(state RequirementState) json.RawMessage {
 			observations = append(observations, map[string]string{"field": observation.Field, "text": observation.Text, "reason": observation.Reason})
 		}
 	}
-	raw, _ := json.Marshal(map[string]any{"revision": state.Revision, "fields": fields, "alternatives": state.Alternatives, "observations": observations})
+	alternatives := append([]RequirementAlternative(nil), state.Alternatives...)
+	// 未知值字段是样板,先整体折叠;其余裁剪逐项进行,给声明留出字节余量。
+	for key := range fields {
+		if field := state.Fields[key]; field.Status == "unknown" && len(field.Value) == 0 && field.Previous == nil {
+			delete(fields, key)
+		}
+	}
+	note := ""
+	build := func() []byte {
+		payload := map[string]any{"revision": state.Revision, "fields": fields, "alternatives": alternatives, "observations": observations}
+		if note != "" {
+			payload["view_note"] = note
+		}
+		raw, _ := json.Marshal(payload)
+		return raw
+	}
+	raw := build()
+	for len(raw) > promptViewMaxBytes {
+		if !trimPromptViewItem(fields, state, &observations, &alternatives) {
+			return raw // 已无可裁剪项:保留声明,按原样送出。
+		}
+		if note == "" {
+			note = "需求视图超过展示上限已被裁剪：未展示字段按未知处理，历史观察未完整展开；完整状态在需求面板，裁剪不改变权威需求。"
+		}
+		raw = build()
+	}
 	return raw
+}
+
+// trimPromptViewItem 每次按优先级裁掉一项:撤销墓碑 → 最旧观察 → 最旧备选 →
+// 低强度自由条目 → 自由必须条件(结构化字段始终保留)。无可裁剪项返回 false。
+func trimPromptViewItem(fields map[string]any, state RequirementState, observations *[]map[string]string, alternatives *[]RequirementAlternative) bool {
+	for key := range fields {
+		if field := state.Fields[key]; field.Status == "removed" && field.Previous == nil {
+			delete(fields, key)
+			return true
+		}
+	}
+	if len(*observations) > 0 {
+		*observations = (*observations)[1:]
+		return true
+	}
+	if len(*alternatives) > 0 {
+		*alternatives = (*alternatives)[1:]
+		return true
+	}
+	for _, strength := range []string{"prefer", "must", ""} {
+		for key := range fields {
+			if FreeField(key) && state.Fields[key].Strength == strength {
+				delete(fields, key)
+				return true
+			}
+		}
+	}
+	return false
 }

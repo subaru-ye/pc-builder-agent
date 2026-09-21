@@ -82,15 +82,21 @@ type WebMessage struct {
 	CreatedAt       time.Time
 }
 
+// RunLifetime 是 run 的服务端寿命,产品侧 per-run ctx 超时(product.RunTimeout)与
+// agent_runs.expires_at 共用该值;超时未终止的 running 行由 ReclaimStaleRuns 回收。
+const RunLifetime = 10 * time.Minute
+
 type AgentRun struct {
-	ID              string
-	SessionID       string
-	ClientRequestID string
-	Kind            RunKind
-	Status          RunStatus
-	Error           json.RawMessage
-	StartedAt       time.Time
-	FinishedAt      *time.Time
+	ID                string
+	SessionID         string
+	ClientRequestID   string
+	Kind              RunKind
+	Status            RunStatus
+	Error             json.RawMessage
+	StartedAt         time.Time
+	FinishedAt        *time.Time
+	CancelRequestedAt *time.Time
+	ExpiresAt         *time.Time
 }
 
 // InvalidPhaseError 保留服务端观察到的 phase，供 transport 返回当前状态。
@@ -192,17 +198,18 @@ func (s *Store) WebSessionsByOwner(ctx context.Context, ownerID string) ([]WebSe
 func scanAgentRun(row interface{ Scan(...any) error }) (AgentRun, error) {
 	var r AgentRun
 	err := row.Scan(&r.ID, &r.SessionID, &r.ClientRequestID, &r.Kind, &r.Status,
-		&r.Error, &r.StartedAt, &r.FinishedAt)
+		&r.Error, &r.StartedAt, &r.FinishedAt, &r.CancelRequestedAt, &r.ExpiresAt)
 	return r, err
 }
 
 const agentRunColumns = `id::text, session_id, client_request_id::text, kind, status,
-       error, started_at, finished_at`
+       error, started_at, finished_at, cancel_requested_at, expires_at`
 
 func (s *Store) RunByOwner(ctx context.Context, ownerID, runID string) (AgentRun, error) {
 	r, err := scanAgentRun(s.pool.QueryRow(ctx, `
 		SELECT r.id::text, r.session_id, r.client_request_id::text, r.kind, r.status,
-		       r.error, r.started_at, r.finished_at FROM agent_runs r
+		       r.error, r.started_at, r.finished_at, r.cancel_requested_at, r.expires_at
+		FROM agent_runs r
 		JOIN web_sessions s ON s.id = r.session_id
 		WHERE r.id = $1 AND s.owner_id = $2`, runID, ownerID))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -220,13 +227,14 @@ func (s *Store) MessageRunByRequest(ctx context.Context, ownerID, sessionID, req
 	var oldText, oldFingerprint string
 	err := s.pool.QueryRow(ctx, `
 		SELECT r.id::text, r.session_id, r.client_request_id::text, r.kind, r.status,
-		       r.error, r.started_at, r.finished_at, m.content, COALESCE(m.request_fingerprint, '')
+		       r.error, r.started_at, r.finished_at, r.cancel_requested_at, r.expires_at,
+		       m.content, COALESCE(m.request_fingerprint, '')
 		FROM agent_runs r
 		JOIN web_sessions s ON s.id = r.session_id
 		JOIN web_messages m ON m.session_id = r.session_id AND m.client_message_id = r.client_request_id
 		WHERE r.session_id = $1 AND r.client_request_id = $2 AND s.owner_id = $3`,
 		sessionID, requestID, ownerID).Scan(&r.ID, &r.SessionID, &r.ClientRequestID, &r.Kind,
-		&r.Status, &r.Error, &r.StartedAt, &r.FinishedAt, &oldText, &oldFingerprint)
+		&r.Status, &r.Error, &r.StartedAt, &r.FinishedAt, &r.CancelRequestedAt, &r.ExpiresAt, &oldText, &oldFingerprint)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return AgentRun{}, false, nil
 	}
@@ -423,9 +431,9 @@ func runByRequestTx(ctx context.Context, tx pgx.Tx, sessionID, requestID string)
 
 func insertRunTx(ctx context.Context, tx pgx.Tx, id, sessionID, requestID string, kind RunKind) (AgentRun, error) {
 	r, err := scanAgentRun(tx.QueryRow(ctx, `INSERT INTO agent_runs
-		(id, session_id, client_request_id, kind, status)
-		VALUES ($1, $2, $3, $4, 'running') RETURNING `+agentRunColumns,
-		id, sessionID, requestID, kind))
+		(id, session_id, client_request_id, kind, status, expires_at)
+		VALUES ($1, $2, $3, $4, 'running', now() + $5::interval) RETURNING `+agentRunColumns,
+		id, sessionID, requestID, kind, fmt.Sprintf("%d seconds", int(RunLifetime.Seconds()))))
 	if err != nil {
 		return AgentRun{}, fmt.Errorf("store: 创建运行失败: %w", err)
 	}
@@ -628,13 +636,7 @@ func (s *Store) InterruptRunning(ctx context.Context, problem json.RawMessage) (
 			rows.Close()
 			return nil, fmt.Errorf("store: 读取遗留运行失败: %w", err)
 		}
-		recovery := PhaseCollecting
-		switch r.Kind {
-		case RunBuild:
-			recovery = PhaseRequirementReady
-		case RunChange:
-			recovery = PhaseReady
-		}
+		recovery := recoveryPhaseForKind(r.Kind)
 		out = append(out, InterruptedRun{AgentRun: r, RecoveryPhase: recovery})
 	}
 	rows.Close()
@@ -656,6 +658,118 @@ func (s *Store) InterruptRunning(ctx context.Context, problem json.RawMessage) (
 	}
 	return out, nil
 }
+
+// RequestRunCancel 置位用户取消标志;仅 running 行可置位,重复请求保持幂等。
+// 返回的 requested=false 表示 run 已处于终态(调用方可原样返回当前状态)。
+func (s *Store) RequestRunCancel(ctx context.Context, ownerID, sessionID, runID string) (AgentRun, bool, error) {
+	r, err := scanAgentRun(s.pool.QueryRow(ctx, `
+		UPDATE agent_runs r SET cancel_requested_at = now()
+		FROM web_sessions s
+		WHERE r.id = $1 AND r.session_id = $2 AND s.id = r.session_id AND s.owner_id = $3
+		  AND r.status = 'running' AND r.cancel_requested_at IS NULL
+		RETURNING r.id::text, r.session_id, r.client_request_id::text, r.kind, r.status,
+		       r.error, r.started_at, r.finished_at, r.cancel_requested_at, r.expires_at`, runID, sessionID, ownerID))
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return AgentRun{}, false, fmt.Errorf("store: 请求取消运行失败: %w", err)
+		}
+		current, e := s.runByOwnerSession(ctx, ownerID, sessionID, runID)
+		if e != nil {
+			return AgentRun{}, false, e
+		}
+		return current, current.Status == RunRunning && current.CancelRequestedAt != nil, nil
+	}
+	return r, true, nil
+}
+
+func (s *Store) runByOwnerSession(ctx context.Context, ownerID, sessionID, runID string) (AgentRun, error) {
+	r, err := scanAgentRun(s.pool.QueryRow(ctx, `
+		SELECT r.id::text, r.session_id, r.client_request_id::text, r.kind, r.status,
+		       r.error, r.started_at, r.finished_at, r.cancel_requested_at, r.expires_at
+		FROM agent_runs r
+		JOIN web_sessions s ON s.id = r.session_id
+		WHERE r.id = $1 AND r.session_id = $2 AND s.owner_id = $3`, runID, sessionID, ownerID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return AgentRun{}, ErrRunNotFound
+	}
+	if err != nil {
+		return AgentRun{}, fmt.Errorf("store: 查询运行失败: %w", err)
+	}
+	return r, nil
+}
+
+// ReclaimStaleRuns 把已请求取消或超过 expires_at 的 running 行落成 interrupted,
+// 并把对应会话置回可恢复的 error 阶段。sessionID 为空时扫描全部会话。
+// 这是进程内取消路径失效(进程被杀)后的兜底,正常取消由服务端本地 cancel 完成。
+func (s *Store) ReclaimStaleRuns(ctx context.Context, sessionID string) ([]InterruptedRun, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("store: 开启过期运行回收事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	query := `SELECT ` + agentRunColumns + ` FROM agent_runs WHERE status = 'running'
+		AND (cancel_requested_at IS NOT NULL OR expires_at < now())`
+	args := []any{}
+	if sessionID != "" {
+		query += ` AND session_id = $1`
+		args = append(args, sessionID)
+	}
+	rows, err := tx.Query(ctx, query+` FOR UPDATE`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store: 查询过期运行失败: %w", err)
+	}
+	var out []InterruptedRun
+	for rows.Next() {
+		r, err := scanAgentRun(rows)
+		if err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("store: 读取过期运行失败: %w", err)
+		}
+		recovery := recoveryPhaseForKind(r.Kind)
+		out = append(out, InterruptedRun{AgentRun: r, RecoveryPhase: recovery})
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store: 遍历过期运行失败: %w", err)
+	}
+	for _, item := range out {
+		problem := staleRunProblem(item.AgentRun)
+		if _, err := tx.Exec(ctx, `UPDATE agent_runs SET status = 'interrupted', error = $2,
+			finished_at = now() WHERE id = $1`, item.ID, problem); err != nil {
+			return nil, fmt.Errorf("store: 标记过期运行中断失败: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `UPDATE web_sessions SET phase = 'error', recovery_phase = $2,
+			last_error = $3, updated_at = now() WHERE id = $1`, item.SessionID, item.RecoveryPhase, problem); err != nil {
+			return nil, fmt.Errorf("store: 标记会话中断失败: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("store: 提交过期运行回收失败: %w", err)
+	}
+	return out, nil
+}
+
+func recoveryPhaseForKind(kind RunKind) SessionPhase {
+	switch kind {
+	case RunBuild:
+		return PhaseRequirementReady
+	case RunChange:
+		return PhaseReady
+	}
+	return PhaseCollecting
+}
+
+func staleRunProblem(r AgentRun) json.RawMessage {
+	if r.CancelRequestedAt != nil {
+		return staleCancelProblem
+	}
+	return staleExpiredProblem
+}
+
+var (
+	staleCancelProblem  = json.RawMessage(`{"type":"/problems/run_cancelled","title":"已停止本次生成","status":409,"code":"run_cancelled","detail":"本次生成已取消，此前的对话与数据保持不变，可重新发起请求。"}`)
+	staleExpiredProblem = json.RawMessage(`{"type":"/problems/run_interrupted","title":"运行已中断","status":409,"code":"run_interrupted","detail":"运行超过时限已回收，此前的对话与数据保持不变，请使用新请求重试。"}`)
+)
 
 func (s *Store) LatestBuildVersion(ctx context.Context, sessionID string) (int, bool, error) {
 	var v *int

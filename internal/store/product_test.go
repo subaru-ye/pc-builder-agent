@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
@@ -222,5 +223,88 @@ func TestInterruptRunning(t *testing.T) {
 	ws, _ := s.WebSessionByOwner(ctx, "owner", "session-interrupt")
 	if ws.Phase != PhaseError || ws.RecoveryPhase == nil || *ws.RecoveryPhase != PhaseCollecting {
 		t.Fatalf("中断后会话不正确:%+v", ws)
+	}
+}
+
+func TestRunCancelAndReclaim(t *testing.T) {
+	s := setupStore(t)
+	ctx := context.Background()
+	const (
+		owner     = "owner-cancel"
+		sessionID = "session-cancel"
+	)
+	if _, err := s.CreateWebSession(ctx, sessionID, owner, "20000000-0000-4000-8000-000000000001"); err != nil {
+		t.Fatal(err)
+	}
+	start := func(requestID, runID, messageID, text string) AgentRun {
+		t.Helper()
+		r, _, err := s.StartMessageRun(ctx, StartMessageRunParams{
+			OwnerID: owner, SessionID: sessionID, RequestID: requestID, RunID: runID,
+			MessageID: messageID, Text: text, Title: text, ForceScreening: true,
+		})
+		if err != nil {
+			t.Fatalf("StartMessageRun:%v", err)
+		}
+		return r
+	}
+	run := start("20000000-0000-4000-8000-000000000002", "20000000-0000-4000-8000-000000000003", "20000000-0000-4000-8000-000000000004", "取消测试")
+	if run.ExpiresAt == nil || run.ExpiresAt.Sub(run.StartedAt) < 9*time.Minute {
+		t.Fatalf("expires_at 未按 RunLifetime 写入:%+v", run)
+	}
+	// 仍在 running 且未取消未到期的行不被回收。
+	if items, err := s.ReclaimStaleRuns(ctx, ""); err != nil || len(items) != 0 {
+		t.Fatalf("未过期 running 不应回收:%+v err=%v", items, err)
+	}
+
+	// 重复取消幂等;错误归属与会话直接 404。
+	cancelled, requested, err := s.RequestRunCancel(ctx, owner, sessionID, run.ID)
+	if err != nil || !requested || cancelled.CancelRequestedAt == nil {
+		t.Fatalf("RequestRunCancel=%+v requested=%v err=%v", cancelled, requested, err)
+	}
+	if _, requested, err := s.RequestRunCancel(ctx, owner, sessionID, run.ID); err != nil || !requested {
+		t.Fatalf("重复取消应幂等:%v", err)
+	}
+	if _, _, err := s.RequestRunCancel(ctx, owner, sessionID, "30000000-0000-4000-8000-000000000001"); !errors.Is(err, ErrRunNotFound) {
+		t.Fatalf("不存在 run 应 404:%v", err)
+	}
+	if _, _, err := s.RequestRunCancel(ctx, "other-owner", sessionID, run.ID); !errors.Is(err, ErrRunNotFound) {
+		t.Fatalf("他人 run 应 404:%v", err)
+	}
+
+	// 取消标志行回收为 interrupted,会话回到可恢复 error 阶段。
+	items, err := s.ReclaimStaleRuns(ctx, sessionID)
+	if err != nil || len(items) != 1 || items[0].ID != run.ID || items[0].RecoveryPhase != PhaseCollecting {
+		t.Fatalf("取消行回收=%+v err=%v", items, err)
+	}
+	if reclaimed, err := s.RunByOwner(ctx, owner, run.ID); err != nil || reclaimed.Status != RunInterrupted || reclaimed.FinishedAt == nil {
+		t.Fatalf("回收后 run 应为 interrupted:%+v err=%v", reclaimed, err)
+	}
+	ws, _ := s.WebSessionByOwner(ctx, owner, sessionID)
+	if ws.Phase != PhaseError || ws.RecoveryPhase == nil || *ws.RecoveryPhase != PhaseCollecting {
+		t.Fatalf("回收后会话不正确:%+v", ws)
+	}
+	if _, requested, err := s.RequestRunCancel(ctx, owner, sessionID, run.ID); err != nil || requested {
+		t.Fatalf("终态 run 不可再取消:%v", err)
+	}
+	// 回收后会话解锁:同会话可再发消息。
+	next := start("20000000-0000-4000-8000-000000000005", "20000000-0000-4000-8000-000000000006", "20000000-0000-4000-8000-000000000007", "取消后再发")
+	if next.Status != RunRunning {
+		t.Fatalf("回收后新 run 应可启动:%+v", next)
+	}
+
+	// 超时行回收:回写 expires_at 模拟超期。
+	if _, err := s.pool.Exec(ctx, `UPDATE agent_runs SET expires_at = now() - interval '1 minute' WHERE id=$1`, next.ID); err != nil {
+		t.Fatal(err)
+	}
+	items, err = s.ReclaimStaleRuns(ctx, "")
+	if err != nil || len(items) != 1 || items[0].ID != next.ID {
+		t.Fatalf("超时行回收=%+v err=%v", items, err)
+	}
+	if reclaimed, err := s.RunByOwner(ctx, owner, next.ID); err != nil || reclaimed.Status != RunInterrupted {
+		t.Fatalf("超时回收后应为 interrupted:%+v err=%v", reclaimed, err)
+	}
+	var code string
+	if err := s.pool.QueryRow(ctx, `SELECT error->>'code' FROM agent_runs WHERE id=$1`, next.ID).Scan(&code); err != nil || code != "run_interrupted" {
+		t.Fatalf("超时回收 problem 不正确:%s err=%v", code, err)
 	}
 }

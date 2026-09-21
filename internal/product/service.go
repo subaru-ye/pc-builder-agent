@@ -329,7 +329,7 @@ func (s *Service) executeScreening(ctx context.Context, r store.AgentRun, ownerI
 			state.NextAction, state.Reply = "confirm", ScreeningReadyMessage
 		}
 		if mergeErr == nil {
-			mergeErr = s.completeRequirementState(ctx, ownerID, r, state)
+			mergeErr = s.completeRequirementState(ctx, ownerID, r, state, result.RetryCount)
 		}
 		if mergeErr != nil {
 			s.fail(ctx, r, NewProblem("schema_validation_failed", "需求更新未保存", 422, mergeErr.Error(), r.ID), store.PhaseCollecting, "")
@@ -341,7 +341,7 @@ func (s *Service) executeScreening(ctx context.Context, r store.AgentRun, ownerI
 		s.succeed(ctx, r, store.PhaseCollecting, nil, false, result.Text, 0)
 	case ScreenRequirement:
 		message := ScreeningReadyMessage
-		s.succeedRequirement(ctx, r, result.Payload, message)
+		s.succeedRequirement(ctx, r, result.Payload, message, result.RetryCount)
 	case ScreenChange:
 		s.fail(ctx, r, NewProblem("schema_validation_failed", "初筛结果类型错误", 422,
 			"首次需求阶段不能产生 ChangeRequest。", r.ID), store.PhaseCollecting, "")
@@ -355,12 +355,12 @@ func (s *Service) executeScreening(ctx context.Context, r store.AgentRun, ownerI
 	}
 }
 
-func (s *Service) succeedRequirement(ctx context.Context, r store.AgentRun, requirement json.RawMessage, assistant string) {
+func (s *Service) succeedRequirement(ctx context.Context, r store.AgentRun, requirement json.RawMessage, assistant string, retries int) {
 	msg, err := s.store.CompleteRun(context.WithoutCancel(ctx), store.CompleteRunParams{
 		RunID: r.ID, SessionID: r.SessionID, AssistantMessageID: uuid.NewString(),
 		AssistantContent: assistant, Status: store.RunSucceeded, Phase: store.PhaseRequirementReady,
 		PendingRequirement: requirement, SetPending: true,
-		ScreeningModel: s.screeningModelFor(r.Kind),
+		ScreeningModel: s.screeningModelFor(r.Kind), RetryCount: retries,
 	})
 	if err != nil {
 		log.Printf("[api] run %s 完成需求落库失败:%v", r.ID, err)

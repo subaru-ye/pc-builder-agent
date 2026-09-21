@@ -130,6 +130,37 @@ func (g screeningGuard) generateRequirementState(ctx context.Context, req *model
 			}
 			return &out, nil, nil
 		}
+		processWithFormatRetry := func(resp *model.LLMResponse) (*model.LLMResponse, *model.LLMRequest, error) {
+			out, retry, perr := processOnce(resp)
+			if perr == nil {
+				return out, retry, nil
+			}
+			// F4:严格解码失败给至多一次同模型格式纠偏重请求;第二次仍失败才失败。
+			// 不切换模型,不放宽逐 op 核验。
+			raw := screeningText(resp.Content)
+			if strings.TrimSpace(raw) == "" {
+				return nil, nil, perr
+			}
+			recordScreeningRetry(ctx)
+			retryReq := copyReq
+			retryReq.Contents = append(append([]*genai.Content(nil), copyReq.Contents...),
+				genai.NewContentFromText(raw, genai.RoleModel),
+				genai.NewContentFromText(formatFallbackInstruction, genai.RoleUser))
+			for response2, err2 := range g.LLM.GenerateContent(ctx, &retryReq, false) {
+				if err2 != nil || response2 == nil || response2.ErrorCode != "" || response2.ErrorMessage != "" {
+					if !yield(response2, err2) {
+						return nil, nil, perr
+					}
+					continue
+				}
+				out2, retry2, perr2 := processOnce(response2)
+				if perr2 != nil {
+					return nil, nil, perr2
+				}
+				return out2, retry2, nil
+			}
+			return nil, nil, perr
+		}
 		for response, err := range g.LLM.GenerateContent(ctx, &copyReq, false) {
 			if err != nil || response == nil || response.ErrorCode != "" || response.ErrorMessage != "" {
 				if !yield(response, err) {
@@ -137,7 +168,7 @@ func (g screeningGuard) generateRequirementState(ctx context.Context, req *model
 				}
 				continue
 			}
-			out, retry, perr := processOnce(response)
+			out, retry, perr := processWithFormatRetry(response)
 			if perr != nil {
 				yield(nil, perr)
 				return
@@ -148,6 +179,7 @@ func (g screeningGuard) generateRequirementState(ctx context.Context, req *model
 				}
 				continue
 			}
+			recordScreeningRetry(ctx)
 			for response2, err2 := range g.LLM.GenerateContent(ctx, retry, false) {
 				if err2 != nil || response2 == nil || response2.ErrorCode != "" || response2.ErrorMessage != "" {
 					if !yield(response2, err2) {
@@ -155,7 +187,7 @@ func (g screeningGuard) generateRequirementState(ctx context.Context, req *model
 					}
 					continue
 				}
-				out2, _, perr2 := processOnce(response2)
+				out2, _, perr2 := processWithFormatRetry(response2)
 				if perr2 != nil {
 					yield(nil, perr2)
 					return
@@ -165,6 +197,21 @@ func (g screeningGuard) generateRequirementState(ctx context.Context, req *model
 				}
 			}
 		}
+	}
+}
+
+const formatFallbackInstruction = `纠偏：上一次输出不符合 JSON 协议（operations/observations/next_action/reply 契约，或字段值不合法）。请重新输出完整 JSON：仅输出 JSON，不要 Markdown；每个操作必须有 op 和 field，quote 逐字摘录本轮原文，evidence 与 quote 同级。字段语义、动作决策与操作语义均按原要求执行，不新增未表达的内容。`
+
+type screeningRetryCounterKey struct{}
+
+// WithScreeningRetryCounter 让调用方收集 guard 发起的同模型重请求次数(F3 retry_count)。
+func WithScreeningRetryCounter(ctx context.Context, counter *int) context.Context {
+	return context.WithValue(ctx, screeningRetryCounterKey{}, counter)
+}
+
+func recordScreeningRetry(ctx context.Context) {
+	if counter, ok := ctx.Value(screeningRetryCounterKey{}).(*int); ok && counter != nil {
+		*counter++
 	}
 }
 

@@ -78,7 +78,7 @@ func (s *Service) EditRequirement(ctx context.Context, ownerID, sessionID, reque
 	}
 	if !duplicate {
 		s.publish(ctx, r.ID, "run.started", map[string]any{"kind": r.Kind})
-		if err := s.completeRequirementState(ctx, ownerID, r, next); err != nil {
+		if err := s.completeRequirementState(ctx, ownerID, r, next, 0); err != nil {
 			s.failInternal(ctx, r, store.PhaseCollecting, "")
 			return SessionDetail{}, err
 		}
@@ -138,7 +138,7 @@ func requirementEditText(operations []schemas.RequirementOperation) string {
 	return "通过需求面板修改：" + strings.Join(lines, "；")
 }
 
-func (s *Service) completeRequirementState(ctx context.Context, ownerID string, r store.AgentRun, state schemas.RequirementState) error {
+func (s *Service) completeRequirementState(ctx context.Context, ownerID string, r store.AgentRun, state schemas.RequirementState, retries int) error {
 	pending, missing, err := planningProjection(state)
 	if err != nil {
 		return err
@@ -177,7 +177,7 @@ func (s *Service) completeRequirementState(ctx context.Context, ownerID string, 
 		RunID: r.ID, SessionID: r.SessionID, AssistantMessageID: uuid.NewString(),
 		AssistantContent: assistant, Status: store.RunSucceeded, Phase: phase,
 		PendingRequirement: pending, SetPending: true, RequirementState: raw, SetRequirementState: true,
-		ScreeningModel: s.screeningModelFor(r.Kind),
+		ScreeningModel: s.screeningModelFor(r.Kind), RetryCount: retries,
 	})
 	if err != nil {
 		return err

@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"iter"
 	"strings"
 	"testing"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"google.golang.org/adk/v2/model"
+	"google.golang.org/genai"
 )
 
 func semanticTurn(t *testing.T, state schemas.RequirementState, input, output string) schemas.RequirementState {
@@ -109,9 +112,11 @@ func TestScreeningAlternativeRemovalAndNoHistoricalResurrection(t *testing.T) {
 	}
 }
 
-func TestScreeningMalformedOutputStillFailsWithoutRetry(t *testing.T) {
+// F4:严格解码失败给至多一次同模型格式纠偏重请求;第二次仍失败才失败。
+func TestScreeningMalformedOutputFailsAfterOneFormatRetry(t *testing.T) {
 	m := &stateProtocolModel{output: `{"operations":[{"op":"set","field":"budget_cny","value":8000`}
-	ctx := WithRequirementState(context.Background(), schemas.NewRequirementState(), schemas.RequirementSource{Kind: "chat", Quote: "预算8000"})
+	retries := 0
+	ctx := WithScreeningRetryCounter(WithRequirementState(context.Background(), schemas.NewRequirementState(), schemas.RequirementSource{Kind: "chat", Quote: "预算8000"}), &retries)
 	var got error
 	for response, err := range (screeningGuard{LLM: m}).GenerateContent(ctx, &model.LLMRequest{}, false) {
 		got = err
@@ -119,8 +124,50 @@ func TestScreeningMalformedOutputStillFailsWithoutRetry(t *testing.T) {
 			t.Fatal("malformed output escaped")
 		}
 	}
-	if !errors.Is(got, ErrRequirementUpdate) || m.calls != 1 {
-		t.Fatalf("unexpected failure/calls: %v %d", got, m.calls)
+	if !errors.Is(got, ErrRequirementUpdate) || m.calls != 2 || retries != 1 {
+		t.Fatalf("unexpected failure/calls: %v %d %d", got, m.calls, retries)
+	}
+}
+
+func TestScreeningFormatRetryAcceptsCorrectedOutput(t *testing.T) {
+	retries := 0
+	source := schemas.RequirementSource{Kind: "chat", MessageID: "current-message", Quote: "预算8000"}
+	m := &scriptedRequirementModel{outputs: []string{
+		`{"operations":[{"op":"set","field":"budget_cny","value":8000`,
+		`{"operations":[{"op":"set","field":"budget_cny","value":8000,"evidence":"stated","quote":"预算8000"}],"next_action":"confirm","reply":"已记录预算。"}`,
+	}}
+	var delivered string
+	for response, err := range (screeningGuard{LLM: m}).GenerateContent(WithScreeningRetryCounter(WithRequirementState(context.Background(), schemas.NewRequirementState(), source), &retries), &model.LLMRequest{}, false) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		delivered = screeningText(response.Content)
+	}
+	if m.calls != 2 || retries != 1 {
+		t.Fatalf("retry not exercised: %d %d", m.calls, retries)
+	}
+	update, err := schemas.DecodeRequirementUpdate([]byte(delivered))
+	if err != nil || len(update.Operations) != 1 || string(update.Operations[0].Value) != "8000" {
+		t.Fatalf("corrected output lost: %s %v", delivered, err)
+	}
+}
+
+type scriptedRequirementModel struct {
+	outputs []string
+	calls   int
+}
+
+func (*scriptedRequirementModel) Name() string { return "offline-scripted-requirement" }
+func (m *scriptedRequirementModel) GenerateContent(_ context.Context, _ *model.LLMRequest, _ bool) iter.Seq2[*model.LLMResponse, error] {
+	return func(yield func(*model.LLMResponse, error) bool) {
+		// 计数先于 yield:重试请求在本轮响应的迭代挂起点内发生。
+		call := m.calls
+		m.calls++
+		if call < len(m.outputs) {
+			yield(&model.LLMResponse{Content: genai.NewContentFromText(m.outputs[call], genai.RoleModel)}, nil)
+		} else {
+			yield(nil, fmt.Errorf("unexpected model call"))
+		}
 	}
 }
 

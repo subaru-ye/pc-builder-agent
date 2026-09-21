@@ -37,6 +37,7 @@ type ScreenResult struct {
 	Payload           json.RawMessage
 	Err               error
 	RequirementUpdate *schemas.RequirementUpdate
+	RetryCount        int // guard 发起的同模型重请求次数(F3 retry_count)
 }
 
 type RemoteResult struct {
@@ -105,6 +106,8 @@ func (g *ADKAgentGateway) Screen(ctx context.Context, userID, sessionID string, 
 	}
 	ctx = pipeline.WithScreeningSources(ctx, sources)
 	ctx = pipeline.WithScreeningBuildState(ctx, input.HasBuild)
+	retries := 0
+	ctx = pipeline.WithScreeningRetryCounter(ctx, &retries)
 	if input.RequirementState != nil {
 		source := input.RequirementSource
 		if source.Kind == "" {
@@ -124,9 +127,11 @@ func (g *ADKAgentGateway) Screen(ctx context.Context, userID, sessionID string, 
 		if err != nil {
 			return ScreenResult{}, err
 		}
-		return ScreenResult{Kind: ScreenRequirement, Text: lastText, RequirementUpdate: &update}, nil
+		return ScreenResult{Kind: ScreenRequirement, Text: lastText, RequirementUpdate: &update, RetryCount: retries}, nil
 	}
-	return ParseScreeningResult(lastText, input.Text)
+	result, err := ParseScreeningResult(lastText, input.Text)
+	result.RetryCount = retries
+	return result, err
 }
 
 // ParseScreeningResult 共用产品初筛的字段规范化和严格解码，不调用模型。

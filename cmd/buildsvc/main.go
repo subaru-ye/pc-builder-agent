@@ -140,9 +140,12 @@ func main() {
 	mux.Handle(a2asrv.WellKnownAgentCardPath, a2asrv.NewStaticAgentCardHandler(agentCard))
 	mux.Handle(invokePath, a2asrv.NewJSONRPCHandler(a2asrv.NewHandler(executor)))
 
-	log.Printf("[buildsvc] A2A 服务启动:监听 %s,card=%s,invoke=%s,harness=%s,builder=%s/%s,embedding=%s/%s",
+	log.Printf("[buildsvc] A2A 服务启动:监听 %s,card=%s,invoke=%s,harness=%s,builder=%s/%s,embedding=%s/%s,run_token_budget=%d",
 		addr, cardURL.JoinPath(a2asrv.WellKnownAgentCardPath).String(), cardURL.JoinPath(invokePath).String(),
-		harnessMode, builderCfg.Provider, builderCfg.Model, embeddingCfg.Provider, embeddingCfg.Model)
+		harnessMode, builderCfg.Provider, builderCfg.Model, embeddingCfg.Provider, embeddingCfg.Model, pipelineConfig.TokenBudget)
+	if harnessMode != buildharness.ModePlanning {
+		log.Printf("[buildsvc] 注意:harness=%s 仅供 dev UI 与评估;产品 HTTP 入口仅支持 planning", harnessMode)
+	}
 	if err := http.ListenAndServe(addr, logMiddleware(mux)); err != nil {
 		log.Fatalf("[buildsvc] A2A 服务退出: %v", err)
 	}

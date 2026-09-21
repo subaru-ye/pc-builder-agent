@@ -18,19 +18,24 @@
 
 ## 架构
 
+产品真实运行形态(`BUILD_HARNESS_MODE=planning`,产品 HTTP 入口唯一可用路径):
+**2 个 LLM Agent + 若干确定性节点**,控制流由产品状态机写死——没有 Manager、没有 spawn、没有 handoff 图。
+
 ```
-用户对话
-   ↓
-┌──────────────┐  A2A: RequirementSpec / ChangeRequest  ┌────────────────────────────────┐
-│  初筛 Agent   │ ─────────────────────────────────────→ │  生成 Agent  →  校验核算 Agent    │
-│  (LLM)       │ ←───────────────────────────────────── │ (LLM+pgvector)  (纯规则引擎,零LLM) │
-└──────────────┘   BuildDraft + ValidationReport         └────────────────────────────────┘
-                                                              ↓
-                                          PostgreSQL(零件库 / 配置单版本树 / 报价快照)
-                                          + pgvector(语义选件)+ Redis(会话热上下文)
+Web/Next.js ──POST /sessions/:id/messages── 产品状态机(cmd/api,每会话仅 1 个 running run)
+   │
+   ├─ 初筛 Agent(LLM,无工具,不含历史):输出 operations/next_action/reply 严格解码
+   │      ↓ 逐 op 核验 + RequirementState reducer(纯代码)
+   ├─ next_action=plan 且可规划 → A2A 单次阻塞调用 buildsvc
+   │      └─ planning.Runner(有界工具循环,planning_action 单一元工具,≤8 轮)
+   │            ├─ search_local / read_page / read_evidence / register_candidate / evaluate
+   │            └─ rules 引擎 12 条 + int64 分报价(零 LLM),真实核验结果回喂
+   │      ↓ Result:outcome + delivery + draft + 候选/证据(重载荷按 run 归档 PG,跨进程只回控制面)
+   └─ finalize 只能降级 + deliveryGate → 仅 outcome==ready 且产品侧零 LLM 复验一致
+          → CompletePlanningRun 事务:版本 + proposal + 消息(交付真值 = 数据库新增版本行)
 ```
 
-默认 planning 模式由模型在有限额度内检索、补充资料和调整方案；规则引擎决定兼容性和报价结果。未解决时保存候选与具体问题，允许继续对话。
+v2 Harness 与 legacy 流水线仅服务于 dev UI(cmd/host)与评估命令,是显式历史诊断路径,不是失败回退。
 
 ## 技术栈
 

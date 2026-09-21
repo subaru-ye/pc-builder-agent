@@ -137,8 +137,16 @@ UI 编辑不改变 RequirementSpec schema。existing_parts 仍按现有品类枚
 | status | text | running/succeeded/failed/interrupted |
 | error | jsonb nullable | problem 投影 |
 | started_at/finished_at | timestamptz | 耗时与中断判断 |
+| cancel_requested_at/expires_at | timestamptz nullable | F1 运行生命周期:取消标志与超时回收 |
+| screening_model/builder_model | text nullable | F3 模型身份(执行环境/控制面回传,不含密钥) |
+| model_calls/tool_calls/search_calls/page_calls/tokens/duration_ms/retry_count | int nullable | F3 计量,0 值写 NULL(未知 ≠ 零) |
+| catalog_snapshot_id | bigint nullable | F3 run 使用的目录价格快照 |
 
 用部分唯一索引保证同一 session_id 最多一行 status=running。HTTP handler 不依赖进程内 mutex 才能保证并发正确性。
+
+run 生命周期(F1):`POST /sessions/{id}/runs/{run_id}/cancel` → 202;取消置位 `cancel_requested_at` 并触发本地取消,
+产品侧记 interrupted(取消 ≠ 失败);`ReclaimStaleRuns` 在启动与每次 StartMessageRun 前回收过期 running 行。
+buildsvc 侧 planning 循环每轮开头轮询取消标志(a2a-go 服务端执行与请求 ctx 分离,断连不会取消生成,见 F6)。
 
 ### 4.4 build_shares
 
@@ -166,6 +174,11 @@ UI 编辑不改变 RequirementSpec schema。existing_parts 仍按现有品类枚
 4. 返回 202 与 Run DTO。
 
 后台执行不绑定浏览器 request context,因此页面刷新或 SSE 断开不取消 Agent。单 API 进程退出会中断 goroutine;启动时把遗留 running 标为 interrupted,不静默自动重跑。
+
+F2 数据面边界:planning 完整产物(含证据全文)按 run 归档在 `planning_artifacts(run_id, session_id, payload)`,
+A2A 只回控制面(outcome/delivery/issues/reply/draft/quote/validation/计量);产品按 run_id 读回重载荷,
+`session_proposals.result` 与传输副本中的证据正文/字段引文降为 240 rune 预览。终态事件
+(run.completed/run.failed/build.saved/requirement.ready)镜像进 `run_events`,不受 Redis 24h TTL 限制。
 
 ### 6.2 事件存储
 

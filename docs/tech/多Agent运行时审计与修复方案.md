@@ -249,17 +249,23 @@ graph TD
 
 ## 6. 仍需实测或复核的点（不要当作已确认事实）
 
-1. **a2asrv 是否传播请求 ctx**（决定 F6 形态）。最小验证：buildsvc 侧打一行 `ctx.Done()` 观察，
-   或用 fake builder model 让客户端提前 cancel/timeout，看服务端调用是否停止。
-2. **取消与 technical_fault 的交互**：`internal/agents/pipeline/planning.go:32-37` 在 `Runner.Run` 返回 err 时
-   会覆盖 Reply/Issues 为中断文案；F1 需决定取消是否保留可保存的 partial proposal。
-3. **`planning.Result` 的精确 JSON 字段名**：`ModelOutcome/Outcome/Delivery` 位于 `internal/planning/types.go`
-   （约 :31-35、:64-68），改传输结构前完整读一遍该文件，别照抄本文行号。
-4. **`session_proposals.result` 的真实体积分布**：F2 落地前后各测一次（同 run 数、同用例集）。
-5. **Redis 会话体积**：`internal/redisstore/service.go` 整段会话 JSON 序列化，F2 后正文不再回灌，应重新测量；
-   若仍偏大，考虑会话事件裁剪（属新范围，先记录不实施）。
+> 2026-09-21 执行回填:F6/F1 相关两项已实测并落地,其余项随 Phase 3 收尾。
+
+1. **a2asrv 是否传播请求 ctx**（决定 F6 形态）。—— **已实测(源码级,v2.3.1)**:不传播。
+   `a2asrv/handler.go` 把请求 ctx 交给 `internal/taskexec`,而 `local_manager.go:182` 用
+   `context.WithoutCancel(ctx)` 把执行放入独立 goroutine——客户端断连/超时**不会**取消生成,
+   任务级取消只能走 A2A `tasks/cancel`。因此 F6 采用方案二:`planning.Runner.ShouldCancel`
+   由 buildsvc 注入,每轮开头轮询 `agent_runs.cancel_requested_at`。
+2. **取消与 technical_fault 的交互**：—— **已落地(F1)**:取消/中断统一 outcome=interrupted、
+   delivery=not_applicable,保留已完成候选与草稿文案,不记 technical_fault;产品侧取消记
+   interrupted(不落 failed),partial proposal 不单独保存(下一轮可经 read_evidence/归档续用)。
+3. **`planning.Result` 的精确 JSON 字段名**：执行时已完整读取 `internal/planning/types.go`
+   (F2/F3 按 `Delivery/Outcome/ModelOutcome/Quote/Builder/CatalogSnapshotID` 实际字段实现)。
+4. **`session_proposals.result` 的真实体积分布**：F2 后跨进程只回控制面,入库副本证据正文/引文
+   降为 240 rune 预览(集成测试断言 ≤270 rune);完整产物仅存 `planning_artifacts`。
+5. **Redis 会话体积**：F2 后正文不再回灌,待下一轮评估复测;若仍偏大再考虑会话事件裁剪。
 6. `internal/buildharness` 与 `internal/agents/pipeline/validator.go` 的次要分支细节来自本次审计的子调查，
-   未在 F8 中要求修改；若 F5/F6 涉及该路径需再逐行确认。
+   未在 F8 中要求修改；若 F5/F6 涉及该路径需再逐行确认。—— F5/F6 未触及该路径。
 
 ---
 

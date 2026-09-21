@@ -45,7 +45,7 @@ func (s *Service) planFromScreening(ctx context.Context, ownerID string, r store
 	return nil
 }
 
-func (s *Service) planningContext(ctx context.Context, sessionID string, payload json.RawMessage) (json.RawMessage, error) {
+func (s *Service) planningContext(ctx context.Context, sessionID, runID string, payload json.RawMessage) (json.RawMessage, error) {
 	var input schemas.PlanningInput
 	if json.Unmarshal(payload, &input) != nil {
 		return nil, fmt.Errorf("invalid planning input")
@@ -53,6 +53,7 @@ func (s *Service) planningContext(ctx context.Context, sessionID string, payload
 	if input.SchemaVersion != 2 {
 		input = schemas.PlanningInput{SchemaVersion: 2, State: schemas.LegacyPlanningState(payload)}
 	}
+	input.RunID = runID
 	st, ok := s.store.(proposalStore)
 	if !ok {
 		return payload, nil
@@ -63,10 +64,12 @@ func (s *Service) planningContext(ctx context.Context, sessionID string, payload
 	}
 	var saved struct {
 		Result json.RawMessage `json:"result"`
+		RunID  string          `json:"run_id"`
 	}
 	if len(previous) > 0 {
 		_ = json.Unmarshal(previous, &saved)
 		input.PreviousProposal = saved.Result
+		input.PreviousRunID = saved.RunID
 	}
 	version, found, e := s.store.LatestBuildVersion(ctx, sessionID)
 	if e != nil {

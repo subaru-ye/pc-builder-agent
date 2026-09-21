@@ -27,7 +27,7 @@ func (p supplementPageTransport) RoundTrip(r *http.Request) (*http.Response, err
 	return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"text/html; charset=utf-8"}}, Body: io.NopCloser(strings.NewReader(p.body)), Request: r}, nil
 }
 
-func (g *planningReplayGateway) supplementReplay(ctx context.Context, input schemas.PlanningInput) (product.RemoteResult, error) {
+func (g *planningReplayGateway) supplementReplay(ctx context.Context, sessionID string, input schemas.PlanningInput) (product.RemoteResult, error) {
 	if _, err := schemas.DecodeBuildDraft(input.BaseDraft); err != nil {
 		return product.RemoteResult{}, err
 	}
@@ -65,7 +65,7 @@ func (g *planningReplayGateway) supplementReplay(ctx context.Context, input sche
 			return product.RemoteResult{}, fmt.Errorf("global catalog changed during session supplement")
 		}
 	}
-	return product.RemoteResult{Text: result.Reply, Planning: &result}, nil
+	return g.archiveAndDegrade(ctx, sessionID, input, result)
 }
 
 type supplementReplayModel struct {

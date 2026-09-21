@@ -25,7 +25,28 @@ import (
 
 // Only model decisions are recorded/oracle output; API, state, tools, pricing,
 // compatibility and all persistence use production implementations.
-type planningReplayGateway struct{ *requirementReplayGateway }
+type planningReplayGateway struct {
+	*requirementReplayGateway
+	mu             sync.Mutex
+	runIDs         []string
+	previousRunIDs []string
+}
+
+// lastPlanningGateway 由 requirementIntegrationAPI 在 planning 模式下登记,供集成测试观察网关入参。
+var lastPlanningGateway *planningReplayGateway
+
+// archiveAndDegrade 复现 buildsvc 的 F2 第一步行为：完整产物按 run 归档，回传降级副本。
+func (g *planningReplayGateway) archiveAndDegrade(ctx context.Context, sessionID string, input schemas.PlanningInput, result planning.Result) (product.RemoteResult, error) {
+	g.mu.Lock()
+	g.runIDs = append(g.runIDs, input.RunID)
+	g.previousRunIDs = append(g.previousRunIDs, input.PreviousRunID)
+	g.mu.Unlock()
+	degraded, err := planning.ArchiveAndDegrade(ctx, g.store, input.RunID, sessionID, result)
+	if err != nil {
+		return product.RemoteResult{}, err
+	}
+	return product.RemoteResult{Text: degraded.Reply, Planning: &degraded}, nil
+}
 
 // The browser harness uses the user's saved complete proposal for selected parts
 // and real catalog excerpts. Only model decisions are supplied by the oracle.
@@ -150,7 +171,7 @@ func (g *planningReplayGateway) Remote(ctx context.Context, _, sessionID string,
 	}
 	m := &planningReplayModel{draft: g.fixture.Draft, input: input}
 	if input.Request != nil && (input.Request.Quote == "换成缺规格主板候选继续核实" || input.Request.Quote == "读取资料补齐主板规格并继续校验" || input.Request.Quote == "按当前方案继续校验") {
-		return g.supplementReplay(ctx, input)
+		return g.supplementReplay(ctx, sessionID, input)
 	}
 	if input.Request != nil && input.State.Fields["priority"].Status == "active" {
 		if len(input.BaseDraft) == 0 || len(input.PreviousProposal) == 0 || input.Request.MessageID == "" {
@@ -171,7 +192,10 @@ func (g *planningReplayGateway) Remote(ctx context.Context, _, sessionID string,
 		m.draft, _ = json.Marshal(base)
 	}
 	result, e := (planning.Runner{Model: m, Catalog: g.store}).Run(ctx, input)
-	return product.RemoteResult{Text: result.Reply, Planning: &result}, e
+	if e != nil {
+		return product.RemoteResult{}, e
+	}
+	return g.archiveAndDegrade(ctx, sessionID, input, result)
 }
 
 type planningReplayModel struct {
@@ -300,6 +324,107 @@ func TestPlanningProposalPersistentWorkflow(t *testing.T) {
 	third := confirm()
 	if third.Session.VersionCount != 2 {
 		t.Fatalf("did not resume after removal: %s", third.Proposal)
+	}
+}
+
+func TestPlanningResultArchivedAndTransportDegraded(t *testing.T) {
+	_, service, st := requirementIntegrationAPI(t, true)
+	ctx := context.Background()
+	owner := strings.Repeat("p", 43)
+	ws, e := service.CreateSession(ctx, owner, uuid.NewString())
+	if e != nil {
+		t.Fatal(e)
+	}
+	edit := func(ops ...schemas.RequirementOperation) {
+		d, e := service.GetSession(ctx, owner, ws.ID)
+		if e != nil {
+			t.Fatal(e)
+		}
+		var state schemas.RequirementState
+		_ = json.Unmarshal(d.Session.RequirementState, &state)
+		if _, e = service.EditRequirement(ctx, owner, ws.ID, uuid.NewString(), product.RequirementEdit{ExpectedRevision: state.Revision, Operations: ops}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	confirm := func() product.SessionDetail {
+		r, e := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString())
+		if e != nil {
+			t.Fatal(e)
+		}
+		for i := 0; i < 200; i++ {
+			run, e := service.GetRun(ctx, owner, r.Run.ID)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if run.Status != store.RunRunning {
+				if run.Status != store.RunSucceeded {
+					t.Fatalf("run failed: %s", run.Error)
+				}
+				d, e := service.GetSession(ctx, owner, ws.ID)
+				if e != nil {
+					t.Fatal(e)
+				}
+				return d
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Fatal("run timeout")
+		return product.SessionDetail{}
+	}
+	gateway := lastPlanningGateway
+	if gateway == nil {
+		t.Fatal("planning gateway not registered")
+	}
+	edit(schemas.RequirementOperation{Op: "set", Field: "budget_cny", Value: json.RawMessage(`12000`), Strength: "must"})
+	first := confirm()
+	if first.Session.VersionCount != 1 {
+		t.Fatalf("first build not saved: %s", first.Proposal)
+	}
+	// F2:产品侧注入 run_id,生成侧按 run 归档完整产物。
+	if len(gateway.runIDs) != 1 || gateway.runIDs[0] == "" {
+		t.Fatalf("run_id not injected into planning input: %v", gateway.runIDs)
+	}
+	archived, e := st.PlanningArtifact(ctx, gateway.runIDs[0])
+	if e != nil || len(archived) == 0 {
+		t.Fatalf("planning artifact missing: len=%d err=%v", len(archived), e)
+	}
+	var full planning.Result
+	if e = json.Unmarshal(archived, &full); e != nil {
+		t.Fatal(e)
+	}
+	// 传输副本必须是归档产物的降级形式,且体积有界。
+	edit(schemas.RequirementOperation{Op: "set", Field: "noise_pref", Value: json.RawMessage(`"silent"`), Kind: "constraint", Strength: "must"})
+	confirm()
+	detail, _ := service.GetSession(ctx, owner, ws.ID)
+	var proposal struct {
+		Result planning.Result `json:"result"`
+	}
+	if e = json.Unmarshal(detail.Proposal, &proposal); e != nil {
+		t.Fatal(e)
+	}
+	expected := planning.TransportDegrade(full)
+	if len(proposal.Result.Evidence) != len(expected.Evidence) {
+		t.Fatalf("evidence count mismatch: %d vs %d", len(proposal.Result.Evidence), len(expected.Evidence))
+	}
+	for i, ev := range proposal.Result.Evidence {
+		if ev.Text != expected.Evidence[i].Text || len([]rune(ev.Text)) > 270 {
+			t.Fatalf("transmitted evidence %d not the degraded archive copy: %d runes", i, len([]rune(ev.Text)))
+		}
+	}
+	// session_proposals.result 体积有界:证据正文与字段引文都不得超过降级上限。
+	for _, c := range proposal.Result.Candidates {
+		for field, quote := range c.FieldQuotes {
+			if len([]rune(quote)) > 270 {
+				t.Fatalf("field quote %s/%s not bounded: %d runes", c.ID, field, len([]rune(quote)))
+			}
+		}
+	}
+	// 下一轮按上一轮 proposal 的 run_id 从归档补全证据正文。
+	if len(gateway.previousRunIDs) != 2 || gateway.previousRunIDs[1] != gateway.runIDs[0] {
+		t.Fatalf("previous_run_id not threaded: %v", gateway.previousRunIDs)
+	}
+	if _, e = st.PlanningArtifact(ctx, gateway.runIDs[1]); e != nil {
+		t.Fatal(e)
 	}
 }
 

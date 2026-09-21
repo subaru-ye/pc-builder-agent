@@ -566,7 +566,7 @@ func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID s
 		s.failInternal(ctx, r, recoveryFor(r.Kind), "")
 		return
 	}
-	payload, err = s.planningContext(ctx, r.SessionID, payload)
+	payload, err = s.planningContext(ctx, r.SessionID, r.ID, payload)
 	if err != nil {
 		s.failInternal(ctx, r, recoveryFor(r.Kind), "")
 		return
@@ -589,13 +589,23 @@ func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID s
 		s.failInternal(ctx, r, recoveryFor(r.Kind), result.Text)
 		return
 	}
-	if !found || after != before+1 {
+	if found && after == before+1 {
+		// legacy 诊断路径（dev UI/评估）：版本由生成侧落库，按计数验收。
+		s.captureEvidence(ctx, r.ID, "build_output", map[string]any{"text": result.Text, "build_version": after})
+		s.succeed(ctx, r, store.PhaseReady, nil, false, result.Text, after)
+		return
+	}
+	if result.Decision != nil {
 		s.captureEvidence(ctx, r.ID, "build_output", map[string]any{"text": result.Text, "decision": result.Decision, "build_version": nil})
 		s.fail(ctx, r, buildFailureProblem(result.Decision, r.ID), recoveryFor(r.Kind), result.Text)
 		return
 	}
-	s.captureEvidence(ctx, r.ID, "build_output", map[string]any{"text": result.Text, "build_version": after})
-	s.succeed(ctx, r, store.PhaseReady, nil, false, result.Text, after)
+	// F2:planning 结果未按协议返回（解码失败或超出传输限制）。显式失败并记录诊断，
+	// 不再以"版本行是否新增"作为 planning 结果的验收依据。
+	log.Printf("[api] run %s planning 结果缺失:请求载荷 %d 字节,回传文本 %d 字节", r.ID, len(payload), len(result.Text))
+	s.fail(ctx, r, NewProblem("generation_failed", "生成结果传输异常", 422,
+		fmt.Sprintf("生成结果未能按协议保存（运行 %s，载荷 %d 字节）。当前需求保持不变，可重试。", r.ID, len(payload)),
+		r.ID), recoveryFor(r.Kind), result.Text)
 }
 
 func recoveryFor(kind store.RunKind) store.SessionPhase {

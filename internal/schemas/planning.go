@@ -13,6 +13,11 @@ type PlanningInput struct {
 	BaseDraft        json.RawMessage    `json:"base_draft,omitempty"`
 	PreviousProposal json.RawMessage    `json:"previous_proposal,omitempty"`
 	Request          *RequirementSource `json:"request,omitempty"` // 本轮执行原话，不是新增的用户偏好。
+	// RunID 是本轮产品侧 run，生成服务据此把完整产物归档到 planning_artifacts。
+	RunID string `json:"run_id,omitempty"`
+	// PreviousRunID 是上一轮 proposal 的 run；上一轮传输副本正文已降级，
+	// 生成服务据此从归档补全证据正文。
+	PreviousRunID string `json:"previous_run_id,omitempty"`
 }
 
 // ScreeningConversation supplies execution facts and the last assistant turn for

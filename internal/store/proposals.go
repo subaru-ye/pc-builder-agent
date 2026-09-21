@@ -14,7 +14,7 @@ func (s *Store) SaveProposal(ctx context.Context, sessionID, runID string, requi
 }
 func (s *Store) LatestProposal(ctx context.Context, sessionID string) (json.RawMessage, error) {
 	var raw json.RawMessage
-	e := s.pool.QueryRow(ctx, `SELECT jsonb_build_object('id',id,'requirement',requirement,'parent_version',parent_version,'created_at',created_at,'result',result) FROM session_proposals WHERE session_id=$1 ORDER BY id DESC LIMIT 1`, sessionID).Scan(&raw)
+	e := s.pool.QueryRow(ctx, `SELECT jsonb_build_object('id',id,'run_id',run_id,'requirement',requirement,'parent_version',parent_version,'created_at',created_at,'result',result) FROM session_proposals WHERE session_id=$1 ORDER BY id DESC LIMIT 1`, sessionID).Scan(&raw)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return nil, nil
 	}

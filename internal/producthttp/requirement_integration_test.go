@@ -272,7 +272,9 @@ func requirementIntegrationAPI(t *testing.T, planningMode ...bool) (*API, *produ
 	events := runevents.NewMemory()
 	var gateway product.AgentGateway = &requirementReplayGateway{store: st, fixture: fixture}
 	if len(planningMode) > 0 && planningMode[0] {
-		gateway = &planningReplayGateway{gateway.(*requirementReplayGateway)}
+		planning := &planningReplayGateway{requirementReplayGateway: gateway.(*requirementReplayGateway)}
+		gateway = planning
+		lastPlanningGateway = planning
 	}
 	service, err := product.NewService(ctx, st, gateway, events)
 	if err != nil {

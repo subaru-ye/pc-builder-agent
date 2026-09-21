@@ -97,6 +97,17 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 	// Restore session evidence; reapply local supplements against current facts.
 	var previous Result
 	if len(input.PreviousProposal) > 0 && json.Unmarshal(input.PreviousProposal, &previous) == nil {
+		// 上一轮传输副本的正文/引文已降级；从归档补全，保持 read_evidence 跨轮可展开。
+		if input.PreviousRunID != "" {
+			if ar, ok := r.Catalog.(ArtifactReader); ok {
+				if payload, e := ar.PlanningArtifact(ctx, input.PreviousRunID); e == nil && len(payload) > 0 {
+					var full Result
+					if json.Unmarshal(payload, &full) == nil {
+						previous = full
+					}
+				}
+			}
+		}
 		x.evidence = previous.Evidence
 		x.result.Draft = previous.Draft
 		for _, c := range previous.Candidates {

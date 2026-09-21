@@ -65,7 +65,7 @@ func (g *planningReplayGateway) supplementReplay(ctx context.Context, sessionID 
 			return product.RemoteResult{}, fmt.Errorf("global catalog changed during session supplement")
 		}
 	}
-	return g.archiveAndDegrade(ctx, sessionID, input, result)
+	return g.archiveAndStrip(ctx, sessionID, input, result)
 }
 
 type supplementReplayModel struct {

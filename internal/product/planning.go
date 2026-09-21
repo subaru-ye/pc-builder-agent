@@ -95,6 +95,33 @@ func builderIdentity(b *planning.BuilderIdentity) string {
 	return b.Provider + "/" + b.Model
 }
 
+// mergeArchivedResult 用归档补全控制面副本的候选/证据/评估/假设。
+// 入库副本经 TransportDegrade,证据正文与字段引文保持有界;
+// 旧协议全量回传的结果已有这些字段,跳过合并。
+func (s *Service) mergeArchivedResult(ctx context.Context, runID string, result *planning.Result) {
+	if len(result.Candidates) > 0 || runID == "" {
+		return
+	}
+	reader, ok := s.store.(planning.ArtifactReader)
+	if !ok {
+		return
+	}
+	payload, err := reader.PlanningArtifact(ctx, runID)
+	if err != nil || len(payload) == 0 {
+		log.Printf("[api] run %s 归档产物不可用:%v", runID, err)
+		return
+	}
+	var full planning.Result
+	if json.Unmarshal(payload, &full) != nil {
+		return
+	}
+	degraded := planning.TransportDegrade(full)
+	result.Candidates = degraded.Candidates
+	result.Evidence = degraded.Evidence
+	result.Assessments = degraded.Assessments
+	result.Assumptions = degraded.Assumptions
+}
+
 // replayVerificationIssue 用产品自己的 store 重放 validate.Node(零 LLM),
 // 比对快照 id、核验结论、总价与候选集合。返回空串表示复验通过;非空为降级 issue。
 func (s *Service) replayVerificationIssue(ctx context.Context, result planning.Result) string {
@@ -141,6 +168,8 @@ func (s *Service) completePlanning(ctx context.Context, r store.AgentRun, payloa
 	if !ok {
 		return fmt.Errorf("proposal persistence unavailable")
 	}
+	// F2 第二步:A2A 只回控制面;重载荷按 run_id 从归档读回,入库副本经降级保持有界。
+	s.mergeArchivedResult(ctx, r.ID, &result)
 	// F5:交付真值前用产品 store 零 LLM 重放校验节点;与生成侧结论不一致时
 	// 降级为 proposal 并附 issue,不新增版本。
 	if result.Outcome == "ready" {

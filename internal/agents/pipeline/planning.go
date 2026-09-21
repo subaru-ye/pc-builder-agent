@@ -48,12 +48,12 @@ func NewRemotePlanning(cfg Config) (agent.Agent, error) {
 				result.Issues = append(result.Issues, "本轮已取消，进度已保留")
 			}
 			result.Builder = cfg.BuilderIdentity
-			// F2 第一步:完整产物按 run 归档到共享 PG,跨进程只回传降级副本。
-			degraded, archiveErr := planning.ArchiveAndDegrade(context.WithoutCancel(ctx), cfg.Store, input.RunID, ctx.Session().ID(), result)
+			// F2:完整产物按 run 归档到共享 PG;A2A 只回控制面,重载荷由产品按 run_id 读回。
+			archiveErr := planning.Archive(context.WithoutCancel(ctx), cfg.Store, input.RunID, ctx.Session().ID(), result)
 			if archiveErr != nil {
 				log.Printf("[buildsvc] run %s planning_artifacts 归档失败:%v", input.RunID, archiveErr)
 			}
-			part, e := PlanningResultPart(degraded)
+			part, e := PlanningResultPart(result.ControlPlane())
 			if e != nil {
 				yield(nil, e)
 				return

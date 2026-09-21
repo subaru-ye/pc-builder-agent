@@ -36,17 +36,17 @@ type planningReplayGateway struct {
 // lastPlanningGateway 由 requirementIntegrationAPI 在 planning 模式下登记,供集成测试观察网关入参。
 var lastPlanningGateway *planningReplayGateway
 
-// archiveAndDegrade 复现 buildsvc 的 F2 第一步行为：完整产物按 run 归档，回传降级副本。
-func (g *planningReplayGateway) archiveAndDegrade(ctx context.Context, sessionID string, input schemas.PlanningInput, result planning.Result) (product.RemoteResult, error) {
+// archiveAndStrip 复现 buildsvc 的 F2 行为:完整产物按 run 归档,A2A 只回控制面。
+func (g *planningReplayGateway) archiveAndStrip(ctx context.Context, sessionID string, input schemas.PlanningInput, result planning.Result) (product.RemoteResult, error) {
 	g.mu.Lock()
 	g.runIDs = append(g.runIDs, input.RunID)
 	g.previousRunIDs = append(g.previousRunIDs, input.PreviousRunID)
 	g.mu.Unlock()
-	degraded, err := planning.ArchiveAndDegrade(ctx, g.store, input.RunID, sessionID, result)
-	if err != nil {
+	if err := planning.Archive(ctx, g.store, input.RunID, sessionID, result); err != nil {
 		return product.RemoteResult{}, err
 	}
-	return product.RemoteResult{Text: degraded.Reply, Planning: &degraded}, nil
+	transport := result.ControlPlane()
+	return product.RemoteResult{Text: transport.Reply, Planning: &transport}, nil
 }
 
 // The browser harness uses the user's saved complete proposal for selected parts
@@ -199,7 +199,7 @@ func (g *planningReplayGateway) Remote(ctx context.Context, _, sessionID string,
 	if g.hook != nil {
 		g.hook(&result)
 	}
-	return g.archiveAndDegrade(ctx, sessionID, input, result)
+	return g.archiveAndStrip(ctx, sessionID, input, result)
 }
 
 type planningReplayModel struct {

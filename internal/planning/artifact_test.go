@@ -44,12 +44,17 @@ func TestTransportDegradeTruncatesLongTextAndQuotesOnly(t *testing.T) {
 	}
 }
 
-func TestArchiveAndDegradeKeepsFullPayloadAndReturnsPreview(t *testing.T) {
+func TestArchiveKeepsFullPayloadAndControlPlaneStripsHeavyFields(t *testing.T) {
 	full := strings.Repeat("厂商规格原文。", 500)
 	st := &memoryArtifacts{artifacts: map[string]json.RawMessage{}}
-	result := Result{Evidence: []Evidence{{ID: "page-1", Kind: "page", Text: full}}}
-	got, err := ArchiveAndDegrade(context.Background(), st, "run-1", "session-1", result)
-	if err != nil {
+	result := Result{
+		Outcome:     "ready",
+		Evidence:    []Evidence{{ID: "page-1", Kind: "page", Text: full}},
+		Candidates:  []Candidate{{ID: "c1"}},
+		Assessments: []Assessment{{Field: "budget_cny"}},
+		Assumptions: []string{"假设"},
+	}
+	if err := Archive(context.Background(), st, "run-1", "session-1", result); err != nil {
 		t.Fatal(err)
 	}
 	var archived Result
@@ -59,8 +64,12 @@ func TestArchiveAndDegradeKeepsFullPayloadAndReturnsPreview(t *testing.T) {
 	if archived.Evidence[0].Text != full {
 		t.Fatal("archived payload must keep full evidence text")
 	}
-	if len([]rune(got.Evidence[0].Text)) >= len([]rune(full))/10 {
-		t.Fatalf("transport copy not degraded: %d runes", len([]rune(got.Evidence[0].Text)))
+	transport := result.ControlPlane()
+	if len(transport.Candidates) != 0 || len(transport.Evidence) != 0 || len(transport.Assessments) != 0 || len(transport.Assumptions) != 0 {
+		t.Fatal("control plane must strip heavy payloads")
+	}
+	if transport.Outcome != "ready" || transport.CatalogSnapshotID != result.CatalogSnapshotID {
+		t.Fatal("control plane must keep control fields")
 	}
 }
 

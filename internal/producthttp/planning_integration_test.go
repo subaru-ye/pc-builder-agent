@@ -30,6 +30,7 @@ type planningReplayGateway struct {
 	mu             sync.Mutex
 	runIDs         []string
 	previousRunIDs []string
+	hook           func(*planning.Result) // 测试注入:在归档前篡改生成侧结果(如 F5 复验分歧)
 }
 
 // lastPlanningGateway 由 requirementIntegrationAPI 在 planning 模式下登记,供集成测试观察网关入参。
@@ -194,6 +195,9 @@ func (g *planningReplayGateway) Remote(ctx context.Context, _, sessionID string,
 	result, e := (planning.Runner{Model: m, Catalog: g.store}).Run(ctx, input)
 	if e != nil {
 		return product.RemoteResult{}, e
+	}
+	if g.hook != nil {
+		g.hook(&result)
 	}
 	return g.archiveAndDegrade(ctx, sessionID, input, result)
 }
@@ -459,4 +463,84 @@ func TestPlanningBrowserServer(t *testing.T) {
 	if e := server.ListenAndServe(); e != http.ErrServerClosed {
 		t.Fatal(e)
 	}
+}
+
+// F5:生成侧 ready 结论与产品侧零 LLM 复验不一致时,降级为 proposal 且不新增版本。
+func TestPlanningReplayDegradesDivergentVerification(t *testing.T) {
+	_, service, st := requirementIntegrationAPI(t, true)
+	ctx := context.Background()
+	owner := strings.Repeat("p", 43)
+	ws, e := service.CreateSession(ctx, owner, uuid.NewString())
+	if e != nil {
+		t.Fatal(e)
+	}
+	lastPlanningGateway.mu.Lock()
+	lastPlanningGateway.hook = func(result *planning.Result) {
+		if result.Outcome == "ready" && result.Quote != nil {
+			tampered := "999999.99"
+			result.Quote.TotalCNY = tampered
+		}
+	}
+	lastPlanningGateway.mu.Unlock()
+	edit := func(ops ...schemas.RequirementOperation) {
+		d, e := service.GetSession(ctx, owner, ws.ID)
+		if e != nil {
+			t.Fatal(e)
+		}
+		var state schemas.RequirementState
+		_ = json.Unmarshal(d.Session.RequirementState, &state)
+		if _, e = service.EditRequirement(ctx, owner, ws.ID, uuid.NewString(), product.RequirementEdit{ExpectedRevision: state.Revision, Operations: ops}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	edit(schemas.RequirementOperation{Op: "set", Field: "budget_cny", Value: json.RawMessage(`12000`), Strength: "must"})
+	r, e := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString())
+	if e != nil {
+		t.Fatal(e)
+	}
+	for i := 0; i < 200; i++ {
+		run, e := service.GetRun(ctx, owner, r.Run.ID)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if run.Status == store.RunRunning {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		if run.Status != store.RunSucceeded {
+			t.Fatalf("run failed: %s", run.Error)
+		}
+		detail, e := service.GetSession(ctx, owner, ws.ID)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if detail.Session.VersionCount != 0 {
+			t.Fatalf("divergent verification still saved a version: %s", detail.Proposal)
+		}
+		var proposal struct {
+			Result planning.Result `json:"result"`
+		}
+		if e = json.Unmarshal(detail.Proposal, &proposal); e != nil {
+			t.Fatal(e)
+		}
+		if proposal.Result.Outcome != "proposal" || proposal.Result.Delivery == nil || proposal.Result.Delivery.Status != "unresolved" {
+			t.Fatalf("not degraded to unresolved proposal: %+v", proposal.Result.Delivery)
+		}
+		found := false
+		for _, issue := range proposal.Result.Issues {
+			found = found || strings.Contains(issue, "服务端复验")
+		}
+		if !found {
+			t.Fatalf("verification issue missing: %v", proposal.Result.Issues)
+		}
+		obs, e := st.RunObservability(ctx, lastPlanningGateway.runIDs[0])
+		if e != nil {
+			t.Fatal(e)
+		}
+		if obs.BuildsLinked != 0 {
+			t.Fatalf("degraded proposal created a build row: %+v", obs)
+		}
+		return
+	}
+	t.Fatal("run timeout")
 }

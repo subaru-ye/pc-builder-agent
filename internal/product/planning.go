@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"log"
 
+	"github.com/subaru-ye/pc-builder-agent/internal/agents/validate"
 	"github.com/subaru-ye/pc-builder-agent/internal/planning"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
@@ -93,10 +95,61 @@ func builderIdentity(b *planning.BuilderIdentity) string {
 	return b.Provider + "/" + b.Model
 }
 
+// replayVerificationIssue 用产品自己的 store 重放 validate.Node(零 LLM),
+// 比对快照 id、核验结论、总价与候选集合。返回空串表示复验通过;非空为降级 issue。
+func (s *Service) replayVerificationIssue(ctx context.Context, result planning.Result) string {
+	resolver, ok := s.store.(validate.Resolver)
+	if !ok {
+		return ""
+	}
+	if result.Validation == nil || result.Quote == nil {
+		return "服务端复验：生成结果缺少核验报告或报价"
+	}
+	draft, err := schemas.DecodeBuildDraft(result.Draft)
+	if err != nil {
+		return "服务端复验：生成结果配置无法解析"
+	}
+	candidateIDs := make(map[string]bool, len(result.Candidates))
+	for _, c := range result.Candidates {
+		candidateIDs[c.ID] = true
+	}
+	for _, sku := range draft.Selection.SKUs() {
+		if !candidateIDs[sku] {
+			return "服务端复验：配置所选候选不在生成侧候选集合中"
+		}
+	}
+	replay, err := validate.New(resolver).Evaluate(ctx, draft.Selection)
+	if err != nil {
+		// 目录在 run 期间变化(候选消失等)按复验不一致降级,不作为内部故障。
+		log.Printf("[api] run 复验执行失败(按不一致降级):%v", err)
+		return "服务端复验：目录数据与生成侧不一致，无法复现核验"
+	}
+	if replay.Quote.SnapshotID != result.CatalogSnapshotID {
+		return "服务端复验：目录价格快照已更新，与生成侧使用的快照不一致"
+	}
+	if replay.Report.OverallStatus != result.Validation.OverallStatus {
+		return "服务端复验：核验结论与生成侧不一致"
+	}
+	if replay.Quote.TotalCNY != result.Quote.TotalCNY {
+		return "服务端复验：报价合计与生成侧不一致"
+	}
+	return ""
+}
+
 func (s *Service) completePlanning(ctx context.Context, r store.AgentRun, payload json.RawMessage, result planning.Result, before int) error {
 	st, ok := s.store.(proposalStore)
 	if !ok {
 		return fmt.Errorf("proposal persistence unavailable")
+	}
+	// F5:交付真值前用产品 store 零 LLM 重放校验节点;与生成侧结论不一致时
+	// 降级为 proposal 并附 issue,不新增版本。
+	if result.Outcome == "ready" {
+		if issue := s.replayVerificationIssue(ctx, result); issue != "" {
+			result.Outcome = "proposal"
+			result.Issues = append(result.Issues, issue)
+			result.Delivery = &planning.Delivery{Status: "unresolved", Issues: []string{issue}}
+			result.Reply = "服务端复验与生成侧结论不一致，本轮未新增正式版本；已有配置保持不变，可重试或补充资料后继续。"
+		}
 	}
 	raw, e := json.Marshal(result)
 	if e != nil {

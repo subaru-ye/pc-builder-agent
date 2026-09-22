@@ -1,0 +1,1343 @@
+[
+ {
+  "id": "rd-set-budget-7500",
+  "title": "聊天来源设置预算并绑定本轮原文",
+  "split": "development",
+  "session": "rd-dev-1",
+  "rationale": "最基础的 set：值、强度（默认 must）、证据 quote 都来自本轮用户消息。",
+  "initial_state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "unknown"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "unknown"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "unknown"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "user_message": "预算7500",
+  "update": {
+   "source": "chat",
+   "operations": [
+    {
+     "op": "set",
+     "field": "budget_cny",
+     "value": 7500,
+     "quote": "预算7500",
+     "evidence": "stated"
+    }
+   ]
+  },
+  "expected": {
+   "schema_version": 2,
+   "revision_delta": 1,
+   "reply_next_action_absent": true,
+   "fields": {
+    "budget_cny": {
+     "status": "active",
+     "value": 7500,
+     "strength": "must",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "turn-1",
+      "quote": "预算7500"
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "rd-existing-empty-explicit",
+  "title": "全部新买是明确 active 空数组",
+  "split": "development",
+  "session": "rd-dev-2",
+  "rationale": "v2 要求 existing_parts=[] 是用户明确表达；unknown 不能默认为空。当前 reducer 接受空数组，此例应通过。",
+  "initial_state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "unknown"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "unknown"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "unknown"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "user_message": "主机配件全部新买",
+  "update": {
+   "source": "chat",
+   "operations": [
+    {
+     "op": "set",
+     "field": "existing_parts",
+     "value": [],
+     "quote": "全部新买",
+     "evidence": "stated"
+    }
+   ]
+  },
+  "expected": {
+   "schema_version": 2,
+   "revision_delta": 1,
+   "reply_next_action_absent": true,
+   "fields": {
+    "existing_parts": {
+     "status": "active",
+     "value": [],
+     "strength": "must",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "turn-1",
+      "quote": "全部新买"
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "rd-owned-correction",
+  "title": "更正已有件型号覆盖旧值",
+  "split": "development",
+  "session": "rd-dev-3",
+  "rationale": "“其实是 4070 Super”是同字段的更正 set；existing/owned 联动保持品类一致。",
+  "initial_state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "unknown"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "unknown"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "active",
+     "value": [
+      "gpu"
+     ],
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "有张显卡"
+     },
+     "strength": "must"
+    },
+    "owned_parts": {
+     "status": "active",
+     "value": [
+      {
+       "category": "gpu",
+       "model": "4070"
+      }
+     ],
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "是4070"
+     },
+     "strength": "must"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "user_message": "看错了，其实是4070 Super",
+  "update": {
+   "source": "chat",
+   "operations": [
+    {
+     "op": "set",
+     "field": "owned_parts",
+     "value": [
+      {
+       "category": "gpu",
+       "model": "4070 Super"
+      }
+     ],
+     "quote": "4070 Super",
+     "evidence": "stated"
+    }
+   ]
+  },
+  "expected": {
+   "schema_version": 2,
+   "revision_delta": 1,
+   "reply_next_action_absent": true,
+   "fields": {
+    "owned_parts": {
+     "status": "active",
+     "value": [
+      {
+       "category": "gpu",
+       "model": "4070 Super"
+      }
+     ],
+     "strength": "must",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "turn-1",
+      "quote": "4070 Super"
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "rd-alternative-keeps-active",
+  "title": "备选不改变当前值",
+  "split": "development",
+  "session": "rd-dev-4",
+  "rationale": "“如果改成一万呢”只是讨论；当前预算保持 7500，10000 记为备选。",
+  "initial_state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "active",
+     "value": 7500,
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "预算7500"
+     },
+     "strength": "must"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "unknown"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "unknown"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "user_message": "如果改成一万呢？",
+  "update": {
+   "source": "chat",
+   "operations": [
+    {
+     "op": "alternative",
+     "field": "budget_cny",
+     "value": 10000,
+     "quote": "一万",
+     "strength": "must",
+     "evidence": "stated"
+    }
+   ]
+  },
+  "expected": {
+   "schema_version": 2,
+   "revision_delta": 1,
+   "reply_next_action_absent": true,
+   "fields": {
+    "budget_cny": {
+     "status": "active",
+     "value": 7500
+    }
+   },
+   "alternatives": [
+    {
+     "field": "budget_cny",
+     "value": 10000,
+     "strength": "must"
+    }
+   ]
+  }
+ },
+ {
+  "id": "rd-temporary-restore",
+  "title": "临时覆盖后恢复原值",
+  "split": "development",
+  "session": "rd-dev-5",
+  "rationale": "同一批内先 temporary set 再 restore，最终回到 7500 且不再保留墓碑。",
+  "initial_state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "active",
+     "value": 7500,
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "预算7500"
+     },
+     "strength": "must"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "unknown"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "unknown"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "user_message": "这轮先按9000试，还是恢复7500吧",
+  "update": {
+   "source": "chat",
+   "operations": [
+    {
+     "op": "set",
+     "field": "budget_cny",
+     "value": 9000,
+     "quote": "按9000试",
+     "evidence": "stated",
+     "scope": "temporary"
+    },
+    {
+     "op": "restore",
+     "field": "budget_cny",
+     "quote": "恢复7500",
+     "evidence": "stated"
+    }
+   ]
+  },
+  "expected": {
+   "schema_version": 2,
+   "revision_delta": 1,
+   "reply_next_action_absent": true,
+   "fields": {
+    "budget_cny": {
+     "status": "active",
+     "value": 7500,
+     "strength": "must",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "turn-1",
+      "quote": "恢复7500"
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "rd-remove-budget",
+  "title": "明确撤销预算留墓碑",
+  "split": "development",
+  "session": "rd-dev-6",
+  "rationale": "remove 保留 removed 状态与来源；readiness 把必填 removed 按缺失处理。",
+  "initial_state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "active",
+     "value": 7500,
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "预算7500"
+     },
+     "strength": "must"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "unknown"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "unknown"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "user_message": "预算先不限制了",
+  "update": {
+   "source": "chat",
+   "operations": [
+    {
+     "op": "remove",
+     "field": "budget_cny",
+     "quote": "不限制",
+     "evidence": "stated"
+    }
+   ]
+  },
+  "expected": {
+   "schema_version": 2,
+   "revision_delta": 1,
+   "reply_next_action_absent": true,
+   "fields": {
+    "budget_cny": {
+     "status": "removed",
+     "source": {
+      "kind": "chat",
+      "message_id": "turn-1",
+      "quote": "不限制"
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "rd-reject-inferred",
+  "title": "推断证据不能写成 active",
+  "split": "development",
+  "session": "rd-dev-7",
+  "rationale": "原话不含任何金额，8000 只能从行情推断；evidence=inferred 一律拒绝，这是 V1 的 reducer 侧防线。",
+  "initial_state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "unknown"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "unknown"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "unknown"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "user_message": "预算就按市面上主流入门整机的价位来",
+  "update": {
+   "source": "chat",
+   "operations": [
+    {
+     "op": "set",
+     "field": "budget_cny",
+     "value": 8000,
+     "quote": "主流入门整机的价位",
+     "evidence": "inferred"
+    }
+   ]
+  },
+  "expected": {
+   "reject": "inferred_evidence"
+  }
+ },
+ {
+  "id": "rd-reject-ungrounded-quote",
+  "title": "quote 不出自本轮原文即拒绝",
+  "split": "development",
+  "session": "rd-dev-8",
+  "rationale": "证据绑定是硬约束：编造或搬运旧话不能通过。",
+  "initial_state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "unknown"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "unknown"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "unknown"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "user_message": "预算大概8000吧",
+  "update": {
+   "source": "chat",
+   "operations": [
+    {
+     "op": "set",
+     "field": "budget_cny",
+     "value": 8000,
+     "quote": "上次说过的8000",
+     "evidence": "stated"
+    }
+   ]
+  },
+  "expected": {
+   "reject": "missing_evidence"
+  }
+ },
+ {
+  "id": "rd-atomic-batch",
+  "title": "批量操作任一失败整批拒绝",
+  "split": "development",
+  "session": "rd-dev-9",
+  "rationale": "第二个 op 值非法时第一个也不落地；revision 不变。",
+  "initial_state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "unknown"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "unknown"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "unknown"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "user_message": "打游戏，预算-5",
+  "update": {
+   "source": "chat",
+   "operations": [
+    {
+     "op": "set",
+     "field": "use_case.type",
+     "value": "gaming",
+     "quote": "打游戏",
+     "evidence": "stated"
+    },
+    {
+     "op": "set",
+     "field": "budget_cny",
+     "value": -5,
+     "quote": "-5",
+     "evidence": "stated"
+    }
+   ]
+  },
+  "expected": {
+   "reject": "invalid_value_or_op"
+  }
+ },
+ {
+  "id": "rd-v2-performance-goal",
+  "title": "v2 字段 use_case.performance_goal",
+  "split": "calibration",
+  "session": "rd-cal-1",
+  "rationale": "“帧率越高越好”映射 fps_first/prefer 且不生成具体 FPS；当前 schema 无该字段，预期 red 为契约缺口。",
+  "initial_state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "unknown"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "unknown"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "unknown"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "user_message": "帧率越高越好",
+  "update": {
+   "source": "chat",
+   "operations": [
+    {
+     "op": "set",
+     "field": "use_case.performance_goal",
+     "value": "fps_first",
+     "quote": "越高越好",
+     "strength": "prefer",
+     "evidence": "stated"
+    }
+   ]
+  },
+  "expected": {
+   "schema_version": 2,
+   "revision_delta": 1,
+   "reply_next_action_absent": true,
+   "fields": {
+    "use_case.performance_goal": {
+     "status": "active",
+     "value": "fps_first",
+     "strength": "prefer",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "turn-1",
+      "quote": "越高越好"
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "rd-v2-any-resolution",
+  "title": "明确不限是 active 用户值",
+  "split": "calibration",
+  "session": "rd-cal-2",
+  "rationale": "“分辨率无所谓”是明确 any，不是 unknown；当前枚举拒绝 any，预期 red 为契约缺口。",
+  "initial_state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "unknown"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "active",
+     "value": "gaming",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "打游戏"
+     },
+     "kind": "fact",
+     "strength": "must"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "unknown"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "user_message": "分辨率无所谓",
+  "update": {
+   "source": "chat",
+   "operations": [
+    {
+     "op": "set",
+     "field": "use_case.resolution",
+     "value": "any",
+     "quote": "无所谓",
+     "evidence": "stated"
+    }
+   ]
+  },
+  "expected": {
+   "schema_version": 2,
+   "revision_delta": 1,
+   "reply_next_action_absent": true,
+   "fields": {
+    "use_case.resolution": {
+     "status": "active",
+     "value": "any",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "turn-1",
+      "quote": "无所谓"
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "rd-holdout-productivity-titles",
+  "title": "生产力用途与软件同轮记录",
+  "split": "holdout",
+  "session": "rd-hold-1",
+  "rationale": "“主要用Premiere剪辑视频”给出 type 与 titles 两个 fact。",
+  "initial_state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "unknown"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "unknown"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "unknown"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "user_message": "主要用Premiere剪辑视频",
+  "update": {
+   "source": "chat",
+   "operations": [
+    {
+     "op": "set",
+     "field": "use_case.type",
+     "value": "productivity",
+     "quote": "Premiere剪辑",
+     "kind": "fact",
+     "evidence": "stated"
+    },
+    {
+     "op": "set",
+     "field": "use_case.titles",
+     "value": [
+      "Premiere 视频剪辑"
+     ],
+     "quote": "Premiere剪辑",
+     "kind": "fact",
+     "evidence": "stated"
+    }
+   ]
+  },
+  "expected": {
+   "schema_version": 2,
+   "revision_delta": 1,
+   "reply_next_action_absent": true,
+   "fields": {
+    "use_case.type": {
+     "status": "active",
+     "value": "productivity",
+     "kind": "fact"
+    },
+    "use_case.titles": {
+     "status": "active",
+     "value": [
+      "Premiere 视频剪辑"
+     ],
+     "kind": "fact"
+    }
+   }
+  }
+ },
+ {
+  "id": "rd-holdout-budget-basis",
+  "title": "已有件时预算口径为用户事实",
+  "split": "holdout",
+  "session": "rd-hold-2",
+  "rationale": "复用旧内存时“按整机算”设置 budget_basis=full_build。",
+  "initial_state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "unknown"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "unknown"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "active",
+     "value": [
+      "memory"
+     ],
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "旧内存还能用"
+     },
+     "strength": "must"
+    },
+    "owned_parts": {
+     "status": "active",
+     "value": [
+      {
+       "category": "memory",
+       "model": "金百达刃 16G"
+      }
+     ],
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "金百达刃"
+     },
+     "strength": "must"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "user_message": "预算按整机总价算",
+  "update": {
+   "source": "chat",
+   "operations": [
+    {
+     "op": "set",
+     "field": "budget_basis",
+     "value": "full_build",
+     "quote": "整机",
+     "evidence": "stated"
+    }
+   ]
+  },
+  "expected": {
+   "schema_version": 2,
+   "revision_delta": 1,
+   "reply_next_action_absent": true,
+   "fields": {
+    "budget_basis": {
+     "status": "active",
+     "value": "full_build",
+     "strength": "must",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "turn-1",
+      "quote": "整机"
+     }
+    }
+   }
+  }
+ }
+]

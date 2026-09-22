@@ -1,0 +1,38 @@
+{
+ "dataset": "requirement-v2",
+ "created_at": "2026-09-22",
+ "grader_version": "reqv2-grader-v1",
+ "labeling": {
+  "method": "AI 辅助起草（Clapears agent, 2026-09-22），依据 requirement-v2 系列五份 change spec 的契约条款逐条标注。",
+  "human_review": {
+   "status": "accepted",
+   "reviewed_at": "2026-09-22",
+   "sheet": "docs/eval/requirement-v2/人工复核-20260922.md",
+   "result": "16/16 条金标全部接受（9 holdout + cv-fps-progressive + ex-monitor-request + accepted-proposal 边界 + ex-budget-correction-same-turn/ex-budget-conflict-family/ex-fps-target-numeric）；holdout 未运行。"
+  },
+  "sources": [
+   "docs/changes/requirement-v2-evaluation-foundation.md（评估契约与 vetoes）",
+   "docs/changes/requirement-state-readiness-v2.md（最低矩阵、系统默认、readiness/reducer 语义）",
+   "docs/changes/screening-requirement-collection-v2.md（操作语义表、turn signals、accepted proposal）",
+   "docs/changes/requirement-confirmation-builder-gate-v2.md（三轴状态、policy、快照）",
+   "docs/changes/requirement-workspace-sidebar-v2.md（ui-contract 展示真值）"
+  ],
+  "revision": "2026-09-22 v5（reqv2-grader-v2）：provider_success/latency_p95/max_model_calls_per_turn/预算一致性改为统计 extraction+conversations 全部真实 provider 轮（verdict layer=model），样本范围与 report.usage 一致；此前 v4：补齐 case_success/final_state/provider_success/latency_p95/max_calls_per_turn/预算一致性门槛，replay 恢复真实 repeats；此前 v3：gate verdict 结构化、pass^k 折叠修正、关键字段零容忍与 min_signal_turns 冻结、同轮更正取后值并新增家庭预算冲突例；此前 v2：按人工验收意见修正——“预算3000左右”改为记录 budget_cny=3000（近似由默认 budget_flex 表达）；rd-reject-inferred 原话不再包含金额，仅剩推断路径；新增 rdy-gaming-any-resolution-not-satisfied（any 是 active 值但不满足 gaming 最低矩阵）；gates 模型质量阈值冻结为具体数值。",
+  "known_boundaries": [
+   "ex-monitor-request 的“不猜用途”、ex-budget-correction-same-turn 的“同轮自我更正取后值 set”与 ex-budget-conflict-family 的“互斥明确约束记 conflict”是新增边界，已随 2026-09-22 人工复核（16/16 接受）确认。",
+   "conversations 用例为确定性用户脚本；LLM 用户模拟器生成的探索性候选未纳入。",
+   "catalog.json 取自 current-178-20260917 冻结目录每品类首件（8 件），仅满足隔离数据库外键，不代表评估选件范围。"
+  ],
+  "review_sheet": "docs/eval/requirement-v2/人工复核-20260922.md（holdout 全量与关键边界，供产品方逐项确认；holdout 未运行）"
+ },
+ "splits": {
+  "rule": "按 case 的 session 字段划分；同一 session 与同一 variants_of 模板不得跨 split。今天人工模拟的 FPS/7500/全部新买对话（cv-fps-progressive）按 spec 归入 development。",
+  "development": "prompt 作者可反复查看与运行。",
+  "calibration": "只用于候选/阈值/prompt 选择。",
+  "holdout": "会话级锁定，最终候选确定后才运行；本基线未运行。"
+ },
+ "current_product_baseline": {
+  "note": "基线 red 是预期证据：当前 v1 语义预期在过早 ready、next_action 权威、purchase declaration、blocking 分离、系统默认、turn signals、presentation action、确认 payload 上失败。",
+  "run": "artifacts/reqv2/（见 docs/eval/requirement-v2/README.md 的基线登记；冻结门槛前的旧产物以 superseded- 前缀归档，不作为冻结基线）"
+ }
+}

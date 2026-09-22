@@ -1,0 +1,1528 @@
+[
+ {
+  "id": "rdy-fresh",
+  "title": "空会话缺三必填",
+  "split": "development",
+  "session": "rdy-dev-1",
+  "rationale": "missing 按追问优先级排序：type → budget → existing_parts。",
+  "state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "unknown"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "unknown"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "unknown"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "expected": {
+   "status": "incomplete",
+   "missing_fields": [
+    "use_case.type",
+    "budget_cny",
+    "existing_parts"
+   ],
+   "blocking_conflicts": [],
+   "confirmation_eligible": false
+  }
+ },
+ {
+  "id": "rdy-gaming-missing-three",
+  "title": "只知用途缺预算/已有件/分辨率",
+  "split": "development",
+  "session": "rdy-dev-2",
+  "rationale": "gaming 条件必填 resolution；existing_parts unknown 也阻塞（v2 与当前实现的差异点）。",
+  "state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "unknown"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "active",
+     "value": "gaming",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "打游戏"
+     },
+     "kind": "fact",
+     "strength": "must"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "unknown"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "expected": {
+   "status": "incomplete",
+   "missing_fields": [
+    "budget_cny",
+    "existing_parts",
+    "use_case.resolution"
+   ],
+   "blocking_conflicts": [],
+   "confirmation_eligible": false
+  }
+ },
+ {
+  "id": "rdy-gaming-ready-defaults",
+  "title": "gaming 齐备展开系统默认",
+  "split": "development",
+  "session": "rdy-dev-3",
+  "rationale": "ready 时 projection 展开 7 项 effective defaults；RequirementState 对应字段仍 unknown。",
+  "state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "active",
+     "value": 7500,
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "预算7500"
+     },
+     "strength": "must"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "active",
+     "value": "gaming",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "打游戏"
+     },
+     "kind": "fact",
+     "strength": "must"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "active",
+     "value": "1080p",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "1080p"
+     },
+     "strength": "must"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "active",
+     "value": [],
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "全新买"
+     },
+     "strength": "must"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "expected": {
+   "status": "ready",
+   "missing_fields": [],
+   "blocking_conflicts": [],
+   "confirmation_eligible": true,
+   "effective_defaults": [
+    {
+     "field": "budget_flex",
+     "value": 0.1,
+     "origin": "system_default"
+    },
+    {
+     "field": "size_pref",
+     "value": "any",
+     "origin": "system_default"
+    },
+    {
+     "field": "noise_pref",
+     "value": "any",
+     "origin": "system_default"
+    },
+    {
+     "field": "brand_pref.cpu",
+     "value": "any",
+     "origin": "system_default"
+    },
+    {
+     "field": "brand_pref.gpu",
+     "value": "any",
+     "origin": "system_default"
+    },
+    {
+     "field": "configuration_scope",
+     "value": [
+      "tower"
+     ],
+     "origin": "system_default"
+    },
+    {
+     "field": "performance_goal",
+     "value": "balanced",
+     "origin": "system_default"
+    }
+   ]
+  }
+ },
+ {
+  "id": "rdy-productivity-no-titles",
+  "title": "生产力缺主要软件或任务",
+  "split": "development",
+  "session": "rdy-dev-4",
+  "rationale": "v2 条件必填 titles；当前实现不要求，是预期 red。",
+  "state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "active",
+     "value": 7500,
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "预算7500"
+     },
+     "strength": "must"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "active",
+     "value": "productivity",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "做剪辑"
+     },
+     "kind": "fact",
+     "strength": "must"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "active",
+     "value": [],
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "全新买"
+     },
+     "strength": "must"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "expected": {
+   "status": "incomplete",
+   "missing_fields": [
+    "use_case.titles"
+   ],
+   "blocking_conflicts": [],
+   "confirmation_eligible": false
+  }
+ },
+ {
+  "id": "rdy-productivity-ready",
+  "title": "生产力齐备",
+  "split": "development",
+  "session": "rdy-dev-5",
+  "rationale": "titles 满足条件必填；默认 6 项（无 gaming performance_goal）。",
+  "state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "active",
+     "value": 8000,
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "预算8000"
+     },
+     "strength": "must"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "active",
+     "value": "productivity",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "剪辑"
+     },
+     "kind": "fact",
+     "strength": "must"
+    },
+    "use_case.titles": {
+     "status": "active",
+     "value": [
+      "Blender 渲染"
+     ],
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "Blender"
+     },
+     "strength": "prefer"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "active",
+     "value": [],
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "全新买"
+     },
+     "strength": "must"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "expected": {
+   "status": "ready",
+   "missing_fields": [],
+   "blocking_conflicts": [],
+   "confirmation_eligible": true,
+   "effective_defaults": [
+    {
+     "field": "budget_flex",
+     "value": 0.1,
+     "origin": "system_default"
+    },
+    {
+     "field": "size_pref",
+     "value": "any",
+     "origin": "system_default"
+    },
+    {
+     "field": "noise_pref",
+     "value": "any",
+     "origin": "system_default"
+    },
+    {
+     "field": "brand_pref.cpu",
+     "value": "any",
+     "origin": "system_default"
+    },
+    {
+     "field": "brand_pref.gpu",
+     "value": "any",
+     "origin": "system_default"
+    },
+    {
+     "field": "configuration_scope",
+     "value": [
+      "tower"
+     ],
+     "origin": "system_default"
+    }
+   ]
+  }
+ },
+ {
+  "id": "rdy-owned-missing-model",
+  "title": "已有显卡缺型号与口径",
+  "split": "development",
+  "session": "rdy-dev-6",
+  "rationale": "条件必填 owned model + budget_basis；当前实现同样要求，应通过。",
+  "state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "unknown"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "unknown"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "active",
+     "value": [
+      "gpu"
+     ],
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "有张显卡"
+     },
+     "strength": "must"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "expected": {
+   "status": "incomplete",
+   "missing_fields": [
+    "use_case.type",
+    "budget_cny",
+    "owned_parts.gpu.model",
+    "budget_basis"
+   ],
+   "blocking_conflicts": [],
+   "confirmation_eligible": false
+  }
+ },
+ {
+  "id": "rdy-budget-conflict-blocks",
+  "title": "预算冲突单列阻塞",
+  "split": "development",
+  "session": "rdy-dev-7",
+  "rationale": "v2 把 conflict 从 missing 分离到 blocking_conflicts；当前实现并入 missing，预期 red。",
+  "state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "conflict",
+     "strength": "must"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "unknown"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "unknown"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "expected": {
+   "status": "incomplete",
+   "missing_fields": [
+    "use_case.type"
+   ],
+   "blocking_conflicts": [
+    "budget_cny"
+   ],
+   "confirmation_eligible": false
+  }
+ },
+ {
+  "id": "rdy-removed-required",
+  "title": "撤销的必填按缺失处理",
+  "split": "development",
+  "session": "rdy-dev-8",
+  "rationale": "budget removed 不再阻塞冲突，只回到 missing；当前实现一致，应通过。",
+  "state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "removed"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "active",
+     "value": "gaming",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "打游戏"
+     },
+     "kind": "fact",
+     "strength": "must"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "active",
+     "value": "1080p",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "1080p"
+     },
+     "strength": "must"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "active",
+     "value": [],
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "全新买"
+     },
+     "strength": "must"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "expected": {
+   "status": "incomplete",
+   "missing_fields": [
+    "budget_cny"
+   ],
+   "blocking_conflicts": [],
+   "confirmation_eligible": false
+  }
+ },
+ {
+  "id": "rdy-existing-unknown-blocks",
+  "title": "已有件 unknown 不能默认为空",
+  "split": "development",
+  "session": "rdy-dev-9",
+  "rationale": "v2 要求 existing_parts 必须 active；当前实现允许 unknown 通过，预期 red。",
+  "state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "active",
+     "value": 7500,
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "预算7500"
+     },
+     "strength": "must"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "active",
+     "value": "gaming",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "打游戏"
+     },
+     "kind": "fact",
+     "strength": "must"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "active",
+     "value": "1080p",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "1080p"
+     },
+     "strength": "must"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "unknown"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "expected": {
+   "status": "incomplete",
+   "missing_fields": [
+    "existing_parts"
+   ],
+   "blocking_conflicts": [],
+   "confirmation_eligible": false
+  }
+ },
+ {
+  "id": "rdy-gaming-any-resolution-not-satisfied",
+  "title": "gaming 的 any 不满足最低矩阵",
+  "split": "development",
+  "session": "rdy-dev-10",
+  "rationale": "明确 any 是 active 用户值，但 gaming 条件必填只认 1080p/2K/4K；any 仍缺 use_case.resolution，不可确认。",
+  "state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "active",
+     "value": 7500,
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "预算7500"
+     },
+     "strength": "must"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "active",
+     "value": "gaming",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "打游戏"
+     },
+     "kind": "fact",
+     "strength": "must"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "active",
+     "value": "any",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "无所谓"
+     },
+     "strength": "must"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "active",
+     "value": [],
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "全新买"
+     },
+     "strength": "must"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "expected": {
+   "status": "incomplete",
+   "missing_fields": [
+    "use_case.resolution"
+   ],
+   "blocking_conflicts": [],
+   "confirmation_eligible": false
+  }
+ },
+ {
+  "id": "rdy-soft-conflict-not-blocking",
+  "title": "普通软偏好冲突不阻塞",
+  "split": "calibration",
+  "session": "rdy-cal-1",
+  "rationale": "noise prefer 冲突只保留观察，不进 blocking 也不 missing。",
+  "state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "active",
+     "value": 7500,
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "预算7500"
+     },
+     "strength": "must"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "active",
+     "value": "gaming",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "打游戏"
+     },
+     "kind": "fact",
+     "strength": "must"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "active",
+     "value": "1080p",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "1080p"
+     },
+     "strength": "must"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "active",
+     "value": [],
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "全新买"
+     },
+     "strength": "must"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "conflict",
+     "strength": "prefer"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "expected": {
+   "status": "ready",
+   "missing_fields": [],
+   "blocking_conflicts": [],
+   "confirmation_eligible": true,
+   "effective_defaults": [
+    {
+     "field": "budget_flex",
+     "value": 0.1,
+     "origin": "system_default"
+    },
+    {
+     "field": "size_pref",
+     "value": "any",
+     "origin": "system_default"
+    },
+    {
+     "field": "noise_pref",
+     "value": "any",
+     "origin": "system_default"
+    },
+    {
+     "field": "brand_pref.cpu",
+     "value": "any",
+     "origin": "system_default"
+    },
+    {
+     "field": "brand_pref.gpu",
+     "value": "any",
+     "origin": "system_default"
+    },
+    {
+     "field": "configuration_scope",
+     "value": [
+      "tower"
+     ],
+     "origin": "system_default"
+    },
+    {
+     "field": "performance_goal",
+     "value": "balanced",
+     "origin": "system_default"
+    }
+   ]
+  }
+ },
+ {
+  "id": "rdy-must-brand-conflict-blocks",
+  "title": "must 约束冲突阻塞",
+  "split": "calibration",
+  "session": "rdy-cal-2",
+  "rationale": "品牌 must 冲突是 blocking，不是普通 missing；预期 red（当前并入 missing）。",
+  "state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "active",
+     "value": 7500,
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "预算7500"
+     },
+     "strength": "must"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "active",
+     "value": "gaming",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "打游戏"
+     },
+     "kind": "fact",
+     "strength": "must"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "active",
+     "value": "1080p",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "1080p"
+     },
+     "strength": "must"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "active",
+     "value": [],
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "全新买"
+     },
+     "strength": "must"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "conflict",
+     "strength": "must"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "expected": {
+   "status": "incomplete",
+   "missing_fields": [],
+   "blocking_conflicts": [
+    "brand_pref.cpu"
+   ],
+   "confirmation_eligible": false
+  }
+ },
+ {
+  "id": "rdy-holdout-owned-basis",
+  "title": "已有内存缺口径",
+  "split": "holdout",
+  "session": "rdy-hold-1",
+  "rationale": "型号齐但 budget_basis 未知仍不完整；当前实现一致。",
+  "state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "active",
+     "value": 4000,
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "预算4000"
+     },
+     "strength": "must"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "active",
+     "value": "productivity",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "办公"
+     },
+     "kind": "fact",
+     "strength": "must"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "active",
+     "value": [
+      "memory"
+     ],
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "旧内存还能用"
+     },
+     "strength": "must"
+    },
+    "owned_parts": {
+     "status": "active",
+     "value": [
+      {
+       "category": "memory",
+       "model": "金百达刃 16G"
+      }
+     ],
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "金百达刃"
+     },
+     "strength": "must"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "expected": {
+   "status": "incomplete",
+   "missing_fields": [
+    "budget_basis"
+   ],
+   "blocking_conflicts": [],
+   "confirmation_eligible": false
+  }
+ },
+ {
+  "id": "rdy-holdout-general-ready",
+  "title": "通用用途齐备",
+  "split": "holdout",
+  "session": "rdy-hold-2",
+  "rationale": "general 无条件必填；默认 6 项。",
+  "state": {
+   "schema_version": 1,
+   "revision": 0,
+   "alternatives": [],
+   "changes": [],
+   "history": [],
+   "fields": {
+    "budget_cny": {
+     "status": "active",
+     "value": 3500,
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "预算3500"
+     },
+     "strength": "must"
+    },
+    "budget_flex": {
+     "status": "unknown"
+    },
+    "budget_basis": {
+     "status": "unknown"
+    },
+    "use_case.type": {
+     "status": "active",
+     "value": "general",
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "家用办公"
+     },
+     "kind": "fact",
+     "strength": "must"
+    },
+    "use_case.titles": {
+     "status": "unknown"
+    },
+    "use_case.resolution": {
+     "status": "unknown"
+    },
+    "use_case.fps_target": {
+     "status": "unknown"
+    },
+    "existing_parts": {
+     "status": "active",
+     "value": [],
+     "evidence": "stated",
+     "source": {
+      "kind": "chat",
+      "message_id": "seed-0",
+      "quote": "全新买"
+     },
+     "strength": "must"
+    },
+    "owned_parts": {
+     "status": "unknown"
+    },
+    "brand_pref.cpu": {
+     "status": "unknown"
+    },
+    "brand_pref.gpu": {
+     "status": "unknown"
+    },
+    "noise_pref": {
+     "status": "unknown"
+    },
+    "size_pref": {
+     "status": "unknown"
+    },
+    "appearance": {
+     "status": "unknown"
+    },
+    "notes": {
+     "status": "unknown"
+    },
+    "recipient": {
+     "status": "unknown"
+    },
+    "priority": {
+     "status": "unknown"
+    }
+   }
+  },
+  "expected": {
+   "status": "ready",
+   "missing_fields": [],
+   "blocking_conflicts": [],
+   "confirmation_eligible": true,
+   "effective_defaults": [
+    {
+     "field": "budget_flex",
+     "value": 0.1,
+     "origin": "system_default"
+    },
+    {
+     "field": "size_pref",
+     "value": "any",
+     "origin": "system_default"
+    },
+    {
+     "field": "noise_pref",
+     "value": "any",
+     "origin": "system_default"
+    },
+    {
+     "field": "brand_pref.cpu",
+     "value": "any",
+     "origin": "system_default"
+    },
+    {
+     "field": "brand_pref.gpu",
+     "value": "any",
+     "origin": "system_default"
+    },
+    {
+     "field": "configuration_scope",
+     "value": [
+      "tower"
+     ],
+     "origin": "system_default"
+    }
+   ]
+  }
+ }
+]

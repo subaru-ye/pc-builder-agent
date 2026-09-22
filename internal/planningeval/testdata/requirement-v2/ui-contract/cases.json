@@ -1,0 +1,234 @@
+[
+ {
+  "id": "ui-collecting-fresh",
+  "title": "新会话可见收集态与缺失项",
+  "split": "development",
+  "session": "ui-dev-1",
+  "rationale": "DTO 必须暴露 incomplete 与 missing；当前 MissingFields 恒空，预期 red。",
+  "seed": [],
+  "seed_user_message": "",
+  "state_next_action": "",
+  "expected": {
+   "requirement_readiness": {
+    "status": "incomplete",
+    "missing_fields": [
+     "use_case.type",
+     "budget_cny",
+     "existing_parts"
+    ],
+    "blocking_conflicts": [],
+    "confirmation_eligible": false
+   },
+   "requirement_confirmation_status": "unconfirmed",
+   "build_relation": "none"
+  }
+ },
+ {
+  "id": "ui-ready-unconfirmed",
+  "title": "齐备未确认的可视状态与确认 payload",
+  "split": "development",
+  "session": "ui-dev-2",
+  "rationale": "ready+unconfirmed+none 组合；确认请求必须携带 expected_revision 等键，当前只有 request id。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "budget_cny",
+    "value": 7500,
+    "quote": "预算7500",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，预算7500，配件全新买",
+  "state_next_action": "confirm",
+  "expected": {
+   "requirement_readiness": {
+    "status": "ready",
+    "missing_fields": [],
+    "blocking_conflicts": [],
+    "confirmation_eligible": true,
+    "effective_defaults": [
+     {
+      "field": "budget_flex",
+      "value": 0.1,
+      "origin": "system_default"
+     },
+     {
+      "field": "size_pref",
+      "value": "any",
+      "origin": "system_default"
+     },
+     {
+      "field": "noise_pref",
+      "value": "any",
+      "origin": "system_default"
+     },
+     {
+      "field": "brand_pref.cpu",
+      "value": "any",
+      "origin": "system_default"
+     },
+     {
+      "field": "brand_pref.gpu",
+      "value": "any",
+      "origin": "system_default"
+     },
+     {
+      "field": "configuration_scope",
+      "value": [
+       "tower"
+      ],
+      "origin": "system_default"
+     }
+    ]
+   },
+   "requirement_confirmation_status": "unconfirmed",
+   "build_relation": "none",
+   "confirm_request_payload": [
+    "schema_version",
+    "expected_revision",
+    "idempotency_key"
+   ]
+  }
+ },
+ {
+  "id": "ui-incomplete-shown-ready",
+  "title": "不完整状态不得显示可确认",
+  "split": "development",
+  "session": "ui-dev-3",
+  "rationale": "gaming 只知用途时 DTO 却因 next_action 显示 ready_to_confirm；预期 V3。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "我想配台打游戏的电脑",
+  "state_next_action": "confirm",
+  "expected": {
+   "requirement_readiness": {
+    "status": "incomplete",
+    "missing_fields": [
+     "budget_cny",
+     "existing_parts",
+     "use_case.resolution"
+    ],
+    "blocking_conflicts": [],
+    "confirmation_eligible": false
+   },
+   "requirement_confirmation_status": "unconfirmed",
+   "build_relation": "none"
+  }
+ },
+ {
+  "id": "ui-holdout-productivity-ready",
+  "title": "生产力齐备可视状态",
+  "split": "holdout",
+  "session": "ui-hold-1",
+  "rationale": "ready+unconfirmed+none；与 ui-ready-unconfirmed 不同会话模板。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "productivity",
+    "quote": "用Blender",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.titles",
+    "value": [
+     "Blender 渲染"
+    ],
+    "quote": "Blender",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "budget_cny",
+    "value": 8000,
+    "quote": "预算8000",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "用Blender渲染，预算8000，全新买",
+  "state_next_action": "confirm",
+  "expected": {
+   "requirement_readiness": {
+    "status": "ready",
+    "missing_fields": [],
+    "blocking_conflicts": [],
+    "confirmation_eligible": true,
+    "effective_defaults": [
+     {
+      "field": "budget_flex",
+      "value": 0.1,
+      "origin": "system_default"
+     },
+     {
+      "field": "size_pref",
+      "value": "any",
+      "origin": "system_default"
+     },
+     {
+      "field": "noise_pref",
+      "value": "any",
+      "origin": "system_default"
+     },
+     {
+      "field": "brand_pref.cpu",
+      "value": "any",
+      "origin": "system_default"
+     },
+     {
+      "field": "brand_pref.gpu",
+      "value": "any",
+      "origin": "system_default"
+     },
+     {
+      "field": "configuration_scope",
+      "value": [
+       "tower"
+      ],
+      "origin": "system_default"
+     }
+    ]
+   },
+   "requirement_confirmation_status": "unconfirmed",
+   "build_relation": "none"
+  }
+ }
+]

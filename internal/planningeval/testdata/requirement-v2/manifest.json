@@ -1,0 +1,139 @@
+{
+  "dataset": "requirement-v2",
+  "grader_version": "reqv2-grader-v2",
+  "frozen_at": "2026-09-22",
+  "files": [
+    {
+      "path": "reducer/cases.json",
+      "sha256": "5bef7b801b04e676dc5a0fc9a49f9182d26e116ff39283a560f8993c92a687c2",
+      "cases": 13,
+      "sessions": 13
+    },
+    {
+      "path": "readiness/cases.json",
+      "sha256": "485436e653b8e2338e839ced5e0f3089bed9692828f7780452ec7454228791d6",
+      "cases": 14,
+      "sessions": 14
+    },
+    {
+      "path": "policy/cases.json",
+      "sha256": "0cb1d2fab8a663d1e88b566db7f79c1ee42101fbfa200f50ecfc72aa6e06480d",
+      "cases": 9,
+      "sessions": 9
+    },
+    {
+      "path": "ui-contract/cases.json",
+      "sha256": "971a14017572266090011f8bc180ff80397778c4169bba0fce0cf0bfe5f86e32",
+      "cases": 4,
+      "sessions": 4
+    },
+    {
+      "path": "extraction/cases.json",
+      "sha256": "431395ebfc8dfb118b76b8d6c08581f3836bc6ee91f8607c7e040f901b2984b7",
+      "cases": 28,
+      "sessions": 28
+    },
+    {
+      "path": "conversations/cases.json",
+      "sha256": "4e6e3ec41b1fd39be3567c55fa496e2ff571bbb39f674d3160ecc2bf60813e63",
+      "cases": 8,
+      "sessions": 8
+    },
+    {
+      "path": "selftest.json",
+      "sha256": "d2b9835154a94a95b5eb88cadd28a5cca8a667dba7a1ca169d93de1eb86588a3",
+      "cases": 14,
+      "sessions": 0
+    },
+    {
+      "path": "catalog.json",
+      "sha256": "78014535b958733d3e322de0d65aca5670928b3df87da47c9eb842168fed1f49",
+      "cases": 0,
+      "sessions": 0
+    }
+  ],
+  "split_sessions": {
+    "calibration": [
+      "ex-cal-1",
+      "ex-cal-2",
+      "ex-cal-3",
+      "ex-cal-4",
+      "ex-cal-5",
+      "ex-cal-6",
+      "ex-cal-7",
+      "ex-cal-8",
+      "pol-cal-1",
+      "pol-cal-2",
+      "rd-cal-1",
+      "rd-cal-2",
+      "rdy-cal-1",
+      "rdy-cal-2"
+    ],
+    "development": [
+      "cv-dev-1",
+      "cv-dev-2",
+      "cv-dev-3",
+      "cv-dev-4",
+      "cv-dev-5",
+      "cv-dev-6",
+      "cv-dev-7",
+      "ex-dev-1",
+      "ex-dev-10",
+      "ex-dev-11",
+      "ex-dev-12",
+      "ex-dev-13",
+      "ex-dev-14",
+      "ex-dev-15",
+      "ex-dev-16",
+      "ex-dev-17",
+      "ex-dev-18",
+      "ex-dev-2",
+      "ex-dev-3",
+      "ex-dev-4",
+      "ex-dev-5",
+      "ex-dev-6",
+      "ex-dev-7",
+      "ex-dev-8",
+      "ex-dev-9",
+      "pol-dev-1",
+      "pol-dev-2",
+      "pol-dev-3",
+      "pol-dev-4",
+      "pol-dev-5",
+      "pol-dev-6",
+      "rd-dev-1",
+      "rd-dev-2",
+      "rd-dev-3",
+      "rd-dev-4",
+      "rd-dev-5",
+      "rd-dev-6",
+      "rd-dev-7",
+      "rd-dev-8",
+      "rd-dev-9",
+      "rdy-dev-1",
+      "rdy-dev-10",
+      "rdy-dev-2",
+      "rdy-dev-3",
+      "rdy-dev-4",
+      "rdy-dev-5",
+      "rdy-dev-6",
+      "rdy-dev-7",
+      "rdy-dev-8",
+      "rdy-dev-9",
+      "ui-dev-1",
+      "ui-dev-2",
+      "ui-dev-3"
+    ],
+    "holdout": [
+      "cv-hold-1",
+      "ex-hold-1",
+      "ex-hold-2",
+      "pol-hold-1",
+      "rd-hold-1",
+      "rd-hold-2",
+      "rdy-hold-1",
+      "rdy-hold-2",
+      "ui-hold-1"
+    ]
+  }
+}

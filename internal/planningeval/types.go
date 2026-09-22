@@ -61,12 +61,15 @@ type PreviousBuildFixture struct {
 	Snapshot *planning.Result `json:"snapshot,omitempty"`
 }
 type Step struct {
-	Kind    string                         `json:"kind"`
-	Text    string                         `json:"text,omitempty"`
-	Edit    []schemas.RequirementOperation `json:"edit,omitempty"`
-	Screen  json.RawMessage                `json:"screen_oracle,omitempty"`
-	Builder []*genai.Content               `json:"builder_oracle,omitempty"`
-	Expect  Expect                         `json:"expect"`
+	Kind   string                         `json:"kind"`
+	Text   string                         `json:"text,omitempty"`
+	Edit   []schemas.RequirementOperation `json:"edit,omitempty"`
+	Screen json.RawMessage                `json:"screen_oracle,omitempty"`
+	// ScreenFallback 是 guard 纠偏重调时的第二条 scripted 输出；仅 v2
+	// requirement 评估使用，v1 冻结件不设置。
+	ScreenFallback json.RawMessage  `json:"screen_oracle_fallback,omitempty"`
+	Builder        []*genai.Content `json:"builder_oracle,omitempty"`
+	Expect         Expect           `json:"expect"`
 }
 type FieldExpect struct {
 	Value    json.RawMessage `json:"value,omitempty"`
@@ -226,9 +229,9 @@ type IntentThresholdCurve struct {
 }
 
 type IntentThresholdPoint struct {
-	Threshold float64  `json:"threshold"`
-	Accepted  int      `json:"accepted"`
-	Correct   int      `json:"correct"`
+	Threshold float64 `json:"threshold"`
+	Accepted  int     `json:"accepted"`
+	Correct   int     `json:"correct"`
 	// Precision is nil (undefined) when the accepted set is empty; an empty
 	// accepted set is never reported as perfect.
 	Precision *float64 `json:"precision"`

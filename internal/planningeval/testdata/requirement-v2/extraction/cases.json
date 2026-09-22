@@ -1,0 +1,1359 @@
+[
+ {
+  "id": "ex-first-fps-vague",
+  "title": "首句模糊 FPS 需求只记可验证事实",
+  "split": "development",
+  "session": "ex-dev-1",
+  "rationale": "用途、titles、performance goal 可从原文验证；预算/已有件/分辨率继续追问。",
+  "seed": [],
+  "seed_user_message": "",
+  "user_message": "主要玩CS2和无畏契约，希望帧率高一点",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "use_case.type",
+     "value": "gaming",
+     "quote_contains": "CS2"
+    },
+    {
+     "op": "set",
+     "field": "use_case.titles",
+     "value": [
+      "CS2",
+      "无畏契约"
+     ],
+     "quote_contains": "无畏契约"
+    },
+    {
+     "op": "set",
+     "field": "use_case.performance_goal",
+     "value": "fps_first",
+     "quote_contains": "帧率"
+    }
+   ],
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   },
+   "expected_missing_fields": [
+    "budget_cny",
+    "existing_parts",
+    "use_case.resolution"
+   ],
+   "expected_confirmation_eligible": false,
+   "expected_next_action_absent": true
+  }
+ },
+ {
+  "id": "ex-budget-question-7500",
+  "title": "“7500够吗”不激活预算",
+  "split": "development",
+  "session": "ex-dev-2",
+  "rationale": "询问行情是 question；7500 最多记备选/观察，不得 set。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，配件全新买",
+  "user_message": "7500够吗？",
+  "expected": {
+   "expected_operations": [],
+   "forbidden_operations": [
+    {
+     "op": "set",
+     "field": "budget_cny"
+    }
+   ],
+   "expected_turn_signals": {
+    "asks_question": true,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   },
+   "expected_missing_fields": [
+    "budget_cny"
+   ],
+   "expected_confirmation_eligible": false
+  }
+ },
+ {
+  "id": "ex-budget-accept-explicit",
+  "title": "“就按7500来”是明确表达",
+  "split": "development",
+  "session": "ex-dev-3",
+  "rationale": "用户自己说出数字即 stated 证据；上一轮助手提问只是上下文。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，配件全新买",
+  "prior_assistant_turn": {
+   "user_message": "先看预算",
+   "reply": "按7500元的预算继续可以吗？"
+  },
+  "user_message": "可以，就按7500来",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "budget_cny",
+     "value": 7500,
+     "evidence": "stated",
+     "quote_contains": "7500"
+    }
+   ],
+   "expected_state": {
+    "budget_cny": {
+     "status": "active",
+     "value": 7500
+    }
+   },
+   "expected_missing_fields": [],
+   "expected_confirmation_eligible": true,
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-bare-accept-needs-protocol",
+  "title": "裸“可以”需要可验证提案协议",
+  "split": "development",
+  "session": "ex-dev-4",
+  "rationale": "存在同字段同值提案且用户明确接受时 evidence=accepted_proposal；当前无该协议，预期 red。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，配件全新买",
+  "prior_assistant_turn": {
+   "user_message": "先看预算",
+   "reply": "按7500元的预算继续可以吗？"
+  },
+  "user_message": "可以",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "budget_cny",
+     "value": 7500,
+     "evidence": "accepted_proposal",
+     "quote_contains": "可以"
+    }
+   ],
+   "expected_state": {
+    "budget_cny": {
+     "status": "active",
+     "value": 7500
+    }
+   },
+   "expected_missing_fields": [],
+   "expected_confirmation_eligible": true
+  }
+ },
+ {
+  "id": "ex-composite-budget-start",
+  "title": "复合意图：预算+开始",
+  "split": "development",
+  "session": "ex-dev-5",
+  "rationale": "同一句既更新字段又表达生成意愿；signals 多标签并存。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，配件全新买",
+  "user_message": "预算9000，开始配吧",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "budget_cny",
+     "value": 9000,
+     "evidence": "stated",
+     "quote_contains": "9000"
+    }
+   ],
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": true,
+    "ambiguous": false
+   },
+   "expected_state": {
+    "budget_cny": {
+     "status": "active",
+     "value": 9000
+    }
+   },
+   "expected_missing_fields": [],
+   "expected_confirmation_eligible": true,
+   "expected_next_action_absent": true
+  }
+ },
+ {
+  "id": "ex-all-new-purchase",
+  "title": "“全部新买”是明确空已有件",
+  "split": "development",
+  "session": "ex-dev-6",
+  "rationale": "existing_parts=[] 是 active 用户值，不是 unknown。",
+  "seed": [],
+  "seed_user_message": "",
+  "user_message": "帮我配台全新的主机，配件都新买",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "existing_parts",
+     "value": [],
+     "quote_contains": "新买"
+    }
+   ],
+   "expected_state": {
+    "existing_parts": {
+     "status": "active",
+     "value": []
+    }
+   },
+   "expected_missing_fields": [
+    "use_case.type",
+    "budget_cny"
+   ],
+   "expected_confirmation_eligible": false,
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-owned-gpu-vague",
+  "title": "“有张显卡”记录品类不猜型号",
+  "split": "development",
+  "session": "ex-dev-7",
+  "rationale": "型号缺失留给追问；不得编造 owned model。",
+  "seed": [],
+  "seed_user_message": "",
+  "user_message": "我有一张显卡能用",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "existing_parts",
+     "value": [
+      "gpu"
+     ],
+     "quote_contains": "显卡"
+    }
+   ],
+   "forbidden_operations": [
+    {
+     "op": "set",
+     "field": "owned_parts"
+    }
+   ],
+   "expected_missing_fields": [
+    "use_case.type",
+    "budget_cny",
+    "owned_parts.gpu.model",
+    "budget_basis"
+   ],
+   "expected_confirmation_eligible": false,
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-owned-correction",
+  "title": "更正已有件型号",
+  "split": "development",
+  "session": "ex-dev-8",
+  "rationale": "“其实是 4070 Super”覆盖旧型号，quote 绑定新原文。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [
+     "gpu"
+    ],
+    "quote": "有张显卡",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "owned_parts",
+    "value": [
+     {
+      "category": "gpu",
+      "model": "4070"
+     }
+    ],
+    "quote": "是4070",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "有张显卡，是4070",
+  "user_message": "看错了，其实是4070 Super",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "owned_parts",
+     "value": [
+      {
+       "category": "gpu",
+       "model": "4070 Super"
+      }
+     ],
+     "quote_contains": "4070 Super"
+    }
+   ],
+   "expected_state": {
+    "owned_parts": {
+     "status": "active",
+     "value": [
+      {
+       "category": "gpu",
+       "model": "4070 Super"
+      }
+     ]
+    }
+   },
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-budget-ceiling",
+  "title": "“不要超过”设置预算与零弹性",
+  "split": "calibration",
+  "session": "ex-cal-1",
+  "rationale": "上限语气映射 budget 7500 + flex 0，两个操作同轮。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，配件全新买",
+  "user_message": "预算不要超过7500",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "budget_cny",
+     "value": 7500,
+     "quote_contains": "7500"
+    },
+    {
+     "op": "set",
+     "field": "budget_flex",
+     "value": 0,
+     "quote_contains": "不要超过"
+    }
+   ],
+   "expected_state": {
+    "budget_cny": {
+     "status": "active",
+     "value": 7500
+    }
+   },
+   "expected_confirmation_eligible": true,
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-monitor-request",
+  "title": "显示器请求识别为不支持能力",
+  "split": "development",
+  "session": "ex-dev-9",
+  "rationale": "用途未明不猜测；显示器保留为 unresolved 观察，回复不得承诺覆盖。",
+  "seed": [],
+  "seed_user_message": "",
+  "user_message": "帮我配台电脑，要带显示器",
+  "expected": {
+   "expected_operations": [],
+   "expected_observations": [
+    {
+     "text_contains": "显示器"
+    }
+   ],
+   "forbidden_operations": [
+    {
+     "op": "set",
+     "field": "use_case.type"
+    }
+   ],
+   "expected_missing_fields": [
+    "use_case.type",
+    "budget_cny",
+    "existing_parts"
+   ],
+   "expected_confirmation_eligible": false,
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": true,
+    "ambiguous": false
+   },
+   "forbidden_vetoes": [
+    "V9"
+   ]
+  }
+ },
+ {
+  "id": "ex-quiet-only",
+  "title": "只表达静音偏好",
+  "split": "calibration",
+  "session": "ex-cal-2",
+  "rationale": "软偏好可记录；其余保持 unknown，不把“都行”写成 any。",
+  "seed": [],
+  "seed_user_message": "",
+  "user_message": "别的都行，就是要安静",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "noise_pref",
+     "value": "silent",
+     "quote_contains": "安静"
+    }
+   ],
+   "forbidden_operations": [
+    {
+     "op": "set",
+     "field": "size_pref"
+    }
+   ],
+   "expected_missing_fields": [
+    "use_case.type",
+    "budget_cny",
+    "existing_parts"
+   ],
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-multi-field-edit",
+  "title": "同轮多字段更新",
+  "split": "calibration",
+  "session": "ex-cal-3",
+  "rationale": "预算修改与尺寸偏好并列；每个操作独立证据。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "budget_cny",
+    "value": 7500,
+    "quote": "预算7500",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，预算7500，配件全新买",
+  "user_message": "预算改成9000吧，机箱尽量小一点",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "budget_cny",
+     "value": 9000,
+     "quote_contains": "9000"
+    },
+    {
+     "op": "set",
+     "field": "size_pref",
+     "value": "itx",
+     "quote_contains": "小"
+    }
+   ],
+   "expected_state": {
+    "budget_cny": {
+     "status": "active",
+     "value": 9000
+    },
+    "size_pref": {
+     "status": "active",
+     "value": "itx"
+    }
+   },
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-office-general",
+  "title": "家用办公用途",
+  "split": "development",
+  "session": "ex-dev-10",
+  "rationale": "“家里办公上网用”可记 general fact；预算与已有件继续追问。",
+  "seed": [],
+  "seed_user_message": "",
+  "user_message": "家里办公上网用",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "use_case.type",
+     "value": "general",
+     "quote_contains": "办公"
+    }
+   ],
+   "expected_missing_fields": [
+    "budget_cny",
+    "existing_parts"
+   ],
+   "expected_confirmation_eligible": false,
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-fps-target-numeric",
+  "title": "明确帧数记 fps_target",
+  "split": "development",
+  "session": "ex-dev-11",
+  "rationale": "“至少144帧”是明确数值目标，映射可选字段 use_case.fps_target，不改 performance_goal。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "budget_cny",
+    "value": 7500,
+    "quote": "预算7500",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，预算7500，配件全新买",
+  "user_message": "帧数至少144",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "use_case.fps_target",
+     "value": 144,
+     "quote_contains": "144"
+    }
+   ],
+   "expected_state": {
+    "use_case.fps_target": {
+     "status": "active",
+     "value": 144
+    }
+   },
+   "expected_missing_fields": [],
+   "expected_confirmation_eligible": true,
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-two-game-titles",
+  "title": "两个游戏名记 titles",
+  "split": "development",
+  "session": "ex-dev-12",
+  "rationale": "“玩DOTA2和LOL”给出用途与 titles，按原文记录不翻译。",
+  "seed": [],
+  "seed_user_message": "",
+  "user_message": "玩DOTA2和LOL",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "use_case.type",
+     "value": "gaming",
+     "quote_contains": "玩"
+    },
+    {
+     "op": "set",
+     "field": "use_case.titles",
+     "value": [
+      "DOTA2",
+      "LOL"
+     ],
+     "quote_contains": "DOTA2"
+    }
+   ],
+   "expected_missing_fields": [
+    "budget_cny",
+    "existing_parts",
+    "use_case.resolution"
+   ],
+   "expected_confirmation_eligible": false,
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-budget-raise",
+  "title": "上调预算",
+  "split": "development",
+  "session": "ex-dev-13",
+  "rationale": "“提到9000吧”是对既有预算的更正 set。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "budget_cny",
+    "value": 7500,
+    "quote": "预算7500",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，预算7500，配件全新买",
+  "user_message": "预算提到9000吧",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "budget_cny",
+     "value": 9000,
+     "quote_contains": "9000"
+    }
+   ],
+   "expected_state": {
+    "budget_cny": {
+     "status": "active",
+     "value": 9000
+    }
+   },
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-existing-add-ssd",
+  "title": "追加已有固态",
+  "split": "development",
+  "session": "ex-dev-14",
+  "rationale": "在已有显卡基础上追加 ssd：提交合并后的品类数组。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [
+     "gpu"
+    ],
+    "quote": "有张显卡",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "有张显卡能用",
+  "user_message": "还有块旧的固态也能用",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "existing_parts",
+     "value": [
+      "gpu",
+      "ssd"
+     ],
+     "quote_contains": "固态"
+    }
+   ],
+   "expected_state": {
+    "existing_parts": {
+     "status": "active",
+     "value": [
+      "gpu",
+      "ssd"
+     ]
+    }
+   },
+   "forbidden_operations": [
+    {
+     "op": "set",
+     "field": "owned_parts"
+    }
+   ],
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-noise-normal",
+  "title": "噪音正常就行",
+  "split": "calibration",
+  "session": "ex-cal-4",
+  "rationale": "“正常就行”是明确 normal，不是 any 也不是 unknown。",
+  "seed": [],
+  "seed_user_message": "",
+  "user_message": "声音无所谓，正常就行",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "noise_pref",
+     "value": "normal",
+     "quote_contains": "正常"
+    }
+   ],
+   "expected_missing_fields": [
+    "use_case.type",
+    "budget_cny",
+    "existing_parts"
+   ],
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-recipient-gaming",
+  "title": "装机对象与用途同轮",
+  "split": "development",
+  "session": "ex-dev-15",
+  "rationale": "“给弟弟打游戏”一次给出 recipient 与 use_case.type 两个事实。",
+  "seed": [],
+  "seed_user_message": "",
+  "user_message": "是给我弟弟装的，他打游戏用",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "recipient",
+     "value": "弟弟",
+     "quote_contains": "弟弟"
+    },
+    {
+     "op": "set",
+     "field": "use_case.type",
+     "value": "gaming",
+     "quote_contains": "打游戏"
+    }
+   ],
+   "expected_missing_fields": [
+    "budget_cny",
+    "existing_parts",
+    "use_case.resolution"
+   ],
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-priority-gpu",
+  "title": "预算紧张优先显卡",
+  "split": "calibration",
+  "session": "ex-cal-5",
+  "rationale": "“优先显卡”映射 priority=[gpu]，只允许八大品类。",
+  "seed": [],
+  "seed_user_message": "",
+  "user_message": "预算紧的话优先把显卡配好",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "priority",
+     "value": [
+      "gpu"
+     ],
+     "quote_contains": "显卡"
+    }
+   ],
+   "expected_missing_fields": [
+    "use_case.type",
+    "budget_cny",
+    "existing_parts"
+   ],
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-budget-flex-explicit",
+  "title": "明确上浮比例",
+  "split": "calibration",
+  "session": "ex-cal-6",
+  "rationale": "“最多上浮5%”是用户明确的 budget_flex，覆盖默认 0.1。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "budget_cny",
+    "value": 7500,
+    "quote": "预算7500",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，预算7500，配件全新买",
+  "user_message": "预算最多上浮5%",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "budget_flex",
+     "value": 0.05,
+     "quote_contains": "5%"
+    }
+   ],
+   "expected_state": {
+    "budget_flex": {
+     "status": "active",
+     "value": 0.05
+    }
+   },
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-restore-temporary-budget",
+  "title": "恢复临时覆盖的预算",
+  "split": "development",
+  "session": "ex-dev-16",
+  "rationale": "临时按 9000 讨论后“还是按原来的7500来”是 restore，不是新 set。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "budget_cny",
+    "value": 7500,
+    "quote": "预算7500",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "budget_cny",
+    "value": 9000,
+    "quote": "先按9000",
+    "evidence": "stated",
+    "scope": "temporary"
+   }
+  ],
+  "seed_user_message": "预算7500，这轮先按9000试",
+  "user_message": "还是按原来的7500来",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "restore",
+     "field": "budget_cny",
+     "quote_contains": "原来的"
+    }
+   ],
+   "expected_state": {
+    "budget_cny": {
+     "status": "active",
+     "value": 7500
+    }
+   },
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-budget-correction-same-turn",
+  "title": "同轮自我更正取后值",
+  "split": "calibration",
+  "session": "ex-cal-7",
+  "rationale": "“6000吧，哦不对，7000”是明确更正：以 7000 为当前预算 set，不记 conflict。",
+  "seed": [],
+  "seed_user_message": "",
+  "user_message": "预算6000吧，哦不对，7000",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "budget_cny",
+     "value": 7000,
+     "evidence": "stated",
+     "quote_contains": "7000"
+    }
+   ],
+   "expected_state": {
+    "budget_cny": {
+     "status": "active",
+     "value": 7000
+    }
+   },
+   "expected_missing_fields": [
+    "use_case.type",
+    "existing_parts"
+   ],
+   "expected_confirmation_eligible": false,
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-budget-conflict-family",
+  "title": "两个出资方预算无法取舍记 conflict",
+  "split": "calibration",
+  "session": "ex-cal-8",
+  "rationale": "父母各自给出明确且互斥的预算约束，不能替用户取舍：记 conflict 并交确认页，不得择一写入。",
+  "seed": [],
+  "seed_user_message": "",
+  "user_message": "我爸说预算8000，我妈说不能超过6000",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "conflict",
+     "field": "budget_cny",
+     "quote_contains": "6000"
+    }
+   ],
+   "forbidden_operations": [
+    {
+     "op": "set",
+     "field": "budget_cny"
+    }
+   ],
+   "expected_state": {
+    "budget_cny": {
+     "status": "conflict"
+    }
+   },
+   "expected_missing_fields": [
+    "use_case.type",
+    "existing_parts"
+   ],
+   "expected_confirmation_eligible": false,
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-web-video-general",
+  "title": "上网看视频是 general",
+  "split": "development",
+  "session": "ex-dev-17",
+  "rationale": "轻度娱乐无生产力任务，记 general 而不是 productivity。",
+  "seed": [],
+  "seed_user_message": "",
+  "user_message": "就上上网看看视频",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "use_case.type",
+     "value": "general",
+     "quote_contains": "上网"
+    }
+   ],
+   "expected_missing_fields": [
+    "budget_cny",
+    "existing_parts"
+   ],
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-appearance-white",
+  "title": "外观偏好",
+  "split": "development",
+  "session": "ex-dev-18",
+  "rationale": "“白色机箱”是外观软偏好，原话记录不改写。",
+  "seed": [],
+  "seed_user_message": "",
+  "user_message": "机箱最好是白色的",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "appearance",
+     "value": "白色",
+     "quote_contains": "白色"
+    }
+   ],
+   "expected_state": {
+    "appearance": {
+     "status": "active",
+     "value": "白色"
+    }
+   },
+   "expected_missing_fields": [
+    "use_case.type",
+    "budget_cny",
+    "existing_parts"
+   ],
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-holdout-budget-approx",
+  "title": "“3000左右”按3000记录",
+  "split": "holdout",
+  "session": "ex-hold-1",
+  "rationale": "用户给出了具体金额 3000，“左右”的近似含义由默认 budget_flex 表达，预算不保持 unknown。",
+  "seed": [],
+  "seed_user_message": "",
+  "user_message": "主要做表格和上网，预算3000左右，主机全新",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "set",
+     "field": "use_case.type",
+     "value": "productivity",
+     "quote_contains": "表格"
+    },
+    {
+     "op": "set",
+     "field": "use_case.titles",
+     "value": [
+      "Office 表格",
+      "上网浏览"
+     ],
+     "quote_contains": "表格"
+    },
+    {
+     "op": "set",
+     "field": "existing_parts",
+     "value": [],
+     "quote_contains": "全新"
+    },
+    {
+     "op": "set",
+     "field": "budget_cny",
+     "value": 3000,
+     "evidence": "stated",
+     "quote_contains": "3000"
+    }
+   ],
+   "expected_state": {
+    "budget_cny": {
+     "status": "active",
+     "value": 3000
+    }
+   },
+   "expected_missing_fields": [],
+   "expected_confirmation_eligible": true,
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ },
+ {
+  "id": "ex-holdout-remove-budget",
+  "title": "明确撤销预算",
+  "split": "holdout",
+  "session": "ex-hold-2",
+  "rationale": "“不算了”是 remove，不是忽略。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "budget_cny",
+    "value": 7500,
+    "quote": "预算7500",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，预算7500，配件全新买",
+  "user_message": "预算不算了，先不限定",
+  "expected": {
+   "expected_operations": [
+    {
+     "op": "remove",
+     "field": "budget_cny",
+     "quote_contains": "不算"
+    }
+   ],
+   "expected_state": {
+    "budget_cny": {
+     "status": "removed"
+    }
+   },
+   "expected_missing_fields": [
+    "budget_cny"
+   ],
+   "expected_confirmation_eligible": false,
+   "expected_turn_signals": {
+    "asks_question": false,
+    "requests_review": false,
+    "requests_build": false,
+    "ambiguous": false
+   }
+  }
+ }
+]

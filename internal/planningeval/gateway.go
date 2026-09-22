@@ -41,6 +41,9 @@ type Models struct {
 	// Journal runs before a provider request and after each response/step. An
 	// evidence write error stops execution instead of spending without a record.
 	Journal func(any) error
+	// BuilderHold 让 Remote 在 planning 前阻塞到 ctx 取消（v2 并发 admission
+	// 观测的适配器脚本）；不产生 provider 调用。
+	BuilderHold bool
 }
 type gateway struct {
 	mu          sync.Mutex
@@ -93,9 +96,14 @@ func (m *tracedModel) GenerateContent(ctx context.Context, req *model.LLMRequest
 			m.g.record.Trace = append(m.g.record.Trace, trace)
 			m.g.mu.Unlock()
 		}()
+		// 非 provider 模型（v2 阻塞 oracle）不消耗预算、不记 provider 调用。
+		providerBacked := true
+		if p, ok := m.live.(interface{ ProviderBacked() bool }); ok {
+			providerBacked = p.ProviderBacked()
+		}
 		m.g.mu.Lock()
-		exhausted := m.g.models.MaxCalls > 0 && m.g.calls >= m.g.models.MaxCalls
-		if !exhausted {
+		exhausted := providerBacked && m.g.models.MaxCalls > 0 && m.g.calls >= m.g.models.MaxCalls
+		if !exhausted && providerBacked {
 			m.g.calls++
 		}
 		call := m.g.calls
@@ -105,8 +113,8 @@ func (m *tracedModel) GenerateContent(ctx context.Context, req *model.LLMRequest
 			yield(nil, fmt.Errorf("%s", trace.Error))
 			return
 		}
-		if m.live != nil {
-			if err := m.g.journal(map[string]any{"event": "model_request", "call": call, "role": m.role, "request": json.RawMessage(raw)}); err != nil {
+		if m.live != nil && providerBacked {
+			if err := m.g.journal(map[string]any{"event": "model_request", "call": call, "role": m.role, "request_sha256": Hash(raw), "request": json.RawMessage(raw)}); err != nil {
 				trace.Error = err.Error()
 				yield(nil, err)
 				return
@@ -164,7 +172,16 @@ func (g *gateway) Screen(ctx context.Context, owner, id string, input product.Sc
 			return product.ScreenResult{}, err
 		}
 	}
-	m := &tracedModel{g: g, role: "screening", live: g.models.Screening, outputs: []*genai.Content{genai.NewContentFromText(string(step.Screen), genai.RoleModel)}}
+	screenOutputs := []*genai.Content{genai.NewContentFromText(string(step.Screen), genai.RoleModel)}
+	if len(step.ScreenFallback) > 0 {
+		screenOutputs = append(screenOutputs, genai.NewContentFromText(string(step.ScreenFallback), genai.RoleModel))
+	}
+	// scripted oracle 优先于 live：v2 的种子轮是适配器输入，不花真实调用。
+	live := g.models.Screening
+	if len(step.Screen) > 0 {
+		live = nil
+	}
+	m := &tracedModel{g: g, role: "screening", live: live, outputs: screenOutputs}
 	a, err := pipeline.NewProductScreening(m)
 	if err != nil {
 		return product.ScreenResult{}, err
@@ -259,6 +276,10 @@ func (g *gateway) Remote(ctx context.Context, _, _ string, payload json.RawMessa
 	var input schemas.PlanningInput
 	if err := json.Unmarshal(payload, &input); err != nil {
 		return product.RemoteResult{}, err
+	}
+	if g.models.BuilderHold {
+		<-ctx.Done()
+		return product.RemoteResult{}, ctx.Err()
 	}
 	g.mu.Lock()
 	g.record.PlanningInput = &input

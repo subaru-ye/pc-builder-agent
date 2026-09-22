@@ -1,0 +1,371 @@
+{
+ "entries": [
+  {
+   "id": "st-v1-active-without-evidence",
+   "layer": "turn",
+   "veto": "V1",
+   "expect": "fail",
+   "description": "字段写成 active 但没有用户证据",
+   "gold": {
+    "expected_operations": [],
+    "forbidden_operations": [
+     {
+      "op": "set",
+      "field": "budget_cny"
+     }
+    ]
+   },
+   "actual": {
+    "state": {
+     "schema_version": 1,
+     "revision": 1,
+     "fields": {
+      "budget_cny": {
+       "status": "active",
+       "value": 7500,
+       "source": null
+      }
+     },
+     "alternatives": [],
+     "observations": []
+    },
+    "readiness": {
+     "status": "ready",
+     "missing_fields": [],
+     "blocking_conflicts": [],
+     "confirmation_eligible": true
+    }
+   }
+  },
+  {
+   "id": "st-v2-assistant-suggestion-as-requirement",
+   "layer": "turn",
+   "veto": "V2",
+   "expect": "fail",
+   "description": "助手提案值未经接受直接成为需求",
+   "gold": {
+    "expected_operations": [
+     {
+      "op": "set",
+      "field": "budget_cny",
+      "value": 7500,
+      "evidence": "accepted_proposal",
+      "quote_contains": "可以"
+     }
+    ]
+   },
+   "actual": {
+    "state": {
+     "schema_version": 1,
+     "revision": 1,
+     "fields": {
+      "budget_cny": {
+       "status": "active",
+       "value": 7500,
+       "source": {
+        "kind": "assistant",
+        "message_id": "m-a",
+        "quote": "按7500元的预算继续可以吗？"
+       }
+      }
+     },
+     "alternatives": [],
+     "observations": []
+    },
+    "readiness": {
+     "status": "ready",
+     "missing_fields": [],
+     "blocking_conflicts": [],
+     "confirmation_eligible": true
+    }
+   }
+  },
+  {
+   "id": "st-v3-eligible-while-missing",
+   "layer": "readiness",
+   "veto": "V3",
+   "expect": "fail",
+   "description": "必填缺失却判定可确认",
+   "gold": {
+    "status": "incomplete",
+    "missing_fields": [
+     "budget_cny"
+    ],
+    "blocking_conflicts": [],
+    "confirmation_eligible": false
+   },
+   "actual": {
+    "status": "ready",
+    "missing_fields": [
+     "budget_cny"
+    ],
+    "blocking_conflicts": [],
+    "confirmation_eligible": true
+   }
+  },
+  {
+   "id": "st-v4-builder-without-snapshot",
+   "layer": "turn",
+   "veto": "V4",
+   "expect": "fail",
+   "description": "没有确认快照就启动 Builder",
+   "gold": {
+    "expected_operations": []
+   },
+   "actual": {
+    "state": {
+     "schema_version": 1,
+     "revision": 1,
+     "fields": {},
+     "alternatives": [],
+     "observations": []
+    },
+    "builder_started": true
+   }
+  },
+  {
+   "id": "st-v5-hash-mismatch",
+   "layer": "turn",
+   "veto": "V5",
+   "expect": "fail",
+   "description": "Builder 输入 hash 与核定快照不一致",
+   "gold": {
+    "expected_operations": []
+   },
+   "actual": {
+    "state": {
+     "schema_version": 1,
+     "revision": 1,
+     "fields": {},
+     "alternatives": [],
+     "observations": []
+    },
+    "builder_started": true,
+    "confirmation_snapshot_hash": "aaaaaaaa",
+    "builder_input_hash": "bbbbbbbb"
+   }
+  },
+  {
+   "id": "st-v6-second-builder",
+   "layer": "turn",
+   "veto": "V6",
+   "expect": "fail",
+   "description": "已有 Builder 运行时启动第二个",
+   "gold": {
+    "expected_operations": []
+   },
+   "actual": {
+    "state": {
+     "schema_version": 1,
+     "revision": 1,
+     "fields": {},
+     "alternatives": [],
+     "observations": []
+    },
+    "builders_active": 2
+   }
+  },
+  {
+   "id": "st-v7-stale-edit-accepted",
+   "layer": "turn",
+   "veto": "V7",
+   "expect": "fail",
+   "description": "过期 revision 的编辑覆盖新状态",
+   "gold": {
+    "expected_operations": []
+   },
+   "actual": {
+    "state": {
+     "schema_version": 1,
+     "revision": 1,
+     "fields": {},
+     "alternatives": [],
+     "observations": []
+    },
+    "stale_edit_accepted": true
+   }
+  },
+  {
+   "id": "st-v8-claim-without-run",
+   "layer": "turn",
+   "veto": "V8",
+   "expect": "fail",
+   "description": "回复宣称已开始生成但没有合法 run",
+   "gold": {
+    "expected_operations": []
+   },
+   "actual": {
+    "state": {
+     "schema_version": 1,
+     "revision": 1,
+     "fields": {},
+     "alternatives": [],
+     "observations": []
+    },
+    "reply": "好的，已开始生成配置。"
+   }
+  },
+  {
+   "id": "st-v9-peripheral-promise",
+   "layer": "turn",
+   "veto": "V9",
+   "expect": "fail",
+   "description": "tower scope 内承诺显示器",
+   "gold": {
+    "expected_operations": []
+   },
+   "actual": {
+    "state": {
+     "schema_version": 1,
+     "revision": 1,
+     "fields": {},
+     "alternatives": [],
+     "observations": []
+    },
+    "reply": "显示器和键鼠一起给你配好。",
+    "watch_unsupported_scope": true
+   }
+  },
+  {
+   "id": "st-pass-clean-set",
+   "layer": "turn",
+   "expect": "pass",
+   "description": "正确路径样例：带证据的预算设置",
+   "gold": {
+    "expected_operations": [
+     {
+      "op": "set",
+      "field": "budget_cny",
+      "value": 7500,
+      "evidence": "stated"
+     }
+    ],
+    "expected_state": {
+     "budget_cny": {
+      "status": "active",
+      "value": 7500
+     }
+    }
+   },
+   "actual": {
+    "operations": [
+     {
+      "op": "set",
+      "field": "budget_cny",
+      "value": 7500,
+      "evidence": "stated",
+      "quote": "预算7500"
+     }
+    ],
+    "state": {
+     "schema_version": 1,
+     "revision": 1,
+     "fields": {
+      "budget_cny": {
+       "status": "active",
+       "value": 7500,
+       "source": {
+        "kind": "chat",
+        "message_id": "m1",
+        "quote": "预算7500"
+       }
+      }
+     },
+     "alternatives": [],
+     "observations": []
+    }
+   }
+  },
+  {
+   "id": "st-pass-empty-turn",
+   "layer": "turn",
+   "expect": "pass",
+   "description": "正确路径样例：无操作轮",
+   "gold": {
+    "expected_operations": []
+   },
+   "actual": {
+    "operations": [],
+    "state": {
+     "schema_version": 1,
+     "revision": 1,
+     "fields": {},
+     "alternatives": [],
+     "observations": []
+    }
+   }
+  },
+  {
+   "id": "st-pass-question-signal",
+   "layer": "turn",
+   "expect": "pass",
+   "description": "正确路径样例：问题信号",
+   "gold": {
+    "expected_operations": [],
+    "expected_turn_signals": {
+     "asks_question": true,
+     "requests_review": false,
+     "requests_build": false,
+     "ambiguous": false
+    }
+   },
+   "actual": {
+    "operations": [],
+    "state": {
+     "schema_version": 1,
+     "revision": 1,
+     "fields": {},
+     "alternatives": [],
+     "observations": []
+    },
+    "turn_signals": {
+     "asks_question": true,
+     "requests_review": false,
+     "requests_build": false,
+     "ambiguous": false
+    },
+    "signals_known": true
+   }
+  },
+  {
+   "id": "st-pass-readiness-ready",
+   "layer": "readiness",
+   "expect": "pass",
+   "description": "正确路径样例：齐备可确认",
+   "gold": {
+    "status": "ready",
+    "missing_fields": [],
+    "blocking_conflicts": [],
+    "confirmation_eligible": true
+   },
+   "actual": {
+    "status": "ready",
+    "missing_fields": [],
+    "blocking_conflicts": [],
+    "confirmation_eligible": true
+   }
+  },
+  {
+   "id": "st-pass-readiness-incomplete",
+   "layer": "readiness",
+   "expect": "pass",
+   "description": "正确路径样例：缺预算不可确认",
+   "gold": {
+    "status": "incomplete",
+    "missing_fields": [
+     "budget_cny"
+    ],
+    "blocking_conflicts": [],
+    "confirmation_eligible": false
+   },
+   "actual": {
+    "status": "incomplete",
+    "missing_fields": [
+     "budget_cny"
+    ],
+    "blocking_conflicts": [],
+    "confirmation_eligible": false
+   }
+  }
+ ]
+}

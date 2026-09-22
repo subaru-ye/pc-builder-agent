@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
+	"github.com/subaru-ye/pc-builder-agent/internal/decision"
 	"github.com/subaru-ye/pc-builder-agent/internal/planning"
 	"github.com/subaru-ye/pc-builder-agent/internal/product"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
@@ -26,21 +27,30 @@ import (
 
 // Models are optional: nil means recorded/oracle responses. Supplying a model
 // never exposes expectations or oracle responses to it. Web stays offline.
+// Intent is the optional Jev observer; it is accounted with its own cap and
+// never changes the product result of a step.
 type Models struct {
 	Screening, Builder model.LLM
 	MaxCalls           int
+	Intent             decision.IntentClassifier
+	MaxIntentCalls     int
+	// Explicitly recorded CNY price rates per million tokens; zero means the
+	// rate was not supplied and no cash estimate is reported.
+	IntentInputPricePerMTok  float64
+	IntentOutputPricePerMTok float64
 	// Journal runs before a provider request and after each response/step. An
 	// evidence write error stops execution instead of spending without a record.
 	Journal func(any) error
 }
 type gateway struct {
-	mu     sync.Mutex
-	step   Step
-	record StepRecord
-	store  *store.Store
-	pages  map[string]string
-	models Models
-	calls  int
+	mu          sync.Mutex
+	step        Step
+	record      StepRecord
+	store       *store.Store
+	pages       map[string]string
+	models      Models
+	calls       int
+	intentCalls int
 }
 
 func (g *gateway) begin(step Step) {
@@ -149,6 +159,11 @@ func (g *gateway) Screen(ctx context.Context, owner, id string, input product.Sc
 	g.record.ScreenInput = &input
 	step := g.step
 	g.mu.Unlock()
+	if g.models.Intent != nil {
+		if err := g.observeIntent(ctx, &input); err != nil {
+			return product.ScreenResult{}, err
+		}
+	}
 	m := &tracedModel{g: g, role: "screening", live: g.models.Screening, outputs: []*genai.Content{genai.NewContentFromText(string(step.Screen), genai.RoleModel)}}
 	a, err := pipeline.NewProductScreening(m)
 	if err != nil {
@@ -174,6 +189,71 @@ func (g *gateway) Screen(ctx context.Context, owner, id string, input product.Sc
 	}
 	update, err := schemas.DecodeRequirementUpdate(pipeline.ExtractPayload(text))
 	return product.ScreenResult{Kind: product.ScreenRequirement, Text: text, RequirementUpdate: &update}, err
+}
+
+// observeIntent shadows the Screening decision point with one bounded Jev
+// call. Provider/API failure is recorded on the step and leaves the product
+// case untouched; an exhausted call cap or a failed pre-request journal write
+// stops the harness instead of spending without accounting.
+func (g *gateway) observeIntent(ctx context.Context, input *product.ScreenInput) error {
+	g.mu.Lock()
+	exhausted := g.models.MaxIntentCalls > 0 && g.intentCalls >= g.models.MaxIntentCalls
+	if !exhausted {
+		g.intentCalls++
+	}
+	g.mu.Unlock()
+	if exhausted {
+		return fmt.Errorf("Jev call limit reached (%d)", g.models.MaxIntentCalls)
+	}
+	in := intentInputFrom(input)
+	if err := g.journal(map[string]any{"event": "intent_request", "input": in}); err != nil {
+		return fmt.Errorf("persist intent request evidence: %w", err)
+	}
+	result, err := g.models.Intent.Classify(ctx, in)
+	if jErr := g.journal(map[string]any{"event": "intent_response", "result": result, "error": fmt.Sprint(err)}); jErr != nil {
+		return fmt.Errorf("persist intent response evidence: %w", jErr)
+	}
+	obs := &IntentObservation{RequestedModel: result.RequestedModel, DurationMS: result.Duration.Milliseconds(), Probabilities: map[string]float64{}}
+	if err != nil {
+		obs.ErrorClass = errClass(err)
+		obs.Error = truncateErr(err)
+	} else {
+		obs.Prediction = string(result.Intent)
+		for intent, p := range result.Probabilities {
+			obs.Probabilities[string(intent)] = p
+		}
+		obs.Confidence = result.Confidence
+		obs.SelectedProbability = result.SelectedProbability
+		obs.ResponseModel = result.ResponseModel
+		obs.InputTokens = result.InputTokens
+		obs.OutputTokens = result.OutputTokens
+	}
+	g.mu.Lock()
+	g.record.Intent = obs
+	g.mu.Unlock()
+	return nil
+}
+
+// intentInputFrom builds the bounded domain input from the exact pre-Screening
+// capture. The provider never sees product.ScreenInput, quotes, parts,
+// proposals, traces or prior raw user messages.
+func intentInputFrom(input *product.ScreenInput) decision.IntentInput {
+	turn := input.RequirementSource.Quote
+	if turn == "" {
+		turn = input.Text
+	}
+	var state json.RawMessage
+	if input.RequirementState != nil {
+		state = schemas.RequirementStatePromptView(*input.RequirementState)
+	}
+	return decision.IntentInput{
+		CurrentTurn:      turn,
+		RequirementState: state,
+		HasBuild:         input.HasBuild,
+		CanPlan:          input.Conversation.CanPlan,
+		BuildVersion:     input.Conversation.BuildVersion,
+		LastAssistant:    input.Conversation.LastAssistant,
+	}
 }
 func (g *gateway) Remote(ctx context.Context, _, _ string, payload json.RawMessage) (product.RemoteResult, error) {
 	var input schemas.PlanningInput

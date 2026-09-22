@@ -1,0 +1,26 @@
+{
+  "sources": {
+    "current-178-20260917/mechanisms/suite.json": "20ffe45204d7427848036af07244602928b0fc9b1e51ce887a79c142960064d0",
+    "current-178-20260917/screening-recorded/suite.json": "3e8a1bfa380911be129ed9ea3252e363904b40bc3c0d02d2020b1548f4af6dbc",
+    "current-178-20260917/cpu-recorded/suite.json": "1da53a87c8afc0a602089e85121c5842bc1826aa8a85d7544c744c01f71b9aeb"
+  },
+  "suite_sha256": "0a81b9b69f32f317ab7e3f0fd03cb725bfe18f8dfdfff500ff580dafaa17f412",
+  "synthetic_changes": [
+    "JEV-A..JEV-F synthetic intent cases with hand-written screening oracles",
+    "expect.next_action labels added to every reused message step",
+    "intent_split calibration/holdout partition added (round-robin over sorted case ids; session-disjoint)"
+  ],
+  "labeling": {
+    "method": "每条 message 步骤的 expect.next_action 由 AI 编程助手按 internal/agents/pipeline/screening_requirement_state.go 的现行动作决策契约逐条复核；15 条已有冻结标注全部与独立复核一致；其余复用步骤采纳其冻结 screen_oracle 的 next_action（复核确认与现行契约一致，Screening 结果仅作证据、不作为标注来源）；6 个合成用例为手写 oracle。",
+    "review_status": "AI-assisted review 2026-09-22; user spot-check of LABELS table recommended before treating directional results as decision-grade.",
+    "boundary_notes": [
+      "B2-002#1 confirm：先看看升级方向按冻结评审采纳 confirm（边界）。",
+      "C123-006#3 plan：按现有要求继续看看按冻结评审采纳 plan（继续即执行）。",
+      "L4-214/L5-306#1 collect：最小首轮缺金额按冻结评审采纳 collect。",
+      "L5-310#2 collect：撤销预算后回退，按冻结评审采纳 collect。",
+      "JEV-B/B2-003#1 confirm：首轮点名执行/继续比较被产品的首次确认门覆盖，标注为最终状态动作 confirm（oracle 原文为 plan）。",
+      "JEV-E#2 confirm：开放委托无点名执行，按现行契约标注 confirm（边界）。"
+    ]
+  },
+  "distribution_note": "63 labelled message steps (incl. 10 synthetic); class counts are recorded in the suite itself."
+}

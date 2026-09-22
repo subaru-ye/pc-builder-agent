@@ -49,23 +49,37 @@ func Load(raw []byte) (Suite, error) {
 				return s, fmt.Errorf("%s previous build: %w", c.ID, err)
 			}
 		}
-		for _, step := range c.Steps {
-			if s.Live && (len(step.Screen) != 0 || len(step.Builder) != 0) {
-				return s, fmt.Errorf("live suite must not contain model oracles")
-			}
-			switch step.Kind {
-			case "message":
-				if !s.Live && len(step.Screen) == 0 {
-					return s, fmt.Errorf("missing screening oracle in %s", c.ID)
+			for _, step := range c.Steps {
+				if s.Live && (len(step.Screen) != 0 || len(step.Builder) != 0) {
+					return s, fmt.Errorf("live suite must not contain model oracles")
 				}
-			case "confirm", "edit", "refresh", "retry":
-			default:
-				return s, fmt.Errorf("unknown step kind %q", step.Kind)
+				switch step.Kind {
+				case "message":
+					if !s.Live && len(step.Screen) == 0 {
+						return s, fmt.Errorf("missing screening oracle in %s", c.ID)
+					}
+				case "confirm", "edit", "refresh", "retry":
+				default:
+					return s, fmt.Errorf("unknown step kind %q", step.Kind)
+				}
 			}
 		}
+		if s.IntentSplit != nil {
+			assigned := map[string]bool{}
+			for _, list := range [][]string{s.IntentSplit.Calibration, s.IntentSplit.Holdout} {
+				for _, id := range list {
+					if !seen[id] {
+						return s, fmt.Errorf("intent_split lists unknown case %q", id)
+					}
+					if assigned[id] {
+						return s, fmt.Errorf("case %q is listed in both intent splits", id)
+					}
+					assigned[id] = true
+				}
+			}
+		}
+		return s, nil
 	}
-	return s, nil
-}
 
 // VerifyProvenance rejects fixture drift before any database or model work.
 func VerifyProvenance(raw, provenance []byte) error {
@@ -153,6 +167,17 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 	liveRequested := models.Screening != nil || models.Builder != nil
 	if suite.Live != liveRequested || (suite.Live && (models.Screening == nil || models.Builder == nil || models.MaxCalls <= 0)) {
 		return report, fmt.Errorf("live suite requires both real models and a positive shared call limit; replay requires offline suite")
+	}
+	if models.Intent != nil {
+		if models.MaxIntentCalls <= 0 {
+			return report, fmt.Errorf("a Jev observer requires a positive intent call cap")
+		}
+		if !liveRequested {
+			report.Mode = "shadow_live_intent"
+			report.Limitations = append(report.Limitations, "Jev 影子调用是真实网络调用；Screening/Builder 仍为录制 oracle，产品结果与离线重放同口径。")
+		} else {
+			report.Limitations = append(report.Limitations, "Jev 影子调用独立于真实模型调用记账，其结果不参与产品判定。")
+		}
 	}
 	if err := Prepare(ctx, dsn, suite.Catalog); err != nil {
 		return report, err
@@ -282,6 +307,15 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 				previous = &baseRecord
 			}
 			Grade(&record, step.Expect, previous)
+			if record.Intent != nil {
+				// Fill the comparison fields after the step settles: the
+				// existing decision is the final reduced state action.
+				o := record.Intent
+				o.ExistingDecision = record.State.NextAction
+				o.GroundTruth = step.Expect.NextAction
+				o.Agreement = o.ErrorClass == "" && o.ExistingDecision != "" && o.Prediction == o.ExistingDecision
+				o.Correct = o.ErrorClass == "" && o.GroundTruth != "" && o.Prediction == o.GroundTruth
+			}
 			for _, check := range record.Checks {
 				cr.Pass = cr.Pass && check.Pass
 			}
@@ -321,6 +355,7 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 		report.Cases = append(report.Cases, cr)
 	}
 	countUsage(&report)
+	report.Intent = buildIntentReport(suite, &report, models)
 	report.DurationMS = time.Since(start).Milliseconds()
 	return report, nil
 }

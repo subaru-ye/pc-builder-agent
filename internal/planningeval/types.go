@@ -17,6 +17,18 @@ type Suite struct {
 	Catalog    CatalogFixture    `json:"catalog"`
 	Pages      map[string]string `json:"pages"`
 	Cases      []Case            `json:"cases"`
+	// IntentSplit partitions case IDs into session-disjoint calibration and
+	// holdout sets for threshold selection and reporting. Optional; only used
+	// when a Jev observer is attached.
+	IntentSplit *IntentSplit `json:"intent_split,omitempty"`
+}
+
+// IntentSplit lists case IDs; every case is one session, so a split by case is
+// session-disjoint. Unlisted cases are reported as unassigned, never silently
+// folded into a split.
+type IntentSplit struct {
+	Calibration []string `json:"calibration"`
+	Holdout     []string `json:"holdout"`
 }
 type CatalogFixture struct {
 	Date          string                  `json:"date"`
@@ -126,6 +138,27 @@ type StepRecord struct {
 	DurationMS      int64                    `json:"duration_ms"`
 	Error           string                   `json:"error,omitempty"`
 	Classification  string                   `json:"classification"`
+	Intent          *IntentObservation       `json:"intent,omitempty"`
+}
+
+// IntentObservation records one bounded Jev call beside the Screening decision.
+// It never carries the raw input: ScreenInput evidence already holds it.
+type IntentObservation struct {
+	Prediction          string             `json:"prediction,omitempty"`
+	Probabilities       map[string]float64 `json:"probabilities,omitempty"`
+	Confidence          float64            `json:"confidence,omitempty"`
+	SelectedProbability float64            `json:"selected_probability,omitempty"`
+	RequestedModel      string             `json:"requested_model,omitempty"`
+	ResponseModel       string             `json:"response_model,omitempty"`
+	InputTokens         int                `json:"input_tokens,omitempty"`
+	OutputTokens        int                `json:"output_tokens,omitempty"`
+	DurationMS          int64              `json:"duration_ms,omitempty"`
+	ExistingDecision    string             `json:"existing_decision,omitempty"`
+	GroundTruth         string             `json:"ground_truth,omitempty"`
+	Agreement           bool               `json:"agreement,omitempty"`
+	Correct             bool               `json:"correct,omitempty"`
+	ErrorClass          string             `json:"error_class,omitempty"`
+	Error               string             `json:"error,omitempty"`
 }
 type CaseRecord struct {
 	ID    string       `json:"id"`
@@ -152,4 +185,57 @@ type Report struct {
 	Classifications     map[string]int `json:"classifications"`
 	DurationMS          int64          `json:"duration_ms"`
 	Limitations         []string       `json:"limitations"`
+	Intent              *IntentReport  `json:"intent,omitempty"`
+}
+
+// IntentReport aggregates the optional Jev observations. Confidence and the
+// selected-option probability are scored as independent policies; agreement
+// with the existing decision is reported separately from correctness.
+type IntentReport struct {
+	RequestedModel      string                    `json:"requested_model,omitempty"`
+	ResponseModels      map[string]int            `json:"response_models,omitempty"`
+	Calls               int                       `json:"calls"`
+	Successes           int                       `json:"successes"`
+	Failures            int                       `json:"failures"`
+	Errors              map[string]int            `json:"errors,omitempty"`
+	Ambiguous           int                       `json:"ambiguous"`
+	LatencyP50MS        int64                     `json:"latency_p50_ms,omitempty"`
+	LatencyP95MS        int64                     `json:"latency_p95_ms,omitempty"`
+	InputTokens         int64                     `json:"input_tokens,omitempty"`
+	OutputTokens        int64                     `json:"output_tokens,omitempty"`
+	CashCost            *float64                  `json:"cash_cost,omitempty"`
+	Labelled            int                       `json:"labelled"`
+	PredictedUnlabelled int                       `json:"predicted_unlabelled,omitempty"`
+	Confusion           map[string]map[string]int `json:"confusion,omitempty"`
+	Accuracy            *float64                  `json:"accuracy,omitempty"`
+	AgreementTotal      int                       `json:"agreement_total"`
+	AgreementCount      int                       `json:"agreement_count"`
+	CalibrationLabelled int                       `json:"calibration_labelled,omitempty"`
+	HoldoutLabelled     int                       `json:"holdout_labelled,omitempty"`
+	Thresholds          []IntentThresholdCurve    `json:"thresholds"`
+	Limitations         []string                  `json:"limitations"`
+}
+
+// IntentThresholdCurve evaluates one score policy on one split. Thresholds are
+// the calibration split's observed scores; the holdout curve is evaluated at
+// those same thresholds once.
+type IntentThresholdCurve struct {
+	Policy string                 `json:"policy"`
+	Split  string                 `json:"split"`
+	Points []IntentThresholdPoint `json:"points"`
+}
+
+type IntentThresholdPoint struct {
+	Threshold float64  `json:"threshold"`
+	Accepted  int      `json:"accepted"`
+	Correct   int      `json:"correct"`
+	// Precision is nil (undefined) when the accepted set is empty; an empty
+	// accepted set is never reported as perfect.
+	Precision *float64 `json:"precision"`
+	Coverage  float64  `json:"coverage"`
+	Fallback  float64  `json:"fallback"`
+	// CorrectShare = precision*coverage. Explicit upper bound on the share of
+	// turns a later safe route policy could serve correctly; not a production
+	// reduction claim.
+	CorrectShare float64 `json:"correct_share"`
 }

@@ -1,6 +1,6 @@
 // Package evalsuite 实现 P13 评估集:用例加载、确定性断言矩阵、执行器与报告。
 // 断言输入只来自执行结果、钉死快照与用例本身,全部为零 LLM 纯函数;
-// 口径与设计见 docs/tech/评估Runner设计.md 与 docs/eval/评估集建立记录.md。
+// 口径与设计见 docs/tech/评估设施.md 与 docs/eval/评估集建立记录.md。
 package evalsuite
 
 import (

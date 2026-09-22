@@ -15,7 +15,7 @@ import (
 )
 
 // QueryEmbedder 查询文本向量化的最小依赖面(internal/embedding.Client 实现之;
-// 接口注入便于单测 fake,语义选件.md §6)。
+// 接口注入便于单测 fake,自主规划流程.md §5)。
 type QueryEmbedder interface {
 	EmbedOne(ctx context.Context, text string) ([]float32, error)
 }

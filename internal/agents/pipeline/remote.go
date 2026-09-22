@@ -1,6 +1,6 @@
 package pipeline
 
-// P5 A2A 单跳拆分(A2A服务边界.md §2/§4):把单进程 Sequential 在初筛与
+// P5 A2A 单跳拆分(服务与状态.md §1):把单进程 Sequential 在初筛与
 // 改单预处理之间切一刀。host 进程只跑初筛(NewScreening)+ A2A 远程消费方;
 // buildsvc 进程跑「入口回填 → 改单预处理 → 生成校验循环」(NewRemote)。
 //

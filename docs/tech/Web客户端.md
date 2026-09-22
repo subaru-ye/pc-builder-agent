@@ -1,313 +1,79 @@
 # Web客户端
 
-> 当前 Session.proposal、右侧待解决方案与版本切换见[自主规划流程](自主规划流程.md)及 OpenAPI；正常追问和方案不要求新增配置版本。
+> 本文维护 Next.js 工作台的组件、状态与交互边界。产品需求见[PRD](../product/PRD.md)，HTTP 契约见[OpenAPI](../api/openapi.yaml)，执行与确认规则见[自主规划流程](自主规划流程.md)。视觉精确规则以根目录 DESIGN.md、DESIGN_CONTEXT.md、UI_RULES.md 为准。
 
-完整方案通过服务端交付核验后自动保存正式版本，不增加“确认此方案”操作。需求确认仍在生成前完成；模型标签与实际交付状态分开。右侧随新方案记录自动切换到已保存配置，待解决状态显示具体问题；会话列表优先使用服务端 status_label。资料按当前配件和引用归并链接，其余检索资料折叠，明确区分本地资料与本轮联网尝试。历史版本可查看当时保存的选型说明与假设。
+## 1. 定位与栈
 
-> 本文维护 Next.js 工作台的组件、状态与交互边界。产品需求见[PRD](../product/PRD.md)，HTTP 契约见[OpenAPI](../api/openapi.yaml)。
+一个克制、精确、偏深色的装机工作台，不做 Hero、统计卡片墙或营销区；只保留 Agent 进度、版本切换和 diff 高亮三类有意义动效，prefers-reduced-motion 下全部变为无位移即时切换。
 
-## 1. 产品与视觉命题
+- Next.js App Router + TypeScript strict + Tailwind CSS(必须用 CSS variables,不散落 hex)+ shadcn/ui(Radix 基础，按需安装)。
+- TanStack Query 管服务端状态；Zustand 只管 mobilePane、inspectorTab、diffSelection 等瞬时 UI，不存 session、message、build 或 run 真值，不跨浏览器刷新持久化。
+- React Hook Form + schema validator 用于 RequirementSpec 编辑，validator 必须从 OpenAPI/共享 schema 派生。
+- Playwright 做 E2E,Vitest + Testing Library 做组件/纯函数测试。以 package.json 和 pnpm-lock.yaml 为唯一真值。
 
-### 1.1 Visual thesis
-
-一个克制、精确、偏深色的装机工作台:以低对比炭黑表面和细边线承载高密度信息,只用一枚紫蓝强调色表达主要动作,让配置、价格和校验结论成为视觉主角。
-
-### 1.2 Content plan
-
-这是工作应用而非营销站,首屏直接进入任务:
-
-1. 会话与运行状态:用户知道自己在哪个会话、系统是否可用。
-2. 对话/需求:输入需求、回答追问、确认结构化需求。
-3. 配置检查器:查看当前版本零件、报价、校验和理由。
-4. 版本与交付:回看、diff、导出、分享。
-
-不做 Hero、统计卡片墙、品牌口号或与任务无关的展示区。
-
-### 1.3 Interaction thesis
-
-只保留三类有意义的动效:
-
-- Agent 进度按真实事件淡入,阶段更新使用同一位置的短过渡。
-- 切换版本时检查器内容做 160–220ms 的轻微淡入/位移,保持空间关系。
-- diff 中变化行用一次性背景高亮和边线强调,不循环闪烁。
-
-prefers-reduced-motion 下全部变为无位移即时切换。
-
-## 2. 工程栈与目录
-
-需求编辑器遇到历史固定执行字段被错误标为 context 时，在用户明确保存后按字段的事实或条件分类提交纠正，即使值未变化也可修复；仅打开面板或刷新不写服务端。notes/recipient/free.* 的背景分类仍可正常使用，装机对象不作为硬件约束。聊天中的错误背景绑定由 Screening 保存为带来源观察，面板更新和聊天更新最终沿用服务端同一 reducer。
-
-已结束且带运行 ID 的助手回复下提供“不满意”入口，按运行保存原因和说明，允许修改。提交失败保留输入；读取历史反馈后可载入编辑。入口使用现有按钮、表单与响应式布局，详情见[反馈与评估回流](反馈与评估回流.md)。浏览器覆盖桌面、平板和手机的提交、重试、修改、刷新后读取流程；这不替代真实模型的完整产品验收。
-
-前端位于 web/,不建立通用 monorepo:
-
-```text
-web/
-├── src/
-│   ├── app/
-│   │   ├── page.tsx
-│   │   ├── s/[session_id]/page.tsx
-│   │   └── share/[token]/page.tsx
-│   ├── components/
-│   │   ├── ui/              # 仅实际安装的 shadcn/Radix 原子组件
-│   │   ├── chat/
-│   │   ├── requirement/
-│   │   ├── build/
-│   │   └── versions/
-│   ├── features/            # 按会话/run/build/share 划分的状态与组合逻辑
-│   ├── lib/api/             # 生成类型、fetch client、SSE parser
-│   └── stores/              # 仅瞬时 UI 状态
-├── package.json
-└── pnpm-lock.yaml
-```
-
-固定选择:
-
-- Next.js App Router + TypeScript strict。
-- Tailwind CSS + CSS variables。
-- shadcn/ui 使用 Radix 基础;按需安装 Button、Tabs、Dialog、Drawer、Tooltip、DropdownMenu、ScrollArea、Textarea、Select、Form、Toast/Sonner。
-- TanStack Query 管服务端状态。
-- Zustand 只管 mobilePane、inspectorTab、diffSelection 等瞬时状态;不存 session、message、build 或 run 真值。
-- React Hook Form + schema validator 用于 RequirementSpec 编辑;validator 必须从 OpenAPI/共享 schema 派生,不能手写另一份规则。
-- Playwright 做 E2E,Vitest + Testing Library 做组件/纯函数测试。
-
-scaffold 当天使用稳定版本,随后以 package.json 和 pnpm-lock.yaml 为唯一真值。开发指导不得长期保留 latest 命令作为日常安装方式。
-
-## 3. Server/Client 边界
+## 2. Server/Client 边界
 
 | 页面/模块 | 渲染边界 | 原因 |
 |---|---|---|
-| 根 layout、静态元数据 | Server Component | 少 JS、统一主题；Geist 使用本地字体包，构建与开发不请求 Google Fonts |
+| 根 layout、静态元数据 | Server Component | 少 JS、统一主题；Geist 本地字体包，不请求 Google Fonts |
 | /share/[token] | Server Component | 首屏、OG 和只读 SEO |
 | 主工作台 shell | Server 可输出框架 | 快速首屏 |
 | 聊天、composer、SSE、需求表单 | Client Component | 浏览器状态与交互 |
 | 配置/版本查询 | TanStack Query Client | SSE 后精确失效与刷新 |
-| 分享图 | Next ImageResponse | 纯展示,只消费 public DTO |
+| 分享图 | Next ImageResponse | 纯展示，只消费 public DTO |
 
-Next.js 不定义业务 Route Handler 或 Server Action。开发环境由 next.config rewrite 把 /api/:path* 转发到 http://localhost:8082/api/:path*;healthz/readyz 可单独代理。生产由同源反向代理承担相同职责。
+Next.js 不定义业务 Route Handler 或 Server Action；开发环境由 next.config rewrite 把 /api/:path* 转发到 Go API,生产由同源反向代理承担。
 
-## 4. 页面与导航
+本机评估 `/eval` 入口：显式设置 `EVALDESK_API_BASE_URL` 后经 rewrite 连接独立 `cmd/evaldesk`,前后端均绑定 loopback,详见[评估设施](评估设施.md)。
 
-### 本机评估 `/eval`
+## 3. 页面与导航
 
-显式设置 `EVALDESK_API_BASE_URL` 后，通过现有 rewrite 连接独立 `cmd/evaldesk`，前后端均绑定 loopback。运行列表、条件对比、共同题指标和逐题双栏证据复用现有主题、Button、React Query；「溯源时间线」串起历史运行、完整冻结题库与当时的 Git 提交，题库可逐题查看输入和期望并跳转运行结果。所有读取、判卷及脱敏在 Go 完成。该入口不依赖产品 API 或模型配置，详见[本机评估工作台](本机评估工作台.md)。
+### 3.1 /
 
-### 4.1 /
+- 品牌名 + 一句功能说明 + 直接可用的 composer;3 个真实示例 prompt 点击只填入不自动发送。
+- 页面加载不预创建空会话；点击「新建对话」显式 POST session。
+- 会话列表桌面常驻、窄屏从顶栏打开；每条会话「…」提供重命名、归档/取消归档和删除。删除前明确提示消息、需求、配置版本与分享一并移除，运行中会话拒绝删除。默认列表只含未归档会话。
+- 会话管理以 Go API 为真值:`PATCH /sessions/{id}`(title 1–80 字符、archived)、`GET ?archived=true`、`DELETE`(204)。改名与归档不改需求快照或配置版本，不调用模型。
 
-- 显示品牌名「装机配置单 Agent」、一句功能说明和直接可用的 composer。
-- 页面加载不预创建空会话；点击「新建对话」时显式 POST session 并进入空会话。直接在首页首次发送仍先创建会话，再发送消息并导航。
-- 提供 3 个真实示例 prompt,点击只填入输入框不自动发送。
-- 首页与会话页复用最近会话列表和新建入口；桌面常驻，窄屏从顶栏打开，无登录诱导。
-- 每条会话右侧「…」提供重命名、归档/取消归档和删除。列表顶部切换最近/已归档；删除前明确提示消息、需求、配置版本与分享链接一并移除，运行中的会话拒绝删除。
-- 管理操作以 Go API 和 PostgreSQL 为真值：`PATCH /api/v1/sessions/{id}` 接受 `title`（去空白后 1–80 字符，单行）和/或 `archived`；`GET /api/v1/sessions?archived=true` 查询归档；`DELETE /api/v1/sessions/{id}` 成功返回 204。默认列表只包含未归档会话。当前会话归档或删除成功后返回首页。
-- 迁移 `00014_session_management.sql` 增加 `archived` 和 `title_custom`。归档仅影响列表分类，仍可打开查看和继续对话；改名与归档不改需求快照或配置版本，不调用模型。手动命名不会被首条消息自动标题覆盖。删除在锁定会话并确认无运行中的任务后，事务清理版本、分享、需求、消息、运行与反馈；Redis 临时上下文按原 TTL 过期，删除后的会话/运行归属校验不再允许访问。
+### 3.2 /s/[session_id]
 
-### 4.2 /s/[session_id]
+桌面三栏：左 240px 会话列表(可调 200–360px),中对话，右 `clamp(360px, 34vw, 480px)` 配置栏(可调 280–640px,聊天至少保留 360px)。`ResizableWorkspace` 分隔线支持键盘 16px 微调、Home/End 到边界、双击恢复默认；宽度存 localStorage(仅为界面偏好)。
 
-桌面结构:
+- 会话摘要常驻聊天顶部；详细需求独立展开为最大宽 672px 抽屉；桌面配置详情常驻右栏，窄屏用可返回对话的抽屉。
+- `Message.display_content` 为服务端生成的可选展示摘要，聊天展示与复制优先使用非空摘要；摘要复用 presenter 的版本、配件名称、报价口径和规则结论，不调用额外模型。旧消息仅依据同会话运行证据生成只读摘要，无法准确关联时保留原文。
+- 切换会话按 session_id 重建聊天组件，运行句柄和未发送输入不误带入另一会话。
+- 需求字段独立展示信息用途(事实、说明、配置条件)和满足强度；未分类旧字段保持未知，不在前端按关键词猜值。撤销后的原文仍留在历史，不继续作为生成输入。
+- 已结束且带运行 ID 的助手回复下提供“不满意”入口，详见[评估设施](评估设施.md)。
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│ 品牌 / 会话标题                      服务状态  导出  分享   │
-├──────────────┬─────────────────────────┬───────────────────────┤
-│ 新建对话     │ 当前需求摘要 · 查看修改 │ 常驻配置详情          │
-│ 最近会话     ├─────────────────────────┤ 报价、快照与状态      │
-│ 当前项标识   │ 对话历史与真实进度      ├───────────────────────┤
-│              │ 需求编辑独立展开        │ 配置 / 校验 / 版本    │
-│              │                         │ 零件及依据            │
-│              ├─────────────────────────┤                       │
-│ 个人设置     │ 多行输入框 / 发送       │ 版本对比与历史快照    │
-└──────────────┴─────────────────────────┴───────────────────────┘
-```
+### 3.3 /share/[token]
 
-- 视口 ≥1024px 左侧默认 240px 会话列表；右侧配置栏默认 `clamp(360px, 34vw, 480px)`。`ResizableWorkspace` 统一约束两侧宽度：左 200–360px、右 280–640px，聊天至少保留 360px，正文最大宽 896px。首页复用左栏宽度，≥1280px 的概览右栏也支持拖动。
-- 分隔线使用 pointer capture，支持左右键 16px 微调、Home/End 到边界、双击/Enter 恢复该侧默认值。宽度使用 `pc-builder.sidebar-widths.v1` 保存在 localStorage，仅为界面偏好；刷新恢复，窗口缩小时限制当前展示宽度，不写入会话需求或个人画像。存储不可用时仍可拖动。
-- 空会话欢迎区在聊天阅读区居中，`SuggestedPrompts` 与首页共享三个输入示例；点击预填并聚焦，不发送请求。新建按钮在客户端交互就绪后启用，避免首次加载时点击未生效。
-- 对话底部不再重复配置摘要和详情按钮；窄屏在对话上方保留配置详情入口，桌面直接查看右栏。
-- 聊天反馈/复制仅保留图标，保留可访问名称、悬停/聚焦提示与触屏 44px 点击范围。Markdown 使用段落和列表间距，避免容器保留空白造成多余空行。
-- `Message.display_content` 为服务端生成的可选展示摘要，聊天展示与复制优先使用非空摘要；`content` 保留原始结果。迁移 `00015_message_presentation.sql` 在消息中增加摘要与对应的 `build_version`，新摘要在完成运行事务中保存，也通过 SSE 传递。
-- 摘要复用 presenter 的版本、父版本、配件名称、报价口径和规则结论，不调用额外模型。首次生成展示核心搭配，后续版本展示实际变动、可确认的预算/品牌调整依据和价格变化。超预算、缺价、适配失败/数据不足及静音证据不足保留中文提醒；不复述内部标识、原始 rationale 或工程参数。摘要暂时不可用时提示查看详情，不暴露内部输出。
-- 旧消息仅依据同会话运行证据中的版本，或同时匹配持久化版本号与 build_ref 来生成只读摘要；不关联最新版本，不改写旧消息和配置，无法准确关联时保留原文。普通追问与用户消息保持原文。
-- 详细需求独立展开为最大宽 672px 的抽屉，配置栏仅保留配置、校验和版本。确认成功回到对话展示进度；来源跳转关闭需求抽屉并定位消息；已有配置保持显示直到新版本保存。
-- 需求字段独立展示信息用途（事实、说明、配置条件）和满足强度；未分类旧字段保持未知。未能可靠结构化的原文及来源可查看、修正或撤销，不在前端按关键词猜值。撤销后的原文仍留在历史，不继续作为生成输入。
-- 配置未保存时，聊天和错误提示展示服务端提供的具体业务原因及需求保存状态，刷新后仍能看到。待核验的硬条件保留原强度；用户可继续聊天补充或通过面板纠正，而不只有重复确认入口。
-- 配置栏在无配置时显示待生成状态，生成与刷新后自动显示已保存配置，无需点击展开。窄屏配置仍使用可返回对话的抽屉。
-- 工作台顶栏不再重复显示个人设置，桌面和窄屏均通过会话导航底部访问；无会话导航的其他页面保留自身入口。
-- 切换会话按 session_id 重建聊天组件，运行句柄和未发送输入不会误带入另一会话；切换版本保留当前对话实例。
-- 顶栏高 56px;输入区保持可见,聊天区独立滚动。
-- 不用厚重外框包住每个区域;主要层级由表面色和 1px hairline 分隔。
+无会话导航、聊天、改单或 owner 操作；只展示配置版本、生成时间、报价快照、校验、理由和免责；token 无效/撤销统一展示「分享不存在或已失效」；页面可打印，打印样式移除导航和交互按钮。
 
-### 4.3 /share/[token]
+## 4. 主流程交互
 
-- 无会话导航、聊天、改单或 owner 操作。
-- 只展示配置版本、生成时间、报价快照、校验、理由和免责。
-- token 无效/撤销统一展示「分享不存在或已失效」,不提供内部错误。
-- 页面可打印,打印样式移除导航和交互按钮。
+- 首次发送按钮立即 submitting 防双击；Session GET 返回 active_run 时自动连接 SSE;刷新先画已有消息/版本再恢复 run,不清空检查器。404 统一通用不存在页，不区分他人会话与真实不存在。degraded=true 时顶栏常驻提示，不阻塞当前操作。
+- 聊天：user 与 assistant 用对齐、留白和轻表面区分，不做大气泡和彩色头像；markdown 仅支持段落、列表、强调和安全链接，禁用原始 HTML;composer Shift+Enter 换行、Enter 发送，中文输入法 composition 期间 Enter 不发送；running 状态禁用再次发送，不提供假取消按钮。
+- 生成未交付时，聊天持久化服务端按结构化业务原因生成的安全说明(待核验条件、需求已保存、原配置保留、下一步)；失败操作区保留「查看或补充需求」和重试，原始远程输出只作证据不直接作为错误文案。
+- 需求确认卡字段分组：核心(预算、弹性、主用途)、游戏(名称、分辨率、帧率，非 gaming 隐藏不伪造)、偏好(尺寸、噪音、品牌)、约束(已有配件、优先品类、备注)。保存调用 PATCH 完整替换，成功后再更新 Query cache;确认与保存分开，有未保存修改时确认先保存。字段错误显示 API 稳定字段路径。品牌 any 明确显示「不限」，不默认帮用户选择。
+- 动态状态面板按服务端 kind 区分用途事实、补充说明与配置条件；只有配置条件显示必须/尽量满足。保留原话区展示未明确内容、原因和来源，撤销操作明确说明会同时撤销相关字段。
+- Agent 进度固定三阶段文案(screening 正在整理需求 / remote_processing 正在生成并校验配置 / finalizing 正在保存结果)；最后事件超 30 秒显示重连提示，超 60 秒加辅助文案，10 分钟失败后提供按新幂等键重试。
 
-## 5. 主流程交互
+## 5. 配置检查器
 
-### 5.1 会话创建与恢复
+- 版本摘要：vN 与父版本、pass/review/fail、总价、预算、差额、快照日期。回看旧版本显示「历史版本」，改单快捷入口禁用。
+- 零件列表固定顺序：CPU、GPU、主板、内存、SSD、电源、机箱、散热。每行含品类图标、品牌型号、SKU、数量、单价/小计、一句 rationale;当前版本 phase=ready 时提供「更换此件」(预填「把显卡换成……」到 composer 并聚焦)。无商品图片不用占位框；缺价显示「缺价，未计入合计」，不可显示 ¥0。已有件不显示普通换件按钮。
+- 校验区：12 条规则顺序与 schemas.AllRuleIDs 一致；每条展示中文名、outcome、severity、detail,高级展开才显示 observed/missing_fields;unknown(数据不足)与 warning(已知风险)视觉不同；免责区固定可见。
+- 版本与 diff:时间线按 v1→vN 排列并明确 parent;diff 显式选择 from/to,八品类全部展示，变化行展示前后型号和价格差；快照日期不同必须在总差额附近提示；切换版本保留聊天滚动和输入草稿。工作台同时显示整机参考价与采购合计，预算差按选定口径计算。
 
-- 首次发送时按钮立即进入 submitting,防止双击。
-- Session GET 返回 active_run 时自动连接 SSE。
-- 页面刷新后先画已有消息/版本,再恢复 run,不清空检查器。
-- 404 显示通用不存在页;不得区分他人会话与真实不存在。
-- degraded=true 时顶栏展示常驻提示：对话与需求仍保存在 PostgreSQL，重连会重新读取状态；实时事件与部分配置修改上下文可能受限，不阻塞当前操作。
+## 6. 状态管理与缓存
 
-### 5.2 聊天
+TanStack Query key 分层：sessions / session/{id} / builds/{session_id} / build/{session_id}/{version} / diff/{session_id}/{from}/{to} / publicShare/{token}。失效规则：assistant.completed → session;requirement.ready → session;build.saved → session、builds、对应 build、相关 diff;分享创建/撤销 → 当前 build 的 share 状态。SSE 增量不直接伪造完整 BuildView;路由参数/session/version 是可分享导航状态，优先放 URL。
 
-- user 与 assistant 使用对齐、留白和轻表面区分,不做大气泡和彩色头像。
-- assistant.delta 只更新当前临时消息;assistant.completed 替换并刷新 session。
-- markdown 仅支持段落、列表、强调和安全链接;禁用原始 HTML。
-- composer 支持 Shift+Enter 换行、Enter 发送;中文输入法 composition 期间 Enter 不发送。
-- running 状态禁用再次发送,显示当前 run 的真实阶段。
-- 不提供假取消按钮;允许用户离开页面并稍后恢复。
-- 生成未交付时，聊天持久化服务端按结构化业务原因生成的安全说明：具体待核验条件、需求已保存、原配置保留与下一步。失败操作区保留「查看或补充需求」和重试；失败后仍可继续聊天补充，不要求用户把必须条件改成软偏好。原始远程输出只保留为证据，不直接作为错误文案；已有完整聊天说明时不在操作区重复整段。
+## 7. 响应式与无障碍
 
-### 5.3 需求确认卡
+- ≥1024px 三栏；768–1023px 单列聊天 + 顶栏会话抽屉；<768px 手机单列、底部 composer、详情全宽抽屉。核心功能不删除：需求确认、配置、规则、版本、diff、导出、分享均可达；表格转定义列表；点击目标 ≥44×44px。
+- 所有状态同时具备文字、图标和颜色；focus-visible 清晰；Radix 语义与焦点管理；SSE 更新用礼貌 aria-live,delta 不逐 token 朗读；错误文案说明发生了什么、数据是否保存、下一步怎么做；不使用「AI 正在思考」等不可验证表述；价格快照和免责使用产品语言。
 
-字段分组:
+## 8. 测试要求
 
-- 核心:预算、预算弹性、主用途。
-- 游戏:游戏名称、分辨率、帧率;非 gaming 隐藏但不伪造值。
-- 偏好:尺寸、噪音、CPU/GPU 品牌。
-- 约束:已有配件品类、优先品类、备注。
-
-规则:
-
-- 表单初始值来自完整 RequirementSpec。
-- 保存调用 PATCH 完整替换;成功后再更新 Query cache。
-- 确认按钮与保存分开;有未保存修改时确认先保存,保存成功后再 confirm。
-- 字段错误显示 API 返回的稳定字段路径,不展示 Go error 原文。
-- 品牌 any 明确显示「不限」;不得默认帮用户选择 NVIDIA/AMD。
-- 动态状态面板按服务端 `kind` 区分用途事实、补充说明与配置条件；只有配置条件显示必须/尽量满足。补充说明编辑可明确选择信息用途，旧记录缺少分类时要求选择，不默认为说明或自动降低强度。保留原话区展示未明确内容、原因和来源，撤销操作明确说明会同时撤销相关字段；已解决原话保留历史标记。
-
-### 5.4 Agent 进度
-
-进度区固定映射:
-
-| stage | 文案 | 可说明内容 |
-|---|---|---|
-| screening | 正在整理需求 | 可能继续追问或准备确认卡 |
-| remote_processing | 正在生成并校验配置 | 生成和规则校验合并描述 |
-| finalizing | 正在保存结果 | 版本即将可查看 |
-
-最后一次事件超过 30 秒时显示「连接不稳定,正在重连」;这不是 run 失败。超过 60 秒增加「复杂偏好可能需要更久」辅助文案;10 分钟失败后提供按新幂等键重试。
-
-## 6. 配置检查器
-
-### 6.1 版本摘要
-
-顶部一行固定展示:
-
-- vN 与父版本。
-- pass/review/fail 文字 + 图标。
-- 总价、预算、差额。
-- 快照日期。
-
-回看旧版本时显示「历史版本,当前为 vN」,所有改单快捷入口禁用,避免用户误以为会基于旧版修改。
-
-### 6.2 零件列表
-
-固定顺序:CPU、GPU、主板、内存、SSD、电源、机箱、散热。
-
-每行包含:
-
-- 品类图标和中文名。
-- 品牌型号;次级文本显示 SKU。
-- 数量、单价/小计。
-- 一句 rationale。
-- 当前版本且 phase=ready 时的「更换此件」。
-
-「更换此件」行为:
-
-1. 将「把显卡换成……,其他配件尽量不动」写入 composer。
-2. 选中省略处并聚焦。
-3. 用户编辑后手动发送。
-
-无商品图片时不用占位图片框,只用一致的品类图标。缺价显示「缺价,未计入合计」,不可显示 ¥0。
-
-### 6.3 校验区
-
-- 摘要先展示总体状态和通过/警告/unknown/错误数量。
-- 12 条规则顺序与 schemas.AllRuleIDs 一致；“主板与电源安装”在纯 ITX 机箱中同时展示电源形态及限长结果。
-- 每条展示规则中文名、outcome、severity、detail;高级展开才显示 observed/missing_fields。
-- pass 不用大面积绿色,只使用小图标和文本。
-- unknown 与 warning 视觉不同:unknown 表示数据不足,warning 表示已知风险。
-- 免责区固定可见,不能折叠或通过设置关闭。
-
-### 6.4 版本与 diff
-
-- 时间线按 v1→vN 排列,明确 parent。
-- 默认查看当前版本;选择旧版不会改变当前真值。
-- diff 需要显式选择 from/to,默认当前版本与父版本。
-- 八品类全部展示;未变化行保持低强调,变化行展示前后型号和价格差。
-- 快照日期不同必须在总差额附近提示。
-- 切换版本时保留聊天滚动和输入草稿。
-
-## 7. 状态管理与缓存
-
-TanStack Query key 固定分层:
-
-- sessions
-- session/{id}
-- builds/{session_id}
-- build/{session_id}/{version}
-- diff/{session_id}/{from}/{to}
-- publicShare/{token}
-
-失效规则:
-
-- assistant.completed → session。
-- requirement.ready → session。
-- build.saved → session、builds、对应 build、相关 diff。
-- 分享创建/撤销 → 当前 build 的 share 状态。
-
-SSE 增量不直接伪造完整 BuildView。Zustand 不跨浏览器刷新持久化;路由参数/session/version 是可分享导航状态,优先放 URL。
-
-## 8. 视觉 token 摘要
-
-精确规则以根目录 DESIGN.md、DESIGN_CONTEXT.md、UI_RULES.md 为准。实现必须使用 CSS variables,不得在组件散落 hex。
-
-- canvas:#0b0c0f;surface:#111318;surface-raised:#171a21。
-- hairline:#272b35;文字主色:#f2f3f5;次级:#a6abb6。
-- primary:#737de8;只用于主操作、选中和焦点。
-- success:#45a66b;review:#d39a45;error:#d85c66;unknown:#8f96a3。
-- 按钮/输入 8px 圆角,交互面板 12px;不用 pill 作为常规按钮。
-- 4px 基础间距;常用 8/12/16/24/32。
-
-## 9. 响应式
-
-| 宽度 | 布局 |
-|---|---|
-| ≥1024px | 会话导航、聊天、常驻配置三栏；需求独立展开 |
-| 768–1023px | 单列聊天，顶栏会话列表抽屉，详情按需展开 |
-| <768px | 手机单列，底部 composer，详情全宽抽屉与返回对话入口 |
-
-手机端要求:
-
-- 核心功能不删除:需求确认、配置、12 条规则、版本、diff、导出、分享均可达。
-- 点击 build.saved 后不强行把用户从聊天切到配置,只显示可访问提示。
-- 表格转为定义列表,不横向压缩到不可读。
-- 点击目标 ≥44×44px。
-
-## 10. 无障碍与文案
-
-- 所有状态同时具备文字、图标和颜色。
-- focus-visible 清晰,不移除 outline 后无替代。
-- Tabs、Dialog、Drawer 使用 Radix 语义与焦点管理。
-- SSE 更新使用礼貌 aria-live;delta 不逐 token 朗读,completed 时统一通知。
-- 错误文案说明发生了什么、数据是否保存、下一步怎么做。
-- 不使用「AI 正在思考」等不可验证表述;只显示协议允许的真实阶段。
-- 价格快照和免责使用产品语言,不使用小到难读的法律灰字。
-
-## 11. 测试与 DoD
-
-- API client 与 OpenAPI 生成类型无漂移。
-- RequirementSpec 表单条件字段、保存/确认串行和错误路径单测。
-- SSE parser 覆盖拆包、多行 data、心跳、重放、重复 id 和终止事件。
-- 配置、校验、diff 的 pass/review/fail/unknown/缺价快照测试。
-- Playwright 覆盖首次会话、追问、确认、生成、改单、回看、diff、导出。
-- 375/768/1440 视口截图回归。
-- axe 无严重/高等级问题;仅键盘可完成主路径。
-- 人为断网、Redis degraded、buildsvc 503、10 分钟 timeout 均有可恢复 UI。
+API client 与 OpenAPI 生成类型无漂移；RequirementSpec 表单条件字段、保存/确认串行和错误路径单测；SSE parser 覆盖拆包、多行 data、心跳、重放、重复 id 和终止事件；配置、校验、diff 的 pass/review/fail/unknown/缺价快照测试；Playwright 覆盖首次会话、追问、确认、生成、改单、回看、diff、导出；375/768/1440 视口；axe 无严重/高等级问题；断网、Redis degraded、buildsvc 503、10 分钟 timeout 均有可恢复 UI。

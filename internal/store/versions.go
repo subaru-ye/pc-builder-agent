@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// 本文件是 P4 版本快照的读写层(版本快照与增量改单.md §2/§3)。
+// 本文件是 P4 版本快照的读写层(服务与状态.md §3)。
 // store 包由此引入唯一的运行时写路径:requirements/builds 两张版本表;
 // parts/prices 仍只读(导入走离线 cmd)。
 

@@ -171,98 +171,23 @@ publish 调用 Go 导入器写 PostgreSQL，成功后切换 `var/data/current-pr
 4. 走规格 review/publish，验证数据库、当前 release 和检索可用性；语义检索还需检查 embedding 是否更新，不能假定自动完成。
 5. SKU 成为当前 `active_core` 后，再走价格发布路径，最后检查默认搜索和装机候选能否找到它。
 
-当前没有 `products.jsonl` 候选包的一键导入器。`pcdata normalize --run-id ...` 主要复制当前 parts/证据，**不会自动理解本指南的候选格式**。已有规格 CLI 为 `review --run-id`、`publish --run-id --policy manual`，但必须先有正确的 normalized 数据和溯源，不能跳过接入直接执行。具体维护步骤见[发布管道](../tech/数据获取与发布管道.md)。
+当前没有 `products.jsonl` 候选包的一键导入器。`pcdata normalize --run-id ...` 主要复制当前 parts/证据，**不会自动理解本指南的候选格式**。已有规格 CLI 为 `review --run-id`、`publish --run-id --policy manual`，但必须先有正确的 normalized 数据和溯源，不能跳过接入直接执行。具体维护步骤见[数据管道设计](../tech/数据管道设计.md)。
 
-## 8. 本次试采带来的经验
+## 8. 平台实测经验（2026-09-08 试采与扫库）
 
-2026-09-08 使用联网搜索和页面文本读取，检查一个官方规格页和两个京东商品链接。未进行登录、验证码操作、下单或正式入库，也未验证淘宝和拼多多的浏览器采集可用性。
+游客可达性：京东 PC/淘宝/拼多多/1688 为登录墙；京东移动端商品可见但价格位数遮蔽（如 `¥5??`）；淘宝列表有滑块验证码；苏宁仅少数第三方店可见（个别异常价 +219%）；ZOL 详情页为媒体级（D 级）参考价且同页多处矛盾，不可作报价证据。规则 §5.3 禁止采纳"登录后才显示"的价格，因此登录态自动采集在当前规则下没有合规出口；**人工核验 + `source_id=manual` 的规范 CSV 是当前现实通道**。
 
-| 目标 | 实际结果 | 处理 |
-|---|---|---|
-| [AMD Ryzen 5 7600 官方页](https://www.amd.com/en/products/processors/desktops/ryzen/7000-series/amd-ryzen-5-7600.html) | 能读取插槽、TDP、核显型号等文字，取得部分规格候选 | 对应已有 `cpu-r5-7600`，不重复建 SKU；保留为候选 |
-| [京东混合型号商品页](https://i-item.jd.com/10106067244239.html) | 搜索标题包含多个 CPU 型号，尾部变体为 7700X；打开后进入风控路径 | 型号不能按搜索词绑定，报价未知 |
-| [京东 7500F 商品页](https://item.jd.com/100059227024.html) | 打开后进入风控路径，读取工具未取得商品正文 | 报价、库存及售卖条件未知 |
+验证有效的方法：
 
-结果为 **1 条部分规格候选、0 条可发布报价**。这说明文本模型能参与规格抽取，且联网搜索命中不保证能取得有效报价；不能推广为所有平台、所有浏览器都无法采集。
+1. **Bing 找京东商品 ID**：搜索词直接带 `item.jd.com`，结果跳转链接 `u=a1<base64>` 参数本地解码得真实商品页，再转 `item.m.jd.com/product/<id>.html` 游客访问；第二套混淆（解码乱码）整条跳过。通用搜索基本只返回京东 SEO 聚合页和导购页，拿不到直链。
+2. **京东移动端变体映射防误绑**：页面内嵌 `window._itemOnly.item.newColorSize` 提供"变体名→skuId"映射，与 URL skuId 互核，可排除混合列表误绑（7800X3D/7600X、WIFI 版主板等）；`priceFloor` 中未渲染的促销金额属"登录后才可见"，按 §5.3 不采纳，只留线索。
+3. **变体陷阱**：混合列表不能按搜索词绑定（ZOL"5600"实际挂 5600X 专属页、苏宁 Kingston 单条非套条）；京东"已选变体"尾部命名行（如 `RM1000x 1000W`）价格即所选变体现价，淘宝/拼多多多型号链接显示最低档价，不可用。
 
-本机样本包（2026-09-08 已按所有者裁定删除，此处仅留存结论）：pilot-01 只保存官方页短摘录、提取候选和访问诊断；摘录是工具提供的片段，不是完整原始页面，不足以满足正式发布证据要求。风控结果记录为工具观察，不编造 HTTP 状态码。未成功取得的价格保持 null，没有生成 approved-prices.csv。
-
-### 8.1 第二批（2026-09-08-office-01）实证：游客可达性、可用方法与限制
-
-第二批目标为 19 个已有 SKU 的报价补充。所有者在中途裁定中断；批次包（pilot-01、office-01）因无可用产出已于 2026-09-08 按所有者裁定删除，本节只保留经核验的方法与失败原因。核对日期：2026-09-08。
-
-**平台游客可达性（当日实测，会话内观察，未存页面快照的已注明）：**
-
-| 平台入口 | 游客可见内容 | 价格 |
-|---|---|---|
-| 京东 PC 端商品/搜索 | 登录墙 | 不可见 |
-| 京东移动端 `item.m.jd.com/product/<id>.html` | 商品、变体、商家、库存/配送、服务标签 | 位数遮蔽（如 `¥5??`）+ "登录查看价格" |
-| 淘宝列表 | 滑块验证码 | 不可见 |
-| 淘宝/天猫搜索 | 不登录不出结果 | 不可见 |
-| 拼多多、1688 | 登录墙 | 不可见 |
-| 苏宁 `search.suning.com/<关键词>/` 与 `www.suning.com/item/<店铺ID>/<商品ID>.html` 包装页 | 搜索、商品、部分含价 | 少数第三方店可见（本次 1 条，异常 +219%） |
-| 苏宁规范页 `product.suning.com/...` | 登录墙 | 不可见 |
-| ZOL 详情页 | 参数与"参考价" | 媒体级（D 级），且同一页面多处价格自相矛盾，不可作报价证据 |
-
-**验证有效的方法：**
-
-1. **Bing 找京东商品 ID**：在 Bing 搜索关键词里直接带上 `item.jd.com` / `item.m.jd.com`；结果跳转链接形如 `bing.com/ck/a?...&u=a1<base64>`，本地解码 `u=` 参数可得真实 `item.jd.com/<id>.html`，再转 `item.m.jd.com/product/<id>.html` 游客访问。部分结果用第二套混淆（解码为乱码），直接整条跳过即可。通用搜索（Google/Bing 默认结果）基本只返回京东 SEO 聚合页（`www.jd.com/jiage/` 等）和导购页，拿不到直链；smzdm、慢慢买等导购帖实测不含直链。
-2. **京东移动端变体映射防误绑**：页面内嵌配置 `window._itemOnly.item.newColorSize` 提供"变体名→skuId"映射，可与 URL skuId 互核；本批次据此排除了 7800X3D/7600X、5600X、WIFI 版主板、B760M 系列等混合列表误绑。部分页面 `priceFloor` 含未渲染促销金额（如 ￥870/￥890）——渲染层不展示属"登录后才可见"，按 §5.3 不采纳，只可留线索。
-3. **变体陷阱实例**：ZOL"5600"搜索挂接的京东链接落到 5600X 专属页（单变体且默认区域无货）；苏宁 Kingston 内存条目为单条而非套条。混合列表必须用映射核验已选变体，不能按搜索词绑定。
-
-**本轮限制与结论：**
-
-- 游客态三大主流平台均无可合规采纳的报价（京东遮蔽价按所有者裁定剔除出交付）；§5.3 禁止采纳"登录后才显示"的价格，因此登录态自动采集在本规则下也没有合规出口。**人工核验 + `source_id=manual` 的规范 CSV 是当前现实通道**；所有者已提出可考虑修订 §5.3，修订未执行前规则仍强制。
-- 本轮浏览器截图功能不可用（NATIVE_BROWSER_VIEWPORT_UNAVAILABLE），证据只能为 `tool_extracted_text`；不满足原始页面快照要求，正式发布证据缺口仍在。
-- 京东移动端部分页面不渲染商家与库存（内嵌配置亦无 seller 字段），相应字段如实记 null/unknown，不得用店铺名搜索结果补齐。
-- 批次 manifest 实践：`model_used=true` 而 provider/model 不可确定时记 null；`products.jsonl` 无候选时留空文件并注明空文件哈希；被剔除行保留在工作底稿（`notes-findings.jsonl`）而非交付物，剔除决定写入 `review.md`。
-
-### 8.2 外部比价 skill 通道（2026-09-08）：买手（maishou88）聚合实测
-
-所有者裁定项目转向学习向评测数据集后，改用腾讯 WorkBuddy「买手」skill（appapi.maishou88.com 聚合淘宝/天猫、京东、拼多多等）对 19 个既有 SKU 查价。结果与限制：
-
-- **覆盖**：19 个目标中 12 个拿到目标型号单件价、2 个仅板U套装价、1 个只有代用型号（NV2 未召回、NV3 可参考）、4 个零有效召回（P3 Plus 1T、CX650M、AP201、Pop Air）。长尾具体 SKU 的聚合召回弱，容易混入杂货，是通道特性。
-- **数据形态**：返回原价/参考价(actualPrice)/券额/店铺/月销，但只有买手内部 `goodsId`，**无平台商品 URL**，无法深链复核，不满足正式管道的来源链接与哈希要求。
-- **清洗纪律**：无关杂货不入数据集；拆机散片标 `condition=used`；多档位混合链接价格与目标型号的对应关系存疑时标 `variant_uncertain`；套装价单独 `offer_type=bundle_board_cpu`；代用型号在 `model` 字段如实记录。
-- **落盘**：`var/data/collections/2026-09-08/learning-price-rows-20260908.jsonl`（49 行，全部 `source_type=aggregator_secondary`）+ `var/data/collections/2026-09-08/learning-price-notes-20260908.md`（缺口与决策），原始快照 `var/data/collections/2026-09-08/maishou_results.json`。不放入 `var/data/price-inbox/`。
-- 同日实测：慢慢买官方 MCP 因无自助开通 key 的能力不可用；其官方 API（huameng@manmanbuy.com）仍是把自动拿价合规化的候选路径。
-- **所有者裁定（2026-09-08 晚）：买手数据升级为后续正式数据集。**已生成价格基线 `scripts/data/prices/2026-09-08.csv`：160 行 = 12 个 SKU 用买手价更新（选行规则：目标型号、单件、全新、优先自营/官方旗舰店；套装价与代用型号不入基线）+ 148 个 SKU 原样沿用 2026-07-28（保留原 source 与 captured_at，不伪装成新采集）。已经 `pcdata` 加载器验证生效（bootstrap，snapshot 2026-09-08）。回退方式：删除 2026-09-08.csv 即自动回落 2026-07-28.csv。注意：基线现含 aggregator 来源（`legacy:maishou88`），《数据获取与发布规则》的来源分级条款未随之修订，严格口径场景需所有者先修订规则。探点采集包（pilot-01、office-01、`var/data/serpapi/` 残留）已按所有者裁定删除。
-- 买手 skill 已于 2026-09-08 安装为本机 Qoder 技能：`由 MAISHOU_SKILL_DIR 指定的本机 taobao skill 目录`（社区版 v1.0.4，脚本仅请求 maishou88.com）。运行 `uv run scripts/main.py search --source=0 --keyword='<词>'` 搜索（返回 goodsId/价格/券/月销/图片 URL），`detail --source=<n> --id=<goodsId>` 可取得**购买链接**（appUrl/schemaUrl），可补齐搜索结果缺平台 URL 的缺口。数据性质不变：aggregator_secondary。
-
-### 8.3 全量扫库大更新（2026-09-08 晚）：160 SKU 全目录买手复核与基线 v3
-
-在 §8.2 的 19 SKU 试采基础上，按所有者要求对全部 160 个目录 SKU 做一次完整数据更新。
-
-- **扫库**：从目录 8 类构造 160 个中文搜索词（品牌中文化、内存按容量粒度防套条误绑、case/cooler 加品类词），经 `scripts/data/collection-tools/2026-09-08/maishou_sweep_20260908.cjs` + `maishou_sweep2_20260908.cjs`（补 cooler 类与 9 个重试词）跑完 160/160，其中 157 个有关键词行；3 个零召回（`gpu-gb-5060-windforce`、`mem-gskill-ripjawsv-32-3200`、`mem-gskill-z5neo-rgb-32-6000`，均已用多关键词复验，确认买手侧无在售召回）。原始快照 `var/data/collections/2026-09-08/maishou_full_results_20260908.json`。
-- **自动匹配**（`scripts/data/collection-tools/2026-09-08/maishou_match_20260908.cjs` v4）：杂货黑名单（拆机/二手/议价/询价/成新/矿卡…，case 类豁免“主机箱”）→ 相对 07-28 基线价带过滤 → 型号 req/ban 规则 → 家族 token 去重（同链接罗列全系列型号判 `multi_model_listing` 扣分）→ 卖家分（自营/旗舰/专卖 + 月销对数），自动命中 100/160。
-- **人工复核**（`var/data/collections/2026-09-08/maishou_review_20260908.txt`：A 区命中行全标题 + B 区未命中 SKU 原始行）：82 accept / 78 carry，逐 SKU 决策固化为 `scripts/data/collection-tools/2026-09-08/build_full_update_20260908.cjs` 的决策表（含 needle 判别片段，可重放）。核心判例：
-  - **京东变体选择器行可用**：标题尾部命名“已选变体”（如 `RM1000x 1000W`、`SN850X-2TB（WDS200T2X0E）`），该行价格即所选变体现价；淘宝/拼多多多型号链接显示最低档价，不可用。
-  - **尾部不命中目标型号一律 carry**：SN580 只有 SN5100/SN7100 尾部行、Pop Air 只有 Pop Silent 尾、Define 7 只有 7C 变体、H150i 尾部 240/360 混合等。
-  - **家族价格互证**：990PRO 2TB 2699 ↔ SN850X 2TB 2599、锐龙盒装与散片同店比值等；与家族明显矛盾的低价（veng-rgb 套条 789 ≈ 0.24× 基线、A850GL 539）视为变体错绑，不入基线。
-  - **晨间 12 行复核**：`cpu-i3-12100f`（569，多型号链接变体不确定）与 `cooler-deepcool-ag400`（56.9，实为玄冰400 V5 混串）回收为沿用 07-28；`psu-msi-mag-a650bn`（279，A650BN 迫击炮 650W 精确行）保留；其余被 v3 更精确行取代。
-- **落盘**：
-  - 基线 v3 `scripts/data/prices/2026-09-08.csv`（160 行 = 82 个 `maishou88@2026-09-08` + 78 个原样沿用 07-28，保留原 source/captured_at），已通过 `pcdata` 加载器验证（160 行）。晨间 v2 备份为 `var/data/collections/2026-09-08/2026-09-08-v2-morning.csv.bak`（加载器只认 `*.csv`，不受影响）。
-  - 学习行 `scripts/data/price-batches/2026-09-08/offers.jsonl`（691 行 = 82 `accept` + 299 `candidate_reject` + 310 `carry_evidence`，全部 `source_type=aggregator_secondary`，含 decision/decision_note 与命中 flags）。
-- **市场背景**：2026-09 内存/显卡处于涨价周期（DDR4 套条 ×2~5、DDR5 ×1.3~1.6、显卡 +5~80%、旗舰 NVMe 翻倍），基线大面积上行（如 LPX 3200 套条 490→1149、RX7800XT 3549→5515）为市场真实变动，非口径变化。
-- **缺口与注意**：买手结果无平台商品 URL（v3.1 已对 accept 行用 `detail` 命令补 `listing_url`，见 §8.4）；`ssd-crucial-t500-2tb` 取京东国际海外官方店跨境价（尾部 2TB 精确，国内行仅 T700/T705 混串）。2026-09-09 已补齐混合采集日期导入，评估库使用 `go run ./cmd/importprices -file scripts/data/prices/2026-09-08.csv -snapshot-date 2026-09-08`；须先将 `PG_DSN` 指向独立评估库并保留旧批次供沿用核验，见[价格任务](../ops/价格任务.md)。本机产品库尚未切换该快照。
-
-### 8.4 换词复扫与基线 v3.1（2026-09-08 深夜）：78 个沿用 SKU 的二次机会
-
-v3 有 78 个 SKU 因无精确行沿用 07-28。本轮对这批 SKU 用**替代搜索词**（品牌中文系列名、代际/变体消歧词，如"魔鹰""复仇者 LPX""鬼斧216""冰魔方"）重扫一遍，验证沿用是否仍成立、有无此前漏掉的精确行。
-
-- **扫库**：78 SKU × 1~3 词共约 150 次搜索（`scripts/tmp-probe3.cjs` 已删，证据存 `var/data/collections/2026-09-08/maishou_probe3_20260908.txt`）；6 个词零召回按原结果保留；合并去重（按 goodsId）为 `var/data/collections/2026-09-08/maishou_merged_20260908.json`，自动匹配升级版产出 `var/data/collections/2026-09-08/maishou_match_candidates3_20260908.json`（108/160 命中，v3 为 100）。
-- **人工复核**（`var/data/collections/2026-09-08/maishou_review3_20260908.txt` 逐 SKU 比对 + probe3 原始行）：**晋升 20 个 / 维持沿用 58 个**。全部决策与依据固化在 `scripts/data/collection-tools/2026-09-08/build_full_update_20260908.cjs` 决策表（note 前缀"换词复扫晋升"）。
-- **方法增量**：`resolveAccept` 增加 `logical()` 去重——同价 + 同规范化标题的行视为同一 listing（搜索重复返回 / 同店多 goodsId 重挂），避免重复行误判歧义。
-- **晋升判例**：官方店精确行兜底（`gpu-gb-5080-gaming` 技嘉电脑旗舰店魔鹰 15099、`mem-corsair-lpx-32-3600` 京东自营 3600 C18 套条 1759、`cooler-noctua-nh-d15` 旗舰店标准版 699）；中文系列名命中（`case-lianli-lancool-216`＝鬼斧216 联力旗舰店 579、`cooler-deepcool-lt520` 冰魔方 559.52、`cooler-deepcool-ag400` "AG400性能版"即市场通名 79）；行情再确认（DDR4/DDR5 内存与 NAND 三家互证上行）。
-- **复核撤回**：`gpu-sapphire-9070xt-pulse` 曾记 6889 脉动行，回查合并数据不存在该行（6899 尾部为 7900XTX 白金，型号不符），**维持沿用 5649**——晋升必须以重放可得的行为准，不能凭印象记价。
-- **购买链接**：对 102 个 accept 行用买手 skill `detail --source=<n> --id=<goodsId>` 逐条取「购买链接」短链，写入学习行 `listing_url` 字段（京东→source=2、淘宝→1；URL 为 u.jd.com / m.tb.cn 跳转短链）。抓取脚本 `scripts/data/collection-tools/2026-09-08/fetch_detail_links_20260908.py`，结果映射 `var/data/collections/2026-09-08/accept_links_20260908.json`。
-- **落盘 v3.1**：`scripts/data/prices/2026-09-08.csv` 重写为 160 行 = 102 个 `maishou88@2026-09-08` + 58 个沿用；学习行 `scripts/data/price-batches/2026-09-08/offers.jsonl` 重生成 708 行（102 accept + 326 candidate_reject + 280 carry_evidence），accept 行含 `listing_url`。已过 `pcdata` 加载器验证。
-
-### 8.5 批次归档与重建（2026-09-08）
-
-当前最终快照为 160 行（102 更新 + 58 沿用）；上文的 12/82 行更新是历史中间轮次。最终复核记录和哈希清单见 [批次说明](../../scripts/data/price-batches/2026-09-08/README.md)，脚本集中到 [批次工具](../../scripts/data/collection-tools/2026-09-08/README.md)。原始响应、底稿和备份已迁入本机忽略目录，未删除；旧文件名与新路径的映射见清单。完整离线重建需单独传递原始数据，默认生成到本地 rebuild 目录，不覆盖已提交快照。
+**买手（maishou88）聚合通道**：长尾具体 SKU 召回弱、易混入杂货，须杂货黑名单 + 型号 req/ban 规则 + 家族 token 去重 + 家族价格互证清洗；返回无平台商品 URL，`detail` 命令可补购买短链（u.jd.com / m.tb.cn），仍不满足深链复核要求。数据性质 `aggregator_secondary`（学习/评测参考报价，见[规则 §5.5](数据获取与发布规则.md)）。160 SKU 全量扫库、自动匹配与人工复核的执行记录和哈希清单见[批次说明](../../scripts/data/price-batches/2026-09-08/README.md)与[批次工具](../../scripts/data/collection-tools/2026-09-08/README.md)。
 
 ## 9. 直接交给新对话的任务文本
+
+### 通用采集任务
 
 ```text
 在 pc-builder-agent 项目中执行一批独立的数据采集工作。先读
@@ -278,13 +203,43 @@ SKU 报价，少量补新型号候选。先建立 targets，再联网找商品�
 按指南在 var/data/collections/<日期-主题-批次>/ 交付 manifest.json、
 targets.jsonl、products.jsonl、offers.jsonl、evidence/、review.md。
 保留准确型号、店铺、商品变体、价格条件、新旧状态、保修、库存和时间；
-哈希由程序计算，模型参与情况如实记录。没有本地文件能力时，交付可下载
-的同结构文件包，并说明无法取得的证据，不声称已写入项目。
+哈希由程序计算，模型参与情况如实记录。没有本地文件能力时，交付可下载的
+同结构文件包，并说明无法取得的证据，不声称已写入项目。
 
 这一任务先完成采集与可审核候选，不执行正式发布。现有 AI 溯源接入及
 新 SKU 导入的实现缺口按指南记录，不通过改 model_used、改评估期望或
 伪造低价绕过。最后报告采集数量、可核验数量、缺口、样例和文件路径，
 明确哪些是原始证据、哪些是提取结果，以及距正式入库还差哪些步骤。
+```
+
+### 买手扩库任务
+
+买手技能入口为本机 taobao skill（`uv run scripts/main.py search/detail`，仅请求 maishou88.com）。以下正文可复制到新任务：
+
+```text
+请在 pc-builder-agent 的独立工作区，使用本机买手技能扩充商品数据集。主目录 C:\code\pc-builder-agent。先阅读开发约定、数据来源/发布规则、AI辅助采集与入库指南及 scripts/data/price-batches/2026-09-08/README.md，再读取 C:\Users\83818\.qoder\skills\taobao\SKILL.md 和 scripts/main.py，按实际接口执行。
+
+本轮仅走买手技能：search 发现商品，detail 获取聚合详情和购买链接。不要使用 Crawl4AI、SerpAPI、其他网页采集或项目 Screening/Builder/Embedding API。由当前 Codex 任务完成分析与辅助复核。买手本身会请求第三方接口，不要把它描述为离线或零外部请求。
+
+已知问题：原目录为八类各 20 个，共 160 SKU。2026-09-08 的 102 accept 是已有 SKU 的价格更新，58 carry 是旧价沿用，并未新增型号。原主扫脚本以固定 SKU/关键词表为入口，未传 --page；不能原样重跑后宣称完成扩库。技能支持任意关键词、source=0/1/2/3 等平台和 --page；详情返回内容必须实际检查，不能假定包含完整硬件规格。
+
+目标：以累计新增 100 个经身份去重的型号/准确变体候选作为首阶段目标，分批处理，每批约 20 个；有价值的新型号优先，不为凑数量降低质量。覆盖 CPU、GPU、主板、内存、SSD、电源、机箱、散热八类，可按真实缺口调整比例，不要求每类固定数量。旧型号价格刷新可同时记录，但不得计入新增数。同一硬件的多店铺报价属于多个 offer，不是多个 SKU。
+
+先检查目录覆盖，提出品类/品牌/系列/容量/功率等发现关键词，再搜索结果发现旧目录之外的准确型号。对有价值结果用完整型号、别名和平台分别复搜、翻页。相同页内容重复、无新增结果或平台拒绝访问时停止该查询并记录原因。不要只拿旧 160 SKU 生成搜索词，也不要仅取第一个最低价。
+
+首阶段总上限：search 200 次、detail 120 次（失败和重试也计入）；单个查询最多 5 页、并发最多 2。先检查技能是否有更低限制并遵守。当前脚本正常每次 search 发 1 次请求、detail 发 2 次请求，分别记录技能调用量及可核实的 HTTP 次数。达到上限保存已有成果及续跑清单，不追加调用，也不为达到 100 候选而编造数据。普通选择、采集、整理无需逐项询问。
+
+数据处理要求：
+1. 按新日期和唯一批次号保存原始搜索 CSV、详情输出、查询词、平台、页码、时间、文件哈希和 checkpoint，不覆盖历史快照与决策表。使用新批次脚本，避免历史 sweep 脚本启动时清空原始文件。
+2. 区分产品身份、卖家报价和规格事实。保留品牌、完整型号、后缀、显存/容量/条数、版本、包装等影响身份或售卖条件的信息。报价保留 source、goodsId、明确变体、店铺、标题、价格条件、链接及观察时间；以 source+goodsId+变体+原始行哈希稳定关联。
+3. 多型号最低价、二手、整机/套装、议价及无法锁定变体的行不要错绑目标新品。价格带/家族梯度只提示异常；无旧基线的新型号不能因此被拒绝。缺价为未知，不能借用近似型号报价。
+4. 保留 accept/carry/reject/待复核及证据理由，你的复核标为 Agent 辅助复核。carry 保留旧价、旧来源、旧观察时间。source_type 始终为 aggregator_secondary，保持已授权的学习/评测用途；聚合 detail 一致或有短链，不代表已经核验平台实价、库存或获得平台授权。
+5. 买手详情实际提供的规格可以逐字段提取并保存原文来源；详情未提供的插槽、支持芯片组、供电接口、尺寸等不得从常识或标题猜造。身份明确但规格不足的新商品仍须落入候选数据和缺项清单，不得为了保持 160 条而丢弃，也不得直接伪装成可交付核心商品。
+6. 审查 pcdata.coverage 的 EXPECTED_PER_CATEGORY=20、count_ok 等旧种子数量假设和相关测试。若阻碍真实扩库，做支持任意目录规模的最小调整；历史固定快照测试可以保留，新增超过 160 条、每类数量不等、重复/非法记录拒绝的验证。数量开放不等于取消真实性、身份、字段或证据校验。不扩大到修改 Builder、前端或产品需求流程。
+7. 复用既有 schema 和候选/审核/release 机制。明确区分新增型号候选、已可导入商品、可供 Builder 使用的核心商品，不把“新增了价格行”当作“新增型号已生效”。当前候选包没有自动完成所有接入步骤的一键导入器；需要的最小适配可实现，缺证据的保持候选。
+8. 产出可重放决策表、候选及报价数据、缺项清单、各品类统计、原始证据 manifest、验证结果和导入说明。按仓库规则保存大文件，不提交凭据。可在隔离测试库验证导入/检索，不调用 embedding；语义索引未更新单独注明。不要直接改当前产品库或任何历史配置版本。
+
+交付时提交本任务数据和必要工具改动，不 push。分别汇报新发现且去重的型号数、可用核心商品数、报价条数、旧价更新数、未知/拒绝数、调用消耗和停止原因，列出仍需补规格的型号及后续合入/导入步骤。任务最终目标是形成可持续扩容的数据链路，不能停留在再次刷新原 160 条。
 ```
 
 新数据正式发布后，另开评估运行并固定所用商品 release、价格快照和模型配置。保持原题与旧运行记录，区分“数据变了”和“模型或代码变了”的影响。

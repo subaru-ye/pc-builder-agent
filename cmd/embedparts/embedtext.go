@@ -10,7 +10,7 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
 
-// styleEntry scripts/data/styles/styles.json 的单条风格标注(语义选件.md §2)。
+// styleEntry scripts/data/styles/styles.json 的单条风格标注(自主规划流程.md §5)。
 // 指针字段 nil = 未标注/未知,拼接时直接省略,不输出"未知"。
 type styleEntry struct {
 	Noise     *string  `json:"noise"`      // silent|normal|loud

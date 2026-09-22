@@ -1,5 +1,5 @@
 // Package tools 把确定性能力注册为 ADK functiontool,供 P2 流水线的 LLM Agent 调用。
-// 契约冻结于 docs/tech/流水线与工具调用.md §4:参数保真、严禁静默转换/截断,
+// 契约:参数保真、严禁静默转换/截断,
 // 工具描述从 Agent 视角写(边界 + 示例 + 协作关系,docs/tech/开发约定.md)。
 // 本包只做「结构化入参 ↔ 内核」的映射;检索/校验逻辑分别在 store 与 agents/validate。
 package tools

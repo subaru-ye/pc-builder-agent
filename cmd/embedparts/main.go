@@ -1,4 +1,4 @@
-// P3 embedding 生成器(语义选件.md §3/§8):把 parts 全量拼接 embedding
+// P3 embedding 生成器(自主规划流程.md §5):把 parts 全量拼接 embedding
 // 文本(canonical specs + scripts/data/styles 风格标注),调端点向量化后回填
 // parts.embedding / embedding_text。幂等全量重算;任一 SKU 失败整批报错,
 // 单事务写库不留半批状态。

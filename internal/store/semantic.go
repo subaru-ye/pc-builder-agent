@@ -15,7 +15,7 @@ import (
 // 端点 embedding 模型实测输出);换模型即换维度,须新迁移重算全量。
 const EmbeddingDims = 1024
 
-// SemanticQuery 语义候选检索入参(语义选件.md §5)。
+// SemanticQuery 语义候选检索入参(自主规划流程.md §5)。
 // 只管软偏好召回;预算/插槽/板型等硬约束走 Candidates 的 SQL 路径。
 type SemanticQuery struct {
 	Category       schemas.Category // 可选,空 = 跨品类;非空须为八大类之一

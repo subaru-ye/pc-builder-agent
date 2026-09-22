@@ -105,9 +105,9 @@ uv run --project scripts/data pcdata bootstrap
 uv run --project scripts/data pcdata health
 ```
 
-采集需要逐个来源显式执行 `pcdata collect` → `normalize` → `review` → `publish`，步骤与门禁见[发布管道](docs/tech/数据获取与发布管道.md)。当前唯一外部来源是固定映射的 AMD 官方 CPU 具体型号页，串行条件请求，严格核对型号并只生成 socket、支持芯片组、TDP、核显和官方名称的确定性 evidence；政策、身份或页面结构变化会隔离来源。
+采集需要逐个来源显式执行 `pcdata collect` → `normalize` → `review` → `publish`，步骤与门禁见[数据管道设计](docs/tech/数据管道设计.md)。当前唯一外部来源是固定映射的 AMD 官方 CPU 具体型号页，串行条件请求，严格核对型号并只生成 socket、支持芯片组、TDP、核显和官方名称的确定性 evidence；政策、身份或页面结构变化会隔离来源。
 
-人工价格 observation、安全选价和动态过期提示可用；自动价格来源和每日任务保持禁用。操作见[价格任务](docs/ops/价格任务.md)，依据见[数据来源决策](docs/data/数据来源决策.md)，未完成工作见[路线图](docs/product/路线图.md)。
+人工价格 observation、安全选价和动态过期提示可用；自动价格来源和每日任务保持禁用。操作见[价格任务](docs/ops/价格任务.md)，依据见[数据规则](docs/data/数据获取与发布规则.md)，未完成工作见[路线图](docs/product/路线图.md)。
 
 ## 当前能力
 

@@ -1,6 +1,6 @@
 package pipeline
 
-// P4 增量改单的确定性预处理(版本快照与增量改单.md §4/§5):
+// P4 增量改单的确定性预处理(服务与状态.md §3):
 // 初筛载荷分类(RequirementSpec / ChangeRequest)、派生需求单、锁定清单、
 // 生成 Agent 改单指令渲染,全部由代码计算,不让 LLM 自己统计(docs/tech/开发约定.md)。
 

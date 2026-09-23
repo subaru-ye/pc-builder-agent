@@ -26,7 +26,15 @@ func seedSnapshotConfirmation(ctx context.Context, st *store.Store, svc *product
 	if _, err := svc.EditRequirement(ctx, owner, sessionID, uuid.NewString(), product.RequirementEdit{Operations: ops}); err != nil {
 		return err
 	}
-	run, _, _, err := st.StartConfirmRun(ctx, store.StartConfirmRunParams{OwnerID: owner, SessionID: sessionID, RequestID: uuid.NewString(), RunID: uuid.NewString()})
+	detail, err := svc.GetSession(ctx, owner, sessionID)
+	if err != nil {
+		return err
+	}
+	req := confirmRequestFromDetail(detail)
+	run, _, _, err := st.StartConfirmRun(ctx, store.StartConfirmRunParams{OwnerID: owner, SessionID: sessionID,
+		RequestID: uuid.NewString(), RunID: uuid.NewString(), ConfirmationID: uuid.NewString(),
+		ExpectedRevision: req.ExpectedRevision, ExpectedReviewHash: req.ExpectedReviewHash,
+		RequestFingerprint: uuid.NewString()})
 	if err != nil {
 		return err
 	}

@@ -240,7 +240,7 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 			case "message":
 				started, err = svc.StartMessage(ctx, owner, ws.ID, requestID, step.Text)
 			case "confirm":
-				started, err = svc.StartConfirm(ctx, owner, ws.ID, requestID)
+				started, err = svc.StartConfirm(ctx, owner, ws.ID, requestID, confirmRequestFromDetail(before))
 			case "edit":
 				var state schemas.RequirementState
 				_ = json.Unmarshal(before.Session.RequirementState, &state)
@@ -249,7 +249,7 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 				if lastStep.Kind == "message" {
 					started, err = svc.StartMessage(ctx, owner, ws.ID, lastRequest, lastStep.Text)
 				} else {
-					started, err = svc.StartConfirm(ctx, owner, ws.ID, lastRequest)
+					started, err = svc.StartConfirm(ctx, owner, ws.ID, lastRequest, confirmRequestFromDetail(before))
 				}
 			case "refresh": // The following GetSession exercises the production read model.
 			}

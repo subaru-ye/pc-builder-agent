@@ -2,12 +2,12 @@ package product
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -64,7 +64,11 @@ type ProductStore interface {
 	MessageRunByRequest(context.Context, string, string, string, string, ...string) (store.AgentRun, bool, error)
 	ReplacePendingRequirement(context.Context, string, string, json.RawMessage) error
 	StartMessageRun(context.Context, store.StartMessageRunParams) (store.AgentRun, bool, error)
-	StartConfirmRun(context.Context, store.StartConfirmRunParams) (store.AgentRun, json.RawMessage, bool, error)
+	StartConfirmRun(context.Context, store.StartConfirmRunParams) (store.AgentRun, store.StartConfirmRunResult, bool, error)
+	ConfirmationByID(context.Context, string, string) (store.RequirementConfirmation, bool, error)
+	BuildRuns(context.Context, string) ([]store.BuildRun, error)
+	RequirementEditFingerprint(context.Context, string, string) (string, bool, error)
+	EditRequirementDraft(context.Context, store.EditRequirementDraftParams) (bool, error)
 	CompleteRun(context.Context, store.CompleteRunParams) (*store.WebMessage, error)
 	LatestBuildVersion(context.Context, string) (int, bool, error)
 	InterruptRunning(context.Context, json.RawMessage) ([]store.InterruptedRun, error)
@@ -73,13 +77,12 @@ type ProductStore interface {
 }
 
 type SessionDetail struct {
-	Proposal          json.RawMessage
-	Session           store.WebSession
-	Messages          []store.WebMessage
-	ActiveRun         *store.AgentRun
-	Degraded          bool
-	RequirementStatus string
-	MissingFields     []string
+	Proposal  json.RawMessage
+	Session   store.WebSession
+	Messages  []store.WebMessage
+	ActiveRun *store.AgentRun
+	Degraded  bool
+	Axes      RequirementAxes
 }
 
 type StartResult struct {
@@ -127,8 +130,17 @@ func (s *Service) GetSession(ctx context.Context, ownerID, sessionID string) (Se
 	if err != nil {
 		return SessionDetail{}, err
 	}
-	status, missing, err := requirementLifecycle(ws)
+	confirmation, hasConfirmation, err := s.store.ConfirmationByID(ctx, sessionID, ws.ConfirmationID)
 	if err != nil {
+		return SessionDetail{}, err
+	}
+	runs, err := s.store.BuildRuns(ctx, sessionID)
+	if err != nil {
+		return SessionDetail{}, err
+	}
+	axes, err := requirementAxes(ws, confirmation, hasConfirmation, runs, active)
+	if err != nil {
+		// v1/损坏状态以稳定问题拒绝,不静默重建空 v2 状态(与旧读取模型一致)。
 		return SessionDetail{}, NewProblem("requirement_state_unsupported", "会话需求版本不受支持", 409,
 			"该会话使用旧版需求格式，不能在当前版本继续；请新建会话重新记录需求，原配置数据保持不变。", sessionID)
 	}
@@ -140,7 +152,7 @@ func (s *Service) GetSession(ctx context.Context, ownerID, sessionID string) (Se
 			return SessionDetail{}, err
 		}
 	}
-	return SessionDetail{Proposal: proposal, Session: ws, Messages: messages, ActiveRun: active, Degraded: s.events.Degraded(), RequirementStatus: status, MissingFields: missing}, nil
+	return SessionDetail{Proposal: proposal, Session: ws, Messages: messages, ActiveRun: active, Degraded: s.events.Degraded(), Axes: axes}, nil
 }
 
 func (s *Service) GetRun(ctx context.Context, ownerID, runID string) (store.AgentRun, error) {
@@ -205,14 +217,34 @@ func (s *Service) StartMessage(ctx context.Context, ownerID, sessionID, requestI
 	if _, err := s.events.Append(ctx, r.ID, "run.started", map[string]any{"kind": r.Kind}); err != nil {
 		log.Printf("[api] run %s 写 run.started 失败:%v", r.ID, err)
 	}
-	s.launch(r, ownerID, text, nil)
+	s.launch(r, ownerID, text, nil, "")
 	return StartResult{Run: r}, nil
 }
 
-func (s *Service) StartConfirm(ctx context.Context, ownerID, sessionID, requestID string) (StartResult, error) {
+// ConfirmRequest 是唯一 Builder admission 的请求合同;schema_version 由
+// transport 校验。ExpectedReviewHash 必须来自用户实际看到的核定预览。
+type ConfirmRequest struct {
+	ExpectedRevision   int
+	ExpectedReviewHash string
+	RetryOfRunID       string
+}
+
+// StartConfirm 执行原子 confirm-and-start:校验、快照/载荷冻结与 run 创建
+// 都在存储事务内;提交后发布事件,发布失败不回滚已提交的确认(客户端由
+// 持久化 run/session 恢复状态)。
+func (s *Service) StartConfirm(ctx context.Context, ownerID, sessionID, requestID string, req ConfirmRequest) (StartResult, error) {
+	if strings.TrimSpace(req.ExpectedReviewHash) == "" {
+		return StartResult{}, NewProblem("invalid_request", "缺少核定预览哈希", 400,
+			"请先获取最新核定预览，再提交确认。", requestID)
+	}
 	s.reclaimStale(ctx, sessionID)
-	r, pending, duplicate, err := s.store.StartConfirmRun(ctx, store.StartConfirmRunParams{
+	fingerprint := fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprintf("schema=2 revision=%d review=%s retry=%s",
+		req.ExpectedRevision, req.ExpectedReviewHash, req.RetryOfRunID))))
+	r, out, duplicate, err := s.store.StartConfirmRun(ctx, store.StartConfirmRunParams{
 		OwnerID: ownerID, SessionID: sessionID, RequestID: requestID, RunID: uuid.NewString(),
+		ConfirmationID: uuid.NewString(), ExpectedRevision: req.ExpectedRevision,
+		ExpectedReviewHash: req.ExpectedReviewHash, RetryOfRunID: req.RetryOfRunID,
+		RequestFingerprint: fingerprint,
 	})
 	if err != nil {
 		return StartResult{}, err
@@ -223,11 +255,15 @@ func (s *Service) StartConfirm(ctx context.Context, ownerID, sessionID, requestI
 	if _, err := s.events.Append(ctx, r.ID, "run.started", map[string]any{"kind": r.Kind}); err != nil {
 		log.Printf("[api] run %s 写 run.started 失败:%v", r.ID, err)
 	}
-	s.launch(r, ownerID, "", pending)
+	s.publish(ctx, r.ID, "requirement.confirmed", map[string]any{
+		"snapshot_id": out.ConfirmationID, "review_hash": out.ReviewHash,
+		"builder_input_hash": out.BuilderInputHash,
+	})
+	s.launch(r, ownerID, "", out.BuilderInputPayload, out.BuilderInputHash)
 	return StartResult{Run: r}, nil
 }
 
-func (s *Service) launch(r store.AgentRun, ownerID, text string, payload json.RawMessage) {
+func (s *Service) launch(r store.AgentRun, ownerID, text string, payload json.RawMessage, builderInputHash string) {
 	// WithoutCancel:用户取消只走本 run 的 cancelFunc;Shutdown 显式取消所有
 	// 已注册 run 后再等 wg,进程关闭语义保持由 InterruptRunning 收尾。
 	// 注册在 launch 同步完成,保证 StartMessage 返回后 cancel 端点必能命中。
@@ -240,7 +276,7 @@ func (s *Service) launch(r store.AgentRun, ownerID, text string, payload json.Ra
 			s.cancels.Delete(r.ID)
 			cancel()
 		}()
-		s.execute(ctx, r, ownerID, text, payload)
+		s.execute(ctx, r, ownerID, text, payload, builderInputHash)
 	}()
 }
 
@@ -283,14 +319,12 @@ func (s *Service) reclaimStale(ctx context.Context, sessionID string) {
 	}
 }
 
-func (s *Service) execute(ctx context.Context, r store.AgentRun, ownerID, text string, payload json.RawMessage) {
+func (s *Service) execute(ctx context.Context, r store.AgentRun, ownerID, text string, payload json.RawMessage, builderInputHash string) {
 	switch r.Kind {
 	case store.RunScreening:
 		s.executeScreening(ctx, r, ownerID, text)
 	case store.RunBuild:
-		s.executeRemote(ctx, r, ownerID, payload)
-	case store.RunChange:
-		s.executeChange(ctx, r, ownerID, text)
+		s.executeRemote(ctx, r, ownerID, payload, builderInputHash)
 	}
 }
 
@@ -379,116 +413,13 @@ func (s *Service) succeedRequirement(ctx context.Context, r store.AgentRun, requ
 	s.publish(ctx, r.ID, "run.completed", map[string]any{"status": "succeeded"})
 }
 
-func (s *Service) executeChange(ctx context.Context, r store.AgentRun, ownerID, text string) {
-	s.progress(ctx, r.ID, "screening", "正在理解改单要求", 1)
-	if delta, ok := parseDeterministicBudgetDelta(text); ok {
-		payload, err := s.deterministicChangePayload(ctx, r.SessionID, struct {
-			SchemaVersion  int                  `json:"schema_version"`
-			BaseBuildRef   string               `json:"base_build_ref"`
-			Intent         schemas.ChangeIntent `json:"intent"`
-			BudgetDeltaCNY int                  `json:"budget_delta_cny"`
-		}{
-			SchemaVersion:  schemas.ChangeRequestSchemaVersion,
-			Intent:         schemas.IntentAdjustBudget,
-			BudgetDeltaCNY: delta,
-		})
-		if err != nil {
-			s.failInternal(ctx, r, store.PhaseReady, "")
-			return
-		}
-		s.executeRemote(ctx, r, ownerID, payload)
-		return
-	}
-	if target, ok := parseDeterministicGPUBrandSwap(text); ok {
-		locked := make([]schemas.Category, 0, len(schemas.AllCategories)-1)
-		for _, category := range schemas.AllCategories {
-			if category != schemas.CategoryGPU {
-				locked = append(locked, category)
-			}
-		}
-		payload, err := s.deterministicChangePayload(ctx, r.SessionID, struct {
-			SchemaVersion    int                  `json:"schema_version"`
-			BaseBuildRef     string               `json:"base_build_ref"`
-			Intent           schemas.ChangeIntent `json:"intent"`
-			Swap             map[string]string    `json:"swap"`
-			LockedCategories []schemas.Category   `json:"locked_categories"`
-		}{
-			SchemaVersion: schemas.ChangeRequestSchemaVersion,
-			Intent:        schemas.IntentSwapPart,
-			Swap: map[string]string{
-				"category": "gpu", "target_hint": target,
-			},
-			LockedCategories: locked,
-		})
-		if err != nil {
-			s.failInternal(ctx, r, store.PhaseReady, "")
-			return
-		}
-		s.executeRemote(ctx, r, ownerID, payload)
-		return
-	}
-	input, err := s.screenInput(ctx, r, text)
-	if err != nil {
-		s.failInternal(ctx, r, store.PhaseReady, "")
-		return
-	}
-	s.captureEvidence(ctx, r.ID, "screening_input", screeningEvidence(input))
-	result, err := s.agent.Screen(ctx, ownerID, r.SessionID, input)
-	if err == nil {
-		s.captureEvidence(ctx, r.ID, "screening_output", map[string]any{"kind": result.Kind, "text": result.Text, "payload": result.Payload})
-	}
-	if err != nil {
-		s.failFromError(ctx, r, err, store.PhaseReady, "")
-		return
-	}
-	switch result.Kind {
-	case ScreenQuestion:
-		s.succeed(ctx, r, store.PhaseReady, nil, false, result.Text, 0)
-		return
-	case ScreenRequirement:
-		s.succeed(ctx, r, store.PhaseReady, nil, false,
-			"这个修改需要整单重生成。请新建会话，并基于当前需求重新确认。", 0)
-		return
-	case ScreenInvalid:
-		s.fail(ctx, r, NewProblem("schema_validation_failed", "改单解析失败", 422,
-			"初筛输出不符合 ChangeRequest schema。", r.ID), store.PhaseReady, "")
-		return
-	case ScreenChange:
-		s.executeRemote(ctx, r, ownerID, result.Payload)
-	}
-}
-
-func (s *Service) deterministicChangePayload(ctx context.Context, sessionID string, value any) (json.RawMessage, error) {
-	version, found, err := s.store.LatestBuildVersion(ctx, sessionID)
-	if err != nil || !found {
-		if err == nil {
-			err = fmt.Errorf("当前会话没有可改单版本")
-		}
-		return nil, err
-	}
-	raw, err := json.Marshal(value)
-	if err != nil {
-		return nil, err
-	}
-	var object map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &object); err != nil {
-		return nil, err
-	}
-	base, err := json.Marshal(fmt.Sprintf("v%d", version))
-	if err != nil {
-		return nil, err
-	}
-	object["base_build_ref"] = base
-	return json.Marshal(object)
-}
-
 const (
 	maxScreenMessages = 6
 	maxScreenRunes    = 4000
 )
 
-// screenInput 从稳定产品消息生成有界上下文。Store 会排除 RunBuild，以及产生
-// build 或失败的 change assistant 交付；ADK 工具和 A2A event 从未进入 web_messages。
+// screenInput 从稳定产品消息生成有界上下文。Store 会排除产生 build 或失败
+// 的 assistant 交付;ADK 工具和 A2A event 从未进入 web_messages。
 func (s *Service) screenInput(ctx context.Context, r store.AgentRun, current string) (ScreenInput, error) {
 	messages, err := s.store.ScreeningMessages(ctx, r.SessionID, r.Kind)
 	if err != nil {
@@ -501,9 +432,7 @@ func (s *Service) screenInput(ctx context.Context, r store.AgentRun, current str
 		}
 		prior = append(prior, message)
 	}
-	input := BuildScreenInput(prior, current)
-	input.HasBuild = r.Kind == store.RunChange
-	return input, nil
+	return BuildScreenInput(prior, current), nil
 }
 
 // BuildScreenInput 让产品请求和多轮评估共用同一上下文边界；调用方先过滤运行类型。
@@ -538,48 +467,10 @@ func BuildScreenInput(prior []store.WebMessage, current string) ScreenInput {
 	return ScreenInput{Text: current, Context: contextText, UserSources: visibleSources}
 }
 
-var deterministicBudgetDeltaRE = regexp.MustCompile(`^(?:(?:把)?预算)?(?:再)?(降低|减少|下调|降|减|增加|提高|上调|加)([1-9][0-9]{0,5})(?:元)?$`)
-var deterministicGPUBrandRE = regexp.MustCompile(`^(?:把)?(?:显卡)?(?:换成|换为|改成|改为)(?:一张|一个)?(A卡|AMD(?:显卡)?|N卡|NVIDIA(?:显卡)?)$`)
-
-// parseDeterministicBudgetDelta 只接管无歧义的整数金额升降表达,其余语句仍交给 screening Agent。
-func parseDeterministicBudgetDelta(text string) (int, bool) {
-	normalized := strings.Join(strings.Fields(text), "")
-	match := deterministicBudgetDeltaRE.FindStringSubmatch(normalized)
-	if len(match) != 3 {
-		return 0, false
-	}
-	amount, err := strconv.Atoi(match[2])
-	if err != nil || amount <= 0 {
-		return 0, false
-	}
-	switch match[1] {
-	case "降低", "减少", "下调", "降", "减":
-		return -amount, true
-	default:
-		return amount, true
-	}
-}
-
-// parseDeterministicGPUBrandSwap 只接管肯定、完整且无歧义的品牌改单。
-// 否定、比较、多个条件或具体型号仍交给 screening 模型理解。
-func parseDeterministicGPUBrandSwap(text string) (string, bool) {
-	normalized := strings.ToUpper(strings.Join(strings.Fields(text), ""))
-	for _, negation := range []string{"不要", "不是", "并非", "取消", "别", "不"} {
-		if strings.Contains(normalized, negation) {
-			return "", false
-		}
-	}
-	match := deterministicGPUBrandRE.FindStringSubmatch(normalized)
-	if len(match) != 2 {
-		return "", false
-	}
-	if strings.HasPrefix(match[1], "A") {
-		return "AMD 显卡", true
-	}
-	return "NVIDIA 显卡", true
-}
-
-func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID string, payload json.RawMessage) {
+// executeRemote 只发送 run 冻结的完整 Builder 载荷;发送前校验实际载荷的
+// 规范化 hash 与冻结 builder_input_hash 一致(V5),不一致以内部错误终止,
+// 绝不把未冻结的载荷发给远程 Builder。不得再用会话草稿或最新 build 重组。
+func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID string, payload json.RawMessage, builderInputHash string) {
 	// F7:日 token 预算硬限(DAILY_TOKEN_BUDGET,0 = 不限);超限拒绝新规划运行。
 	if budget := envInt("DAILY_TOKEN_BUDGET"); budget > 0 {
 		if used, ok := s.store.(interface {
@@ -598,12 +489,12 @@ func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID s
 		s.failInternal(ctx, r, recoveryFor(r.Kind), "")
 		return
 	}
-	payload, err = s.planningContext(ctx, r.SessionID, r.ID, payload)
-	if err != nil {
+	if actual, err := schemas.CanonicalHash(payload); err != nil || actual != builderInputHash {
+		log.Printf("[api] run %s 冻结载荷 hash 不一致:actual=%q frozen=%q err=%v", r.ID, actual, builderInputHash, err)
 		s.failInternal(ctx, r, recoveryFor(r.Kind), "")
 		return
 	}
-	s.captureEvidence(ctx, r.ID, "build_input", map[string]any{"payload": payload})
+	s.captureEvidence(ctx, r.ID, "build_input", map[string]any{"payload": payload, "builder_input_hash": builderInputHash})
 	result, err := s.agent.Remote(ctx, ownerID, r.SessionID, payload)
 	if err != nil {
 		s.failFromError(ctx, r, err, recoveryFor(r.Kind), "")
@@ -643,9 +534,6 @@ func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID s
 func recoveryFor(kind store.RunKind) store.SessionPhase {
 	if kind == store.RunBuild {
 		return store.PhaseRequirementReady
-	}
-	if kind == store.RunChange {
-		return store.PhaseReady
 	}
 	return store.PhaseCollecting
 }

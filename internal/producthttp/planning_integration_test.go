@@ -171,12 +171,9 @@ func (g *planningReplayGateway) Remote(ctx context.Context, _, sessionID string,
 		return product.RemoteResult{}, e
 	}
 	m := &planningReplayModel{draft: g.fixture.Draft, input: input}
-	if input.Request != nil && (input.Request.Quote == "换成缺规格主板候选继续核实" || input.Request.Quote == "读取资料补齐主板规格并继续校验" || input.Request.Quote == "按当前方案继续校验") {
-		return g.supplementReplay(ctx, sessionID, input)
-	}
 	if input.State.Fields["priority"].Status == "active" {
 		// v2:确认路径(而非聊天续跑)触发换件时同样携带基版本与上一方案;
-		// Request 只在聊天执行授权时存在,不再作为续跑上下文的必要条件。
+		// 冻结载荷在确认事务内组装,续跑上下文不再是执行时追加。
 		if len(input.BaseDraft) == 0 || len(input.PreviousProposal) == 0 {
 			return product.RemoteResult{}, fmt.Errorf("missing continuation context")
 		}
@@ -215,7 +212,7 @@ func (m *planningReplayModel) GenerateContent(_ context.Context, req *model.LLMR
 	return func(y func(*model.LLMResponse, error) bool) {
 		m.calls++
 		usage := &genai.GenerateContentResponseUsageMetadata{TotalTokenCount: int32(100 + m.calls)}
-		if m.input.Request != nil && m.calls == 2 && strings.Contains(string(m.draft), "cpu-r7-5700x") {
+		if m.calls == 2 && strings.Contains(string(m.draft), "cpu-r7-5700x") {
 			toolResults, _ := json.Marshal(req.Contents[len(req.Contents)-1])
 			if !strings.Contains(string(toolResults), "cpu-r7-5700x") {
 				y(nil, fmt.Errorf("upgrade candidate was not retrieved by search_local"))
@@ -286,7 +283,7 @@ func TestPlanningProposalPersistentWorkflow(t *testing.T) {
 		return d
 	}
 	confirm := func() product.SessionDetail {
-		r, e := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString())
+		r, e := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString(), confirmRequest(t, service, owner, ws.ID))
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -364,7 +361,7 @@ func TestPlanningResultArchivedAndTransportDegraded(t *testing.T) {
 		}
 	}
 	confirm := func() product.SessionDetail {
-		r, e := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString())
+		r, e := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString(), confirmRequest(t, service, owner, ws.ID))
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -506,7 +503,7 @@ func TestPlanningReplayDegradesDivergentVerification(t *testing.T) {
 		}
 	}
 	edit(v2CompleteSeed(12000)...)
-	r, e := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString())
+	r, e := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString(), confirmRequest(t, service, owner, ws.ID))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -581,7 +578,7 @@ func TestPlanningDailyTokenBudgetRefusesNewRuns(t *testing.T) {
 		}
 	}
 	confirm := func() error {
-		r, e := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString())
+		r, e := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString(), confirmRequest(t, service, owner, ws.ID))
 		if e != nil {
 			t.Fatal(e)
 		}

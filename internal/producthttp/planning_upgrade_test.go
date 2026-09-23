@@ -57,7 +57,7 @@ func TestChatUpgradeRequiresExplicitConfirmation(t *testing.T) {
 	}
 	confirm := func() product.SessionDetail {
 		t.Helper()
-		return wait(service.StartConfirm(ctx, owner, ws.ID, uuid.NewString()))
+		return wait(service.StartConfirm(ctx, owner, ws.ID, uuid.NewString(), confirmRequest(t, service, owner, ws.ID)))
 	}
 	initial := message("预算7000，剪1080p多轨视频，不要求静音，配件全部新买")
 	if initial.Session.VersionCount != 0 || initial.Session.Phase != store.PhaseRequirementReady {

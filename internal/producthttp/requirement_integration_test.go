@@ -371,8 +371,8 @@ func TestRequirementStatePersistentWorkflow(t *testing.T) {
 		return state
 	}
 	detail := chat("预算8000，玩游戏，要安静一点，尽量用N卡，帮朋友装机，2K分辨率，配件全部新买")
-	if len(detail.MissingFields) != 0 {
-		t.Fatalf("重复追问已知字段: %v", detail.MissingFields)
+	if detail.Axes.Readiness == nil || len(detail.Axes.Readiness.MissingFields) != 0 {
+		t.Fatalf("重复追问已知字段: %+v", detail.Axes.Readiness)
 	}
 	detail = chat("预算改成6000")
 	state := stateOf(detail)
@@ -412,7 +412,9 @@ func TestRequirementStatePersistentWorkflow(t *testing.T) {
 		t.Fatalf("旧页面应冲突:%v", err)
 	}
 	confirmKey := uuid.NewString()
-	confirmed, err := service.StartConfirm(ctx, owner, ws.ID, confirmKey)
+	// 幂等重放按"相同 key + 相同请求"比较:先固定原始请求,重放时原样提交。
+	originalConfirm := confirmRequest(t, service, owner, ws.ID)
+	confirmed, err := service.StartConfirm(ctx, owner, ws.ID, confirmKey, originalConfirm)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -443,15 +445,19 @@ func TestRequirementStatePersistentWorkflow(t *testing.T) {
 		t.Fatalf("配置摘要未与原始回复及版本一起持久化: %+v", last)
 	}
 	detail = chat("预算改成6000")
-	if detail.RequirementStatus != "modified" || detail.Session.VersionCount != 1 {
+	if detail.Axes.Confirmation.Status != product.ConfirmationModified || detail.Session.VersionCount != 1 {
 		t.Fatal("未确认修改覆盖了已有版本")
 	}
 	unchanged, _ := st.RequirementSpecByID(ctx, old.RequirementID)
 	if !reflect.DeepEqual(original, unchanged) {
 		t.Fatal("历史需求被覆盖")
 	}
+	confirmation, found, err := st.ConfirmationByID(ctx, ws.ID, detail.Session.ConfirmationID)
+	if err != nil || !found {
+		t.Fatalf("确认快照不可读: found=%v err=%v", found, err)
+	}
 	var confirmedSpec schemas.RequirementState
-	_ = json.Unmarshal(detail.Session.ConfirmedRequirementState, &confirmedSpec)
+	_ = json.Unmarshal(confirmation.RequirementState, &confirmedSpec)
 	if string(confirmedSpec.Fields["budget_cny"].Value) != "8500" {
 		t.Fatal("确认快照被覆写")
 	}
@@ -472,7 +478,7 @@ func TestRequirementStatePersistentWorkflow(t *testing.T) {
 	if err != nil || stateOf(withdrawn).Fields["budget_cny"].Status != "removed" {
 		t.Fatalf("撤销预算应保留未知需求并允许继续讨论: %v", err)
 	}
-	retry, err := service.StartConfirm(ctx, owner, ws.ID, confirmKey)
+	retry, err := service.StartConfirm(ctx, owner, ws.ID, confirmKey, originalConfirm)
 	if err != nil || !retry.Duplicate || retry.Run.ID != confirmed.Run.ID {
 		t.Fatalf("新草稿不足不应影响旧确认重试: %+v, %v", retry, err)
 	}
@@ -544,8 +550,8 @@ func TestVideoRequirementConfirmationReplay(t *testing.T) {
 	}
 	detail = wait(complete.Run.ID, store.RunSucceeded)
 	state := stateOf(detail)
-	if len(detail.MissingFields) != 0 || state.Fields["budget_flex"].Status != "unknown" || state.Fields["use_case.resolution"].Status == "active" {
-		t.Fatalf("invented preference or unnecessary question: %+v", detail)
+	if detail.Axes.Readiness == nil || len(detail.Axes.Readiness.MissingFields) != 0 || state.Fields["budget_flex"].Status != "unknown" || state.Fields["use_case.resolution"].Status == "active" {
+		t.Fatalf("invented preference or unnecessary question: %+v", detail.Axes.Readiness)
 	}
 	detail, err = service.EditRequirement(ctx, owner, ws.ID, uuid.NewString(), product.RequirementEdit{ExpectedRevision: state.Revision,
 		Operations: []schemas.RequirementOperation{{Op: "set", Field: "budget_cny", Value: json.RawMessage(`6000`), Strength: "prefer"}}})
@@ -556,7 +562,7 @@ func TestVideoRequirementConfirmationReplay(t *testing.T) {
 	if state.Fields["noise_pref"].Strength != "prefer" || string(state.Fields["use_case.type"].Value) != `"productivity"` || state.Fields["budget_flex"].Status != "unknown" {
 		t.Fatal("budget strength edit changed other facts or user-unknown flex")
 	}
-	confirmed, err := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString())
+	confirmed, err := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString(), confirmRequest(t, service, owner, ws.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -575,7 +581,11 @@ func TestVideoRequirementConfirmationReplay(t *testing.T) {
 	if !strings.Contains(string(savedSpec), "4K") || !strings.Contains(string(savedSpec), "silent") {
 		t.Fatal("workload evidence or quiet preference never reached saved build requirement")
 	}
-	frozen := append(json.RawMessage(nil), detail.Session.ConfirmedRequirementState...)
+	frozenConf, found, err := st.ConfirmationByID(ctx, ws.ID, detail.Session.ConfirmationID)
+	if err != nil || !found {
+		t.Fatalf("确认快照不可读: found=%v err=%v", found, err)
+	}
+	frozen := append(json.RawMessage(nil), frozenConf.RequirementState...)
 	fresh, err := service.GetSession(ctx, owner, ws.ID)
 	if err != nil || !reflect.DeepEqual(fresh.Session.RequirementState, detail.Session.RequirementState) {
 		t.Fatal("refresh lost authoritative state")
@@ -586,10 +596,11 @@ func TestVideoRequirementConfirmationReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(frozen, detail.Session.ConfirmedRequirementState) {
-		t.Fatal("draft edit overwrote confirmed snapshot")
+	afterConf, found, err := st.ConfirmationByID(ctx, ws.ID, detail.Session.ConfirmationID)
+	if err != nil || !found || !reflect.DeepEqual(frozen, afterConf.RequirementState) {
+		t.Fatalf("draft edit overwrote confirmed snapshot: found=%v err=%v", found, err)
 	}
-	failed, err := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString())
+	failed, err := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString(), confirmRequest(t, service, owner, ws.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -619,7 +630,7 @@ func TestVideoRequirementConfirmationReplay(t *testing.T) {
 	if stateOf(detail).Fields["noise_pref"].Strength != "prefer" {
 		t.Fatal("chat did not apply explicit correction after failed confirmation")
 	}
-	confirmed, err = service.StartConfirm(ctx, owner, ws.ID, uuid.NewString())
+	confirmed, err = service.StartConfirm(ctx, owner, ws.ID, uuid.NewString(), confirmRequest(t, service, owner, ws.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -655,4 +666,19 @@ func TestRequirementStateBrowserServer(t *testing.T) {
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		t.Fatal(err)
 	}
+}
+
+// confirmRequest 像 UI 客户端一样从服务端核定预览取 revision 与 review_hash,
+// 不在测试里自行拼接 spec。
+func confirmRequest(t *testing.T, svc *product.Service, owner, sessionID string) product.ConfirmRequest {
+	t.Helper()
+	detail, err := svc.GetSession(context.Background(), owner, sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state schemas.RequirementState
+	if err := json.Unmarshal(detail.Session.RequirementState, &state); err != nil {
+		t.Fatal(err)
+	}
+	return product.ConfirmRequest{ExpectedRevision: state.Revision, ExpectedReviewHash: detail.Axes.ReviewHash}
 }

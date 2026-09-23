@@ -21,13 +21,11 @@ stateDiagram-v2
     [*] --> collecting
     collecting --> collecting: readiness 不完整,按追问计划补问
     collecting --> requirement_ready: readiness 完整,投影 RequirementSpec v2
-    requirement_ready --> requirement_ready: 用户编辑需求
-    requirement_ready --> building: 用户确认
-    building --> ready: v1 保存成功
+    requirement_ready --> requirement_ready: 用户编辑需求(独立草稿事务)
+    requirement_ready --> building: 用户经 confirm API 确认(唯一 Builder admission)
+    building --> ready: 配置保存成功
     building --> error: 生成或校验失败
-    ready --> changing: 用户发起改单
-    changing --> ready: 新版本保存成功
-    changing --> error: 改单失败
+    ready --> collecting: ready 阶段普通聊天也是 screening 收集轮
     error --> collecting: 首次需求重试
     error --> requirement_ready: 确认前重试
     error --> ready: 已有版本时恢复
@@ -35,26 +33,34 @@ stateDiagram-v2
 
 | 状态 | 可接受的用户动作 | 禁止动作 |
 |---|---|---|
-| collecting | 发送自然语言、查看历史 | 确认需求、改单 |
+| collecting | 发送自然语言、侧栏编辑草稿、查看历史 | 确认需求(readiness 未完整时硬拒绝) |
 | requirement_ready | 编辑/确认需求、补充自然语言 | 直接访问不存在的 build |
-| building | 查看进度、离开页面 | 再次确认、发送新消息 |
-| ready | 发送改单、查看版本、导出、分享 | 修改旧版本 |
-| changing | 查看进度、离开页面 | 并发改单 |
+| building | 查看进度、侧栏编辑草稿(不创建 run)、离开页面 | 再次确认、发送新聊天消息 |
+| ready | 发送消息(screening 收集轮)、查看版本、导出、分享 | 修改旧版本;聊天直达生成 |
 | error | 查看错误、按建议重试 | 无幂等保护的自动重试 |
 
-会话 phase 是产品层真值，存 PostgreSQL(`web_sessions` 及其 requirement/confirmed 字段，见[编号迁移](../../db/migrations/)；字段细节以迁移为准)；ADK session state 是运行时上下文，存 Redis。不得用前端猜测 phase。
+会话 phase 是执行恢复用的粗粒度真值，存 PostgreSQL(`web_sessions`,当前确认经 `confirmation_id` 指向不可变 `requirement_confirmations` 快照,见[编号迁移](../../db/migrations/)；字段细节以迁移为准)；UI 与 admission 使用的三轴状态(requirement_readiness/requirement_confirmation/build_relation)由后端从草稿投影、确认快照与 build run 派生。不得用前端猜测 phase 或状态。
 
-### 需求确认与改单
+### 需求确认与 Builder gate
 
 1. API 只运行初筛 Agent；具有需求状态的新会话注入有界上下文(RequirementStatePromptView、确定性 readiness 摘要与领域下一步追问、最近一条助手回复及未解决建议、是否有配置版本、当前 capability=tower)与本轮用户原文。Screening v2 一轮合同只输出 `operations`/`observations`/`turn_signals`/`proposals`/`answer`,严格解码拒绝未知字段(含 `next_action`/`reply`,legacy 传输适配已删除);`has_requirement_update` 由 operations/observations 派生,模型不输出。
 2. 服务端核验本轮来源并归并操作，保存 `requirement_state`;确定性 readiness 判定不完整时按领域追问计划(`NextRequirementQuestion`,每轮一个问题组,conflict/unsupported 优先)生成针对性追问，phase 保持 collecting。
 3. readiness 完整时确定性投影为 RequirementSpec v2(含 configuration_scope=[tower] 与来源可追溯的系统默认),写入 pending_requirement，phase 变 requirement_ready;先发 requirement.updated，再发 requirement.ready。
-3a. 回复由产品层确定性组合(展示守卫后的 answer → 展示建议问句 → 追问或就绪提示),并按 readiness+turn signals 发布短期 presentation action(`presentation.action` 事件:open_requirement_review / focus_missing_requirement),不启动 Builder;后续三轴 Policy 在同一入口扩展。模型 answer 声称已开始生成或承诺主机外品类时,被确定性守卫替换为诚实范围说明。
+3a. 回复由产品层确定性组合(展示守卫后的 answer → 展示建议问句 → 追问或就绪提示),并按 readiness+turn signals 发布短期 presentation action(`presentation.action` 事件:open_requirement_review / focus_missing_requirement),不启动 Builder;确认/生成三轴 Policy 在同一入口扩展。模型 answer 声称已开始生成或承诺主机外品类时,被确定性守卫替换为诚实范围说明。
 3b. 助手建议(proposal)只在建议问句确实展示给用户后与 assistant 消息同事务保存(迁移 00022 `requirement_proposals`),绑定真实 assistant message id,只对紧接着的下一条用户消息有效;用户明确接受时 operation 携带 `evidence=accepted_proposal`,服务器核验同字段同规范化值、消息归属与紧邻轮次后才进入 Reducer,接受后建议 resolved,拒绝/覆盖/跨轮不得复用。
-4. `PATCH requirement-state` 接受带 expected_revision 的字段操作，与聊天走同一 reducer;旧 PATCH requirement 完整替换入口保留兼容。
-5. confirm 在锁内重算 readiness 门控投影并与 pending_requirement 逐字比对,通过后冻结确认快照并调用 A2A remote 生成配置;RequirementState/Spec v1 在解码边界以稳定错误拒绝,不静默迁移。
+4. `PATCH requirement-state` 是独立原子草稿编辑事务:复用同一 Reducer、权限与幂等约束,只更新草稿 RequirementState 与 revision,不创建 AgentRun、不改变 phase;**Builder 运行期间同样可用**(运行中的 Builder 只读取启动时冻结的快照)。旧 PATCH requirement 完整替换入口保留兼容。
+5. `POST requirement/confirm` 是唯一的 Builder admission:请求体携带 `expected_revision` 与 `expected_review_hash`(来自服务端核定预览),可选 `retry_of_run_id`(仅失败重试)。服务端在同一事务重算 readiness、比较 revision 与 review hash、冻结不可变确认快照(`requirement_confirmations`:review_spec + review_hash + revision 等)并冻结该 run 的完整 Builder 载荷(`agent_runs.builder_input_payload` + `builder_input_hash`):载荷内 `effective_constraints` 承载冻结的有效选型约束(完整核定预览 + 默认来源),Builder 的模型输入与确定性门槛只读它,`requirement_state` 仅保留用户事实与溯源;失败重试整体继承该约束,仅替换 run 标识。然后创建唯一 build run。`RequirementState/Spec v1` 在解码边界以稳定错误拒绝,不静默迁移。
+5a. 稳定 admission reason code(409/422 problem code):`requirement_revision_conflict`、`requirement_review_conflict`(revision 不变但默认规则/配置范围变化导致预览失效)、`session_busy`(活动 Builder 存在)、`invalid_retry_target`、`requirement_not_ready`。
 
-ready 后继续将用户修改归并为新草稿；原确认快照与配置版本不变，再次确认后生成新版本。快捷按钮仍只预填自然语言，没有 card-change 专用入口。Redis 中 A2A context/build_state 过期时返回可识别的 context_expired problem,UI 提供「按当前需求整单重生成」，重生成固定为新根会话，不伪造增量改单保证。
+### 三轴状态(Readiness / Confirmation / Build)
+
+Session DTO 由后端唯一计算三轴,前端只渲染:`requirement_readiness`(status/missing_fields/blocking_conflicts/unsupported_capabilities/next_question/confirmation_eligible/effective_defaults)、`review_spec`/`review_hash`(核定预览,展开有效系统默认)、`effective_budget_ceiling_cny`(budget_cny×(1+budget_flex) 展示值)、`requirement_confirmation`(unconfirmed/confirmed/modified + confirmed_revision/confirmed_at/confirmed_review_hash)、`build_relation`(none/running/current/outdated/failed + version/snapshot_id/review_hash/builder_input_hash)。旧的单值 `requirement_status` 与裸 `missing_fields` 已删除。
+
+- confirmed=当前草稿规范化 review_hash 与最近确认快照相同;modified=存在快照但草稿不同或已不足以投影。
+- running 优先表示活动 Builder;草稿运行中修改 → confirmation 立即 modified,run 结束后按当时草稿与该 run 的快照计算 current/outdated/failed。outdated 仅在已有成功配置时成立;failed 可与 modified 并存,历史成功配置经 version 继续可见。
+- 草稿改回与快照完全相同的规范化 review_spec 时自动恢复 confirmed/current;不强迫重复确认,已有 run 的冻结载荷不随之改变。
+
+ready 后继续将用户修改归并为新草稿；原确认快照与配置版本不变，再次确认(生成新快照与新 run)后生成新版本。生成期间(确认/生成 CTA 禁用)聊天与侧栏编辑可用,但第二次确认被服务端硬拒绝;第一版不排队、不并行、不自动取消。Redis 中 A2A context/build_state 过期时返回可识别的 context_expired problem,UI 提供「按当前需求整单重生成」，重生成固定为新根会话——它同样必须走 confirm API,不得绕过唯一 admission。
 
 ## 3. 匿名身份与所有权
 
@@ -84,7 +90,7 @@ ready 后继续将用户修改归并为新草稿；原确认快照与配置版�
 | SSE 断开 | 后台继续，允许重连 | 无业务失败 |
 | API 重启 | running → interrupted | 409 run_interrupted |
 
-失败后 phase 回退：screening 失败 → collecting;build 失败 → requirement_ready;change 失败 → ready。
+失败后 phase 回退：screening 失败 → collecting;build 失败 → requirement_ready。失败重试区分两类:同幂等键同请求重放返回原 run;失败后的新生成必须显式携带 `retry_of_run_id` 走 confirm API——复用确认快照,选型上下文(需求状态、基线草稿、上一提案)整体继承目标 run 的冻结载荷,仅替换本轮 run 标识并另冻新载荷/hash,不从当前 session 重新组装;草稿已修改则先重新核定。错误恢复不自动退回旧 confirmed spec 启动生成;`RunChange`、确定性改单与 `ChangeRequest` 旁路已删除,不存在绕过唯一 confirm admission 的路径。
 
 ## 5. 配置读模型与 presenter
 

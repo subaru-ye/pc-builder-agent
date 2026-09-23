@@ -48,8 +48,11 @@ type ReqV2TurnObservation struct {
 	PresentationAction string `json:"presentation_action,omitempty"`
 	// BuilderStartedViaChat：本轮为聊天消息却启动了 Builder；聊天文字不能
 	// 替代 confirm API，ContinueScreeningRun 的自动 confirmed 不是用户核定。
-	BuilderStartedViaChat    bool   `json:"builder_started_via_chat"`
-	BuildersActive           int    `json:"builders_active"`
+	BuilderStartedViaChat bool   `json:"builder_started_via_chat"`
+	BuildersActive        int    `json:"builders_active"`
+	// AdmissionReason 是稳定原因码:ok | readiness_incomplete | no_confirmation |
+	// builder_running | stale_revision。confirm 轮来自 API 真实拒绝原因。
+	AdmissionReason          string `json:"admission_reason,omitempty"`
 	ConfirmationSnapshotHash string `json:"confirmation_snapshot_hash,omitempty"`
 	BuilderInputHash         string `json:"builder_input_hash,omitempty"`
 	StaleEditAccepted        bool   `json:"stale_edit_accepted"`
@@ -477,10 +480,10 @@ func GradeReqV2Readiness(c ReqV2ReadinessCase, obs ReqV2ReadinessResult) []ReqV2
 	}
 	g.check("readiness:confirmation_eligible", obs.ConfirmationEligible == c.Expected.ConfirmationEligible, reqV2ClassBehavior, "", fmt.Sprint(obs.ConfirmationEligible))
 	if len(c.Expected.EffectiveDefaults) > 0 {
-		g.check("readiness:effective_defaults", defaultsMatch(obs.EffectiveDefaults, c.Expected.EffectiveDefaults), reqV2ClassGap, "", fmt.Sprint(obs.EffectiveDefaults))
+		g.check("readiness:effective_defaults", defaultsMatch(obs.EffectiveDefaults, c.Expected.EffectiveDefaults), reqV2ClassBehavior, "", fmt.Sprint(obs.EffectiveDefaults))
 	}
 	if len(c.Expected.UnsupportedCapabilities) > 0 {
-		g.check("readiness:unsupported_capabilities", reflect.DeepEqual(normalizeList(obs.UnsupportedCapabilities), normalizeList(c.Expected.UnsupportedCapabilities)), reqV2ClassGap, "", fmt.Sprint(obs.UnsupportedCapabilities))
+		g.check("readiness:unsupported_capabilities", reflect.DeepEqual(normalizeList(obs.UnsupportedCapabilities), normalizeList(c.Expected.UnsupportedCapabilities)), reqV2ClassBehavior, "", fmt.Sprint(obs.UnsupportedCapabilities))
 	}
 	turn := ReqV2TurnObservation{Readiness: &obs}
 	g.detectVetoes(turn, nil, nil, false)
@@ -536,8 +539,8 @@ func GradeReqV2Policy(c ReqV2PolicyCase, obs ReqV2TurnObservation) []ReqV2Assert
 	g := &reqV2Grader{}
 	g.check("policy:builder_admission", obs.BuilderStarted == c.Expected.BuilderAdmission, reqV2ClassBehavior, "", fmt.Sprintf("started=%v admission_error=%q", obs.BuilderStarted, obs.Error))
 	if c.Expected.AdmissionReason != "" {
-		// 当前实现没有稳定 reason code；只断言拒绝语义本身。
-		g.check("policy:admission_reason", !c.Expected.BuilderAdmission || obs.BuilderStarted, reqV2ClassGap, "", "current path exposes no stable admission reason code")
+		// admission 拒绝有稳定 reason code(confirm API 错误映射),按行为判卷。
+		g.check("policy:admission_reason", obs.AdmissionReason == c.Expected.AdmissionReason, reqV2ClassBehavior, "", fmt.Sprintf("got=%q want=%q", obs.AdmissionReason, c.Expected.AdmissionReason))
 	}
 	if c.Expected.PresentationAction != "" {
 		g.check("policy:presentation_action", obs.PresentationAction == c.Expected.PresentationAction, reqV2ClassBehavior, "",
@@ -559,7 +562,7 @@ func GradeReqV2Policy(c ReqV2PolicyCase, obs ReqV2TurnObservation) []ReqV2Assert
 // blockPresent 表示 DTO 是否携带结构化 requirement_readiness 块。
 func GradeReqV2UI(c ReqV2UICase, obs ReqV2TurnObservation, blockPresent bool, confirmationStatus, buildRelation string, confirmPayloadKeys []string) []ReqV2Assertion {
 	g := &reqV2Grader{}
-	g.check("ui:readiness_block", blockPresent, reqV2ClassGap, "", "session DTO carries no structured requirement_readiness block")
+	g.check("ui:readiness_block", blockPresent, reqV2ClassBehavior, "", "session DTO carries no structured requirement_readiness block")
 	if obs.Readiness != nil {
 		sub := GradeReqV2Readiness(ReqV2ReadinessCase{ReqV2CaseHead: ReqV2CaseHead{ID: c.ID}, Expected: c.Expected.Readiness}, *obs.Readiness)
 		for _, a := range sub {
@@ -570,7 +573,7 @@ func GradeReqV2UI(c ReqV2UICase, obs ReqV2TurnObservation, blockPresent bool, co
 	g.check("ui:confirmation_status", confirmationStatus == c.Expected.ConfirmationStatus, classForStatus(confirmationStatus, c.Expected.ConfirmationStatus), "", fmt.Sprintf("got=%q", confirmationStatus))
 	g.check("ui:build_relation", buildRelation == c.Expected.BuildRelation, classForStatus(buildRelation, c.Expected.BuildRelation), "", fmt.Sprintf("got=%q", buildRelation))
 	if len(c.Expected.ConfirmPayloadKeys) > 0 {
-		g.check("ui:confirm_payload", reflect.DeepEqual(normalizeList(confirmPayloadKeys), normalizeList(c.Expected.ConfirmPayloadKeys)), reqV2ClassGap, "", fmt.Sprint(confirmPayloadKeys))
+		g.check("ui:confirm_payload", reflect.DeepEqual(normalizeList(confirmPayloadKeys), normalizeList(c.Expected.ConfirmPayloadKeys)), reqV2ClassBehavior, "", fmt.Sprint(confirmPayloadKeys))
 	}
 	g.detectVetoes(obs, nil, nil, false)
 	return g.assertions

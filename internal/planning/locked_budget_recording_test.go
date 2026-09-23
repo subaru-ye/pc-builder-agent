@@ -182,6 +182,11 @@ func TestRecordedSelectionSatisfiesLockedGPU7500Budget(t *testing.T) {
 	budget := f.Input.State.Fields["budget_cny"]
 	budget.Value = json.RawMessage(`6500`)
 	f.Input.State.Fields["budget_cny"] = budget
+	// 严格预算意图显式陈述弹性 0(未填写时按系统默认 0.1 执行,7114 ≤ 7150
+	// 将合法通过门槛)。
+	flex := f.Input.State.Fields["budget_flex"]
+	flex.Status, flex.Kind, flex.Strength, flex.Value = "active", "constraint", "must", json.RawMessage(`0`)
+	f.Input.State.Fields["budget_flex"] = flex
 	m.calls = 0
 	lower, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 2}).Run(context.Background(), f.Input)
 	if err != nil || lower.Outcome == "ready" {

@@ -19,55 +19,6 @@ type proposalStore interface {
 	BuildByVersion(context.Context, string, int) (store.BuildVersion, error)
 }
 
-// isChangeRequestPayload 按顶层 intent 键识别改单载荷;改单合同不是需求
-// 状态投影,不做 v1 兼容包装,原样交给生成服务按其合同处理。
-func isChangeRequestPayload(payload json.RawMessage) bool {
-	var root map[string]json.RawMessage
-	return json.Unmarshal(payload, &root) == nil && root["intent"] != nil
-}
-
-func (s *Service) planningContext(ctx context.Context, sessionID, runID string, payload json.RawMessage) (json.RawMessage, error) {
-	var input schemas.PlanningInput
-	if json.Unmarshal(payload, &input) != nil || input.SchemaVersion != 2 {
-		// v1 一次性切换:旧需求单不再静默包装重建。改单载荷(schema v1 的
-		// ChangeRequest)原样透传,其余不合规载荷以稳定错误拒绝。
-		if isChangeRequestPayload(payload) {
-			return payload, nil
-		}
-		return nil, schemas.ErrRequirementStateUnsupported
-	}
-	input.RunID = runID
-	st, ok := s.store.(proposalStore)
-	if !ok {
-		return payload, nil
-	}
-	previous, e := st.LatestProposal(ctx, sessionID)
-	if e != nil {
-		return nil, e
-	}
-	var saved struct {
-		Result json.RawMessage `json:"result"`
-		RunID  string          `json:"run_id"`
-	}
-	if len(previous) > 0 {
-		_ = json.Unmarshal(previous, &saved)
-		input.PreviousProposal = saved.Result
-		input.PreviousRunID = saved.RunID
-	}
-	version, found, e := s.store.LatestBuildVersion(ctx, sessionID)
-	if e != nil {
-		return nil, e
-	}
-	if found {
-		base, e := st.BuildByVersion(ctx, sessionID, version)
-		if e != nil {
-			return nil, e
-		}
-		input.BaseDraft = base.Draft
-	}
-	return json.Marshal(input)
-}
-
 // builderIdentity 把生成服务回传的身份压成单列口径;缺省(旧协议)返回空。
 func builderIdentity(b *planning.BuilderIdentity) string {
 	if b == nil {

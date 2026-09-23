@@ -23,9 +23,13 @@ type fakeProductStore struct {
 	mu           sync.Mutex
 	session      store.WebSession
 	runs         map[string]store.AgentRun
+	buildRuns       map[string]store.BuildRun
+	builderPayloads map[string]json.RawMessage
+	confirmation    *store.RequirementConfirmation
 	messages     []store.WebMessage
 	latest       int
 	fingerprints map[string]string
+	edits        map[string]string // request_id → fingerprint(草稿编辑幂等)
 	onMessageRun func(messageID string) // planningFakeStore 挂接建议消费等扩展语义
 	onComplete   func(store.CompleteRunParams)
 }
@@ -33,8 +37,11 @@ type fakeProductStore struct {
 func newFakeProductStore() *fakeProductStore {
 	return &fakeProductStore{
 		session:      store.WebSession{ID: "session-1", OwnerID: "owner-1", Phase: store.PhaseCollecting},
-		runs:         make(map[string]store.AgentRun),
-		fingerprints: make(map[string]string),
+		runs:            make(map[string]store.AgentRun),
+		buildRuns:       make(map[string]store.BuildRun),
+		builderPayloads: make(map[string]json.RawMessage),
+		fingerprints:    make(map[string]string),
+		edits:           make(map[string]string),
 	}
 }
 
@@ -117,28 +124,154 @@ func (f *fakeProductStore) StartMessageRun(ctx context.Context, p store.StartMes
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	kind := store.RunScreening
-	if f.session.Phase == store.PhaseReady {
-		kind = store.RunChange
-		f.session.Phase = store.PhaseChanging
-	}
 	r := store.AgentRun{ID: p.RunID, SessionID: p.SessionID, ClientRequestID: p.RequestID,
-		Kind: kind, Status: store.RunRunning, StartedAt: time.Now()}
+		Kind: store.RunScreening, Status: store.RunRunning, StartedAt: time.Now()}
 	f.runs[r.ID] = r
 	f.fingerprints[r.ID] = p.RequestFingerprint
 	f.messages = append(f.messages, store.WebMessage{
 		ID: p.MessageID, SessionID: p.SessionID, Role: "user", Content: p.Text, RunID: &r.ID, CreatedAt: time.Now(),
 	})
+	f.session.Phase = store.PhaseCollecting
 	return r, false, nil
 }
-func (f *fakeProductStore) StartConfirmRun(_ context.Context, p store.StartConfirmRunParams) (store.AgentRun, json.RawMessage, bool, error) {
+
+// startConfirmRunForTest 是生产 StartConfirmRun 的假实现:同一 readiness/hash
+// 门控,但不做 SQL 级并发控制。
+func (f *fakeProductStore) StartConfirmRun(_ context.Context, p store.StartConfirmRunParams) (store.AgentRun, store.StartConfirmRunResult, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	for _, run := range f.runs {
+		if run.Kind == store.RunBuild && run.ClientRequestID == p.RequestID {
+			if f.fingerprints[run.ID] != p.RequestFingerprint {
+				return store.AgentRun{}, store.StartConfirmRunResult{}, false, store.ErrIdempotencyConflict
+			}
+			return run, store.StartConfirmRunResult{}, true, nil
+		}
+	}
+	if len(f.session.RequirementState) == 0 {
+		return store.AgentRun{}, store.StartConfirmRunResult{}, false, schemas.ErrRequirementStateUnsupported
+	}
+	state, err := schemas.DecodeRequirementState(f.session.RequirementState)
+	if err != nil {
+		return store.AgentRun{}, store.StartConfirmRunResult{}, false, err
+	}
+	if state.Revision != p.ExpectedRevision {
+		return store.AgentRun{}, store.StartConfirmRunResult{}, false, store.ErrRequirementRevision
+	}
+	spec, readiness, err := schemas.RequirementStateSpec(state)
+	if err != nil {
+		return store.AgentRun{}, store.StartConfirmRunResult{}, false, err
+	}
+	if !readiness.ConfirmationEligible {
+		return store.AgentRun{}, store.StartConfirmRunResult{}, false, store.ErrRequirementNotReady
+	}
+	reviewHash, err := schemas.CanonicalHash(spec)
+	if err != nil {
+		return store.AgentRun{}, store.StartConfirmRunResult{}, false, err
+	}
+	if reviewHash != p.ExpectedReviewHash {
+		return store.AgentRun{}, store.StartConfirmRunResult{}, false, store.ErrRequirementReviewConflict
+	}
+	// 与生产语义一致:新确认从当前状态组装;失败重试继承目标 run 的冻结
+	// 载荷,只替换 run 标识。
+	var payload json.RawMessage
+	confirmationID := p.ConfirmationID
+	if p.RetryOfRunID != "" {
+		target, ok := f.buildRuns[p.RetryOfRunID]
+		inheritedPayload, hasPayload := f.builderPayloads[p.RetryOfRunID]
+		if !ok || target.SessionID != p.SessionID {
+			return store.AgentRun{}, store.StartConfirmRunResult{}, false, store.ErrRunNotFound
+		}
+		if target.Status != store.RunFailed || target.ConfirmationID == "" || !hasPayload {
+			return store.AgentRun{}, store.StartConfirmRunResult{}, false, store.ErrRetryTargetInvalid
+		}
+		confirmationID = target.ConfirmationID
+		var inherited schemas.PlanningInput
+		if err := json.Unmarshal(inheritedPayload, &inherited); err != nil {
+			return store.AgentRun{}, store.StartConfirmRunResult{}, false, err
+		}
+		inherited.RunID = p.RunID
+		payload, err = json.Marshal(inherited)
+		if err != nil {
+			return store.AgentRun{}, store.StartConfirmRunResult{}, false, err
+		}
+	} else {
+		payload, err = schemas.PlanningBuilderInput(p.RunID, state, nil, nil, nil, "")
+		if err != nil {
+			return store.AgentRun{}, store.StartConfirmRunResult{}, false, err
+		}
+		f.confirmation = &store.RequirementConfirmation{ID: p.ConfirmationID, SessionID: p.SessionID,
+			RequirementSpec: spec, RequirementState: f.session.RequirementState, ReviewHash: reviewHash,
+			Revision: state.Revision, SchemaVersion: schemas.RequirementStateSchemaVersion, CreatedAt: time.Now()}
+	}
+	builderHash, err := schemas.CanonicalHash(payload)
+	if err != nil {
+		return store.AgentRun{}, store.StartConfirmRunResult{}, false, err
+	}
 	r := store.AgentRun{ID: p.RunID, SessionID: p.SessionID, ClientRequestID: p.RequestID,
 		Kind: store.RunBuild, Status: store.RunRunning, StartedAt: time.Now()}
 	f.runs[r.ID] = r
+	f.fingerprints[r.ID] = p.RequestFingerprint
+	f.builderPayloads[r.ID] = append(json.RawMessage(nil), payload...)
+	f.buildRuns[r.ID] = store.BuildRun{AgentRun: r, ConfirmationID: confirmationID, ReviewHash: reviewHash, BuilderInputHash: builderHash}
 	f.session.Phase = store.PhaseBuilding
-	return r, f.session.PendingRequirement, false, nil
+	f.session.ConfirmationID = confirmationID
+	return r, store.StartConfirmRunResult{ConfirmationID: confirmationID, ReviewHash: reviewHash,
+		BuilderInputPayload: payload, BuilderInputHash: builderHash}, false, nil
+}
+
+func (f *fakeProductStore) ConfirmationByID(_ context.Context, sessionID, id string) (store.RequirementConfirmation, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if id == "" || f.confirmation == nil || f.confirmation.SessionID != sessionID || f.confirmation.ID != id {
+		return store.RequirementConfirmation{}, false, nil
+	}
+	return *f.confirmation, true, nil
+}
+
+func (f *fakeProductStore) BuildRuns(_ context.Context, sessionID string) ([]store.BuildRun, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]store.BuildRun, 0, len(f.buildRuns))
+	for _, run := range f.buildRuns {
+		if run.SessionID == sessionID {
+			run.Version = 0
+			out = append(out, run)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeProductStore) RequirementEditFingerprint(_ context.Context, sessionID, requestID string) (string, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if sessionID != f.session.ID {
+		return "", false, nil
+	}
+	fp, ok := f.edits[requestID]
+	return fp, ok, nil
+}
+
+func (f *fakeProductStore) EditRequirementDraft(_ context.Context, p store.EditRequirementDraftParams) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if old, ok := f.edits[p.RequestID]; ok {
+		if old != p.Fingerprint {
+			return false, store.ErrIdempotencyConflict
+		}
+		return false, nil
+	}
+	state, err := schemas.DecodeRequirementState(f.session.RequirementState)
+	if err != nil {
+		return false, err
+	}
+	if state.Revision != p.ExpectedRevision {
+		return false, store.ErrRequirementRevision
+	}
+	f.edits[p.RequestID] = p.Fingerprint
+	f.session.RequirementState = p.Next
+	f.session.PendingRequirement = p.Pending
+	return true, nil
 }
 func (f *fakeProductStore) CompleteRun(ctx context.Context, p store.CompleteRunParams) (*store.WebMessage, error) {
 	if hook := f.onComplete; hook != nil {
@@ -149,6 +282,13 @@ func (f *fakeProductStore) CompleteRun(ctx context.Context, p store.CompleteRunP
 	r := f.runs[p.RunID]
 	r.Status = p.Status
 	f.runs[p.RunID] = r
+	if br, ok := f.buildRuns[p.RunID]; ok {
+		br.Status = p.Status
+		if p.BuildVersion > 0 {
+			br.Version = p.BuildVersion
+		}
+		f.buildRuns[p.RunID] = br
+	}
 	f.session.Phase = p.Phase
 	f.session.RecoveryPhase = p.RecoveryPhase
 	f.session.LastError = p.Error
@@ -365,16 +505,21 @@ func (f *fakeSink) names() []string {
 }
 
 func TestServiceRequirementConfirmBuild(t *testing.T) {
-	st := newFakeProductStore()
-	spec := json.RawMessage(`{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":8000,"use_case":{"type":"gaming","resolution":"2K"}}`)
-	agent := &fakeAgent{store: st, screen: ScreenResult{Kind: ScreenRequirement, Payload: spec}, contextAvailable: true}
+	st := newPlanningFakeStore()
+	update := &schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{
+		{Op: "set", Field: "budget_cny", Value: json.RawMessage("8000"), Kind: "constraint", Strength: "must", Scope: "session", Evidence: "stated", Quote: "预算8000"},
+		{Op: "set", Field: "use_case.type", Value: json.RawMessage(`"gaming"`), Kind: "fact", Strength: "must", Scope: "session", Evidence: "stated", Quote: "游戏"},
+		{Op: "set", Field: "use_case.resolution", Value: json.RawMessage(`"2K"`), Kind: "fact", Strength: "must", Scope: "session", Evidence: "stated", Quote: "2K"},
+		{Op: "set", Field: "existing_parts", Value: json.RawMessage("[]"), Kind: "fact", Strength: "must", Scope: "session", Evidence: "stated", Quote: "全部新买"},
+	}}
+	agent := &fakeAgent{store: st.fakeProductStore, screen: turnScreenResult(update, "需求已经整理好，请确认。"), contextAvailable: true}
 	sink := newFakeSink()
 	svc, err := NewService(context.Background(), st, agent, sink)
 	if err != nil {
 		t.Fatal(err)
 	}
 	started, err := svc.StartMessage(context.Background(), "owner-1", "session-1",
-		"00000000-0000-4000-8000-000000000001", "8000 元 2K 玩黑神话")
+		"00000000-0000-4000-8000-000000000001", "预算8000，2K 玩游戏，全部新买")
 	if err != nil || started.Run.Kind != store.RunScreening {
 		t.Fatalf("StartMessage=%+v err=%v", started, err)
 	}
@@ -383,12 +528,22 @@ func TestServiceRequirementConfirmBuild(t *testing.T) {
 	if ws.Phase != store.PhaseRequirementReady || len(ws.PendingRequirement) == 0 {
 		t.Fatalf("screening 后状态不正确:%+v", ws)
 	}
-	edited := json.RawMessage(`{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":8500,"noise_pref":"silent","use_case":{"type":"gaming","resolution":"2K"}}`)
-	if err := svc.ReplaceRequirement(context.Background(), "owner-1", "session-1", edited); err != nil {
+	// 确认请求绑定用户看到的核定预览:revision 与 review_hash 来自服务端。
+	detail, err := svc.GetSession(context.Background(), "owner-1", "session-1")
+	if err != nil || detail.Axes.ReviewHash == "" || detail.Axes.Readiness == nil || !detail.Axes.Readiness.ConfirmationEligible {
+		t.Fatalf("核定预览不可用: %+v err=%v", detail.Axes, err)
+	}
+	var state schemas.RequirementState
+	if err := json.Unmarshal(detail.Session.RequirementState, &state); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.StartConfirm(context.Background(), "owner-1", "session-1",
-		"00000000-0000-4000-8000-000000000002"); err != nil {
+	if detail.Axes.Confirmation.Status != ConfirmationUnconfirmed || detail.Axes.Build.Status != BuildNone {
+		t.Fatalf("确认前三轴应为 unconfirmed/none: %+v %+v", detail.Axes.Confirmation, detail.Axes.Build)
+	}
+	confirmed, err := svc.StartConfirm(context.Background(), "owner-1", "session-1",
+		"00000000-0000-4000-8000-000000000002", ConfirmRequest{
+			ExpectedRevision: state.Revision, ExpectedReviewHash: detail.Axes.ReviewHash})
+	if err != nil {
 		t.Fatal(err)
 	}
 	sink.wait(t)
@@ -396,12 +551,25 @@ func TestServiceRequirementConfirmBuild(t *testing.T) {
 	if ws.Phase != store.PhaseReady || st.latest != 1 {
 		t.Fatalf("confirm 后状态不正确:session=%+v latest=%d", ws, st.latest)
 	}
-	confirmed, err := schemas.DecodeRequirementSpec(agent.remotePayload)
-	if err != nil || confirmed.BudgetCNY != 8500 || confirmed.NoisePref != schemas.NoisePrefSilent {
-		t.Fatalf("Remote 应收到编辑后的 pending requirement,得到 %s err=%v", agent.remotePayload, err)
+	// Builder 收到的就是 run 冻结的完整载荷:发送 hash 与冻结 hash 一致(V5)。
+	var input schemas.PlanningInput
+	if err := json.Unmarshal(agent.remotePayload, &input); err != nil || input.SchemaVersion != 2 || input.RunID != confirmed.Run.ID {
+		t.Fatalf("Remote 应收到冻结 PlanningInput:%s err=%v", agent.remotePayload, err)
 	}
-	wantOrder := []string{"run.started", "run.progress", "assistant.completed", "requirement.ready", "run.completed",
-		"run.started", "run.progress", "run.progress", "assistant.completed", "build.saved", "run.completed"}
+	if got := input.State.Fields["budget_cny"].Value; string(got) != "8000" {
+		t.Fatalf("冻结载荷的预算不正确: %s", got)
+	}
+	st.mu.Lock()
+	buildRun := st.buildRuns[confirmed.Run.ID]
+	st.mu.Unlock()
+	if sent, _ := schemas.CanonicalHash(agent.remotePayload); sent != buildRun.BuilderInputHash {
+		t.Fatalf("发送载荷 hash %s 与冻结 hash %s 不一致", sent, buildRun.BuilderInputHash)
+	}
+	if buildRun.ConfirmationID == "" || buildRun.ReviewHash != detail.Axes.ReviewHash || buildRun.ConfirmationID != ws.ConfirmationID {
+		t.Fatalf("run 未绑定确认快照: %+v ws=%+v", buildRun, ws)
+	}
+	wantOrder := []string{"run.started", "run.progress", "requirement.updated", "assistant.completed", "requirement.ready", "run.completed",
+		"run.started", "requirement.confirmed", "run.progress", "run.progress", "assistant.completed", "build.saved", "run.completed"}
 	got := sink.names()
 	if len(got) != len(wantOrder) {
 		t.Fatalf("事件数量=%d want=%d:%v", len(got), len(wantOrder), got)
@@ -614,112 +782,40 @@ func TestServiceCanContinueWithoutRemoteContext(t *testing.T) {
 	}
 }
 
-func TestServiceDeterministicBudgetChangeBypassesScreening(t *testing.T) {
-	st := newFakeProductStore()
-	st.session.Phase = store.PhaseReady
-	st.latest = 1
-	agent := &fakeAgent{store: st, contextAvailable: true}
-	sink := newFakeSink()
-	svc, err := NewService(context.Background(), st, agent, sink)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = svc.StartMessage(context.Background(), "owner-1", "session-1",
-		"00000000-0000-4000-8000-000000000006", "降 500")
-	if err != nil {
-		t.Fatal(err)
-	}
-	sink.wait(t)
-	change, err := schemas.DecodeChangeRequest(agent.remotePayload)
-	if err != nil {
-		t.Fatalf("Remote payload 不是合法 ChangeRequest:%s err=%v", agent.remotePayload, err)
-	}
-	if agent.screenCalls != 0 || change.BaseBuildRef != "v1" || change.BudgetDeltaCNY == nil || *change.BudgetDeltaCNY != -500 {
-		t.Fatalf("确定性改单不正确:screen_calls=%d change=%+v", agent.screenCalls, change)
-	}
-	ws, _ := st.WebSessionByOwner(context.Background(), "owner-1", "session-1")
-	if ws.Phase != store.PhaseReady || st.latest != 2 {
-		t.Fatalf("改单后状态不正确:session=%+v latest=%d", ws, st.latest)
-	}
-}
-
-func TestServiceDeterministicGPUBrandChangeBypassesScreening(t *testing.T) {
-	for _, tc := range []struct {
-		text, target string
-	}{
-		{text: "换成 A 卡", target: "AMD 显卡"},
-		{text: "把显卡改为 NVIDIA", target: "NVIDIA 显卡"},
-	} {
-		t.Run(tc.text, func(t *testing.T) {
-			st := newFakeProductStore()
+// 旧确定性改单/RunChange 直达 Builder 的路径已关闭:ready 阶段的聊天(包括
+// "降 500""换成 A 卡""开始吧")只能是 screening 轮,不得调用 Remote,也不得
+// 产生 ChangeRequest。
+func TestChatInReadyPhaseCannotStartBuilder(t *testing.T) {
+	for _, text := range []string{"降 500", "换成 A 卡", "就这样，开始吧"} {
+		t.Run(text, func(t *testing.T) {
+			st := newPlanningFakeStore()
 			st.session.Phase = store.PhaseReady
 			st.latest = 1
-			agent := &fakeAgent{store: st, contextAvailable: true}
+			agent := &fakeAgent{store: st.fakeProductStore, screen: turnScreenResult(&schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{}}, "好的"), contextAvailable: true}
 			sink := newFakeSink()
 			svc, err := NewService(context.Background(), st, agent, sink)
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = svc.StartMessage(context.Background(), "owner-1", "session-1",
-				"00000000-0000-4000-8000-000000000016", tc.text)
+			started, err := svc.StartMessage(context.Background(), "owner-1", "session-1",
+				"00000000-0000-4000-8000-000000000006", text)
 			if err != nil {
 				t.Fatal(err)
 			}
+			if started.Run.Kind != store.RunScreening {
+				t.Fatalf("ready 阶段聊天应产生 screening 运行,得到 %s", started.Run.Kind)
+			}
 			sink.wait(t)
-			change, err := schemas.DecodeChangeRequest(agent.remotePayload)
-			if err != nil {
-				t.Fatalf("Remote payload 不是合法 ChangeRequest:%s err=%v", agent.remotePayload, err)
+			if agent.remotePayload != nil {
+				t.Fatalf("聊天不得直达 Builder: %s", agent.remotePayload)
 			}
-			if agent.screenCalls != 0 || change.BaseBuildRef != "v1" || change.Swap == nil ||
-				change.Swap.Category != schemas.CategoryGPU || change.Swap.TargetHint != tc.target {
-				t.Fatalf("确定性显卡改单不正确:screen_calls=%d change=%+v", agent.screenCalls, change)
+			if agent.screenCalls == 0 {
+				t.Fatal("ready 阶段聊天应进入 screening 轮")
 			}
-			if got := change.HardLocked(); len(got) != len(schemas.AllCategories)-1 {
-				t.Fatalf("锁定品类=%v", got)
+			if st.latest != 1 {
+				t.Fatalf("聊天不得新增配置版本: latest=%d", st.latest)
 			}
 		})
-	}
-}
-
-func TestParseDeterministicBudgetDelta(t *testing.T) {
-	tests := []struct {
-		text  string
-		want  int
-		match bool
-	}{
-		{text: "降 500", want: -500, match: true},
-		{text: "预算减少500元", want: -500, match: true},
-		{text: "再加 300", want: 300, match: true},
-		{text: "预算提高1000元", want: 1000, match: true},
-		{text: "降 500，显卡别动", match: false},
-		{text: "预算改成 7500", match: false},
-	}
-	for _, tt := range tests {
-		got, matched := parseDeterministicBudgetDelta(tt.text)
-		if got != tt.want || matched != tt.match {
-			t.Errorf("parseDeterministicBudgetDelta(%q)=(%d,%v),want (%d,%v)", tt.text, got, matched, tt.want, tt.match)
-		}
-	}
-}
-
-func TestParseDeterministicGPUBrandSwap(t *testing.T) {
-	for _, tc := range []struct {
-		text, want string
-		match      bool
-	}{
-		{text: "换成 A 卡", want: "AMD 显卡", match: true},
-		{text: "显卡换为AMD", want: "AMD 显卡", match: true},
-		{text: "把显卡改为 N 卡", want: "NVIDIA 显卡", match: true},
-		{text: "换成NVIDIA显卡", want: "NVIDIA 显卡", match: true},
-		{text: "不要换成 A 卡", match: false},
-		{text: "换成 A 卡还是 N 卡", match: false},
-		{text: "换成 RX 9070", match: false},
-	} {
-		got, matched := parseDeterministicGPUBrandSwap(tc.text)
-		if got != tc.want || matched != tc.match {
-			t.Errorf("parseDeterministicGPUBrandSwap(%q)=(%q,%v),want (%q,%v)",
-				tc.text, got, matched, tc.want, tc.match)
-		}
 	}
 }
 
@@ -742,9 +838,10 @@ func TestScreenInputUsesOnlyRecentSameKindStableMessages(t *testing.T) {
 		t.Fatal("screening invented a build")
 	}
 	changeInput, err := svc.screenInput(context.Background(), store.AgentRun{SessionID: st.session.ID, Kind: store.RunChange}, "改预算")
-	if err != nil || !changeInput.HasBuild {
-		t.Fatal("change run lost authoritative build state")
+	if err != nil {
+		t.Fatal(err)
 	}
+	_ = changeInput // RunChange 运行已不再产生;上下文过滤按 kind 一致处理。
 	if strings.Contains(input.Context, "完整配置") || strings.Contains(input.Context, "screening-0") || strings.Contains(input.Context, "screening-1") {
 		t.Fatalf("上下文未正确过滤/截断:%s", input.Context)
 	}
@@ -815,7 +912,7 @@ func TestServiceDuplicateMessagePrecedesContextCheck(t *testing.T) {
 	requestID := "00000000-0000-4000-8000-000000000004"
 	runID := "00000000-0000-4000-8000-000000000005"
 	st.runs[runID] = store.AgentRun{ID: runID, SessionID: st.session.ID, ClientRequestID: requestID,
-		Kind: store.RunChange, Status: store.RunSucceeded}
+		Kind: store.RunScreening, Status: store.RunSucceeded}
 	st.messages = append(st.messages, store.WebMessage{Role: "user", Content: "换成 A 卡", RunID: &runID})
 	agent := &fakeAgent{store: st, contextAvailable: false}
 	svc, _ := NewService(context.Background(), st, agent, newFakeSink())

@@ -700,6 +700,39 @@ func containsString(items []string, value string) bool {
 	return false
 }
 
+// RequirementReviewSpec 是核定预览的唯一入口:在 RequirementStateSpec 投影
+// 之上把 readiness 列出的有效系统默认显式展开,得到"用户看到什么就冻结什么"
+// 的规范化有效 RequirementSpec v2。review_hash 基于该投影:默认规则或配置
+// 范围变化即使 revision 不变也会改变 hash,从而拒绝旧核定预览。
+func RequirementReviewSpec(state RequirementState) (json.RawMessage, RequirementReadiness, error) {
+	spec, readiness, err := RequirementStateSpec(state)
+	if err != nil || spec == nil {
+		return spec, readiness, err
+	}
+	decoded, err := DecodeRequirementSpec(spec)
+	if err != nil {
+		return nil, readiness, err
+	}
+	for _, d := range readiness.EffectiveDefaults {
+		switch d.Field {
+		case "budget_flex":
+			_ = json.Unmarshal(d.Value, &decoded.BudgetFlex)
+		case "size_pref":
+			_ = json.Unmarshal(d.Value, &decoded.SizePref)
+		case "noise_pref":
+			_ = json.Unmarshal(d.Value, &decoded.NoisePref)
+		case "brand_pref.cpu":
+			_ = json.Unmarshal(d.Value, &decoded.BrandPref.CPU)
+		case "brand_pref.gpu":
+			_ = json.Unmarshal(d.Value, &decoded.BrandPref.GPU)
+		case "performance_goal":
+			_ = json.Unmarshal(d.Value, &decoded.UseCase.PerformanceGoal)
+		}
+	}
+	raw, err := EncodeRequirementSpec(decoded)
+	return raw, readiness, err
+}
+
 // NormalizeRequirementValue 校验并做确定性规范化(供 proposal 值比对等
 // 持久化边界使用):非法值返回错误,不改写、不丢弃。
 func NormalizeRequirementValue(key string, raw json.RawMessage) (json.RawMessage, error) {

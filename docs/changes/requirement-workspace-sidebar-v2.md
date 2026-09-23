@@ -13,7 +13,7 @@ created: 2026-09-22
 
 把桌面右侧共享区域改为可切换的“需求状态 / 配置详情”。需求状态始终可达且作为默认 Tab，让用户直观看见当前已确定、未填写、冲突、撤销和系统默认的需求；配置详情在首个 Builder 版本生成后才可进入。字段可由对话或侧栏手动修改，两条路径共享同一后端 RequirementState 和 Reducer。
 
-核定面板展示 Builder 将实际使用的完整快照；保存修改和确认启动是两个明确动作。前端不实现 readiness、默认值、确认比较或 Builder admission 规则。
+核定面板展示服务端 `review_spec` 中所有影响 Builder 选型的有效需求与默认值；run ID 等执行元数据不属于用户需求。保存修改和确认启动是两个明确动作。前端不实现 readiness、默认值、确认比较或 Builder admission 规则。
 
 ## Boundaries
 
@@ -156,7 +156,7 @@ created: 2026-09-22
 
 ### Contents
 
-必须展示 Builder 将使用的规范化快照，而不是只展示 active 用户字段：
+必须展示服务端预览中的全部有效选型约束，而不是只展示 active 用户字段：
 
 - 核心：scope、预算、预算弹性、最高预算、购买/复用范围。
 - 用途：type、titles、resolution、performance goal、具体 FPS。
@@ -176,7 +176,7 @@ created: 2026-09-22
 - modified：“确认修改并生成新版本”。
 - failed retry：“按相同需求重新生成”。
 
-确认请求携带打开/保存后最新的 `expected_revision`。409 时面板不关闭，重新载入并提示用户需求已经变化。
+确认请求携带打开/保存后最新的 `expected_revision` 与服务端预览给出的 `expected_review_hash`；失败重试另传失败 run 的 `retry_of_run_id`，前端不自行计算 hash。409 时面板不关闭，重新载入预览并提示用户需求或系统默认已变化，须重新核定。
 
 ## Configuration tab
 
@@ -267,4 +267,3 @@ created: 2026-09-22
 - [ ] 桌面、移动端、键盘、IME 和无障碍验收通过。
 - [ ] UI contract evaluation 无 veto。
 - [ ] 未实现显示器、键鼠或 Jev。
-

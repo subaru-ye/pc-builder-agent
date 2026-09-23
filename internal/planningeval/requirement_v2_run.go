@@ -6,8 +6,8 @@ package planningeval
 // 不修改金标换取通过。
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -317,9 +317,8 @@ func RunRequirementV2(ctx context.Context, dataset *ReqV2Dataset, opts ReqV2RunO
 		Gates: &dataset.Gates, Repeats: opts.Repeats, MaxModelRequests: opts.MaxCalls,
 		Usage: ReqV2Usage{ProviderErrors: map[string]int{}, TokensAllKnown: true},
 		Limitations: []string{
-			"当前产品是 Requirement v1 语义；v2 条目上的 red 是预期证据，不是回归。",
 			"Builder 输出质量不在本评估范围（planning-v2 已覆盖）；v2 驱动器用 scripted builder 观察 admission 行为。",
-			"V5 需要成功 build 才有可比 hash；当前基线只能在 grader 金丝雀层验证该 veto。",
+			"V5 的评估口径：scripted builder 实际收到的完整 PlanningInput 规范化 hash 必须等于 run 冻结的 builder_input_hash；发送路径另有运行时校验（product.executeRemote）。",
 		},
 	}
 	for split := range opts.Splits {
@@ -1066,7 +1065,7 @@ func (d *v2Driver) turn(ctx context.Context, kind, text string, scripted, script
 	case "message":
 		started, err = d.svc.StartMessage(ctx, d.owner, d.sessionID, requestID, text)
 	case "confirm":
-		started, err = d.svc.StartConfirm(ctx, d.owner, d.sessionID, requestID)
+		started, err = d.svc.StartConfirm(ctx, d.owner, d.sessionID, requestID, confirmRequestFromDetail(before))
 	case "edit":
 		_, err = d.svc.EditRequirement(ctx, d.owner, d.sessionID, requestID, product.RequirementEdit{ExpectedRevision: expectedRevision, Operations: editOps})
 	}
@@ -1099,16 +1098,19 @@ func (d *v2Driver) turn(ctx context.Context, kind, text string, scripted, script
 	obs.BuilderStarted = record.PlanningInput != nil && kind != "edit"
 	obs.BuilderStartedViaChat = obs.BuilderStarted && kind == "message"
 	if record.PlanningInput != nil {
-		if raw, e := schemas.PlanningRequirement(record.PlanningInput.State); e == nil {
+		if raw, e := json.Marshal(*record.PlanningInput); e == nil {
+			// V5 口径:实际发出的完整 Builder 载荷(PlanningInput 全文)的
+			// 规范化 hash;不再把扁平 spec hash 与 PlanningInput hash 硬比。
 			obs.BuilderInputHash = normalizedHash(raw)
 		}
 	}
-	if len(after.Session.ConfirmedRequirement) > 0 {
-		obs.ConfirmationSnapshotHash = normalizedHash(after.Session.ConfirmedRequirement)
-	}
+	// 冻结 hash 来自 run 的持久化关联(builder_input_hash);空表示该 run
+	// 没有确认快照关联(V4)。
+	obs.ConfirmationSnapshotHash = after.Axes.Build.BuilderInputHash
 	if after.ActiveRun != nil {
 		obs.BuildersActive = 1
 	}
+	obs.AdmissionReason = admissionReason(kind, runErr, obs, after)
 	if runErr != nil {
 		if obs.BuilderStarted {
 			// scripted builder 的失败是 v2 驱动器刻意行为：admission 已被观测，
@@ -1217,17 +1219,21 @@ func classifyProviderError(err string) string {
 	}
 }
 
+// confirmRequestFromDetail 像 UI 客户端一样从服务端核定预览构造确认请求:
+// revision 与 review_hash 都来自会话读取,评估驱动器不自行拼接 spec。
+func confirmRequestFromDetail(detail product.SessionDetail) product.ConfirmRequest {
+	var state schemas.RequirementState
+	_ = json.Unmarshal(detail.Session.RequirementState, &state)
+	return product.ConfirmRequest{ExpectedRevision: state.Revision, ExpectedReviewHash: detail.Axes.ReviewHash}
+}
+
 // normalizedHash 对 JSON 做语义规范化后取 SHA256；key 顺序差异不改变 hash。
 func normalizedHash(raw []byte) string {
-	var value any
-	if json.Unmarshal(raw, &value) != nil {
-		return ""
-	}
-	normalized, err := json.Marshal(value)
+	hash, err := schemas.CanonicalHash(raw)
 	if err != nil {
 		return ""
 	}
-	return fmt.Sprintf("%x", sha256.Sum256(normalized))
+	return hash
 }
 
 // seedTurn 组装 scripted screening 输出(v2 一轮合同形状)。fixture 的
@@ -1320,6 +1326,34 @@ func (d *v2Driver) editTurn(ctx context.Context, ops []schemas.RequirementOperat
 	return d.turn(ctx, "edit", "", nil, nil, ops, expectedRevision, wait)
 }
 
+// admissionReason 把本轮结果映射到稳定 admission 原因码:confirm 轮取 confirm
+// API 的真实拒绝原因;聊天/编辑轮不能启动 Builder,按确定性三轴归因。
+func admissionReason(kind string, runErr error, obs ReqV2TurnObservation, after product.SessionDetail) string {
+	if obs.BuilderStarted {
+		return "ok"
+	}
+	if kind == "confirm" {
+		switch {
+		case errors.Is(runErr, store.ErrRequirementNotReady):
+			return "readiness_incomplete"
+		case errors.Is(runErr, store.ErrSessionBusy):
+			return "builder_running"
+		case errors.Is(runErr, store.ErrRequirementRevision), errors.Is(runErr, store.ErrRequirementReviewConflict):
+			return "stale_revision"
+		case runErr != nil:
+			return "stale_revision"
+		}
+		return "no_confirmation"
+	}
+	if obs.Readiness != nil && !obs.Readiness.ConfirmationEligible {
+		return "readiness_incomplete"
+	}
+	if after.ActiveRun != nil && after.ActiveRun.Kind == store.RunBuild {
+		return "builder_running"
+	}
+	return "no_confirmation"
+}
+
 func observeUICase(ctx context.Context, dataset *ReqV2Dataset, st *store.Store, opts ReqV2RunOptions, id string) (ReqV2CaseObservation, error) {
 	if st == nil {
 		return ReqV2CaseObservation{Skipped: "no_database"}, nil
@@ -1351,30 +1385,26 @@ func observeUICase(ctx context.Context, dataset *ReqV2Dataset, st *store.Store, 
 		var state schemas.RequirementState
 		_ = json.Unmarshal(detail.Session.RequirementState, &state)
 		turn := ReqV2TurnObservation{State: ProjectRequirementState(state)}
-		// DTO 真值：requirementLifecycle 的状态与 missing 就是前端可见内容。
-		dtoReadiness := ReqV2ReadinessResult{Status: "incomplete", MissingFields: []string{}, BlockingConflicts: []string{}}
-		switch detail.RequirementStatus {
-		case "ready_to_confirm", "confirmed", "modified":
-			dtoReadiness.Status = "ready"
-			dtoReadiness.ConfirmationEligible = true
+		// DTO 真值:三轴状态全部来自后端派生(SessionDetail.Axes 与 HTTP DTO
+		// 同源),前端只渲染,不重新比较 JSON 或推断状态。
+		dtoReadiness := &ReqV2ReadinessResult{Status: "incomplete", MissingFields: []string{}, BlockingConflicts: []string{}}
+		if axes := detail.Axes.Readiness; axes != nil {
+			dtoReadiness = &ReqV2ReadinessResult{Status: axes.Status, MissingFields: axes.MissingFields,
+				BlockingConflicts: axes.BlockingConflicts, UnsupportedCapabilities: axes.UnsupportedCapabilities,
+				ConfirmationEligible: axes.ConfirmationEligible}
+			for _, d := range axes.EffectiveDefaults {
+				dtoReadiness.EffectiveDefaults = append(dtoReadiness.EffectiveDefaults, ReqV2DefaultGold{Field: d.Field, Value: d.Value, Origin: d.Origin})
+			}
 		}
-		dtoReadiness.MissingFields = detail.MissingFields
-		turn.Readiness = &dtoReadiness
-		confirmation := "unconfirmed"
-		if len(detail.Session.ConfirmedRequirement) > 0 {
-			confirmation = "confirmed"
-		}
-		build := "none"
-		if detail.ActiveRun != nil {
-			build = "running"
-		} else if detail.Session.VersionCount > 0 {
-			build = "current_or_outdated_undistinguished"
-		}
+		turn.Readiness = dtoReadiness
 		ui := ReqV2UIObservation{
-			Turn: turn, ReadinessBlock: false, RequirementStatus: detail.RequirementStatus,
-			ConfirmationStatus: confirmation, BuildRelation: build,
-			// 当前 confirm API 只携带 request id；没有 expected_revision payload。
-			ConfirmPayloadKeys: []string{"request_id"},
+			Turn: turn,
+			// 结构化 readiness 块由后端进入 Session DTO。
+			ReadinessBlock:     detail.Axes.Readiness != nil,
+			ConfirmationStatus: string(detail.Axes.Confirmation.Status),
+			BuildRelation:      string(detail.Axes.Build.Status),
+			// confirm API 请求载荷:Idempotency-Key 头 + 核定预览绑定的请求体。
+			ConfirmPayloadKeys: []string{"schema_version", "expected_revision", "expected_review_hash", "idempotency_key"},
 		}
 		return ReqV2CaseObservation{UI: &ui}, nil
 	}

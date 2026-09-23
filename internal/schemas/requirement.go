@@ -18,6 +18,12 @@ const (
 	maxBudgetFlex     = 0.3
 )
 
+// DefaultBudgetFlex 是预算弹性系统默认的唯一导出来源:核定预览
+// (RequirementReviewSpec)、readiness effective_defaults 与规划侧预算门槛
+// (planning accounting)共用同一常量。"弹性未填写"不按 0 弹性执行,也不把
+// 默认改写成用户事实(origin 保持 system_default,来源可追溯)。
+const DefaultBudgetFlex = defaultBudgetFlex
+
 // ConfigurationScopeTower 当前唯一支持的配置能力边界。
 const ConfigurationScopeTower = "tower"
 

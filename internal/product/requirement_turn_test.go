@@ -227,7 +227,7 @@ func TestQuestionTargetsConflictAndUnsupportedFirst(t *testing.T) {
 	conflict := seededGamingState(t)
 	conflict.Fields["budget_cny"] = schemas.RequirementField{Status: "conflict", Strength: "must", Evidence: "uncertain"}
 	reply := composeTurnReply(conflict, mustReadiness(t, conflict), pipeline.RequirementTurnResult{Operations: []schemas.RequirementOperation{}},
-		nil, nil, nil, false)
+		nil, ConfirmationUnconfirmed, false)
 	if !strings.Contains(reply, "预算应采用哪个要求") {
 		t.Fatalf("冲突应先于缺项追问: %s", reply)
 	}
@@ -235,7 +235,7 @@ func TestQuestionTargetsConflictAndUnsupportedFirst(t *testing.T) {
 	unsupported := seededGamingState(t)
 	unsupported.Observations = []schemas.RequirementObservation{{Text: "要带显示器", Reason: "unsupported_capability:monitor", Source: schemas.RequirementSource{Kind: "chat", Quote: "要带显示器"}}}
 	reply = composeTurnReply(unsupported, mustReadiness(t, unsupported), pipeline.RequirementTurnResult{Operations: []schemas.RequirementOperation{}},
-		nil, nil, nil, false)
+		nil, ConfirmationUnconfirmed, false)
 	if !strings.Contains(reply, "仅支持主机") || !strings.Contains(reply, "显示器") {
 		t.Fatalf("unsupported 追问应说明 tower 边界: %s", reply)
 	}

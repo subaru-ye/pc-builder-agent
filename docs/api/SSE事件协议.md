@@ -105,7 +105,17 @@ data: {"schema_version":1,"run_id":"...","timestamp":"...","payload":{"kind":"bu
   - `open_requirement_review`:需求已就绪且用户本轮请求核对/开始,前端可打开核定面板;仍需用户显式确认。
   - `focus_missing_requirement`:用户请求核对/开始但需求未就绪;fields 是领域问题计划选中的首个阻塞项(可能是 conflict、unsupported capability 或缺失字段)。
 - fields 为稳定机器值(字段名或 capability 名),前端不得从中渲染业务文案。
-- 后续 confirmation/build 三轴 Policy 在同一入口扩展;不产生 action 的轮次不发送本事件。
+- 确认/生成三轴 Policy 在同一入口扩展;不产生 action 的轮次不发送本事件;刷新后不自动重放打开动作。
+
+### 3.3.3 requirement.confirmed
+
+```json
+{"snapshot_id":"<uuid>","review_hash":"<sha256>","builder_input_hash":"<sha256>"}
+```
+
+- confirm API 在同一事务冻结不可变确认快照与该 run 的完整 Builder 载荷,提交后先发布 run.started 再发布本事件,随后是常规生成进度事件。
+- snapshot_id/review_hash 是用户核定的不可变快照;builder_input_hash 是实际送往远程 Builder 的完整 PlanningInput 载荷规范化 hash(与快照的 review_hash 用途不同,不得互比)。
+- 事件发布失败不回滚已提交的确认/run;客户端可由持久化 run/session 恢复状态。
 
 ### 3.4 assistant.delta
 

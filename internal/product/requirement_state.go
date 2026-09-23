@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
@@ -26,8 +25,9 @@ func decodeSessionRequirements(raw json.RawMessage) (schemas.RequirementState, e
 	return schemas.DecodeRequirementState(raw)
 }
 
-// EditRequirement 在服务端保存用户可读的来源消息，再原子发布合并后的草稿。
-// 不调用模型，既不保存个人画像，也不修改已确认快照或历史配置。
+// EditRequirement 用独立原子事务保存侧栏草稿编辑:复用同一 Reducer、权限与
+// 幂等约束,不创建 AgentRun、不改 phase;Builder 运行期间同样可用,运行中的
+// 载荷与确认快照保持不变。revision 校验发生在存储事务内。
 func (s *Service) EditRequirement(ctx context.Context, ownerID, sessionID, requestID string, edit RequirementEdit) (SessionDetail, error) {
 	if edit.ExpectedRevision < 0 || len(edit.Operations) == 0 || len(edit.Operations) > 32 {
 		return SessionDetail{}, NewProblem("invalid_request", "需求修改无效", 422, "请提交1–32项修改及有效修订号。", requestID)
@@ -38,9 +38,14 @@ func (s *Service) EditRequirement(ctx context.Context, ownerID, sessionID, reque
 		return SessionDetail{}, err
 	}
 	fingerprint := fmt.Sprintf("%x", sha256.Sum256(request))
-	if _, found, err := s.store.MessageRunByRequest(ctx, ownerID, sessionID, requestID, text, fingerprint); err != nil {
+	// 重放预检先于 Reducer:重复请求可能包含无法重复应用的操作(如 restore),
+	// 相同指纹直接返回当前会话,不同指纹是稳定冲突。
+	if old, found, err := s.store.RequirementEditFingerprint(ctx, sessionID, requestID); err != nil {
 		return SessionDetail{}, err
 	} else if found {
+		if old != fingerprint {
+			return SessionDetail{}, store.ErrIdempotencyConflict
+		}
 		return s.GetSession(ctx, ownerID, sessionID)
 	}
 	ws, err := s.store.WebSessionByOwner(ctx, ownerID, sessionID)
@@ -55,32 +60,24 @@ func (s *Service) EditRequirement(ctx context.Context, ownerID, sessionID, reque
 	if err != nil {
 		return SessionDetail{}, err
 	}
-	if state.Revision != edit.ExpectedRevision {
-		return SessionDetail{}, store.ErrRequirementRevision
-	}
-	messageID := uuid.NewString()
-	source := schemas.RequirementSource{MessageID: messageID, Kind: "edit", Quote: text}
-	update := schemas.RequirementUpdate{Operations: edit.Operations}
-	next, err := schemas.ApplyRequirementUpdate(state, update, source)
+	source := schemas.RequirementSource{Kind: "edit", Quote: text}
+	next, err := schemas.ApplyRequirementUpdate(state, schemas.RequirementUpdate{Operations: edit.Operations}, source)
 	if err != nil {
 		return SessionDetail{}, NewProblem("schema_validation_failed", "需求修改未保存", 422, err.Error(), requestID)
 	}
-	r, duplicate, err := s.store.StartMessageRun(ctx, store.StartMessageRunParams{
-		OwnerID: ownerID, SessionID: sessionID, RequestID: requestID, RunID: uuid.NewString(),
-		MessageID: messageID, Text: text, Title: "我的装机需求", ForceScreening: true,
-		ExpectedRevision:   &edit.ExpectedRevision,
-		RequestFingerprint: fingerprint,
-	})
+	raw, err := json.Marshal(next)
 	if err != nil {
 		return SessionDetail{}, err
 	}
-	if !duplicate {
-		s.publish(ctx, r.ID, "run.started", map[string]any{"kind": r.Kind})
-		source := schemas.RequirementSource{MessageID: messageID, Kind: "edit", Quote: text}
-		if err := s.completeRequirementTurn(ctx, ownerID, r, next, source, nil, nil, 0); err != nil {
-			s.failInternal(ctx, r, store.PhaseCollecting, "")
-			return SessionDetail{}, err
-		}
+	pending, _, err := schemas.RequirementStateSpec(next)
+	if err != nil {
+		return SessionDetail{}, err
+	}
+	if _, err := s.store.EditRequirementDraft(ctx, store.EditRequirementDraftParams{
+		OwnerID: ownerID, SessionID: sessionID, RequestID: requestID, Fingerprint: fingerprint,
+		ExpectedRevision: edit.ExpectedRevision, Next: raw, Pending: pending,
+	}); err != nil {
+		return SessionDetail{}, err
 	}
 	return s.GetSession(ctx, ownerID, sessionID)
 }
@@ -137,23 +134,6 @@ func requirementEditText(operations []schemas.RequirementOperation) string {
 	return "通过需求面板修改：" + strings.Join(lines, "；")
 }
 
-// confirmedRequirementProjection 返回已确认状态的当前投影;无确认快照或
-// 状态不可投影时返回 nil。
-func confirmedRequirementProjection(raw json.RawMessage) json.RawMessage {
-	if len(raw) == 0 {
-		return nil
-	}
-	state, err := decodeSessionRequirements(raw)
-	if err != nil {
-		return nil
-	}
-	spec, readiness, err := schemas.RequirementStateSpec(state)
-	if err != nil || !readiness.ConfirmationEligible {
-		return nil
-	}
-	return spec
-}
-
 func sameRequirementJSON(a, b json.RawMessage) bool {
 	var left, right any
 	return len(a) > 0 && len(b) > 0 && json.Unmarshal(a, &left) == nil && json.Unmarshal(b, &right) == nil && reflect.DeepEqual(left, right)
@@ -204,47 +184,6 @@ func requirementReplacementOperations(before, after json.RawMessage) ([]schemas.
 	return operations, nil
 }
 
-// requirementLifecycle 从确定性 readiness 派生旧形状 DTO(临时适配,Builder
-// gate change 中删除):不读模型 next_action,判定只来自领域 readiness 与
-// 投影比对。v1/损坏状态返回稳定错误,由调用方转为问题响应。
-func requirementLifecycle(ws store.WebSession) (string, []string, error) {
-	if len(ws.RequirementState) == 0 {
-		if ws.Phase == store.PhaseCollecting && len(ws.PendingRequirement) == 0 {
-			return "collecting", []string{}, nil
-		}
-		// 有 pending 却没有增量状态:这是 v1 一次性切换遗留的旧会话。
-		return "", nil, schemas.ErrRequirementStateUnsupported
-	}
-	state, err := decodeSessionRequirements(ws.RequirementState)
-	if err != nil {
-		return "", nil, err
-	}
-	readiness, err := schemas.EvaluateRequirementReadiness(state)
-	if err != nil {
-		return "", nil, err
-	}
-	missing := readiness.MissingFields
-	if missing == nil {
-		missing = []string{}
-	}
-	if !readiness.ConfirmationEligible {
-		return "collecting", missing, nil
-	}
-	pending, _, err := schemas.RequirementStateSpec(state)
-	if err != nil {
-		return "", nil, err
-	}
-	if len(ws.ConfirmedRequirement) > 0 {
-		// confirmed_requirement 存 Builder 输入快照;确认/修改判定比较
-		// 确认状态与当前状态的投影,不依赖快照存储形状。
-		if sameRequirementJSON(pending, confirmedRequirementProjection(ws.ConfirmedRequirementState)) {
-			return "confirmed", missing, nil
-		}
-		return "modified", missing, nil
-	}
-	return "ready_to_confirm", missing, nil
-}
-
 func (s *Service) attachRequirementState(ctx context.Context, ownerID string, r store.AgentRun, input *ScreenInput) error {
 	ws, err := s.store.WebSessionByOwner(ctx, ownerID, r.SessionID)
 	if err != nil {
@@ -254,7 +193,7 @@ func (s *Service) attachRequirementState(ctx context.Context, ownerID string, r 
 	if len(ws.RequirementState) == 0 {
 		// v1 一次性切换:没有增量状态的旧会话不再从旧需求单静默重建,
 		// 以稳定错误拒绝,由用户显式新建会话或走运维重建步骤。
-		if len(ws.PendingRequirement) > 0 || len(ws.ConfirmedRequirement) > 0 {
+		if len(ws.PendingRequirement) > 0 || ws.ConfirmationID != "" {
 			return schemas.ErrRequirementStateUnsupported
 		}
 		if _, supportsPlanning := s.store.(proposalStore); !supportsPlanning {
@@ -269,7 +208,7 @@ func (s *Service) attachRequirementState(ctx context.Context, ownerID string, r 
 	// The first message of a session always hands back an explicit confirmation;
 	// later messages (and confirmed requirements) may continue into planning
 	// directly — the user's own follow-up is the authorization.
-	input.Conversation.CanPlan = len(ws.ConfirmedRequirement) > 0 || state.Revision > 0
+	input.Conversation.CanPlan = ws.ConfirmationID != "" || state.Revision > 0
 	if st, ok := s.store.(proposalStore); ok {
 		if ws.VersionCount > 0 {
 			base, err := st.BuildByVersion(ctx, r.SessionID, ws.VersionCount)

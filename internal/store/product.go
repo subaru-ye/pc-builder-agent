@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -14,12 +13,15 @@ import (
 )
 
 var (
-	ErrWebSessionNotFound  = errors.New("产品会话不存在")
-	ErrRunNotFound         = errors.New("运行不存在")
-	ErrSessionBusy         = errors.New("会话已有活动运行")
-	ErrInvalidSessionPhase = errors.New("会话阶段不允许当前操作")
-	ErrIdempotencyConflict = errors.New("幂等键已用于不同请求")
-	ErrRequirementRevision = errors.New("需求已更新，请刷新后重试")
+	ErrWebSessionNotFound     = errors.New("产品会话不存在")
+	ErrRunNotFound            = errors.New("运行不存在")
+	ErrSessionBusy            = errors.New("会话已有活动运行")
+	ErrInvalidSessionPhase    = errors.New("会话阶段不允许当前操作")
+	ErrIdempotencyConflict    = errors.New("幂等键已用于不同请求")
+	ErrRequirementRevision    = errors.New("需求已更新，请刷新后重试")
+	ErrRequirementNotReady    = errors.New("需求尚未达到确认条件")
+	ErrRequirementReviewConflict = errors.New("需求核定预览已变化，请重新核定")
+	ErrRetryTargetInvalid     = errors.New("重试目标运行无效")
 )
 
 type SessionPhase string
@@ -51,23 +53,22 @@ const (
 )
 
 type WebSession struct {
-	StatusLabel               string
-	ID                        string
-	OwnerID                   string
-	CreateRequestID           string
-	Title                     string
-	Archived                  bool
-	Phase                     SessionPhase
-	RecoveryPhase             *SessionPhase
-	PendingRequirement        json.RawMessage
-	RequirementState          json.RawMessage
-	ConfirmedRequirementState json.RawMessage
-	ConfirmedRequirement      json.RawMessage
-	ConfirmedAt               *time.Time
-	LastError                 json.RawMessage
-	CreatedAt                 time.Time
-	UpdatedAt                 time.Time
-	VersionCount              int
+	StatusLabel      string
+	ID               string
+	OwnerID          string
+	CreateRequestID  string
+	Title            string
+	Archived         bool
+	Phase            SessionPhase
+	RecoveryPhase    *SessionPhase
+	PendingRequirement json.RawMessage
+	RequirementState json.RawMessage
+	// ConfirmationID 指向当前确认快照(requirement_confirmations);空表示从未确认。
+	ConfirmationID string
+	LastError      json.RawMessage
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	VersionCount   int
 }
 
 type WebMessage struct {
@@ -118,7 +119,7 @@ func (s *Store) Ping(ctx context.Context) error {
 const webSessionColumns = `s.id, s.owner_id, s.create_request_id::text, s.title, s.phase,
        s.recovery_phase, s.pending_requirement, s.last_error, s.created_at, s.updated_at,
        (SELECT count(*) FROM builds b WHERE b.session_id = s.id),
-       s.requirement_state, s.confirmed_requirement_state, s.confirmed_requirement, s.confirmed_at, s.archived,
+       s.requirement_state, COALESCE(s.confirmation_id::text, ''), s.archived,
        CASE WHEN s.phase='requirement_ready' AND EXISTS (
            SELECT 1 FROM session_proposals p WHERE p.id=(SELECT max(p2.id) FROM session_proposals p2 WHERE p2.session_id=s.id)
            AND p.result->>'outcome'='proposal'
@@ -132,7 +133,7 @@ func scanWebSession(row interface{ Scan(...any) error }) (WebSession, error) {
 	)
 	err := row.Scan(&s.ID, &s.OwnerID, &s.CreateRequestID, &s.Title, &s.Phase,
 		&recovery, &s.PendingRequirement, &s.LastError, &s.CreatedAt, &s.UpdatedAt, &s.VersionCount,
-		&s.RequirementState, &s.ConfirmedRequirementState, &s.ConfirmedRequirement, &s.ConfirmedAt, &s.Archived, &s.StatusLabel)
+		&s.RequirementState, &s.ConfirmationID, &s.Archived, &s.StatusLabel)
 	if recovery != nil {
 		p := SessionPhase(*recovery)
 		s.RecoveryPhase = &p
@@ -152,7 +153,7 @@ func (s *Store) CreateWebSession(ctx context.Context, id, ownerID, requestID str
 		DO UPDATE SET create_request_id = EXCLUDED.create_request_id
 		RETURNING id, owner_id, create_request_id::text, title, phase, recovery_phase,
 		          pending_requirement, last_error, created_at, updated_at, 0,
-		          requirement_state, confirmed_requirement_state, confirmed_requirement, confirmed_at, archived, ''`, id, ownerID, requestID, state)
+		          requirement_state, COALESCE(confirmation_id::text, ''), archived, ''`, id, ownerID, requestID, state)
 	ws, err := scanWebSession(row)
 	if err != nil {
 		return WebSession{}, fmt.Errorf("store: 创建产品会话失败: %w", err)
@@ -401,6 +402,9 @@ func (s *Store) StartMessageRun(ctx context.Context, p StartMessageRunParams) (A
 	return r, false, nil
 }
 
+// messageTransition 是消息运行的 phase 门控。产品层一律 ForceScreening:
+// ready 阶段的普通聊天也是 screening 轮,不存在 RunChange 旁路;building/
+// changing 阶段拒绝新消息运行(草稿编辑走独立事务,不经过这里)。
 func messageTransition(phase SessionPhase, recovery *string) (RunKind, SessionPhase, bool, error) {
 	if phase == PhaseError {
 		if recovery == nil {
@@ -409,12 +413,8 @@ func messageTransition(phase SessionPhase, recovery *string) (RunKind, SessionPh
 		phase = SessionPhase(*recovery)
 	}
 	switch phase {
-	case PhaseCollecting:
+	case PhaseCollecting, PhaseRequirementReady, PhaseReady:
 		return RunScreening, PhaseCollecting, false, nil
-	case PhaseRequirementReady:
-		return RunScreening, PhaseCollecting, true, nil
-	case PhaseReady:
-		return RunChange, PhaseChanging, false, nil
 	default:
 		return "", "", false, &InvalidPhaseError{Phase: phase}
 	}
@@ -451,83 +451,354 @@ func isRunningConflict(err error) bool {
 
 type StartConfirmRunParams struct {
 	OwnerID, SessionID, RequestID, RunID string
-	ExpectedRevision                     *int
+	// ConfirmationID 是新确认快照的主键(服务层生成);retry 复用目标 run 的
+	// 快照时忽略该值。
+	ConfirmationID string
+	// ExpectedRevision/ExpectedReviewHash 绑定用户看到的核定预览:revision 或
+	// review_hash 任一变化都拒绝(默认规则/配置范围在 revision 不变时也可能变化)。
+	ExpectedRevision   int
+	ExpectedReviewHash string
+	// RetryOfRunID 仅失败重试时非空:复用目标 run 的确认快照,为新 run 另冻
+	// 新载荷与新 hash;目标必须属于本会话、kind=build 且已失败。
+	RetryOfRunID string
+	// RequestFingerprint 是确认请求体的规范化指纹:同键同请求重放返回原 run,
+	// 同键不同请求返回稳定冲突。
+	RequestFingerprint string
 }
 
-func (s *Store) StartConfirmRun(ctx context.Context, p StartConfirmRunParams) (AgentRun, json.RawMessage, bool, error) {
+type StartConfirmRunResult struct {
+	ConfirmationID      string
+	ReviewHash          string
+	BuilderInputPayload json.RawMessage
+	BuilderInputHash    string
+}
+
+// StartConfirmRun 是唯一的 Builder admission 入口:在同一事务里完成幂等、
+// revision/review_hash/readiness 校验、确认快照冻结与 run 的完整执行载荷
+// 冻结。提交前不产生任何部分状态;聊天文字与旧改单路径都不能到达这里。
+func (s *Store) StartConfirmRun(ctx context.Context, p StartConfirmRunParams) (AgentRun, StartConfirmRunResult, bool, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return AgentRun{}, nil, false, fmt.Errorf("store: 开启确认运行事务失败: %w", err)
+		return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 开启确认运行事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	var phase SessionPhase
-	var recovery *string
-	var pending json.RawMessage
 	var requirementState json.RawMessage
 	var revision int
-	if err := tx.QueryRow(ctx, `SELECT phase, recovery_phase, pending_requirement, COALESCE((requirement_state->>'revision')::int, 0), requirement_state FROM web_sessions
-		WHERE id = $1 AND owner_id = $2 FOR UPDATE`, p.SessionID, p.OwnerID).
-		Scan(&phase, &recovery, &pending, &revision, &requirementState); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT COALESCE((requirement_state->>'revision')::int, 0), requirement_state FROM web_sessions
+		WHERE id = $1 AND owner_id = $2 FOR UPDATE`, p.SessionID, p.OwnerID).Scan(&revision, &requirementState); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return AgentRun{}, nil, false, ErrWebSessionNotFound
+			return AgentRun{}, StartConfirmRunResult{}, false, ErrWebSessionNotFound
 		}
-		return AgentRun{}, nil, false, fmt.Errorf("store: 锁定确认会话失败: %w", err)
+		return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 锁定确认会话失败: %w", err)
 	}
+	// 幂等重放先于一切校验:同键同请求返回原始 run,不重新读取当前草稿。
 	if existing, found, err := runByRequestTx(ctx, tx, p.SessionID, p.RequestID); err != nil {
-		return AgentRun{}, nil, false, err
+		return AgentRun{}, StartConfirmRunResult{}, false, err
 	} else if found {
-		if existing.Kind != RunBuild {
-			return AgentRun{}, nil, false, ErrIdempotencyConflict
+		var oldFingerprint string
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(request_fingerprint, '') FROM agent_runs WHERE id = $1`, existing.ID).Scan(&oldFingerprint); err != nil {
+			return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 读取确认指纹失败: %w", err)
 		}
-		return existing, pending, true, nil
+		if existing.Kind != RunBuild || oldFingerprint != p.RequestFingerprint {
+			return AgentRun{}, StartConfirmRunResult{}, false, ErrIdempotencyConflict
+		}
+		return existing, StartConfirmRunResult{}, true, nil
 	}
-	if p.ExpectedRevision != nil && *p.ExpectedRevision != revision {
-		return AgentRun{}, nil, false, ErrRequirementRevision
+	if len(requirementState) == 0 {
+		// v1 一次性切换:没有增量状态的旧会话不能继续确认。
+		return AgentRun{}, StartConfirmRunResult{}, false, schemas.ErrRequirementStateUnsupported
 	}
-	allowed := phase == PhaseRequirementReady || (phase == PhaseError && recovery != nil && SessionPhase(*recovery) == PhaseRequirementReady)
-	if !allowed || len(pending) == 0 {
-		return AgentRun{}, nil, false, &InvalidPhaseError{Phase: phase}
+	state, err := schemas.DecodeRequirementState(requirementState)
+	if err != nil {
+		return AgentRun{}, StartConfirmRunResult{}, false, err
 	}
-	// 锁内核验投影：确认入口与 Planning/API 共用 schemas.RequirementStateSpec
-	// (确定性 readiness 门控),不再存在返回固定空 missing 的旁路;
-	// readiness 不完整或待确认草稿与当前投影不一致都拒绝确认。
-	if len(requirementState) > 0 {
-		state, err := schemas.DecodeRequirementState(requirementState)
+	if state.Revision != p.ExpectedRevision {
+		return AgentRun{}, StartConfirmRunResult{}, false, ErrRequirementRevision
+	}
+	// 确认入口与 Planning/API 共用同一核定预览投影(展开有效默认)与
+	// readiness 规则;不信任客户端提交的 eligible/missing/snapshot。
+	reviewSpec, readiness, err := schemas.RequirementReviewSpec(state)
+	if err != nil {
+		return AgentRun{}, StartConfirmRunResult{}, false, err
+	}
+	if !readiness.ConfirmationEligible {
+		return AgentRun{}, StartConfirmRunResult{}, false, ErrRequirementNotReady
+	}
+	reviewHash, err := schemas.CanonicalHash(reviewSpec)
+	if err != nil {
+		return AgentRun{}, StartConfirmRunResult{}, false, err
+	}
+	if reviewHash != p.ExpectedReviewHash {
+		return AgentRun{}, StartConfirmRunResult{}, false, ErrRequirementReviewConflict
+	}
+	// Builder 上下文在确认事务内确定并冻结:run ID、上一提案与基线草稿是
+	// 最终载荷的一部分,不得延迟到执行时再拼装。失败重试是唯一例外:选型
+	// 上下文整体继承目标 run 的冻结载荷,只替换本轮 run 标识,不从当前
+	// session 重新组装(见下)。
+	var payload json.RawMessage
+	var builderInputHash string
+	confirmationID := p.ConfirmationID
+	if p.RetryOfRunID != "" {
+		// 失败重试:目标必须属于本会话、kind=build 且已失败,其快照仍与当前
+		// 核定预览一致;复用快照与冻结选型上下文,仅为新 run 标识另冻载荷
+		// 与新 hash。
+		var kind RunKind
+		var status RunStatus
+		var targetConfirmation string
+		var targetReviewHash string
+		var inheritedPayload json.RawMessage
+		err := tx.QueryRow(ctx, `SELECT r.kind, r.status, COALESCE(r.confirmation_id::text, ''), COALESCE(c.review_hash, ''),
+			r.builder_input_payload
+			FROM agent_runs r LEFT JOIN requirement_confirmations c ON c.id = r.confirmation_id
+			WHERE r.id = $1 AND r.session_id = $2`, p.RetryOfRunID, p.SessionID).Scan(&kind, &status, &targetConfirmation, &targetReviewHash, &inheritedPayload)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return AgentRun{}, StartConfirmRunResult{}, false, ErrRunNotFound
+		}
 		if err != nil {
-			return AgentRun{}, nil, false, ErrRequirementRevision
+			return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 读取重试目标失败: %w", err)
 		}
-		spec, readiness, err := schemas.RequirementStateSpec(state)
-		var actual, proposed any
-		if err != nil || !readiness.ConfirmationEligible || json.Unmarshal(spec, &proposed) != nil || json.Unmarshal(pending, &actual) != nil || !reflect.DeepEqual(actual, proposed) {
-			return AgentRun{}, nil, false, ErrRequirementRevision
+		if kind != RunBuild || status != RunFailed || targetConfirmation == "" || len(inheritedPayload) == 0 {
+			return AgentRun{}, StartConfirmRunResult{}, false, ErrRetryTargetInvalid
 		}
-		pending, err = schemas.PlanningRequirement(state)
+		if targetReviewHash != reviewHash {
+			return AgentRun{}, StartConfirmRunResult{}, false, ErrRequirementReviewConflict
+		}
+		confirmationID = targetConfirmation
+		// 继承冻结载荷:state/base_draft/previous_proposal/previous_run_id
+		// 原样保留,只替换本轮 run 标识(PlanningInput 中唯一随 run 变化的
+		// 字段);先前 run 的载荷/hash 不修改。
+		var inherited schemas.PlanningInput
+		if err := json.Unmarshal(inheritedPayload, &inherited); err != nil {
+			return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 解析重试目标载荷失败: %w", err)
+		}
+		inherited.RunID = p.RunID
+		payload, err = json.Marshal(inherited)
 		if err != nil {
-			return AgentRun{}, nil, false, err
+			return AgentRun{}, StartConfirmRunResult{}, false, err
 		}
 	} else {
-		// v1 一次性切换:没有增量状态的旧会话不能继续确认。
-		return AgentRun{}, nil, false, schemas.ErrRequirementStateUnsupported
+		var previous struct {
+			Result json.RawMessage `json:"result"`
+			RunID  string          `json:"run_id"`
+		}
+		var previousProposal json.RawMessage
+		var previousRunID string
+		err = tx.QueryRow(ctx, `SELECT result, run_id::text FROM session_proposals
+			WHERE session_id = $1 ORDER BY id DESC LIMIT 1`, p.SessionID).Scan(&previous.Result, &previous.RunID)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+		case err != nil:
+			return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 读取上一提案失败: %w", err)
+		default:
+			previousProposal, previousRunID = previous.Result, previous.RunID
+		}
+		var baseDraft json.RawMessage
+		var version *int
+		if err := tx.QueryRow(ctx, `SELECT max(version) FROM builds WHERE session_id = $1`, p.SessionID).Scan(&version); err != nil {
+			return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 查询最新配置版本失败: %w", err)
+		}
+		if version != nil {
+			if err := tx.QueryRow(ctx, `SELECT draft FROM builds WHERE session_id = $1 AND version = $2`, p.SessionID, *version).Scan(&baseDraft); err != nil {
+				return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 读取基线草稿失败: %w", err)
+			}
+		}
+		payload, err = schemas.PlanningBuilderInput(p.RunID, state, &schemas.EffectiveConstraints{
+			Spec: reviewSpec, Defaults: readiness.EffectiveDefaults,
+		}, baseDraft, previousProposal, previousRunID)
+		if err != nil {
+			return AgentRun{}, StartConfirmRunResult{}, false, err
+		}
+		var specObject map[string]json.RawMessage
+		if err := json.Unmarshal(reviewSpec, &specObject); err != nil {
+			return AgentRun{}, StartConfirmRunResult{}, false, err
+		}
+		scope := specObject["configuration_scope"]
+		if scope == nil {
+			scope = json.RawMessage(`[]`)
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO requirement_confirmations
+			(id, session_id, requirement_spec, requirement_state, review_hash, revision, configuration_scope, schema_version)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, confirmationID, p.SessionID, reviewSpec, requirementState,
+			reviewHash, state.Revision, scope, schemas.RequirementStateSchemaVersion); err != nil {
+			return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 冻结确认快照失败: %w", err)
+		}
+	}
+	builderInputHash, err = schemas.CanonicalHash(payload)
+	if err != nil {
+		return AgentRun{}, StartConfirmRunResult{}, false, err
 	}
 	r, err := insertRunTx(ctx, tx, p.RunID, p.SessionID, p.RequestID, RunBuild)
 	if isRunningConflict(err) {
-		return AgentRun{}, nil, false, ErrSessionBusy
+		return AgentRun{}, StartConfirmRunResult{}, false, ErrSessionBusy
 	}
 	if err != nil {
-		return AgentRun{}, nil, false, err
+		return AgentRun{}, StartConfirmRunResult{}, false, err
 	}
-	// 确认快照冻结 Builder 实际输入(PlanningInput 包装):Builder 输入 hash
-	// 必须与确认快照一致(veto V5);展示/编辑差异比对使用
-	// confirmed_requirement_state 的投影,不依赖本列形状。
+	// run 永久绑定不可变快照与两个 hash:发送路径只读 builder_input_payload,
+	// 发送前再校验实际载荷 hash 与冻结值一致(V5)。
+	if _, err := tx.Exec(ctx, `UPDATE agent_runs SET request_fingerprint = NULLIF($2, ''),
+		confirmation_id = $3, builder_input_payload = $4, builder_input_hash = $5,
+		retry_of_run_id = NULLIF($6, '')::uuid WHERE id = $1`, r.ID, p.RequestFingerprint,
+		confirmationID, payload, builderInputHash, p.RetryOfRunID); err != nil {
+		return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 冻结运行载荷失败: %w", err)
+	}
 	if _, err := tx.Exec(ctx, `UPDATE web_sessions SET phase = 'building', recovery_phase = NULL,
-		confirmed_requirement = $2, confirmed_requirement_state = requirement_state,
-		confirmed_at = now(), last_error = NULL, updated_at = now() WHERE id = $1`, p.SessionID, pending); err != nil {
-		return AgentRun{}, nil, false, fmt.Errorf("store: 更新确认阶段失败: %w", err)
+		last_error = NULL, confirmation_id = $2, updated_at = now() WHERE id = $1`, p.SessionID, confirmationID); err != nil {
+		return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 更新确认阶段失败: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return AgentRun{}, nil, false, fmt.Errorf("store: 提交确认运行失败: %w", err)
+		return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 提交确认运行失败: %w", err)
 	}
-	return r, pending, false, nil
+	return r, StartConfirmRunResult{ConfirmationID: confirmationID, ReviewHash: reviewHash,
+		BuilderInputPayload: payload, BuilderInputHash: builderInputHash}, false, nil
+}
+
+// RequirementConfirmation 是不可变的确认快照:review_spec 是用户核定时看到的
+// 规范化有效 RequirementSpec,review_hash 基于它;builder_input_hash 另存于 run。
+type RequirementConfirmation struct {
+	ID                 string
+	SessionID          string
+	RequirementSpec    json.RawMessage
+	RequirementState   json.RawMessage
+	ReviewHash         string
+	Revision           int
+	ConfigurationScope json.RawMessage
+	SchemaVersion      int
+	CreatedAt          time.Time
+}
+
+func (s *Store) ConfirmationByID(ctx context.Context, sessionID, id string) (RequirementConfirmation, bool, error) {
+	if id == "" {
+		return RequirementConfirmation{}, false, nil
+	}
+	var c RequirementConfirmation
+	err := s.pool.QueryRow(ctx, `SELECT id::text, session_id, requirement_spec, requirement_state,
+		review_hash, revision, configuration_scope, schema_version, created_at
+		FROM requirement_confirmations WHERE id = $1 AND session_id = $2`, id, sessionID).
+		Scan(&c.ID, &c.SessionID, &c.RequirementSpec, &c.RequirementState, &c.ReviewHash,
+			&c.Revision, &c.ConfigurationScope, &c.SchemaVersion, &c.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RequirementConfirmation{}, false, nil
+	}
+	if err != nil {
+		return RequirementConfirmation{}, false, fmt.Errorf("store: 查询确认快照失败: %w", err)
+	}
+	return c, true, nil
+}
+
+// BuildRun 是 build 运行与其冻结快照关联的读取视图;Version 是该 run 产出的
+// 配置版本(成功才有)。ReviewHash 来自其确认快照。
+type BuildRun struct {
+	AgentRun
+	ConfirmationID   string
+	ReviewHash       string
+	BuilderInputHash string
+	RetryOfRunID     string
+	Version          int
+}
+
+// BuildRuns 返回会话全部 build 运行(新→旧);三轴 build_relation 的派生输入。
+func (s *Store) BuildRuns(ctx context.Context, sessionID string) ([]BuildRun, error) {
+	rows, err := s.pool.Query(ctx, `SELECT r.id::text, r.session_id, r.client_request_id::text, r.kind, r.status,
+	       r.error, r.started_at, r.finished_at, r.cancel_requested_at, r.expires_at,
+	       COALESCE(r.confirmation_id::text, ''), COALESCE(c.review_hash, ''), COALESCE(r.builder_input_hash, ''),
+	       COALESCE(r.retry_of_run_id::text, ''), COALESCE(b.version, 0)
+		FROM agent_runs r
+		LEFT JOIN requirement_confirmations c ON c.id = r.confirmation_id
+		LEFT JOIN builds b ON b.run_id = r.id
+		WHERE r.session_id = $1 AND r.kind = 'build'
+		ORDER BY r.started_at DESC, r.id DESC`, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("store: 查询 build 运行失败: %w", err)
+	}
+	defer rows.Close()
+	out := make([]BuildRun, 0)
+	for rows.Next() {
+		var run BuildRun
+		if err := rows.Scan(&run.ID, &run.SessionID, &run.ClientRequestID, &run.Kind, &run.Status,
+			&run.Error, &run.StartedAt, &run.FinishedAt, &run.CancelRequestedAt, &run.ExpiresAt,
+			&run.ConfirmationID, &run.ReviewHash, &run.BuilderInputHash, &run.RetryOfRunID, &run.Version); err != nil {
+			return nil, fmt.Errorf("store: 读取 build 运行失败: %w", err)
+		}
+		out = append(out, run)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store: 遍历 build 运行失败: %w", err)
+	}
+	return out, nil
+}
+
+type EditRequirementDraftParams struct {
+	OwnerID, SessionID, RequestID, Fingerprint string
+	ExpectedRevision                           int
+	// Next 是产品层已用共享 Reducer 应用后的完整草稿状态;Pending 是其投影
+	// (不合格时为 nil)。事务只校验 revision 与幂等,不触碰 phase/run。
+	Next, Pending json.RawMessage
+}
+
+// RequirementEditFingerprint 预检草稿编辑幂等:服务层在重放路径(可能包含
+// 无法重复应用的操作,如 restore)应用 Reducer 之前先识别重复请求。
+func (s *Store) RequirementEditFingerprint(ctx context.Context, sessionID, requestID string) (string, bool, error) {
+	if requestID == "" {
+		return "", false, nil
+	}
+	var fingerprint string
+	err := s.pool.QueryRow(ctx, `SELECT fingerprint FROM requirement_edit_requests
+		WHERE session_id = $1 AND request_id = $2`, sessionID, requestID).Scan(&fingerprint)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("store: 查询草稿编辑指纹失败: %w", err)
+	}
+	return fingerprint, true, nil
+}
+
+// EditRequirementDraft 是运行中也可用的独立原子草稿编辑事务:不创建 AgentRun、
+// 不改 phase,原 Builder run 与确认快照保持不变。同一会话同一请求键重复提交
+// 同一指纹时按幂等成功处理(不重复应用)。
+func (s *Store) EditRequirementDraft(ctx context.Context, p EditRequirementDraftParams) (bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("store: 开启草稿编辑事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var revision int
+	if err := tx.QueryRow(ctx, `SELECT COALESCE((requirement_state->>'revision')::int, 0) FROM web_sessions
+		WHERE id = $1 AND owner_id = $2 FOR UPDATE`, p.SessionID, p.OwnerID).Scan(&revision); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, ErrWebSessionNotFound
+		}
+		return false, fmt.Errorf("store: 锁定草稿会话失败: %w", err)
+	}
+	var fingerprint string
+	if err := tx.QueryRow(ctx, `INSERT INTO requirement_edit_requests (session_id, request_id, fingerprint)
+		VALUES ($1, $2, $3) ON CONFLICT (session_id, request_id) DO NOTHING RETURNING fingerprint`,
+		p.SessionID, p.RequestID, p.Fingerprint).Scan(&fingerprint); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return false, fmt.Errorf("store: 记录草稿编辑失败: %w", err)
+	}
+	if fingerprint == "" {
+		var oldFingerprint string
+		if err := tx.QueryRow(ctx, `SELECT fingerprint FROM requirement_edit_requests
+			WHERE session_id = $1 AND request_id = $2`, p.SessionID, p.RequestID).Scan(&oldFingerprint); err != nil {
+			return false, fmt.Errorf("store: 读取草稿编辑指纹失败: %w", err)
+		}
+		if oldFingerprint != p.Fingerprint {
+			return false, ErrIdempotencyConflict
+		}
+		return false, nil
+	}
+	if revision != p.ExpectedRevision {
+		return false, ErrRequirementRevision
+	}
+	if _, err := tx.Exec(ctx, `UPDATE web_sessions SET requirement_state = $2,
+		pending_requirement = $3, updated_at = now() WHERE id = $1`, p.SessionID, p.Next, p.Pending); err != nil {
+		return false, fmt.Errorf("store: 保存草稿失败: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("store: 提交草稿编辑失败: %w", err)
+	}
+	return true, nil
 }
 
 func (s *Store) ReplacePendingRequirement(ctx context.Context, ownerID, sessionID string, spec json.RawMessage) error {

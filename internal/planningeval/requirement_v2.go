@@ -22,7 +22,11 @@ import (
 // provider_success、latency_p95、max_model_calls_per_turn 与预算一致性改为
 // 统计 extraction+conversations 的全部真实 provider 轮（verdict layer=model），
 // 样本范围与 report.usage 一致。旧产物按 superseded 归档，跨版本判卷走显式 regrade。
-const ReqV2GraderVersion = "reqv2-grader-v3"
+// reqv2-grader-v4(2026-09-23,确认/Builder gate v2):policy:admission_reason
+// 有稳定 reason code(confirm API 真实拒绝原因),ui-contract 的结构化
+// readiness 块/三轴状态/confirm payload 全部来自后端真值,V5 改为"实际发送
+// 的完整 Builder 载荷 hash vs run 冻结 builder_input_hash"。
+const ReqV2GraderVersion = "reqv2-grader-v4"
 
 // ReqV2Layer 是 fixture 的判定对象分层；live 层需要模型，其余零模型。
 var ReqV2Layers = []string{"extraction", "reducer", "readiness", "policy", "conversations", "ui-contract"}

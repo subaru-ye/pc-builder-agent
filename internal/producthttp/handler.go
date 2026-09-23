@@ -43,7 +43,7 @@ type ProductService interface {
 	OwnSession(context.Context, string, string) error
 	ReplaceRequirement(context.Context, string, string, json.RawMessage) error
 	StartMessage(context.Context, string, string, string, string) (product.StartResult, error)
-	StartConfirm(context.Context, string, string, string) (product.StartResult, error)
+	StartConfirm(context.Context, string, string, string, product.ConfirmRequest) (product.StartResult, error)
 	RequestCancel(context.Context, string, string, string) (store.AgentRun, bool, error)
 }
 
@@ -476,16 +476,43 @@ func (a *API) replaceRequirement(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(raw)
 }
 
+// confirmRequirement 是唯一的原子 confirm-and-start 入口:请求体绑定用户
+// 看到的核定预览(expected_revision + expected_review_hash);失败重试显式
+// 携带 retry_of_run_id,不存在模糊的"继续生成"入口。
 func (a *API) confirmRequirement(w http.ResponseWriter, r *http.Request) {
 	key, ok := a.idempotencyKey(w, r)
 	if !ok {
 		return
 	}
+	var body struct {
+		SchemaVersion      int     `json:"schema_version"`
+		ExpectedRevision   *int    `json:"expected_revision"`
+		ExpectedReviewHash *string `json:"expected_review_hash"`
+		RetryOfRunID       *string `json:"retry_of_run_id"`
+	}
+	if !a.decodeJSON(w, r, &body) {
+		return
+	}
+	if body.SchemaVersion != 2 || body.ExpectedRevision == nil || *body.ExpectedRevision < 0 ||
+		body.ExpectedReviewHash == nil || strings.TrimSpace(*body.ExpectedReviewHash) == "" {
+		a.writeProblem(w, r, product.NewProblem("invalid_request", "确认请求无效", 400,
+			"schema_version 必须为 2，expected_revision 与 expected_review_hash 必须来自最新核定预览。", requestID(r)))
+		return
+	}
+	req := product.ConfirmRequest{ExpectedRevision: *body.ExpectedRevision, ExpectedReviewHash: *body.ExpectedReviewHash}
+	if body.RetryOfRunID != nil {
+		if _, err := uuid.Parse(*body.RetryOfRunID); err != nil {
+			a.writeProblem(w, r, product.NewProblem("invalid_request", "重试目标无效", 400,
+				"retry_of_run_id 必须是本次会话中已失败的 build 运行 ID。", requestID(r)))
+			return
+		}
+		req.RetryOfRunID = *body.RetryOfRunID
+	}
 	owner, ok := a.ownerForSession(w, r, r.PathValue("session_id"))
 	if !ok {
 		return
 	}
-	result, err := a.service.StartConfirm(r.Context(), owner, r.PathValue("session_id"), key)
+	result, err := a.service.StartConfirm(r.Context(), owner, r.PathValue("session_id"), key, req)
 	if err != nil {
 		a.writeError(w, r, err)
 		return
@@ -800,6 +827,15 @@ func (a *API) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, store.ErrRequirementRevision):
 		a.writeProblem(w, r, product.NewProblem("requirement_revision_conflict", "需求已发生变化", 409,
 			"此次修改未保存。请刷新当前需求后重试。", requestID(r)))
+	case errors.Is(err, store.ErrRequirementNotReady):
+		a.writeProblem(w, r, product.NewProblem("requirement_not_ready", "需求尚未达到确认条件", 422,
+			"仍有缺失或冲突的需求项；请查看会话的 requirement_readiness 后补齐再确认。", requestID(r)))
+	case errors.Is(err, store.ErrRequirementReviewConflict):
+		a.writeProblem(w, r, product.NewProblem("requirement_review_conflict", "核定预览已变化", 409,
+			"需求预览(默认规则或配置范围)已更新，此次确认未执行、生成未开始；请重新核定后再确认。", requestID(r)))
+	case errors.Is(err, store.ErrRetryTargetInvalid):
+		a.writeProblem(w, r, product.NewProblem("invalid_retry_target", "重试目标无效", 409,
+			"retry_of_run_id 必须指向本会话中已失败的 build 运行，且其确认快照仍与当前核定预览一致。", requestID(r)))
 	case errors.Is(err, store.ErrInvalidSessionPhase):
 		detail := err.Error()
 		a.writeProblem(w, r, product.NewProblem("invalid_session_phase", "当前会话阶段不允许该操作", 409,

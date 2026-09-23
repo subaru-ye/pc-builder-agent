@@ -299,12 +299,11 @@ func TestReqV2McNemarExact(t *testing.T) {
 }
 
 // TestReqV2PolicyUIBaseline（PG_TEST_DSN 门控）冻结当前 policy/ui 层基线。
-// 2026-09-23 Spec 3 落地后：presentation action 全部转绿（focus_missing_
-// requirement/open_requirement_review 由确定性代码发布）；V9 判卷缺陷已按
-// 冻结资产变更流程修正（grader-v3），产品诚实说明 tower 边界不再误报。
-// 剩余 red 归属后续 change——pol-edit-while-running(生成中编辑策略)归
-// 确认/Builder gate v2；ui 的结构化 readiness 块与 confirm payload 归
-// workspace sidebar。
+// 2026-09-23 Spec 3 落地后：presentation action 全部转绿；2026-09-23 确认/
+// Builder gate v2(Spec 4) 落地后：confirm API 暴露稳定 admission reason code,
+// Session DTO 携带结构化 readiness 块/三轴状态/confirm payload,V5 按"实际
+// 发送载荷 hash vs run 冻结 builder_input_hash"判定;生成中编辑(pol-edit-
+// while-running)改为独立原子事务后转绿。钉定基线全部通过。
 func TestReqV2PolicyUIBaseline(t *testing.T) {
 	dsn := os.Getenv("PG_TEST_DSN")
 	if dsn == "" {
@@ -345,11 +344,11 @@ func TestReqV2PolicyUIBaseline(t *testing.T) {
 		"policy/pol-incomplete-chat-start":      {pass: true},
 		"policy/pol-ready-chat-start":           {pass: true},
 		"policy/pol-monitor-promise-guard":      {pass: true},
-		"policy/pol-edit-while-running":         {pass: false},
+		"policy/pol-edit-while-running":         {pass: true},
 		"policy/pol-edit-after-confirm-rebuild": {pass: true},
-		"ui-contract/ui-collecting-fresh":       {pass: false},
-		"ui-contract/ui-ready-unconfirmed":      {pass: false},
-		"ui-contract/ui-incomplete-shown-ready": {pass: false},
+		"ui-contract/ui-collecting-fresh":       {pass: true},
+		"ui-contract/ui-ready-unconfirmed":      {pass: true},
+		"ui-contract/ui-incomplete-shown-ready": {pass: true},
 	}
 	seen := map[string]bool{}
 	for _, c := range report.Cases {

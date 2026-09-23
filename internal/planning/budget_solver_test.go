@@ -317,6 +317,8 @@ func TestBudgetSolverTruthAuditAgainstFrozenCatalog(t *testing.T) {
 	newExec := func(owned string) *execution {
 		input := schemas.PlanningInput{SchemaVersion: 2, State: schemas.NewRequirementState()}
 		mustField(t, &input, "budget_cny", "6000", "must", "constraint")
+		// authored 真值按严格预算(弹性 0)审计;未填写弹性将按系统默认 0.1。
+		mustField(t, &input, "budget_flex", `0`, "must", "constraint")
 		mustField(t, &input, "budget_basis", `"new_purchase"`, "must", "constraint")
 		mustField(t, &input, "owned_parts", owned, "must", "fact")
 		return &execution{input: input, candidates: suite.Catalog.Candidates, date: suite.Catalog.Date, snapshotID: 1}

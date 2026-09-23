@@ -282,7 +282,12 @@ paths:
       operationId: updateRequirementState
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
-      description: 与聊天修改共用服务端需求归并流程。按 expected_revision 防止覆盖并发修改；只更新当前草稿，已确认快照与配置历史不变。不调用模型。
+      description: |
+        独立原子草稿编辑事务:复用共享 Reducer、权限与幂等约束,按
+        expected_revision 防止覆盖并发修改;只更新草稿 RequirementState 与
+        revision,不创建 AgentRun、不改变 phase。Builder 运行期间同样可用
+        (运行中的 Builder 只读取启动时冻结的快照;确认快照与历史配置不变)。
+        生成中确认/生成请求仍被服务端硬拒绝;编辑后以响应中的三轴状态为准。
       requestBody:
         required: true
         content:
@@ -338,11 +343,43 @@ paths:
     parameters:
       - $ref: "#/components/parameters/SessionID"
     post:
-      summary: 确认需求并启动生成 run
+      summary: 确认需求并启动生成 run(唯一 Builder admission)
       tags: [sessions]
       operationId: confirmRequirement
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
+      description: |
+        唯一的原子 confirm-and-start 入口:同一事务校验 readiness/revision/核定
+        预览 hash,冻结不可变确认快照(review_spec + review_hash)与本 run 的完整
+        Builder 执行载荷(builder_input_payload + builder_input_hash),并创建唯一
+        build run。聊天文字、模型 signal、旧 phase 或恢复路径都不能替代本入口。
+        幂等:相同 Idempotency-Key + 相同请求体重放返回原 run;相同 key 不同请求
+        返回 409。retry_of_run_id 仅用于失败重试:目标必须属于本会话、kind=build
+        且已失败,其确认快照的 review_hash 仍与当前核定预览一致;重试复用快照,选型上下文(需求状态、基线草稿、上一提案)整体继承目标 run
+        的冻结载荷,仅替换本轮 run 标识并另冻新载荷与新 hash。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [schema_version, expected_revision, expected_review_hash]
+              properties:
+                schema_version: {type: integer, const: 2}
+                expected_revision:
+                  type: integer
+                  minimum: 0
+                  description: 用户打开核定面板时看到的草稿修订号。
+                expected_review_hash:
+                  type: string
+                  minLength: 1
+                  description: 来自最新服务端核定预览(session DTO 的 review_hash)。revision 不变但默认规则/配置范围变化时该 hash 也会变化。
+                retry_of_run_id:
+                  oneOf:
+                    - {type: string, format: uuid}
+                    - {type: "null"}
+                  description: 仅失败重试时传目标 build run ID;省略表示新确认。
       responses:
         "200":
           description: 幂等命中已完成 run
@@ -354,6 +391,20 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/Run"}
+        "409":
+          description: |
+            revision 变化(requirement_revision_conflict)、核定预览失效
+            (requirement_review_conflict,含默认/配置范围变化)、存在活动运行
+            (session_busy)、重试目标无效(invalid_retry_target)或幂等冲突。
+            返回最新会话供用户重新核定。
+          content:
+            application/problem+json:
+              schema: {$ref: "#/components/schemas/Problem"}
+        "422":
+          description: readiness 不完整(requirement_not_ready),响应 detail 指向 requirement_readiness。
+          content:
+            application/problem+json:
+              schema: {$ref: "#/components/schemas/Problem"}
         "4XX":
           $ref: "#/components/responses/Problem"
   /api/v1/sessions/{session_id}/runs/{run_id}/cancel:
@@ -817,7 +868,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/SessionSummary"
         - type: object
-          required: [messages, pending_requirement, requirement_state, requirement_status, confirmed_requirement_state, confirmed_requirement, confirmed_at, missing_fields, active_run, last_error, recovery_phase, degraded]
+          required: [messages, pending_requirement, requirement_state, requirement_readiness, review_spec, review_hash, effective_budget_ceiling_cny, requirement_confirmation, build_relation, active_run, last_error, recovery_phase, degraded]
           properties:
             messages:
               type: array
@@ -831,26 +882,28 @@ components:
               oneOf:
                 - $ref: "#/components/schemas/RequirementState"
                 - type: "null"
-            requirement_status:
-              type: string
-              enum: [collecting, ready_to_confirm, confirmed, modified]
-              description: 根据当前有效需求与已确认快照计算；仅讨论备选或无有效修改不会被标为 modified。
-            confirmed_requirement_state:
+            requirement_readiness:
               oneOf:
-                - $ref: "#/components/schemas/RequirementState"
+                - $ref: "#/components/schemas/RequirementReadiness"
                 - type: "null"
-            confirmed_requirement:
+              description: 后端唯一计算的确定性 readiness 真值;前端只渲染。
+            review_spec:
               oneOf:
                 - $ref: "#/components/schemas/RequirementSpec"
                 - type: "null"
-            confirmed_at:
+              description: 服务端核定预览(展开有效系统默认后的规范化有效 RequirementSpec v2)。incomplete 时不伪造可确认预览(null)。
+            review_hash:
               oneOf:
-                - {type: string, format: date-time}
+                - {type: string}
                 - {type: "null"}
-            missing_fields:
-              type: array
-              items: {type: string}
-              description: 当前需求生成前仍需补充或消解冲突的必要字段。
+              description: review_spec 的规范化 SHA256;确认请求的 expected_review_hash 必须来自本字段。
+            effective_budget_ceiling_cny:
+              oneOf:
+                - {type: integer}
+                - {type: "null"}
+              description: 预算上限展示值 = budget_cny ×(1+budget_flex)取整;预算未表达时为 null。生成侧会计使用精确有理数。
+            requirement_confirmation: {$ref: "#/components/schemas/RequirementConfirmation"}
+            build_relation: {$ref: "#/components/schemas/BuildRelation"}
             active_run:
               oneOf:
                 - $ref: "#/components/schemas/Run"
@@ -865,6 +918,90 @@ components:
                   enum: [collecting, requirement_ready, ready]
                 - type: "null"
             degraded: {type: boolean}
+    RequirementReadiness:
+      type: object
+      required: [status, missing_fields, blocking_conflicts, unsupported_capabilities, next_question, confirmation_eligible, effective_defaults]
+      properties:
+        status: {type: string, enum: [incomplete, ready]}
+        missing_fields:
+          type: array
+          items: {type: string}
+        blocking_conflicts:
+          type: array
+          items: {type: string}
+        unsupported_capabilities:
+          type: array
+          items: {type: string}
+        next_question:
+          oneOf:
+            - type: object
+              required: [reason_code, fields]
+              properties:
+                reason_code: {type: string}
+                fields:
+                  type: array
+                  items: {type: string}
+            - type: "null"
+          description: 确定性下一步追问(reason_code + 字段组);ready 时为 null。
+        confirmation_eligible: {type: boolean}
+        effective_defaults:
+          type: array
+          description: 本次预览实际展开的系统默认(origin=system_default);默认规则变化会改变 review_hash。
+          items:
+            type: object
+            required: [field, value, origin]
+            properties:
+              field: {type: string}
+              value: {}
+              origin: {type: string, enum: [system_default]}
+    RequirementConfirmation:
+      type: object
+      required: [status, confirmed_revision, confirmed_at, confirmed_review_hash]
+      properties:
+        status:
+          type: string
+          enum: [unconfirmed, confirmed, modified]
+          description: confirmed=当前草稿规范化 review_hash 与最近确认快照相同;modified=存在快照但草稿不同或已不足以投影。
+        confirmed_revision:
+          oneOf:
+            - {type: integer}
+            - {type: "null"}
+        confirmed_at:
+          oneOf:
+            - {type: string, format: date-time}
+            - {type: "null"}
+        confirmed_review_hash:
+          oneOf:
+            - {type: string}
+            - {type: "null"}
+    BuildRelation:
+      type: object
+      required: [status, version, snapshot_id, review_hash, builder_input_hash]
+      properties:
+        status:
+          type: string
+          enum: [none, running, current, outdated, failed]
+          description: none=从无 build run;running 优先表示活动 Builder;current=最新成功 run 关联当前确认快照且草稿未修改;outdated=已有成功配置但当前确认目标已不同;failed=最近一次 build run 失败(确认快照仍有效,历史成功配置经 version 继续可见)。
+        version:
+          oneOf:
+            - {type: integer}
+            - {type: "null"}
+          description: 最新成功 build 的配置版本号;从未成功过为 null。
+        snapshot_id:
+          oneOf:
+            - {type: string}
+            - {type: "null"}
+          description: 关联确认快照 ID(有 build run 时)。
+        review_hash:
+          oneOf:
+            - {type: string}
+            - {type: "null"}
+          description: 关联确认快照的 review_hash。
+        builder_input_hash:
+          oneOf:
+            - {type: string}
+            - {type: "null"}
+          description: 最近(或活动)build run 冻结的完整 Builder 载荷规范化 hash;与实际发送载荷比对即 V5。
     Message:
       type: object
       additionalProperties: false
@@ -1035,12 +1172,39 @@ components:
     PlanningInput:
       type: object
       required: [schema_version, requirement_state]
+      description: |
+        确认事务冻结的完整 Builder 执行载荷。字段在确认时全部确定(run ID、
+        基线草稿、上一提案、有效选型约束);发送路径只读该载荷,不再用会话草稿
+        或最新 build 重组。规范化 hash 记录为 run 的 builder_input_hash。
+        requirement_state 仅保留用户事实与溯源;有效选型约束以
+        effective_constraints 为准(Builder 的模型输入与确定性门槛都读取它)。
       properties:
         schema_version: {type: integer, const: 2}
         requirement_state: {$ref: "#/components/schemas/RequirementState"}
+        effective_constraints:
+          oneOf:
+            - type: object
+              required: [spec, defaults]
+              properties:
+                spec:
+                  $ref: "#/components/schemas/RequirementSpec"
+                  description: 确认时冻结的完整核定预览(展开系统默认后的规范化有效 RequirementSpec v2)。
+                defaults:
+                  type: array
+                  description: 被展开的系统默认及来源(origin=system_default);冻结后修改默认规则不改变旧 run 的执行语义。
+                  items:
+                    type: object
+                    required: [field, value, origin]
+                    properties:
+                      field: {type: string}
+                      value: {}
+                      origin: {type: string, enum: [system_default]}
+            - type: "null"
+          description: 确认事务冻结的有效选型约束;失败重试整体继承目标 run 的该字段,仅替换 run 标识。null 仅为历史归档/评估回放兼容。
         base_draft: {type: object, additionalProperties: true}
         previous_proposal: {type: object, additionalProperties: true}
-        request: {$ref: "#/components/schemas/RequirementSource", description: 本轮已授权执行的用户原话，供规划理解修改目标，不作为新增偏好}
+        run_id: {type: string, format: uuid, description: 本轮产品侧 run,生成服务据此归档完整产物}
+        previous_run_id: {type: string, format: uuid, description: 上一轮 proposal 的 run,供生成侧从归档补全证据正文}
     PlanningEvidence:
       type: object
       required: [id, url, title, text, captured_at, kind]

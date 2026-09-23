@@ -16,11 +16,13 @@ type deliveryGateCounters struct {
 	budget, unknown, hardreq, nobudget, stalled, total int
 }
 
-// budgetCeiling 返回 must 预算硬上限（含用户明确表达的弹性）。未表达 must 预算时为 false；
-// 会计只使用陈述值，不引入默认预算或弹性。
+// budgetCeiling 返回 must 预算硬上限。确认/Builder gate v2:有效约束(含弹性
+// 默认与 must 强度)读确认事务冻结的 EffectiveConstraints,冻结后修改系统默认
+// 规则不改变旧 run 的执行语义;nil 旧载荷回退从 State 推导(弹性按
+// schemas.DefaultBudgetFlex,与核定预览同一来源)。未表达 must 预算时为
+// false；会计不引入默认预算金额或支出下限。
 func (x *execution) budgetCeiling() (*big.Rat, bool) {
-	field, ok := x.input.State.Fields["budget_cny"]
-	if !ok || field.Status != "active" || field.Strength != "must" {
+	if !x.budgetMust() {
 		return nil, false
 	}
 	spec := x.accountingSpec()

@@ -95,6 +95,11 @@ func TestLiveOwnedPurchaseDeliveryUsesTheVerifiedBudgetBasis(t *testing.T) {
 				field("budget_basis", `"full_build"`)
 			case "lower_budget", "missing_basis_lower_budget":
 				field("budget_cny", `5000`)
+				// 该场景校验超预算被拒:显式陈述弹性 0 表示严格预算
+				// (弹性未填写时按系统默认 0.1 执行,与核定预览一致)。
+				flex := f.Input.State.Fields["budget_flex"]
+				flex.Status, flex.Kind, flex.Strength, flex.Value = "active", "constraint", "must", json.RawMessage(`0`)
+				f.Input.State.Fields["budget_flex"] = flex
 			case "unowned_memory":
 				field("owned_parts", `[{"category":"cpu","model":"AMD Ryzen 5 7600","quantity":1}]`)
 			case "wrong_owned_model":

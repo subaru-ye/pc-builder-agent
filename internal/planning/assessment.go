@@ -2,6 +2,7 @@ package planning
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"regexp"
 	"strings"
@@ -27,8 +28,33 @@ func stripInternalIssueCodes(issues []string) []string {
 	return issues
 }
 
-// Accounting uses only stated values, never a default budget or spend floor.
+// frozenSpec 严格解码确认事务冻结的有效选型约束;无冻结载荷返回 (nil, nil)
+// (历史归档/评估回放走旧路径)。损坏的冻结约束返回错误——调用方不得回退到
+// 原始 state 或关闭预算门槛后继续生成(Runner.Run 入口即校验并拒绝)。
+func (x *execution) frozenSpec() (*schemas.RequirementSpec, error) {
+	if x.input.EffectiveConstraints == nil {
+		return nil, nil
+	}
+	spec, err := schemas.DecodeRequirementSpec(x.input.EffectiveConstraints.Spec)
+	if err != nil {
+		return nil, fmt.Errorf("planning: 冻结的有效选型约束无效: %w", err)
+	}
+	return &spec, nil
+}
+
+// accountingSpec 是预算/口径/已有件的确定性会计输入。确认/Builder gate v2 起
+// 优先读取确认事务冻结的有效选型约束(已展开系统默认并标注来源):冻结后修改
+// 系统默认规则不改变旧 run 的执行语义。冻结约束损坏时按空会计失败关闭——
+// 绝不静默回退到可变推导;nil 的旧载荷按原语义从 State 读取。预算金额、口径
+// 与支出下限永不引入默认,预算弹性未表达时按系统默认执行(与核定预览同一来源)。
 func (x *execution) accountingSpec() schemas.RequirementSpec {
+	frozen, err := x.frozenSpec()
+	if err != nil {
+		return schemas.RequirementSpec{}
+	}
+	if frozen != nil {
+		return *frozen
+	}
 	var spec schemas.RequirementSpec
 	read := func(field string, dst any) {
 		if f := x.input.State.Fields[field]; f.Status == "active" {
@@ -37,9 +63,27 @@ func (x *execution) accountingSpec() schemas.RequirementSpec {
 	}
 	read("budget_cny", &spec.BudgetCNY)
 	read("budget_flex", &spec.BudgetFlex)
+	if x.input.State.Fields["budget_flex"].Status != "active" {
+		spec.BudgetFlex = schemas.DefaultBudgetFlex
+	}
 	read("budget_basis", &spec.BudgetBasis)
 	read("owned_parts", &spec.OwnedParts)
 	return spec
+}
+
+// budgetMust 报告预算是否为 must 硬约束:冻结路径读冻结载荷的
+// constraint_strengths,旧载荷读 State 字段强度。冻结约束损坏时失败关闭
+// (false = 无预算门槛不得成为继续生成的理由;Run 入口已先行拒绝无效载荷)。
+func (x *execution) budgetMust() bool {
+	frozen, err := x.frozenSpec()
+	if err != nil {
+		return false
+	}
+	if frozen != nil {
+		return frozen.ConstraintStrengths["budget_cny"] == "must"
+	}
+	field, ok := x.input.State.Fields["budget_cny"]
+	return ok && field.Status == "active" && field.Strength == "must"
 }
 
 func (x *execution) deliveryIssues() (issues, notes []string) {

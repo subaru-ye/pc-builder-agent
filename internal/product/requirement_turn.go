@@ -328,7 +328,7 @@ func presentableProposal(proposal pipeline.RequirementProposal, normalized json.
 // composeTurnReply 按固定顺序组合最终回复;每段都由确定性代码控制。
 func composeTurnReply(state schemas.RequirementState, readiness schemas.RequirementReadiness,
 	turn pipeline.RequirementTurnResult, visibleProposals []pipeline.RequirementProposal,
-	confirmed json.RawMessage, pending json.RawMessage, hasVersions bool) string {
+	confirmation ConfirmationStatus, hasVersions bool) string {
 	var segments []string
 	if answer := guardScreeningAnswer(turn.Answer); answer != "" {
 		segments = append(segments, answer)
@@ -343,9 +343,9 @@ func composeTurnReply(state schemas.RequirementState, readiness schemas.Requirem
 		switch {
 		case turn.Signals.RequestsReview || turn.Signals.RequestsBuild:
 			segments = append(segments, "需求已经齐备，现在可以核定需求；确认后再生成配置。")
-		case hasVersions && len(pending) > 0 && sameRequirementJSON(pending, confirmedRequirementProjection(confirmed)):
+		case confirmation == ConfirmationConfirmed:
 			segments = append(segments, "当前有效需求保持不变，可继续查看配置或修改需求。")
-		case hasVersions && len(confirmedRequirementProjection(confirmed)) > 0:
+		case confirmation == ConfirmationModified:
 			segments = append(segments, "需求草稿已更新，原配置保持不变。请确认后生成新的配置版本。")
 		default:
 			segments = append(segments, "需求已经齐备，现在可以核定需求；确认后再生成配置。")
@@ -382,13 +382,35 @@ func (s *Service) completeRequirementTurn(ctx context.Context, ownerID string, r
 	if err != nil {
 		return err
 	}
+	// 本轮草稿(next)尚未落库,不能走会话级三轴派生;确认轴直接与快照比较。
+	var confirmationStatus ConfirmationStatus
+	if ws.ConfirmationID == "" {
+		confirmationStatus = ConfirmationUnconfirmed
+	} else {
+		confirmation, found, err := s.store.ConfirmationByID(ctx, r.SessionID, ws.ConfirmationID)
+		if err != nil {
+			return err
+		}
+		confirmationStatus = ConfirmationModified
+		if found {
+			draftHash := ""
+			if readiness.ConfirmationEligible && len(pending) > 0 {
+				if draftHash, err = schemas.CanonicalHash(pending); err != nil {
+					return err
+				}
+			}
+			if draftHash != "" && draftHash == confirmation.ReviewHash {
+				confirmationStatus = ConfirmationConfirmed
+			}
+		}
+	}
 	question, err := schemas.NextRequirementQuestion(state)
 	if err != nil {
 		return err
 	}
-	// 已确认且投影未变的会话回到 ready:后续消息走改单而非重新收集。
-	if phase == store.PhaseRequirementReady && ws.VersionCount > 0 &&
-		sameRequirementJSON(pending, confirmedRequirementProjection(ws.ConfirmedRequirementState)) {
+	// 已确认且草稿预览未变的会话回到 ready:后续消息走 screening 收集而非
+	// 重新确认;phase 是执行恢复用的粗粒度标记,admission 不依赖它。
+	if phase == store.PhaseRequirementReady && confirmationStatus == ConfirmationConfirmed {
 		phase = store.PhaseReady
 	}
 	empty := pipeline.RequirementTurnResult{Operations: []schemas.RequirementOperation{}}
@@ -414,7 +436,7 @@ func (s *Service) completeRequirementTurn(ctx context.Context, ownerID string, r
 		visibleProposals = append(visibleProposals, proposal)
 		saveProposals = append(saveProposals, store.RequirementProposalSave{Field: proposal.Field, Value: normalized, Text: proposal.Text})
 	}
-	assistant := composeTurnReply(state, readiness, *turn, visibleProposals, ws.ConfirmedRequirementState, pending, ws.VersionCount > 0)
+	assistant := composeTurnReply(state, readiness, *turn, visibleProposals, confirmationStatus, ws.VersionCount > 0)
 	if assistant == "" {
 		assistant = ScreeningReadyMessage
 	}

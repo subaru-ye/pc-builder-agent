@@ -11,7 +11,7 @@ import (
 )
 
 // This store extends the existing service fake only with persistence of the new
-// requirement state and confirmation retry lookup; no model or database is used.
+// requirement state; no model or database is used.
 type requirementReviewStore struct{ *fakeProductStore }
 
 func (f requirementReviewStore) CompleteRun(ctx context.Context, p store.CompleteRunParams) (*store.WebMessage, error) {
@@ -22,15 +22,6 @@ func (f requirementReviewStore) CompleteRun(ctx context.Context, p store.Complet
 		f.mu.Unlock()
 	}
 	return message, err
-}
-
-func (f requirementReviewStore) StartConfirmRun(ctx context.Context, p store.StartConfirmRunParams) (store.AgentRun, json.RawMessage, bool, error) {
-	for _, run := range f.runs {
-		if run.ClientRequestID == p.RequestID && run.Kind == store.RunBuild {
-			return run, f.session.PendingRequirement, true, nil
-		}
-	}
-	return f.fakeProductStore.StartConfirmRun(ctx, p)
 }
 
 func newRequirementReviewService(t *testing.T) (*Service, requirementReviewStore, schemas.RequirementState) {
@@ -101,19 +92,33 @@ func TestRequirementEditIdempotencyDistinguishesAlternativeFromAdoption(t *testi
 	}
 }
 
-func TestConfirmRetryUsesOriginalRunWhenCurrentDraftIsIncomplete(t *testing.T) {
+// 同键同请求重放必须返回原始 run,不能用变化后的草稿重新校验或生成新载荷:
+// 先真实确认一次,再把草稿改成 incomplete,重放仍命中幂等。
+func TestConfirmReplayUsesOriginalRunWhenCurrentDraftIsIncomplete(t *testing.T) {
 	svc, st, state := newRequirementReviewService(t)
+	detail, err := svc.GetSession(context.Background(), "owner-1", "session-1")
+	if err != nil || detail.Axes.ReviewHash == "" {
+		t.Fatalf("核定预览不可用: %v", err)
+	}
+	requestID := "confirm-key"
+	result, err := svc.StartConfirm(context.Background(), "owner-1", "session-1", requestID, ConfirmRequest{
+		ExpectedRevision: state.Revision, ExpectedReviewHash: detail.Axes.ReviewHash})
+	if err != nil || result.Duplicate || result.Run.ID == "" {
+		t.Fatalf("首次确认应创建 run: %+v err=%v", result, err)
+	}
 	updated, err := schemas.ApplyRequirementUpdate(state, schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{{Op: "remove", Field: "budget_cny"}}}, schemas.RequirementSource{Kind: "edit", MessageID: "later", Quote: "预算还没确定"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	st.mu.Lock()
 	st.session.RequirementState, _ = json.Marshal(updated)
 	st.session.PendingRequirement = nil
 	st.session.Phase = store.PhaseCollecting
-	st.runs["original-confirm"] = store.AgentRun{ID: "original-confirm", SessionID: "session-1", ClientRequestID: "confirm-key", Kind: store.RunBuild, Status: store.RunSucceeded}
-	result, err := svc.StartConfirm(context.Background(), "owner-1", "session-1", "confirm-key")
-	if err != nil || !result.Duplicate || result.Run.ID != "original-confirm" {
-		t.Fatalf("completed confirmation retry was blocked by a newer draft: %+v err=%v", result, err)
+	st.mu.Unlock()
+	replay, err := svc.StartConfirm(context.Background(), "owner-1", "session-1", requestID, ConfirmRequest{
+		ExpectedRevision: state.Revision, ExpectedReviewHash: detail.Axes.ReviewHash})
+	if err != nil || !replay.Duplicate || replay.Run.ID != result.Run.ID {
+		t.Fatalf("completed confirmation replay was blocked by a newer draft: %+v err=%v", replay, err)
 	}
 }
 

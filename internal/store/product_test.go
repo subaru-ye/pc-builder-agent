@@ -114,10 +114,20 @@ func TestProductSessionRunLifecycle(t *testing.T) {
 	if err := s.ReplacePendingRequirement(ctx, owner, sessionID, spec); err != nil {
 		t.Fatalf("ReplacePendingRequirement:%v", err)
 	}
-	buildRun, pending, duplicate, err := s.StartConfirmRun(ctx, StartConfirmRunParams{
+	reviewSpec, readiness, err := schemas.RequirementReviewSpec(state)
+	if err != nil || !readiness.ConfirmationEligible {
+		t.Fatalf("核定预览不可用:readiness=%+v err=%v", readiness, err)
+	}
+	reviewHash, err := schemas.CanonicalHash(reviewSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	buildRun, out, duplicate, err := s.StartConfirmRun(ctx, StartConfirmRunParams{
 		OwnerID: owner, SessionID: sessionID, RequestID: confirmKey, RunID: run2,
+		ConfirmationID: "40000000-0000-4000-8000-000000000001", ExpectedRevision: state.Revision,
+		ExpectedReviewHash: reviewHash, RequestFingerprint: "confirm-fingerprint",
 	})
-	if err != nil || duplicate || buildRun.Kind != RunBuild || len(pending) == 0 {
+	if err != nil || duplicate || buildRun.Kind != RunBuild || len(out.BuilderInputPayload) == 0 {
 		t.Fatalf("启动 build 失败:run=%+v duplicate=%v err=%v", buildRun, duplicate, err)
 	}
 
@@ -138,8 +148,11 @@ func TestProductSessionRunLifecycle(t *testing.T) {
 	if ws.Phase != PhaseError || ws.RecoveryPhase == nil || *ws.RecoveryPhase != PhaseRequirementReady {
 		t.Fatalf("error/recovery 未持久化:%+v", ws)
 	}
+	// readiness 驱动 admission:error 阶段(state 未变)显式重新确认仍然可用。
 	if _, _, duplicate, err := s.StartConfirmRun(ctx, StartConfirmRunParams{
 		OwnerID: owner, SessionID: sessionID, RequestID: confirmKey2, RunID: run3,
+		ConfirmationID: "40000000-0000-4000-8000-000000000002", ExpectedRevision: state.Revision,
+		ExpectedReviewHash: reviewHash, RequestFingerprint: "confirm-fingerprint-2",
 	}); err != nil || duplicate {
 		t.Fatalf("error 状态显式重试失败:duplicate=%v err=%v", duplicate, err)
 	}

@@ -108,7 +108,7 @@ func TestRunCancelLifecycle(t *testing.T) {
 	}
 
 	// build run:确认后进入阻塞的 Remote,取消 → interrupted,会话再次解锁。
-	confirmed, err := svc.StartConfirm(ctx, owner, ws.ID, uuid.NewString())
+	confirmed, err := svc.StartConfirm(ctx, owner, ws.ID, uuid.NewString(), confirmRequest(t, svc, owner, ws.ID))
 	if err != nil {
 		t.Fatal(err)
 	}

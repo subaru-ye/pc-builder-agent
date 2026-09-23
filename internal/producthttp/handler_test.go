@@ -56,7 +56,7 @@ func (*fakeService) ReplaceRequirement(context.Context, string, string, json.Raw
 func (f *fakeService) StartMessage(context.Context, string, string, string, string) (product.StartResult, error) {
 	return product.StartResult{Run: f.run}, nil
 }
-func (f *fakeService) StartConfirm(context.Context, string, string, string) (product.StartResult, error) {
+func (f *fakeService) StartConfirm(context.Context, string, string, string, product.ConfirmRequest) (product.StartResult, error) {
 	return product.StartResult{Run: f.run}, nil
 }
 func (f *fakeService) RequestCancel(_ context.Context, _, _, runID string) (store.AgentRun, bool, error) {
@@ -348,5 +348,40 @@ func TestWriteErrorDoesNotExposeUnknownError(t *testing.T) {
 	api.writeError(rec, req, errors.New("secret database detail"))
 	if strings.Contains(rec.Body.String(), "secret") || !strings.Contains(rec.Body.String(), "internal_error") {
 		t.Fatalf("body=%s", rec.Body.String())
+	}
+}
+
+func TestConfirmRequiresStructuredPreviewPayload(t *testing.T) {
+	api, service := newTestAPI(t, runevents.NewMemory())
+	owner := strings.Repeat("A", 43)
+	service.session.OwnerID = owner
+	path := "/api/v1/sessions/session-1/requirement/confirm"
+	post := func(body string, idem string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Idempotency-Key", idem)
+		req.AddCookie(&http.Cookie{Name: anonymousCookieName, Value: owner})
+		rec := httptest.NewRecorder()
+		api.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+	key := uuid.NewString()
+	// 旧形状(无请求体/缺 structured 字段)必须 400,不能隐式确认。
+	if rec := post("", key); rec.Code != http.StatusBadRequest {
+		t.Fatalf("空请求体 status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := post(`{"schema_version":1}`, key); rec.Code != http.StatusBadRequest {
+		t.Fatalf("schema_version=1 status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := post(`{"schema_version":2,"expected_revision":7}`, key); rec.Code != http.StatusBadRequest {
+		t.Fatalf("缺 review hash status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := post(`{"schema_version":2,"expected_revision":7,"expected_review_hash":"abc","retry_of_run_id":"not-uuid"}`, key); rec.Code != http.StatusBadRequest {
+		t.Fatalf("非法 retry_of_run_id status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	ok := `{"schema_version":2,"expected_revision":7,"expected_review_hash":"` + strings.Repeat("a", 64) + `"}`
+	if rec := post(ok, key); rec.Code != http.StatusAccepted {
+		t.Fatalf("合法确认 status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }

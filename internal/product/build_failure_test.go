@@ -12,6 +12,7 @@ import (
 
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
 	"github.com/subaru-ye/pc-builder-agent/internal/buildharness"
+	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
@@ -27,8 +28,25 @@ func (a *stoppedBuildAgent) Remote(context.Context, string, string, json.RawMess
 func TestBuildBusinessFailurePersistsSafeReasonAndKeepsVersions(t *testing.T) {
 	st := newFakeProductStore()
 	st.latest = 1
+	state, err := schemas.ApplyRequirementUpdate(schemas.NewRequirementState(), schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{
+		{Op: "set", Field: "budget_cny", Value: json.RawMessage(`6000`), Strength: "must"},
+		{Op: "set", Field: "use_case.type", Value: json.RawMessage(`"general"`), Strength: "must"},
+		{Op: "set", Field: "existing_parts", Value: json.RawMessage(`[]`), Strength: "must"},
+	}}, schemas.RequirementSource{Kind: "edit", Quote: "预算6000，办公，全部新买"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(state)
+	pending, _, err := schemas.RequirementStateSpec(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reviewHash, err := schemas.CanonicalHash(pending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.session.RequirementState, st.session.PendingRequirement = raw, pending
 	st.session.Phase = store.PhaseRequirementReady
-	st.session.PendingRequirement = json.RawMessage(`{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":6000,"use_case":{"type":"productivity"}}`)
 	agent := &stoppedBuildAgent{fakeAgent: &fakeAgent{store: st}, result: RemoteResult{
 		Text: "internal raw diagnostic", Decision: &buildharness.Decision{Kind: "data_unavailable", Reason: "requirement_evidence_missing", Fields: []string{"noise_pref"}, Message: "private validation output"},
 	}}
@@ -38,7 +56,8 @@ func TestBuildBusinessFailurePersistsSafeReasonAndKeepsVersions(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = svc.Shutdown(context.Background()) }()
-	_, err = svc.StartConfirm(context.Background(), "owner-1", "session-1", "00000000-0000-4000-8000-000000000028")
+	_, err = svc.StartConfirm(context.Background(), "owner-1", "session-1", "00000000-0000-4000-8000-000000000028", ConfirmRequest{
+		ExpectedRevision: state.Revision, ExpectedReviewHash: reviewHash})
 	if err != nil {
 		t.Fatal(err)
 	}

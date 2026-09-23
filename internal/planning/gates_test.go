@@ -17,6 +17,11 @@ func mustBudget(t *testing.T, input *schemas.PlanningInput, value, strength stri
 	input.State.Fields["budget_cny"] = schemas.RequirementField{
 		Status: "active", Kind: "constraint", Strength: strength, Value: json.RawMessage(value),
 	}
+	// 这些用例校验"超预算被拒/求解"的门槛机制:显式陈述弹性 0 表示严格预算
+	// (确认/Builder gate v2 起弹性未填写按系统默认 0.1 执行,与核定预览一致)。
+	input.State.Fields["budget_flex"] = schemas.RequirementField{
+		Status: "active", Kind: "constraint", Strength: strength, Value: json.RawMessage(`0`),
+	}
 }
 
 func catalogCandidates(c recordedCatalog) []Candidate {

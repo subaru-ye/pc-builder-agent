@@ -10,12 +10,11 @@ go run ./cmd/authsetup            # 可选:生成本地 Auth 独立密钥,不覆
 docker compose -f docker-compose.yml -f docker-compose.auth.yml up -d postgres redis auth
 go run ./cmd/migrate up          # 应用 PostgreSQL 编号迁移
 go run ./cmd/buildsvc            # 终端 1:A2A 生成+校验服务
-go run ./cmd/host web --write-timeout=10m api --sse-write-timeout=10m webui  # 终端 2:ADK dev UI,http://localhost:8080/ui/
-go run ./cmd/api                 # 终端 3:产品 API,http://localhost:8082
+go run ./cmd/api                 # 终端 2:产品 API,http://localhost:8082
 go run ./cmd/modelcheck -role screening  # 显式上游检查;普通启动/测试不调用模型
 uv run --project scripts/data pcdata source check  # 静态来源检查;默认不联网
 uv run --project scripts/data pcdata price health  # 价格快照与动态年龄
-cd web && pnpm dev               # 终端 4:产品 Web,http://localhost:3000
+cd web && pnpm dev               # 终端 3:产品 Web,http://localhost:3000
 go build ./... && go vet ./...
 ```
 

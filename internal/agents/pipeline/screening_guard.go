@@ -35,7 +35,7 @@ func WithScreeningObserver(ctx context.Context, observe func(string, []string)) 
 	return context.WithValue(ctx, screeningObserverKey{}, observe)
 }
 
-// screeningGuard 在 ADK OutputKey 和可见事件写入前核验，产品、dev UI 和评估共用。
+// screeningGuard 在 ADK OutputKey 和可见事件写入前核验，产品与评估共用。
 // 单次非流式调用避免未经核验的半成品 JSON 提前出现在用户界面。
 type screeningGuard struct{ model.LLM }
 

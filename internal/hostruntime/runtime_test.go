@@ -32,7 +32,8 @@ func TestConfigFromEnvModelDefaultsAndOverride(t *testing.T) {
 }
 
 const requirementWithBrands = `{
-  "schema_version":1,
+  "schema_version":2,
+  "configuration_scope":["tower"],
   "budget_cny":8000,
   "use_case":{"type":"gaming","resolution":"2K"},
   "brand_pref":{"cpu":"intel","gpu":"nvidia"}
@@ -93,8 +94,8 @@ func TestIsProductOwnerID(t *testing.T) {
 }
 
 func TestPreferCurrentPayloadUsesConfirmedEdit(t *testing.T) {
-	oldSpec := `{"schema_version":1,"budget_cny":8000,"noise_pref":"normal","use_case":{"type":"gaming","resolution":"2K"}}`
-	edited := `{"schema_version":1,"budget_cny":8500,"noise_pref":"silent","use_case":{"type":"gaming","resolution":"2K"}}`
+	oldSpec := `{"schema_version":2,"configuration_scope":["tower"],"budget_cny":8000,"noise_pref":"normal","use_case":{"type":"gaming","resolution":"2K"}}`
+	edited := `{"schema_version":2,"configuration_scope":["tower"],"budget_cny":8500,"noise_pref":"silent","use_case":{"type":"gaming","resolution":"2K"}}`
 	got := preferCurrentPayload(edited, oldSpec+"\n"+edited)
 	spec, err := schemas.DecodeRequirementSpec(got)
 	if err != nil {
@@ -105,7 +106,7 @@ func TestPreferCurrentPayloadUsesConfirmedEdit(t *testing.T) {
 	}
 }
 
-func TestPreferCurrentPayloadFallsBackForDevUI(t *testing.T) {
+func TestPreferCurrentPayloadFallsBackToAggregated(t *testing.T) {
 	aggregated := "用户说想装机\n" + requirementWithBrands
 	got := preferCurrentPayload("8000 元玩游戏", aggregated)
 	if !bytes.Equal(got, []byte(requirementWithBrands)) {

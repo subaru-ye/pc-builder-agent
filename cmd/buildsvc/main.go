@@ -2,7 +2,7 @@
 // 持有生成旗舰档模型 + 零件库 Store + 查询向量化;承载重试回路(Loop 留在服务进程内)。
 // 运行方式(从仓库根,需先起 docker-compose 的 postgres 并导入零件/价格数据):
 //
-//	go run ./cmd/buildsvc          # 监听 BUILDSVC_ADDR(默认 :8081),先于 cmd/host 启动
+//	go run ./cmd/buildsvc          # 监听 BUILDSVC_ADDR(默认 :8081),先于 cmd/api 启动
 //
 // 诚实标注(指引 §八.5):单跳拆分是 A2A 学习目的,非性能需要;多 Agent token 开销数倍。
 package main
@@ -145,7 +145,7 @@ func main() {
 		addr, cardURL.JoinPath(a2asrv.WellKnownAgentCardPath).String(), cardURL.JoinPath(invokePath).String(),
 		harnessMode, builderCfg.Provider, builderCfg.Model, embeddingCfg.Provider, embeddingCfg.Model, pipelineConfig.TokenBudget)
 	if harnessMode != buildharness.ModePlanning {
-		log.Printf("[buildsvc] 注意:harness=%s 仅供 dev UI 与评估;产品 HTTP 入口仅支持 planning", harnessMode)
+		log.Printf("[buildsvc] 注意:harness=%s 仅供评估;产品 HTTP 入口仅支持 planning", harnessMode)
 	}
 	if err := http.ListenAndServe(addr, logMiddleware(mux)); err != nil {
 		log.Fatalf("[buildsvc] A2A 服务退出: %v", err)

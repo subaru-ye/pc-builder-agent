@@ -1,5 +1,5 @@
-// Package hostruntime 装配 host 与产品 API 共用的初筛和 A2A 远程 Agent。
-// 模型、提示词、A2A 超时和出站裁剪只在本包维护，避免两个入口静默漂移。
+// Package hostruntime 装配产品 API 与评估命令共用的初筛和 A2A 远程 Agent。
+// 模型、提示词、A2A 超时和出站裁剪只在本包维护，避免各入口静默漂移。
 package hostruntime
 
 import (
@@ -17,7 +17,6 @@ import (
 	"github.com/a2aproject/a2a-go/v2/a2aclient"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/agent/remoteagent/v2"
-	"google.golang.org/adk/v2/agent/workflowagents/sequentialagent"
 	"google.golang.org/adk/v2/session"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
@@ -52,15 +51,13 @@ func ConfigFromEnv() (Config, error) {
 	return cfg, nil
 }
 
-// Runtime 同时提供 dev UI 的完整根 Agent，以及产品 API 分阶段调用的两个 Agent。
+// Runtime 提供产品 API 分阶段调用的两个 Agent。
 type Runtime struct {
-	Root             agent.Agent
-	Screening        agent.Agent
 	ProductScreening agent.Agent
 	Remote           agent.Agent
 }
 
-// New 装配共享 Agent runtime。调用方负责提供 session.Service 给 launcher/runner。
+// New 装配共享 Agent runtime。调用方负责提供 session.Service 给 runner。
 func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	if cfg.BuildsvcURL == "" {
 		cfg.BuildsvcURL = DefaultBuildsvcURL
@@ -71,10 +68,6 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		return nil, fmt.Errorf("创建初筛模型失败: %w", err)
 	}
 
-	screening, err := pipeline.NewScreening(screeningModel)
-	if err != nil {
-		return nil, fmt.Errorf("装配初筛 Agent 失败: %w", err)
-	}
 	productScreening, err := pipeline.NewProductScreening(screeningModel)
 	if err != nil {
 		return nil, fmt.Errorf("装配产品初筛 Agent 失败: %w", err)
@@ -93,25 +86,14 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		return nil, fmt.Errorf("装配 A2A 远程消费方失败(buildsvc=%s): %w", cfg.BuildsvcURL, err)
 	}
 
-	root, err := sequentialagent.New(sequentialagent.Config{
-		AgentConfig: agent.Config{
-			Name:        AppName,
-			Description: "装机 host:需求初筛 → A2A 远程生成校验服务。",
-			SubAgents:   []agent.Agent{screening, remote},
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("装配 host 流水线失败: %w", err)
-	}
-
-	return &Runtime{Root: root, Screening: screening, ProductScreening: productScreening, Remote: remote}, nil
+	return &Runtime{ProductScreening: productScreening, Remote: remote}, nil
 }
 
 // trimToPayload 发送前把 A2A 消息裁成唯一一条结构化载荷 JSON：
 // ADK 默认转发自上次远程响应以来的会话事件，本回调只保留 RequirementSpec/
 // ChangeRequest。产品 API 的匿名 owner 是固定 256-bit base64url 值；对该入口把
 // ContextID 固定为 Web session ID，使 buildsvc 落库版本和产品会话使用同一 session_id。
-// dev UI 的普通 user ID 保持既有 A2A 自动 contextID 行为。
+// 非产品入口的 user ID 保持 A2A 自动 contextID 行为。
 func trimToPayload(ctx agent.Context, req *a2a.SendMessageRequest) (*session.Event, error) {
 	if req == nil || req.Message == nil {
 		return nil, nil
@@ -139,8 +121,8 @@ func trimToPayload(ctx agent.Context, req *a2a.SendMessageRequest) (*session.Eve
 }
 
 // preferCurrentPayload 避免 A2A 聚合消息中的旧 RequirementSpec 覆盖本次确认前编辑。
-// 产品 API 的 Remote 调用会把已确认 JSON 作为当前 UserContent;dev UI 当前输入仍是
-// 自然语言时,回退到 Sequential 历史中由初筛 Agent 产出的结构化载荷。
+// 产品 API 的 Remote 调用会把已确认 JSON 作为当前 UserContent;当前输入仍是自然
+// 语言时,回退到聚合消息中的结构化载荷兜底。
 func preferCurrentPayload(currentText, aggregateText string) json.RawMessage {
 	if payload := pipeline.ExtractPayload(currentText); payload != nil {
 		return payload

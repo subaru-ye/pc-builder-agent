@@ -18,7 +18,7 @@ const (
 )
 
 // Backend 聚合 Redis 连接与 TTL 配置;rdb 为 nil 表示未配置/连接失败(降级)。
-// 供 cmd/host 与 cmd/buildsvc 共用同一份装配 + 降级逻辑。
+// 供 cmd/api 与 cmd/buildsvc 共用同一份装配 + 降级逻辑。
 type Backend struct {
 	rdb        *redis.Client
 	SessionTTL time.Duration

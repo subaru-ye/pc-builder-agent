@@ -2,7 +2,7 @@
 //
 //	Sequential(初筛 llmagent → 改单预处理确定性节点 → Loop(生成 llmagent → 校验确定性节点), max=3)
 //
-// 模型实例由 cmd/host 注入(型号常量只写在 host,ADR-004),本包不 import 模型 SDK;
+// 模型实例由 internal/hostruntime 与评估命令注入(型号常量只写在 hostruntime,ADR-004),本包不 import 模型 SDK;
 // 提示词见 prompts.go(随代码入 Git,改动后须重跑用例 A 回归)。
 package pipeline
 

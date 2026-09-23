@@ -35,7 +35,7 @@ Web/Next.js ──POST /sessions/:id/messages── 产品状态机(cmd/api,每�
           → CompletePlanningRun 事务:版本 + proposal + 消息(交付真值 = 数据库新增版本行)
 ```
 
-v2 Harness 与 legacy 流水线仅服务于 dev UI(cmd/host)与评估命令,是显式历史诊断路径,不是失败回退。
+v2 Harness 与 legacy 流水线仅服务于评估命令,是显式历史诊断路径,不是失败回退。
 
 ## 技术栈
 
@@ -45,7 +45,7 @@ v2 Harness 与 legacy 流水线仅服务于 dev UI(cmd/host)与评估命令,是�
 | 数据层 | PostgreSQL 16 + pgvector、Redis 7(pgx / go-redis) |
 | 模型 | 统一 Responses 适配层:阿里百炼、MiMo、通用 OpenAI-compatible；三个角色独立配置 |
 | 数据管道 | Python(pc-part-dataset / dbgpu 导入、embedding 生成) |
-| 客户端 | Next.js 16 + React 19；ADK dev UI 仅用于调试 |
+| 客户端 | Next.js 16 + React 19 |
 
 选型理由与取舍记录见 [docs/tech/技术选型.md](docs/tech/技术选型.md)(ADR 形式)。
 
@@ -82,15 +82,11 @@ go run ./cmd/migrate up
 ```bash
 go run ./cmd/buildsvc  # 终端 1:启动「生成 + 校验」A2A 服务(http://localhost:8081)
 
-# 终端 2:启动初筛 host + dev UI;语义选件可能超过 ADK 默认写超时,故统一放宽到 10 分钟
-go run ./cmd/host web --write-timeout=10m api --sse-write-timeout=10m webui
-# 浏览器访问 http://localhost:8080/ui/
-
-# 终端 3:产品 API
+# 终端 2:产品 API
 go run ./cmd/api
 # 存活/完整就绪检查:http://localhost:8082/healthz 和 /readyz
 
-# 终端 4:Web 配置工作台
+# 终端 3:Web 配置工作台
 cd web
 pnpm install --frozen-lockfile
 pnpm dev

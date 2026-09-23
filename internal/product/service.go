@@ -609,7 +609,7 @@ func (s *Service) executeRemote(ctx context.Context, r store.AgentRun, ownerID s
 		return
 	}
 	if found && after == before+1 {
-		// legacy 诊断路径（dev UI/评估）：版本由生成侧落库，按计数验收。
+		// legacy 诊断路径（评估）：版本由生成侧落库，按计数验收。
 		s.captureEvidence(ctx, r.ID, "build_output", map[string]any{"text": result.Text, "build_version": after})
 		s.succeed(ctx, r, store.PhaseReady, nil, false, result.Text, after)
 		return

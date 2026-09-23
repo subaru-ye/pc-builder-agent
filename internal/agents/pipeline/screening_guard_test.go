@@ -117,10 +117,10 @@ func (m *guardTestModel) GenerateContent(_ context.Context, _ *model.LLMRequest,
 	}
 }
 
-// 验证产品与 dev UI 共用的 ADK 入口：可见事件和 OutputKey 都必须是安全追问。
+// 验证产品与评估共用的 ADK 入口：可见事件和 OutputKey 都必须是安全追问。
 func TestScreeningGuardRunsBeforeEventsAndOutputKey(t *testing.T) {
 	for _, product := range []bool{false, true} {
-		m := &guardTestModel{text: `{"schema_version":1,"budget_cny":7000,"use_case":{"type":"general"},"existing_parts":["cpu"],"owned_parts":[{"category":"cpu","model":"Intel Core i5-12400F"}],"budget_basis":"new_purchase"}`}
+		m := &guardTestModel{text: `{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":7000,"use_case":{"type":"general"},"existing_parts":["cpu"],"owned_parts":[{"category":"cpu","model":"Intel Core i5-12400F"}],"budget_basis":"new_purchase"}`}
 		var a agent.Agent
 		var err error
 		if product {

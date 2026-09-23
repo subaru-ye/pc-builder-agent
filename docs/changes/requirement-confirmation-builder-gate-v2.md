@@ -22,7 +22,7 @@ created: 2026-09-22
 - Readiness、Confirmation、Build 三轴状态。
 - 确认快照、规范化 hash、revision 和 build 关联。
 - 原子 confirm-and-start API、幂等与并发控制。
-- chat review/build request 到 presentation action 的确定性 Policy。
+- 在 Screening v2 已有的短期 presentation action 入口上扩展 confirmation/build 三轴 Policy；不另建平行决策器。
 - 生成期间草稿编辑、旧配置 retained/outdated 行为。
 - Builder 失败、重试和相同快照复用。
 - Session DTO、SSE 事件、存储和相关文档更新。
@@ -251,4 +251,3 @@ build_relation:
 - [ ] 旧配置在修改后保留并正确标记。
 - [ ] policy evaluator 100% 且所有 admission veto 为零。
 - [ ] 未实现 Web 视觉、Jev 或外设能力。
-

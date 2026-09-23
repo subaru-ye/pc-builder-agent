@@ -23,7 +23,7 @@ created: 2026-09-22
 - 多标签 turn signals。
 - chat operations、observations、answer 和 assistant proposals。
 - 明确接受上一轮提案的可验证协议。
-- 确定性回答组合、追问优先级和 presentation action 请求。
+- 确定性回答组合，以及基于本 change 可用的 readiness/turn signals 生成短期 presentation action；三轴 Policy 在后续 Builder gate change 中扩展同一入口。
 - Screening guard、bounded retry、错误分类和可观测证据。
 - 现有 Screening evaluation/replay 适配到 v2 契约。
 
@@ -35,6 +35,7 @@ created: 2026-09-22
 - 不接入 Jev；Jev 只保留未来作为 turn signal 的辅助 prior。
 - 不让 Screening 判断兼容、报价或选择配件。
 - 不增加第二次 LLM 调用只为润色追问。
+- 不实现 confirmation/build 三轴完整 Policy；Spec 4 扩展本 change 的 presentation action 入口，不另建并行决策器。
 
 ## Turn contract
 
@@ -70,6 +71,7 @@ type RequirementTurnResult struct {
 - `turn_signals` 是多标签请求事实，不是授权；同一句可以同时 update 和 request build。
 - `proposals` 是助手准备向用户建议的字段值，不是 active requirement。
 - `answer` 只回答用户当前问题，不得宣布 readiness、确认成功或 Builder 已启动。
+- 严格解码拒绝未知字段、非法 signal/operation/proposal 值及超长输出；空 `answer` 合法，不能为了凑回复而编造事实。
 
 `has_requirement_update` 不需要模型输出，可由 operations/observations 是否为空确定。禁止恢复 `next_action` 单选标签。
 
@@ -101,6 +103,13 @@ type RequirementTurnResult struct {
 
 模型建议、市场行情、候选价格和系统默认不得作为用户 active 值。
 
+### Unsupported capability
+
+- 用户明确要求本次一并购买/配置显示器、键盘或鼠标时，Screening 以本轮原话产出稳定原因码 `unsupported_capability:monitor|keyboard|mouse` 的 observation；它不写入 tower spec，也不能只塞入 `notes` 后视为已处理。
+- 用户随后明确放弃某项时，产出带本轮 quote 的 `remove unsupported.<name>`；不得靠无关字段更新或自由文本 reason 自动解除阻塞。
+- 对“我有显示器”“1080p 显示器够用”等背景陈述与购买请求作区分；不确定时保留普通 observation/追问，不臆造 unsupported 或放弃操作。
+- Reducer/Readiness 的允许值、撤销校验和优先级以 Spec 2 已落地的领域实现为准，Screening 不复制判断规则。
+
 ## Accepted proposal
 
 必须支持以下小白对话而不牺牲证据：
@@ -112,12 +121,12 @@ type RequirementTurnResult struct {
 
 协议：
 
-1. 助手提出可被接受的具体字段和值时，Screening 输出 `proposals`。
-2. 产品层在保存助手消息后，为 proposal 绑定真实 assistant message ID，并作为非 active、只对紧接着的下一条用户消息有效的 proposal 记录。
+1. 助手提出可被接受的具体字段和值时，Screening 输出 `proposals`；只有最终实际发送给用户的助手消息明确呈现了对应字段、具体值和可接受问句，才允许保存 proposal。被组合器删改、过滤或未显示的建议必须丢弃。
+2. 产品层在同一持久化边界保存助手消息与其 proposal，为 proposal 绑定真实 assistant message ID，并作为非 active、只对紧接着的下一条用户消息有效的记录；刷新或并发请求不得产生悬空、跨轮提案。
 3. 紧接着的下一轮用户明确接受时，operation 使用 `evidence=accepted_proposal`；若该轮没有接受，proposal 自动失效。
-4. Reducer 只在存在同字段、同规范化值、未过期 proposal，且当前用户 quote 明确表达接受时采用该值。
+4. Reducer 只在存在同字段、同规范化值、未过期 proposal，且当前用户 quote 明确表达接受时采用该值；字段、值、消息归属和紧邻轮次均由服务器验证，不能只相信模型给出的 `accepted_proposal` 标签。
 5. 接受后 proposal 标记 resolved；拒绝、覆盖或未在下一轮接受时不得继续复用。
-6. 模型不能自行提供或猜测 assistant message ID；绑定由产品层完成。
+6. 模型不能自行提供或猜测 assistant message ID；绑定由产品层完成。多个未解决 proposal 或“可以”指向不明时不自动采用，要求用户指明字段和值。
 
 不存在可验证 proposal 时，“可以”“就这样”只能产生 ambiguous/review signal，不能凭上下文编造字段。
 
@@ -140,24 +149,18 @@ Screening 输入只包含完成本轮语义任务所需的有界内容：
 
 1. 应用 operations；失败时不部分保存。
 2. 重新计算 Readiness。
-3. 保留 Screening 的事实性 `answer`，但过滤其工作流宣称。
+3. 对 Screening 的 `answer` 做确定性工作流/能力范围守卫：不得透传“已开始生成”等虚假执行宣称，也不得承诺配置 tower 之外的品类；无法安全保留时用诚实的范围说明替换，不改写用户需求事实。
 4. 如果用户当前提出问题，先展示 answer。
 5. 若 incomplete，追加 deterministic question plan 选择的一个问题组。
 6. 若刚变为 ready 且用户没有请求 review/build，只提示“现在可以核定需求”，不自动打开面板。
 7. 若 ready 且 requests_review/build，产生 `open_requirement_review` presentation action；仍不启动 Builder。
-8. 若 incomplete 且 requests_review/build，产生 `focus_missing_requirement` 并询问最高优先级缺失项。
+8. 若 incomplete 且 requests_review/build，产生 `focus_missing_requirement` 并询问领域问题计划选中的首个阻塞项；它可能是 conflict 或 unsupported capability，而不一定是 missing field。
 
 每轮最多主动追加一个问题组。多个 owned part 型号可以作为一个相关问题组；普通可选字段不主动追问。
 
 ### Question priority
 
-1. blocking conflict。
-2. `use_case.type`。
-3. `budget_cny`。
-4. `existing_parts`（全部新买或复用）。
-5. gaming resolution / productivity titles。
-6. owned part 型号。
-7. budget basis。
+直接消费 Spec 2 的 `NextRequirementQuestion`/`RequirementStateQuestions`（或等价单一领域入口）：先处理 blocking conflict、unsupported capability，再处理最低矩阵缺项。不得在 prompt、产品层或本 change 新建第二份字段顺序表；ready 时不补问。
 
 如果用户说“不知道预算”，answer 可以提供有来源或明确口径的参考区间，但预算保持 unknown；建议值只有在用户后续明确接受时才进入 active。
 
@@ -176,6 +179,7 @@ Signals 只保存在当前 run/turn 的结果或事件中，不进入 Requiremen
 - schema/decode/ungrounded operation 属于 contract failure；完整 state 不修改。
 - provider timeout/rate limit/transport 与 semantic failure 分开记录。
 - 如果模型 answer 可用但 operations 非法，不能只保存 answer 并声称需求已记录。
+- 如果 proposal 保存失败，不得保留一个可被后续“可以”错误接受的半状态；助手消息仍可展示时须明确撤销该 proposal 的可接受资格。
 - 错误文案说明需求是否保存和下一步；不暴露原始模型输出。
 - 标题生成、摘要等辅助失败不得在 Screening 错误路径再次调用模型形成重试放大。
 
@@ -186,15 +190,20 @@ Signals 只保存在当前 run/turn 的结果或事件中，不进入 Requiremen
 - `internal/agents/pipeline`：v2 prompt、严格解码、guard 和 bounded repair。
 - `internal/product/agent.go`：返回新的 turn result。
 - `internal/product/service.go`：Reducer、Readiness、response composition 和 presentation action。
+- `internal/store`：把可接受 proposal 与实际发出的助手消息按 session/turn 绑定保存并保证紧邻轮次、并发消费和失效语义；复用现有消息/运行事务，不建立第二套需求真值。
 - `internal/schemas`：只补充已在 readiness change 冻结的 accepted-proposal 支持。
 - `internal/planningeval`：v2 extraction/conversation 记录和 replay。
 - OpenAPI/技术文档同步 turn result 与事件，但不把内部 prompt 暴露给 Web。
+- Spec 4 在这里的短期 presentation action/Policy 入口上补 confirmation/build 三轴、原子确认和 admission；本 change 不实现确认 API，也不创建 Builder run。
 
 ## Verification
 
 - evaluation foundation 的 extraction 和 conversation development/calibration 全量运行。
-- 关键边界 live 至少三次并报告 Pass^3；不使用 Best@3。
+- 关键边界 live 至少三次并报告 Pass^3；不使用 Best@3。按冻结 gates 报告 operation precision/recall、关键错写、turn signals、case/final-state 成功率、重复追问、provider/延迟/调用预算及 veto；模型层样本不足或某门槛不可评估时不得宣称通过。
+- 先在 dev/calibration 修复；holdout 保持锁定，待发布认证 change 按预注册流程运行。真实模型调用必须有显式正数预算并保存 plan、provider 观测和重放证据。
+- 对 V9 同时人工复核“承诺配置外设”与“明确告知暂不支持”两种回复：当前 grader 的纯关键词规则会把后者也算违规。不得靠回避品类名称或修改产品文案来迎合误报；若确认为判卷缺陷，按冻结资产变更流程修正 grader/金丝雀、升级版本、归档旧基线、零模型 regrade 并记录 provenance，再判断候选是否过门槛；不自行改 holdout 金标。
 - guard/replay 覆盖 current prompt outputs 和故意非法输出。
+- 产品/存储测试覆盖 proposal 可见性、同轮原子保存、不同会话、非紧邻轮、并发双重接受、多个候选的歧义及明确拒绝/覆盖；外设请求与撤销、仅有 unsupported/conflict 的追问和 V8/V9 安全回退。
 - `go test ./internal/agents/pipeline ./internal/product ./internal/schemas ./internal/planningeval`。
 - `go test ./... && go vet ./...`。
 - 无网络模式下所有确定性测试和 replay 通过。
@@ -210,14 +219,19 @@ Signals 只保存在当前 run/turn 的结果或事件中，不进入 Requiremen
 7. 无 proposal 时单独“可以”不生成新字段。
 8. 有匹配 proposal 时“可以”可通过服务器验证并采用。
 9. 用户问题和字段补充同轮出现时，既回答问题又保存字段，最多追加一个追问。
+10. 明确要求配置显示器时记录 unsupported 并说明 tower 范围；后续“显示器先不要了”只解除 monitor 阻塞，更新 notes 不得解除。
+11. 仅提及已有显示器或询问 1080p，不等于要求本次购买显示器。
+12. 模型错误声称“已经开始生成”或“把显示器一起配上”时，最终回复不得透传该承诺，也不得启动 Builder。
 
 ## Completion checklist
 
 - [ ] Screening v2 不输出或持久化 `next_action`。
 - [ ] operations/observations/signals/proposals/answer 合同严格解码。
 - [ ] assistant proposal 接受可由服务器验证。
-- [ ] response composition 和问题优先级由确定性代码控制。
+- [ ] proposal 只在对应具体建议确实发送给用户后才可接受，且跨轮/并发/模糊“可以”不能误采用。
+- [ ] unsupported 能力请求与明确撤销按 Spec 2 的稳定原因码和保留操作处理；背景提及不误阻塞。
+- [ ] response composition 消费领域问题计划，短期 presentation action 由确定性代码控制；Spec 4 可在同一入口扩展三轴 Policy。
 - [ ] 首句模糊需求不会因模型宣称 ready 而进入核定。
-- [ ] extraction/conversation 评估无 veto，指标与运行证据完整。
+- [ ] extraction/conversation 评估按冻结 gates 报告并通过本 change 可评估门槛，所有本 change 负责的 veto 为零；V9 误报如发生，先完成有版本记录的判卷修正，不以绕过文案替代。
 - [ ] OpenAPI 与技术文档同步。
 - [ ] 未修改确认快照、Builder admission 和 Web UI。

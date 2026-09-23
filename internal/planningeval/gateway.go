@@ -204,8 +204,9 @@ func (g *gateway) Screen(ctx context.Context, owner, id string, input product.Sc
 			}
 		}
 	}
-	update, err := schemas.DecodeRequirementUpdate(pipeline.ExtractPayload(text))
-	return product.ScreenResult{Kind: product.ScreenRequirement, Text: text, RequirementUpdate: &update}, err
+	turn, err := pipeline.DecodeLegacyRequirementTurn(pipeline.ExtractPayload(text))
+	update := turn.Update()
+	return product.ScreenResult{Kind: product.ScreenRequirement, Text: text, Reply: turn.Reply, RequirementUpdate: &update}, err
 }
 
 // observeIntent shadows the Screening decision point with one bounded Jev

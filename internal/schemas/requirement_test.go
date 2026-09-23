@@ -8,7 +8,7 @@ import (
 )
 
 const validRequirementJSON = `{
-  "schema_version": 1,
+  "schema_version": 2, "configuration_scope": ["tower"],
   "budget_cny": 8000,
   "budget_flex": 0.15,
   "use_case": {
@@ -21,17 +21,87 @@ const validRequirementJSON = `{
   "noise_pref": "silent",
   "brand_pref": {"cpu": "amd", "gpu": "nvidia"},
   "existing_parts": ["ssd"],
+  "owned_parts": [{"category": "ssd", "model": "三星 990 Pro 1TB"}],
+  "budget_basis": "new_purchase",
   "priority": ["gpu", "cpu"],
   "notes": "机箱要小"
 }`
+
+// 直接解码与 Projection 使用同一组合不变量:最低矩阵与 ownership 约束
+// 不允许两条路径语义不同。
+func TestDecodeRequirementSpecCombinationInvariants(t *testing.T) {
+	base := func(mutate func(map[string]any)) string {
+		value := map[string]any{
+			"schema_version": 2, "configuration_scope": []string{"tower"},
+			"budget_cny":     8000,
+			"use_case":       map[string]any{"type": "productivity", "titles": []string{"Premiere"}, "resolution": "4K"},
+			"existing_parts": []string{"gpu"},
+			"owned_parts":    []any{map[string]any{"category": "gpu", "model": "RTX 4060"}},
+			"budget_basis":   "new_purchase",
+		}
+		mutate(value)
+		raw, _ := json.Marshal(value)
+		return string(raw)
+	}
+	cases := []struct {
+		name  string
+		json  string
+		valid bool
+	}{
+		{"合法基线", base(func(map[string]any) {}), true},
+		{"existing 空但 owned 非空", base(func(v map[string]any) { v["existing_parts"] = []string{} }), false},
+		{"owned 品类不在 existing", base(func(v map[string]any) {
+			v["existing_parts"] = []string{"gpu", "memory"}
+			v["owned_parts"] = []any{map[string]any{"category": "gpu", "model": "RTX 4060"}}
+		}), false},
+		{"existing 品类缺型号", base(func(v map[string]any) {
+			v["existing_parts"] = []string{"gpu", "memory"}
+			v["owned_parts"] = []any{
+				map[string]any{"category": "gpu", "model": "RTX 4060"},
+				map[string]any{"category": "memory", "model": " "},
+			}
+		}), false},
+		{"已有件缺预算口径", base(func(v map[string]any) { v["budget_basis"] = "" }), false},
+		{"productivity 缺 titles", base(func(v map[string]any) {
+			v["use_case"] = map[string]any{"type": "productivity"}
+			v["existing_parts"] = []string{}
+			v["owned_parts"] = nil
+		}), false},
+		{"productivity 空白标题", base(func(v map[string]any) {
+			v["use_case"] = map[string]any{"type": "productivity", "titles": []string{"  "}}
+			v["existing_parts"] = []string{}
+			v["owned_parts"] = nil
+		}), false},
+		{"gaming any 分辨率", base(func(v map[string]any) {
+			v["use_case"] = map[string]any{"type": "gaming", "resolution": "any"}
+		}), false},
+		{"gaming 缺分辨率", base(func(v map[string]any) {
+			v["use_case"] = map[string]any{"type": "gaming"}
+		}), false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := DecodeRequirementSpec([]byte(c.json))
+			if c.valid && err != nil {
+				t.Fatalf("合法组合被拒绝: %v", err)
+			}
+			if !c.valid && err == nil {
+				t.Fatal("非法组合被接受")
+			}
+		})
+	}
+}
 
 func TestDecodeRequirementSpecValid(t *testing.T) {
 	got, err := DecodeRequirementSpec([]byte(validRequirementJSON))
 	if err != nil {
 		t.Fatalf("合法输入不应报错: %v", err)
 	}
-	if got.SchemaVersion != 1 || got.BudgetCNY != 8000 || got.BudgetFlex != 0.15 {
+	if got.SchemaVersion != RequirementSpecSchemaVersion || got.BudgetCNY != 8000 || got.BudgetFlex != 0.15 {
 		t.Errorf("头部字段解析错误: %+v", got)
+	}
+	if got.UseCase.PerformanceGoal != PerformanceGoalBalanced || len(got.ConfigurationScope) != 1 || got.ConfigurationScope[0] != ConfigurationScopeTower {
+		t.Errorf("v2 组合默认解析错误: %+v %+v", got.UseCase, got.ConfigurationScope)
 	}
 	if got.UseCase.Type != UseCaseGaming || got.UseCase.Resolution != Resolution2K {
 		t.Errorf("use_case 解析错误: %+v", got.UseCase)
@@ -56,7 +126,7 @@ func TestDecodeRequirementSpecValid(t *testing.T) {
 // TestDecodeRequirementSpecDefaults 只给必填字段,验证可缺省字段落到默认值。
 func TestDecodeRequirementSpecDefaults(t *testing.T) {
 	minimal := `{
-  "schema_version": 1,
+  "schema_version": 2, "configuration_scope": ["tower"],
   "budget_cny": 5000,
   "use_case": {"type": "general"}
 }`
@@ -80,7 +150,7 @@ func TestDecodeRequirementSpecDefaults(t *testing.T) {
 
 func TestEncodeRequirementSpecMaterializesDefaults(t *testing.T) {
 	spec, err := DecodeRequirementSpec([]byte(`{
-  "schema_version": 1,
+  "schema_version": 2, "configuration_scope": ["tower"],
   "budget_cny": 5000,
   "use_case": {"type": "general"}
 }`))
@@ -116,8 +186,8 @@ func TestDecodeRequirementSpecErrors(t *testing.T) {
 		name string
 		json string
 	}{
-		{"schema_version 缺失", strings.Replace(validRequirementJSON, `"schema_version": 1,`, ``, 1)},
-		{"schema_version 不支持", strings.Replace(validRequirementJSON, `"schema_version": 1`, `"schema_version": 2`, 1)},
+		{"schema_version 缺失", strings.Replace(validRequirementJSON, `"schema_version": 2, "configuration_scope": ["tower"],`, ``, 1)},
+		{"schema_version 不支持", strings.Replace(validRequirementJSON, `"schema_version": 2, "configuration_scope": ["tower"]`, `"schema_version": 2`, 1)},
 		{"budget_cny 缺失", strings.Replace(validRequirementJSON, `"budget_cny": 8000,`, ``, 1)},
 		{"budget_cny 为零", strings.Replace(validRequirementJSON, `"budget_cny": 8000`, `"budget_cny": 0`, 1)},
 		{"budget_cny 为负", strings.Replace(validRequirementJSON, `"budget_cny": 8000`, `"budget_cny": -100`, 1)},
@@ -139,7 +209,10 @@ func TestDecodeRequirementSpecErrors(t *testing.T) {
 		{"brand_pref.cpu 非法", strings.Replace(validRequirementJSON, `"cpu": "amd"`, `"cpu": "via"`, 1)},
 		{"existing_parts 非法品类", strings.Replace(validRequirementJSON, `"existing_parts": ["ssd"]`, `"existing_parts": ["fan"]`, 1)},
 		{"priority 非法品类", strings.Replace(validRequirementJSON, `"priority": ["gpu", "cpu"]`, `"priority": ["rgb"]`, 1)},
-		{"未知字段", strings.Replace(validRequirementJSON, `"schema_version": 1,`, `"schema_version": 1, "extra": true,`, 1)},
+		{"未知字段", strings.Replace(validRequirementJSON, `"schema_version": 2,`, `"schema_version": 2, "extra": true,`, 1)},
+		{"缺少 configuration_scope", strings.Replace(validRequirementJSON, `"configuration_scope": ["tower"],`, ``, 1)},
+		{"非法 configuration_scope", strings.Replace(validRequirementJSON, `"configuration_scope": ["tower"],`, `"configuration_scope": ["monitor"],`, 1)},
+		{"gaming 拒绝 resolution=any", strings.Replace(validRequirementJSON, `"resolution": "2K"`, `"resolution": "any"`, 1)},
 		{"非 JSON", `not-json`},
 	}
 	for _, c := range cases {

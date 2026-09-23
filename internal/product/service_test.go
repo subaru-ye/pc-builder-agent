@@ -1,6 +1,7 @@
 package product
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -200,21 +201,6 @@ func (f *planningFakeStore) CompletePlanningRun(ctx context.Context, p store.Com
 	f.latest++
 	return store.PlanningCompletion{Result: p.Result, Version: f.latest}, nil
 }
-func (f *planningFakeStore) ContinueScreeningRun(_ context.Context, _, _, runID string, state schemas.RequirementState) (store.AgentRun, json.RawMessage, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	r := f.runs[runID]
-	r.Kind = store.RunBuild
-	f.runs[runID] = r
-	pending, err := schemas.PlanningRequirement(state)
-	if err != nil {
-		return store.AgentRun{}, nil, err
-	}
-	f.session.Phase = store.PhaseBuilding
-	f.session.PendingRequirement = pending
-	f.session.ConfirmedRequirement = pending
-	return r, pending, nil
-}
 
 type fakeAgent struct {
 	store            *fakeProductStore
@@ -281,7 +267,7 @@ func (f *fakeSink) names() []string {
 
 func TestServiceRequirementConfirmBuild(t *testing.T) {
 	st := newFakeProductStore()
-	spec := json.RawMessage(`{"schema_version":1,"budget_cny":8000,"use_case":{"type":"gaming","resolution":"2K"}}`)
+	spec := json.RawMessage(`{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":8000,"use_case":{"type":"gaming","resolution":"2K"}}`)
 	agent := &fakeAgent{store: st, screen: ScreenResult{Kind: ScreenRequirement, Payload: spec}, contextAvailable: true}
 	sink := newFakeSink()
 	svc, err := NewService(context.Background(), st, agent, sink)
@@ -298,7 +284,7 @@ func TestServiceRequirementConfirmBuild(t *testing.T) {
 	if ws.Phase != store.PhaseRequirementReady || len(ws.PendingRequirement) == 0 {
 		t.Fatalf("screening 后状态不正确:%+v", ws)
 	}
-	edited := json.RawMessage(`{"schema_version":1,"budget_cny":8500,"noise_pref":"silent","use_case":{"type":"gaming","resolution":"2K"}}`)
+	edited := json.RawMessage(`{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":8500,"noise_pref":"silent","use_case":{"type":"gaming","resolution":"2K"}}`)
 	if err := svc.ReplaceRequirement(context.Background(), "owner-1", "session-1", edited); err != nil {
 		t.Fatal(err)
 	}
@@ -328,14 +314,119 @@ func TestServiceRequirementConfirmBuild(t *testing.T) {
 	}
 }
 
-func TestFirstExecutionMessageGoesStraightToBuilder(t *testing.T) {
+// 零模型回归:首句模糊需求(缺分辨率/已有件)不得因模型 next_action=confirm
+// 提前 ready;必须被确定性 readiness 拦在 collecting。
+func TestFirstVagueMessageIsBlockedByReadiness(t *testing.T) {
 	st := &planningFakeStore{newFakeProductStore()}
 	update := &schemas.RequirementUpdate{
 		Operations: []schemas.RequirementOperation{
 			{Op: "set", Field: "budget_cny", Value: json.RawMessage("8000"), Kind: "constraint", Strength: "must", Scope: "session", Evidence: "stated", Quote: "预算8000"},
 			{Op: "set", Field: "use_case.type", Value: json.RawMessage(`"gaming"`), Kind: "fact", Strength: "must", Scope: "session", Evidence: "stated", Quote: "游戏"},
 		},
-		NextAction: "plan", Reply: "开始为本轮检索选配。",
+	}
+	agent := &fakeAgent{store: st.fakeProductStore, screen: ScreenResult{RequirementUpdate: update, Reply: "需求已经整理好，请确认。"}, contextAvailable: true}
+	sink := newFakeSink()
+	svc, err := NewService(context.Background(), st, agent, sink)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.StartMessage(context.Background(), "owner-1", "session-1",
+		"00000000-0000-4000-8000-000000000009", "预算8000，配一台游戏主机"); err != nil {
+		t.Fatal(err)
+	}
+	sink.wait(t)
+	ws, _ := st.WebSessionByOwner(context.Background(), "owner-1", "session-1")
+	if ws.Phase != store.PhaseCollecting || len(ws.PendingRequirement) != 0 {
+		t.Fatalf("不完整首句应被 readiness 拦截: %+v", ws)
+	}
+	messages, _ := st.WebMessages(context.Background(), "session-1")
+	last := messages[len(messages)-1]
+	if last.Role != "assistant" || !strings.Contains(last.Content, "分辨率") || !strings.Contains(last.Content, "已有配件") {
+		t.Fatalf("追问应覆盖缺失的分辨率与已有件: %s", last.Content)
+	}
+}
+
+// v1 一次性切换:旧格式需求状态在读取边界被明确拒绝,不回退为空 v2 状态。
+func TestLegacyV1RequirementStateIsRejected(t *testing.T) {
+	st := newFakeProductStore()
+	v1State := json.RawMessage(`{"schema_version":1,"revision":2,"reply":"旧协议","next_action":"confirm","fields":{},"alternatives":[],"changes":[],"history":[]}`)
+	st.session.RequirementState = v1State
+	agent := &fakeAgent{store: st, contextAvailable: true}
+	sink := newFakeSink()
+	svc, err := NewService(context.Background(), st, agent, sink)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.GetSession(context.Background(), "owner-1", "session-1"); err == nil ||
+		!strings.Contains(err.Error(), "不支持的 schema_version") && !strings.Contains(err.Error(), "旧版需求格式") {
+		// GetSession 统一转为 problem;底层必须是稳定拒绝而不是空状态。
+		problem, ok := err.(Problem)
+		if !ok || problem.Code != "requirement_state_unsupported" {
+			t.Fatalf("v1 状态应以稳定问题拒绝: %v", err)
+		}
+	}
+	if _, err := svc.StartMessage(context.Background(), "owner-1", "session-1",
+		"00000000-0000-4000-8000-000000000010", "再改改预算"); err != nil {
+		t.Fatal(err)
+	}
+	sink.wait(t)
+	ws, _ := st.WebSessionByOwner(context.Background(), "owner-1", "session-1")
+	if ws.Phase != store.PhaseError || !bytes.Equal(ws.RequirementState, v1State) {
+		t.Fatalf("v1 会话应失败并保持原状态不变,不得静默重建: %+v", ws)
+	}
+}
+
+// 仅 must 冲突(无缺失)时必须保持 collecting:不发布待确认草稿、不发
+// requirement.ready、不启动 Builder,提示指向冲突本身。
+func TestMustConflictOnlyKeepsCollecting(t *testing.T) {
+	st := &planningFakeStore{newFakeProductStore()}
+	update := &schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{
+		{Op: "set", Field: "budget_cny", Value: json.RawMessage("8000"), Kind: "constraint", Strength: "must", Scope: "session", Evidence: "stated", Quote: "预算8000"},
+		{Op: "set", Field: "use_case.type", Value: json.RawMessage(`"gaming"`), Kind: "fact", Strength: "must", Scope: "session", Evidence: "stated", Quote: "游戏"},
+		{Op: "set", Field: "use_case.resolution", Value: json.RawMessage(`"1080p"`), Kind: "fact", Strength: "must", Scope: "session", Evidence: "stated", Quote: "1080p"},
+		{Op: "set", Field: "existing_parts", Value: json.RawMessage("[]"), Kind: "fact", Strength: "must", Scope: "session", Evidence: "stated", Quote: "全部新买"},
+		{Op: "conflict", Field: "brand_pref.gpu", Strength: "must", Evidence: "uncertain", Quote: "只要N卡，但绝不要N卡"},
+	}}
+	agent := &fakeAgent{store: st.fakeProductStore, screen: ScreenResult{RequirementUpdate: update}, contextAvailable: true}
+	sink := newFakeSink()
+	svc, err := NewService(context.Background(), st, agent, sink)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.StartMessage(context.Background(), "owner-1", "session-1",
+		"00000000-0000-4000-8000-000000000021", "预算8000，配1080p游戏主机全部新买，只要N卡，但绝不要N卡"); err != nil {
+		t.Fatal(err)
+	}
+	sink.wait(t)
+	if agent.remotePayload != nil || st.latest != 0 {
+		t.Fatalf("must 冲突不得启动 Builder: payload=%s latest=%d", agent.remotePayload, st.latest)
+	}
+	ws, _ := st.WebSessionByOwner(context.Background(), "owner-1", "session-1")
+	if ws.Phase != store.PhaseCollecting || len(ws.PendingRequirement) != 0 {
+		t.Fatalf("must 冲突应保持 collecting 且无待确认草稿: %+v", ws)
+	}
+	for _, name := range sink.names() {
+		if name == "requirement.ready" {
+			t.Fatalf("must 冲突不得发布 requirement.ready: %v", sink.names())
+		}
+	}
+	messages, _ := st.WebMessages(context.Background(), "session-1")
+	if last := messages[len(messages)-1]; last.Role != "assistant" || !strings.Contains(last.Content, "显卡品牌") {
+		t.Fatalf("追问应指向冲突字段: %s", last.Content)
+	}
+}
+
+// 仅 unsupported 阻塞(其余齐备)时同样保持 collecting,并提示当前 tower 边界。
+func TestUnsupportedOnlyKeepsCollecting(t *testing.T) {
+	st := &planningFakeStore{newFakeProductStore()}
+	update := &schemas.RequirementUpdate{
+		Operations: []schemas.RequirementOperation{
+			{Op: "set", Field: "budget_cny", Value: json.RawMessage("8000"), Kind: "constraint", Strength: "must", Scope: "session", Evidence: "stated", Quote: "预算8000"},
+			{Op: "set", Field: "use_case.type", Value: json.RawMessage(`"gaming"`), Kind: "fact", Strength: "must", Scope: "session", Evidence: "stated", Quote: "游戏"},
+			{Op: "set", Field: "use_case.resolution", Value: json.RawMessage(`"1080p"`), Kind: "fact", Strength: "must", Scope: "session", Evidence: "stated", Quote: "1080p"},
+			{Op: "set", Field: "existing_parts", Value: json.RawMessage("[]"), Kind: "fact", Strength: "must", Scope: "session", Evidence: "stated", Quote: "全部新买"},
+		},
+		Observations: []schemas.RequirementObservationInput{{Quote: "还要配显示器", Reason: "unsupported_capability:monitor"}},
 	}
 	agent := &fakeAgent{store: st.fakeProductStore, screen: ScreenResult{RequirementUpdate: update}, contextAvailable: true}
 	sink := newFakeSink()
@@ -343,42 +434,64 @@ func TestFirstExecutionMessageGoesStraightToBuilder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := svc.StartMessage(context.Background(), "owner-1", "session-1",
+		"00000000-0000-4000-8000-000000000022", "预算8000，配1080p游戏主机全部新买，还要配显示器"); err != nil {
+		t.Fatal(err)
+	}
+	sink.wait(t)
+	if agent.remotePayload != nil || st.latest != 0 {
+		t.Fatalf("unsupported 阻塞不得启动 Builder: payload=%s latest=%d", agent.remotePayload, st.latest)
+	}
+	ws, _ := st.WebSessionByOwner(context.Background(), "owner-1", "session-1")
+	if ws.Phase != store.PhaseCollecting || len(ws.PendingRequirement) != 0 {
+		t.Fatalf("unsupported 阻塞应保持 collecting 且无待确认草稿: %+v", ws)
+	}
+	messages, _ := st.WebMessages(context.Background(), "session-1")
+	if last := messages[len(messages)-1]; last.Role != "assistant" || !strings.Contains(last.Content, "主机") || !strings.Contains(last.Content, "显示器") {
+		t.Fatalf("追问应说明 tower 边界与显示器阻塞: %s", last.Content)
+	}
+}
+
+func TestFirstExecutionMessageDoesNotStartBuilder(t *testing.T) {
+	st := &planningFakeStore{newFakeProductStore()}
+	update := &schemas.RequirementUpdate{
+		Operations: []schemas.RequirementOperation{
+			{Op: "set", Field: "budget_cny", Value: json.RawMessage("8000"), Kind: "constraint", Strength: "must", Scope: "session", Evidence: "stated", Quote: "预算8000"},
+			{Op: "set", Field: "use_case.type", Value: json.RawMessage(`"gaming"`), Kind: "fact", Strength: "must", Scope: "session", Evidence: "stated", Quote: "游戏"},
+			{Op: "set", Field: "use_case.resolution", Value: json.RawMessage(`"1080p"`), Kind: "fact", Strength: "must", Scope: "session", Evidence: "stated", Quote: "1080p"},
+			{Op: "set", Field: "existing_parts", Value: json.RawMessage("[]"), Kind: "fact", Strength: "must", Scope: "session", Evidence: "stated", Quote: "全部新买"},
+		},
+	}
+	agent := &fakeAgent{store: st.fakeProductStore, screen: ScreenResult{RequirementUpdate: update, Reply: "开始为本轮选配。"}, contextAvailable: true}
+	sink := newFakeSink()
+	svc, err := NewService(context.Background(), st, agent, sink)
+	if err != nil {
+		t.Fatal(err)
+	}
 	started, err := svc.StartMessage(context.Background(), "owner-1", "session-1",
-		"00000000-0000-4000-8000-000000000003", "预算8000，直接开始配一台游戏主机")
+		"00000000-0000-4000-8000-000000000003", "预算8000，直接开始配一台1080p游戏主机，全部新买")
 	if err != nil || started.Run.Kind != store.RunScreening {
 		t.Fatalf("StartMessage=%+v err=%v", started, err)
 	}
 	sink.wait(t)
-	// 会话首条消息保留显式确认：screening 的 plan 交接为 confirm，不直接进 Builder。
+	// v2:模型 next_action=plan 不再有权威,聊天文字不能替代确认 API 启动 Builder。
+	if agent.remotePayload != nil {
+		t.Fatalf("聊天不得启动 Builder: %s", agent.remotePayload)
+	}
 	if st.latest != 0 {
-		t.Fatalf("首条消息不应进 Builder: latest=%d", st.latest)
+		t.Fatalf("builder 不应运行: latest=%d", st.latest)
 	}
 	ws, _ := st.WebSessionByOwner(context.Background(), "owner-1", "session-1")
 	if ws.Phase != store.PhaseRequirementReady || len(ws.PendingRequirement) == 0 {
-		t.Fatalf("首条消息后应停在 requirement_ready: %+v", ws)
+		t.Fatalf("readiness 完整时应停在 requirement_ready 待确认: %+v", ws)
 	}
-	// 后续消息是用户自己的执行授权，直接进入 Builder。
-	started2, err := svc.StartMessage(context.Background(), "owner-1", "session-1",
-		"00000000-0000-4000-8000-000000000004", "预算8000，直接开始配一台游戏主机")
-	if err != nil {
-		t.Fatal(err)
+	pending, err := schemas.DecodeRequirementSpec(ws.PendingRequirement)
+	if err != nil || pending.SchemaVersion != schemas.RequirementSpecSchemaVersion || len(pending.ConfigurationScope) != 1 || pending.ConfigurationScope[0] != schemas.ConfigurationScopeTower {
+		t.Fatalf("待确认草稿应是 RequirementSpec v2: %s err=%v", ws.PendingRequirement, err)
 	}
-	sink.wait(t)
-	if st.latest != 1 {
-		t.Fatalf("builder 未运行: latest=%d", st.latest)
-	}
-	ws, _ = st.WebSessionByOwner(context.Background(), "owner-1", "session-1")
-	if ws.Phase != store.PhaseReady {
-		t.Fatalf("builder 完成后会话状态不正确: %+v", ws)
-	}
-	run2, _ := st.RunByOwner(context.Background(), "owner-1", started2.Run.ID)
-	if run2.Kind != store.RunBuild {
-		t.Fatalf("后续消息 run 未升级为 build: %+v", run2)
-	}
-	var sent schemas.PlanningInput
-	if err := json.Unmarshal(agent.remotePayload, &sent); err != nil || sent.SchemaVersion != 2 ||
-		string(sent.State.Fields["budget_cny"].Value) != "8000" || string(sent.State.Fields["use_case.type"].Value) != `"gaming"` {
-		t.Fatalf("Remote 未收到合并后的需求: %s err=%v", agent.remotePayload, err)
+	messages, _ := st.WebMessages(context.Background(), "session-1")
+	if len(messages) == 0 || messages[len(messages)-1].Role != "assistant" || messages[len(messages)-1].Content != "开始为本轮选配。" {
+		t.Fatalf("legacy reply 应作为助手文案展示: %+v", messages)
 	}
 }
 

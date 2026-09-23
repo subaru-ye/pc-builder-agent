@@ -95,9 +95,18 @@ func (r BuildRow) SKUs() []string {
 	return out
 }
 
-func (r BuildRow) BudgetCNY() int {
+// decodePlanningInput 区分两类落库载荷:带 requirement_state 的 PlanningInput
+// 与扁平 RequirementSpec v2(两者 schema_version 同为 2,以字段形状判别)。
+func decodePlanningInput(raw json.RawMessage) (schemas.PlanningInput, bool) {
 	var input schemas.PlanningInput
-	if json.Unmarshal(r.Spec, &input) == nil && input.SchemaVersion == 2 {
+	if len(raw) == 0 || json.Unmarshal(raw, &input) != nil || input.SchemaVersion != 2 || input.State.Fields == nil {
+		return schemas.PlanningInput{}, false
+	}
+	return input, true
+}
+
+func (r BuildRow) BudgetCNY() int {
+	if input, ok := decodePlanningInput(r.Spec); ok {
 		var budget int
 		_ = json.Unmarshal(input.State.Fields["budget_cny"].Value, &budget)
 		return budget

@@ -19,41 +19,22 @@ type proposalStore interface {
 	BuildByVersion(context.Context, string, int) (store.BuildVersion, error)
 }
 
-// A chat command authorizes another planning pass after initial confirmation.
-// Persist the updated state before invoking Builder, within the same run.
-func (s *Service) planFromScreening(ctx context.Context, ownerID string, r store.AgentRun, state schemas.RequirementState, source schemas.RequirementSource) error {
-	st, ok := s.store.(interface {
-		ContinueScreeningRun(context.Context, string, string, string, schemas.RequirementState) (store.AgentRun, json.RawMessage, error)
-	})
-	if !ok {
-		return fmt.Errorf("planning continuation unavailable")
-	}
-	next, pending, err := st.ContinueScreeningRun(ctx, ownerID, r.SessionID, r.ID, state)
-	if err != nil {
-		return err
-	}
-	var input schemas.PlanningInput
-	if err = json.Unmarshal(pending, &input); err != nil {
-		return err
-	}
-	input.Request = &source
-	payload, err := json.Marshal(input)
-	if err != nil {
-		return err
-	}
-	raw, _ := json.Marshal(state)
-	s.publish(ctx, r.ID, "requirement.updated", json.RawMessage(raw))
-	s.executeRemote(ctx, next, ownerID, payload)
-	return nil
+// isChangeRequestPayload 按顶层 intent 键识别改单载荷;改单合同不是需求
+// 状态投影,不做 v1 兼容包装,原样交给生成服务按其合同处理。
+func isChangeRequestPayload(payload json.RawMessage) bool {
+	var root map[string]json.RawMessage
+	return json.Unmarshal(payload, &root) == nil && root["intent"] != nil
 }
 
 func (s *Service) planningContext(ctx context.Context, sessionID, runID string, payload json.RawMessage) (json.RawMessage, error) {
 	var input schemas.PlanningInput
-	if json.Unmarshal(payload, &input) != nil {
-		return nil, fmt.Errorf("invalid planning input")
-	}
-	if input.SchemaVersion != 2 {
-		input = schemas.PlanningInput{SchemaVersion: 2, State: schemas.LegacyPlanningState(payload)}
+	if json.Unmarshal(payload, &input) != nil || input.SchemaVersion != 2 {
+		// v1 一次性切换:旧需求单不再静默包装重建。改单载荷(schema v1 的
+		// ChangeRequest)原样透传,其余不合规载荷以稳定错误拒绝。
+		if isChangeRequestPayload(payload) {
+			return payload, nil
+		}
+		return nil, schemas.ErrRequirementStateUnsupported
 	}
 	input.RunID = runID
 	st, ok := s.store.(proposalStore)

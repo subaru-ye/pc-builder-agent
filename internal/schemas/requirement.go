@@ -7,13 +7,19 @@ import (
 )
 
 // RequirementSpecSchemaVersion 当前唯一支持的 RequirementSpec schema 版本。
-const RequirementSpecSchemaVersion = 1
+// v2 一次性切换:新增 configuration_scope 与 use_case.performance_goal,
+// resolution 允许 any(仅 RequirementState 有证据语义;gaming 组合校验拒绝 any)。
+// v1 由解码器以稳定错误拒绝,不做运行时迁移。
+const RequirementSpecSchemaVersion = 2
 
 // defaultBudgetFlex 预算弹性缺省值;maxBudgetFlex 为上限(设计方案 §四.2)。
 const (
 	defaultBudgetFlex = 0.1
 	maxBudgetFlex     = 0.3
 )
+
+// ConfigurationScopeTower 当前唯一支持的配置能力边界。
+const ConfigurationScopeTower = "tower"
 
 // UseCaseType 单一主用途(当前不做多用途混合,见 docs/product/PRD.md)。
 type UseCaseType string
@@ -44,6 +50,9 @@ const (
 	Resolution1080p Resolution = "1080p"
 	Resolution2K    Resolution = "2K"
 	Resolution4K    Resolution = "4K"
+	// ResolutionAny 是用户明确表示不限(有证据的 active 用户值,不是 unknown)。
+	// gaming 的最低确认矩阵不接受 any,组合校验在解码边界拒绝 gaming+any。
+	ResolutionAny Resolution = "any"
 )
 
 func (r *Resolution) UnmarshalJSON(b []byte) error {
@@ -52,11 +61,34 @@ func (r *Resolution) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	switch Resolution(s) {
-	case Resolution1080p, Resolution2K, Resolution4K:
+	case Resolution1080p, Resolution2K, Resolution4K, ResolutionAny:
 		*r = Resolution(s)
 		return nil
 	}
-	return fmt.Errorf("非法分辨率枚举 %q(仅 1080p|2K|4K)", s)
+	return fmt.Errorf("非法分辨率枚举 %q(仅 1080p|2K|4K|any)", s)
+}
+
+// PerformanceGoal 用途内取舍目标。仅 gaming 在未明确时使用系统默认 balanced;
+// 用户明确的 goal 可作为其他用途的取舍目标保留。
+type PerformanceGoal string
+
+const (
+	PerformanceGoalBalanced     PerformanceGoal = "balanced"
+	PerformanceGoalFPSFirst     PerformanceGoal = "fps_first"
+	PerformanceGoalQualityFirst PerformanceGoal = "quality_first"
+)
+
+func (g *PerformanceGoal) UnmarshalJSON(b []byte) error {
+	s, err := unmarshalString(b, "use_case.performance_goal")
+	if err != nil {
+		return err
+	}
+	switch PerformanceGoal(s) {
+	case PerformanceGoalBalanced, PerformanceGoalFPSFirst, PerformanceGoalQualityFirst:
+		*g = PerformanceGoal(s)
+		return nil
+	}
+	return fmt.Errorf("非法性能目标枚举 %q(仅 balanced|fps_first|quality_first)", s)
 }
 
 // SizePref 尺寸偏好:板型三选一或 any(不限)。
@@ -148,12 +180,14 @@ func (b *GPUBrand) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("非法 GPU 品牌枚举 %q(仅 any|nvidia|amd)", s)
 }
 
-// UseCase 单一主用途及其参数。Resolution 在 gaming 时非空,其余用途为空("")。
+// UseCase 单一主用途及其参数。Resolution 在 gaming 时为 1080p/2K/4K,
+// 用户明确不限时可为 any(仅 state 语义;spec 组合校验拒绝 gaming+any)。
 type UseCase struct {
-	Type       UseCaseType
-	Titles     []string
-	Resolution Resolution
-	FPSTarget  *int // nil = 未指定
+	Type            UseCaseType
+	Titles          []string
+	Resolution      Resolution
+	FPSTarget       *int            // nil = 未指定
+	PerformanceGoal PerformanceGoal // 空 = 未明确;gaming 由解码填充系统默认 balanced
 }
 
 // BrandPref 品牌偏好;缺省均为 any。
@@ -165,20 +199,23 @@ type BrandPref struct {
 // RequirementSpec 初筛 Agent → 生成 Agent 的结构化需求单(设计方案 §四.2)。
 // 唯一权威出处为设计方案 §四.2,字段变更先改文档再改本包(CLAUDE.md 工程纪律)。
 type RequirementSpec struct {
-	SchemaVersion           int
-	BudgetCNY               int
-	BudgetFlex              float64 // 缺省 0.1
-	UseCase                 UseCase
-	SizePref                SizePref  // 缺省 any
-	NoisePref               NoisePref // 缺省 any
-	BrandPref               BrandPref // 缺省 {any, any}
+	SchemaVersion int
+	BudgetCNY     int
+	BudgetFlex    float64 // 缺省 0.1
+	UseCase       UseCase
+	SizePref      SizePref  // 缺省 any
+	NoisePref     NoisePref // 缺省 any
+	BrandPref     BrandPref // 缺省 {any, any}
+	// ConfigurationScope 是产品能力边界(当前仅 tower),由 Projection 注入的
+	// 系统默认,不是用户陈述;直接解码也必须携带,禁止绕过 Projection 构造。
+	ConfigurationScope      []string
 	ExistingParts           []Category
 	OwnedParts              []OwnedPart
 	BudgetBasis             string
 	Priority                []Category
 	Notes                   string
 	ConstraintStrengths     map[string]string          // 当前会话明确的 must/prefer；缺失沿用旧需求单语义。
-	RequirementDetails      map[string]json.RawMessage // 外观、装机对象等有效补充信息，不含历史/备选。
+	RequirementDetails      map[string]json.RawMessage // 外观、装机对象与 free.* 有效补充，不含历史/备选。
 	RequirementSemantics    map[string]string          // fact/context/constraint 独立于 must/prefer。
 	RequirementObservations []RequirementObservation   // 尚未结构化的用户原文，仅作未确认上下文。
 }
@@ -192,6 +229,7 @@ type requirementSpecWire struct {
 	SizePref                *SizePref                  `json:"size_pref"`
 	NoisePref               *NoisePref                 `json:"noise_pref"`
 	BrandPref               *brandPrefWire             `json:"brand_pref"`
+	ConfigurationScope      []string                   `json:"configuration_scope"`
 	ExistingParts           []Category                 `json:"existing_parts"`
 	OwnedParts              []OwnedPart                `json:"owned_parts,omitempty"`
 	BudgetBasis             string                     `json:"budget_basis,omitempty"`
@@ -204,10 +242,11 @@ type requirementSpecWire struct {
 }
 
 type useCaseWire struct {
-	Type       *UseCaseType `json:"type"`
-	Titles     []string     `json:"titles"`
-	Resolution *Resolution  `json:"resolution"`
-	FPSTarget  *int         `json:"fps_target"`
+	Type            *UseCaseType     `json:"type"`
+	Titles          []string         `json:"titles"`
+	Resolution      *Resolution      `json:"resolution"`
+	FPSTarget       *int             `json:"fps_target"`
+	PerformanceGoal *PerformanceGoal `json:"performance_goal"`
 }
 
 type brandPrefWire struct {
@@ -233,10 +272,11 @@ func EncodeRequirementSpec(spec RequirementSpec) (json.RawMessage, error) {
 	}
 
 	type canonicalUseCase struct {
-		Type       UseCaseType `json:"type"`
-		Titles     []string    `json:"titles"`
-		Resolution Resolution  `json:"resolution,omitempty"`
-		FPSTarget  *int        `json:"fps_target,omitempty"`
+		Type            UseCaseType     `json:"type"`
+		Titles          []string        `json:"titles"`
+		Resolution      Resolution      `json:"resolution,omitempty"`
+		FPSTarget       *int            `json:"fps_target,omitempty"`
+		PerformanceGoal PerformanceGoal `json:"performance_goal,omitempty"`
 	}
 	type canonicalBrandPref struct {
 		CPU CPUBrand `json:"cpu"`
@@ -250,6 +290,7 @@ func EncodeRequirementSpec(spec RequirementSpec) (json.RawMessage, error) {
 		SizePref                SizePref                   `json:"size_pref"`
 		NoisePref               NoisePref                  `json:"noise_pref"`
 		BrandPref               canonicalBrandPref         `json:"brand_pref"`
+		ConfigurationScope      []string                   `json:"configuration_scope"`
 		ExistingParts           []Category                 `json:"existing_parts"`
 		OwnedParts              []OwnedPart                `json:"owned_parts,omitempty"`
 		BudgetBasis             string                     `json:"budget_basis,omitempty"`
@@ -261,17 +302,22 @@ func EncodeRequirementSpec(spec RequirementSpec) (json.RawMessage, error) {
 		RequirementObservations []RequirementObservation   `json:"requirement_observations,omitempty"`
 	}
 
+	scope := spec.ConfigurationScope
+	if scope == nil {
+		scope = []string{ConfigurationScopeTower}
+	}
 	encoded, err := json.Marshal(canonicalRequirement{
 		SchemaVersion: spec.SchemaVersion,
 		BudgetCNY:     spec.BudgetCNY,
 		BudgetFlex:    spec.BudgetFlex,
 		UseCase: canonicalUseCase{
 			Type: spec.UseCase.Type, Titles: titles, Resolution: spec.UseCase.Resolution,
-			FPSTarget: spec.UseCase.FPSTarget,
+			FPSTarget: spec.UseCase.FPSTarget, PerformanceGoal: spec.UseCase.PerformanceGoal,
 		},
 		SizePref: spec.SizePref, NoisePref: spec.NoisePref,
-		BrandPref:     canonicalBrandPref{CPU: spec.BrandPref.CPU, GPU: spec.BrandPref.GPU},
-		ExistingParts: existing, OwnedParts: spec.OwnedParts, BudgetBasis: spec.BudgetBasis, Priority: priority, Notes: spec.Notes,
+		BrandPref:          canonicalBrandPref{CPU: spec.BrandPref.CPU, GPU: spec.BrandPref.GPU},
+		ConfigurationScope: scope,
+		ExistingParts:      existing, OwnedParts: spec.OwnedParts, BudgetBasis: spec.BudgetBasis, Priority: priority, Notes: spec.Notes,
 		ConstraintStrengths: spec.ConstraintStrengths, RequirementDetails: spec.RequirementDetails,
 		RequirementSemantics: spec.RequirementSemantics, RequirementObservations: spec.RequirementObservations,
 	})
@@ -283,23 +329,64 @@ func EncodeRequirementSpec(spec RequirementSpec) (json.RawMessage, error) {
 
 // DecodeRequirementSpec 严格解码需求单 JSON;违反契约返回 error(schema error)。
 // 可缺省字段(budget_flex/size_pref/noise_pref/brand_pref)缺失时填充默认值。
+// v2 组合不变量(最低矩阵与 ownership 约束)在此边界强制执行。
 func DecodeRequirementSpec(data []byte) (RequirementSpec, error) {
+	spec, err := decodeRequirementSpec(data, true)
+	if err != nil {
+		return RequirementSpec{}, fmt.Errorf("requirement spec: %w", err)
+	}
+	return spec, nil
+}
+
+// DecodeLegacyRequirementSpec 仅供评估工具回放冻结 v1 产物:对 schema_version=1
+// 做机械升格(仅补 schema_version/configuration_scope,不改值、不造事实),
+// 并按 v1 组合语义解码——v2 新增的组合不变量(生产力 titles、已有件型号与
+// 口径)不追溯适用于历史用例,否则冻结 v1 资产需要编造用户事实才能通过。
+// 产品路径不得调用;产品 decoder 对 v1 保持稳定拒绝。
+func DecodeLegacyRequirementSpec(data []byte) (RequirementSpec, error) {
+	var header struct {
+		SchemaVersion int `json:"schema_version"`
+	}
+	if json.Unmarshal(data, &header) != nil {
+		return RequirementSpec{}, fmt.Errorf("requirement spec: 非法 JSON")
+	}
+	if header.SchemaVersion == 1 {
+		decoded := map[string]json.RawMessage{}
+		if json.Unmarshal(data, &decoded) != nil {
+			return RequirementSpec{}, fmt.Errorf("requirement spec: 非法 JSON")
+		}
+		version, _ := json.Marshal(RequirementSpecSchemaVersion)
+		scope, _ := json.Marshal([]string{ConfigurationScopeTower})
+		decoded["schema_version"] = version
+		decoded["configuration_scope"] = scope
+		if out, err := json.Marshal(decoded); err == nil {
+			data = out
+		}
+	}
+	spec, err := decodeRequirementSpec(data, false)
+	if err != nil {
+		return RequirementSpec{}, fmt.Errorf("requirement spec: %w", err)
+	}
+	return spec, nil
+}
+
+func decodeRequirementSpec(data []byte, enforceCombination bool) (RequirementSpec, error) {
 	var w requirementSpecWire
 	if err := decodeStrict(data, &w); err != nil {
-		return RequirementSpec{}, fmt.Errorf("requirement spec: %w", err)
+		return RequirementSpec{}, err
 	}
 
 	if w.SchemaVersion == nil {
-		return RequirementSpec{}, fmt.Errorf("requirement spec: 缺少 schema_version")
+		return RequirementSpec{}, fmt.Errorf("缺少 schema_version")
 	}
 	if *w.SchemaVersion != RequirementSpecSchemaVersion {
-		return RequirementSpec{}, fmt.Errorf("requirement spec: 不支持的 schema_version %d(当前仅 %d)", *w.SchemaVersion, RequirementSpecSchemaVersion)
+		return RequirementSpec{}, fmt.Errorf("不支持的 schema_version %d(当前仅 %d)", *w.SchemaVersion, RequirementSpecSchemaVersion)
 	}
 	if w.BudgetCNY == nil {
-		return RequirementSpec{}, fmt.Errorf("requirement spec: 缺少 budget_cny")
+		return RequirementSpec{}, fmt.Errorf("缺少 budget_cny")
 	}
 	if *w.BudgetCNY <= 0 {
-		return RequirementSpec{}, fmt.Errorf("requirement spec: budget_cny 必须为正整数,得到 %d", *w.BudgetCNY)
+		return RequirementSpec{}, fmt.Errorf("budget_cny 必须为正整数,得到 %d", *w.BudgetCNY)
 	}
 
 	out := RequirementSpec{
@@ -313,10 +400,16 @@ func DecodeRequirementSpec(data []byte) (RequirementSpec, error) {
 
 	if w.BudgetFlex != nil {
 		if *w.BudgetFlex < 0 || *w.BudgetFlex > maxBudgetFlex {
-			return RequirementSpec{}, fmt.Errorf("requirement spec: budget_flex 必须在 [0,%.1f],得到 %v", maxBudgetFlex, *w.BudgetFlex)
+			return RequirementSpec{}, fmt.Errorf("budget_flex 必须在 [0,%.1f],得到 %v", maxBudgetFlex, *w.BudgetFlex)
 		}
 		out.BudgetFlex = *w.BudgetFlex
 	}
+
+	// configuration_scope 是必填能力边界:仅接受精确 ["tower"],不静默修复。
+	if len(w.ConfigurationScope) != 1 || w.ConfigurationScope[0] != ConfigurationScopeTower {
+		return RequirementSpec{}, fmt.Errorf("configuration_scope 当前仅支持 [%q],得到 %v", ConfigurationScopeTower, w.ConfigurationScope)
+	}
+	out.ConfigurationScope = append([]string(nil), w.ConfigurationScope...)
 
 	uc, err := resolveUseCase(w.UseCase)
 	if err != nil {
@@ -351,18 +444,23 @@ func DecodeRequirementSpec(data []byte) (RequirementSpec, error) {
 	}
 	out.ExistingParts = w.ExistingParts
 	out.Priority = w.Priority
+	if enforceCombination {
+		if err := validateSpecCombination(&out); err != nil {
+			return RequirementSpec{}, err
+		}
+	}
 
 	if w.Notes != nil {
 		out.Notes = *w.Notes
 	}
 	for key, strength := range w.ConstraintStrengths {
 		if !knownRequirementField(key) || (strength != "must" && strength != "prefer") {
-			return RequirementSpec{}, fmt.Errorf("requirement spec: 非法约束强度 %s=%s", key, strength)
+			return RequirementSpec{}, fmt.Errorf("非法约束强度 %s=%s", key, strength)
 		}
 	}
 	for key, value := range w.RequirementDetails {
-		if key != "appearance" && key != "recipient" {
-			return RequirementSpec{}, fmt.Errorf("requirement spec: 非法补充字段 %s", key)
+		if key != "appearance" && key != "recipient" && !FreeField(key) {
+			return RequirementSpec{}, fmt.Errorf("非法补充字段 %s", key)
 		}
 		if err := validateRequirementValue(key, value); err != nil {
 			return RequirementSpec{}, err
@@ -371,12 +469,12 @@ func DecodeRequirementSpec(data []byte) (RequirementSpec, error) {
 	out.ConstraintStrengths, out.RequirementDetails = w.ConstraintStrengths, w.RequirementDetails
 	for key, kind := range w.RequirementSemantics {
 		if !knownRequirementField(key) || !ValidRequirementKind(kind) {
-			return RequirementSpec{}, fmt.Errorf("requirement spec: 非法语义分类 %s=%s", key, kind)
+			return RequirementSpec{}, fmt.Errorf("非法语义分类 %s=%s", key, kind)
 		}
 	}
 	for _, observation := range w.RequirementObservations {
 		if observation.Resolved || strings.TrimSpace(observation.Text) == "" || observation.Text != observation.Source.Quote || (observation.Field != "" && !knownRequirementField(observation.Field)) {
-			return RequirementSpec{}, fmt.Errorf("requirement spec: 非法原文观察")
+			return RequirementSpec{}, fmt.Errorf("非法原文观察")
 		}
 	}
 	out.RequirementSemantics, out.RequirementObservations = w.RequirementSemantics, w.RequirementObservations
@@ -384,37 +482,79 @@ func DecodeRequirementSpec(data []byte) (RequirementSpec, error) {
 	return out, nil
 }
 
-// resolveUseCase 校验并展开 use_case;gaming 用途要求 resolution 必填。
+// resolveUseCase 校验并展开 use_case;gaming 要求 resolution 为 1080p/2K/4K
+// (组合不变量:明确 any 不满足 gaming 最低矩阵,直接拒绝),未明确
+// performance_goal 时填系统默认 balanced;其余用途保留用户显式 goal。
 func resolveUseCase(w *useCaseWire) (UseCase, error) {
 	if w == nil {
-		return UseCase{}, fmt.Errorf("requirement spec: 缺少 use_case")
+		return UseCase{}, fmt.Errorf("缺少 use_case")
 	}
 	if w.Type == nil {
-		return UseCase{}, fmt.Errorf("requirement spec: use_case.type 缺失")
+		return UseCase{}, fmt.Errorf("use_case.type 缺失")
 	}
 	uc := UseCase{Type: *w.Type, Titles: w.Titles}
 
 	if w.Resolution != nil {
 		uc.Resolution = *w.Resolution
 	}
-	if *w.Type == UseCaseGaming && w.Resolution == nil {
-		return UseCase{}, fmt.Errorf("requirement spec: gaming 用途必须提供 resolution")
+	if *w.Type == UseCaseGaming {
+		if w.Resolution == nil {
+			return UseCase{}, fmt.Errorf("gaming 用途必须提供 resolution")
+		}
+		if *w.Resolution == ResolutionAny {
+			return UseCase{}, fmt.Errorf("gaming 用途的 resolution 不能为 any(需 1080p|2K|4K)")
+		}
+		if w.PerformanceGoal == nil {
+			uc.PerformanceGoal = PerformanceGoalBalanced
+		}
+	}
+	if w.PerformanceGoal != nil {
+		uc.PerformanceGoal = *w.PerformanceGoal
 	}
 
 	if w.FPSTarget != nil {
 		if *w.FPSTarget <= 0 {
-			return UseCase{}, fmt.Errorf("requirement spec: use_case.fps_target 必须为正整数,得到 %d", *w.FPSTarget)
+			return UseCase{}, fmt.Errorf("use_case.fps_target 必须为正整数,得到 %d", *w.FPSTarget)
 		}
 		uc.FPSTarget = w.FPSTarget
 	}
 	return uc, nil
 }
 
+// validateSpecCombination 在解码边界执行与 readiness 相同的组合不变量,
+// 避免调用方绕过 Projection 构造 gaming+any、existing/owned 不一致、
+// 生产力缺软件任务或已有件缺口径等非法 spec。谓词与 readiness 共用,
+// 不复制第二套业务矩阵。
+func validateSpecCombination(spec *RequirementSpec) error {
+	if spec.UseCase.Type == UseCaseProductivity && len(NonEmptyTitles(spec.UseCase.Titles)) == 0 {
+		return fmt.Errorf("productivity 用途必须提供至少一个非空软件或任务(use_case.titles)")
+	}
+	existing := map[Category]bool{}
+	for _, category := range spec.ExistingParts {
+		existing[category] = true
+	}
+	if len(existing) == 0 && len(spec.OwnedParts) > 0 {
+		return fmt.Errorf("existing_parts 为空时不能携带 owned_parts")
+	}
+	for _, part := range spec.OwnedParts {
+		if !existing[part.Category] {
+			return fmt.Errorf("owned_parts.%s 不在 existing_parts 内", part.Category)
+		}
+	}
+	if missing := MissingOwnedModels(spec.ExistingParts, spec.OwnedParts); len(missing) > 0 {
+		return fmt.Errorf("existing_parts 品类缺少对应 owned_parts 准确型号:%v", missing)
+	}
+	if (len(spec.ExistingParts) > 0 || len(spec.OwnedParts) > 0) && spec.BudgetBasis == "" {
+		return fmt.Errorf("已有件时必须提供 budget_basis(new_purchase 或 full_build)")
+	}
+	return nil
+}
+
 // validateCategories 校验品类列表每项均为八大类合法枚举(existing_parts / priority)。
 func validateCategories(field string, cats []Category) error {
 	for _, c := range cats {
 		if !isValidCategory(c) {
-			return fmt.Errorf("requirement spec: %s 含非法品类 %q", field, c)
+			return fmt.Errorf("%s 含非法品类 %q", field, c)
 		}
 	}
 	return nil

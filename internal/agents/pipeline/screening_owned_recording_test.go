@@ -30,10 +30,11 @@ func TestRecordedOwnedModelsSynchronizeCategories(t *testing.T) {
 		t.Run(c.ID, func(t *testing.T) {
 			state := schemas.NewRequirementState()
 			for _, step := range c.Steps {
-				update, err := schemas.DecodeRequirementUpdate([]byte(step.Response))
+				turn, err := DecodeLegacyRequirementTurn([]byte(step.Response))
 				if err != nil {
 					t.Fatal(err)
 				}
+				update := turn.Update()
 				source := schemas.RequirementSource{Kind: "chat", MessageID: step.Message, Quote: step.Message}
 				update = prepareRequirementUpdate(state, update, source)
 				state, err = schemas.ApplyRequirementUpdate(state, update, source)

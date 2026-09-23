@@ -8,7 +8,8 @@ import (
 )
 
 const screenedRequirementWithFlex = `{
-  "schema_version": 1,
+  "schema_version": 2,
+  "configuration_scope": ["tower"],
   "budget_cny": 8500,
   "budget_flex": 0,
   "use_case": {"type": "gaming", "resolution": "2K"},

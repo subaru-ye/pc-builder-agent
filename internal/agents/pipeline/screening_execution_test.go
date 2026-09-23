@@ -26,10 +26,12 @@ func TestScreeningUpgradeHasCurrentConfigurationAndFreeRequirements(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		update, err = schemas.DecodeRequirementUpdate([]byte(screeningText(response.Content)))
+		// 传输外形仍是 legacy turn(含 reply/next_action);领域更新取剥离结果。
+		turn, err := DecodeLegacyRequirementTurn([]byte(screeningText(response.Content)))
 		if err != nil {
 			t.Fatal(err)
 		}
+		update = turn.Update()
 	}
 	input := screeningText(m.request.Contents[0])
 	for _, expected := range []string{`"can_plan":true`, "cpu-r5-5600", "mb-msi-b550m-pro-vdh-wifi", "4579.90", "1080p素材", "free.removed", "可在现有配置基础上继续升级"} {
@@ -41,7 +43,7 @@ func TestScreeningUpgradeHasCurrentConfigurationAndFreeRequirements(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.calls != 1 || next.NextAction != "plan" || string(next.Fields["priority"].Value) != `["cpu"]` || next.Fields["free.preserve_other_parts"].Strength != "prefer" || next.Fields["noise_pref"].Status != "removed" || next.Fields["owned_parts"].Status != "unknown" {
+	if m.calls != 1 || string(next.Fields["priority"].Value) != `["cpu"]` || next.Fields["free.preserve_other_parts"].Strength != "prefer" || next.Fields["noise_pref"].Status != "removed" || next.Fields["owned_parts"].Status != "unknown" {
 		t.Fatalf("upgrade semantics changed: %+v", next)
 	}
 }

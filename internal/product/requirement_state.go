@@ -20,12 +20,9 @@ type RequirementEdit struct {
 }
 
 func decodeSessionRequirements(raw json.RawMessage) (schemas.RequirementState, error) {
-	var state schemas.RequirementState
-	if len(raw) == 0 {
-		return state, nil
-	}
-	err := json.Unmarshal(raw, &state)
-	return state, err
+	// v1 及损坏状态以稳定错误拒绝,不静默重建空 v2 状态;
+	// 开发数据通过显式运维步骤重建(见 docs/ops/本地运行与部署.md)。
+	return schemas.DecodeRequirementState(raw)
 }
 
 // EditRequirement 在服务端保存用户可读的来源消息，再原子发布合并后的草稿。
@@ -78,7 +75,7 @@ func (s *Service) EditRequirement(ctx context.Context, ownerID, sessionID, reque
 	}
 	if !duplicate {
 		s.publish(ctx, r.ID, "run.started", map[string]any{"kind": r.Kind})
-		if err := s.completeRequirementState(ctx, ownerID, r, next, 0); err != nil {
+		if err := s.completeRequirementState(ctx, ownerID, r, next, "", 0); err != nil {
 			s.failInternal(ctx, r, store.PhaseCollecting, "")
 			return SessionDetail{}, err
 		}
@@ -138,20 +135,23 @@ func requirementEditText(operations []schemas.RequirementOperation) string {
 	return "通过需求面板修改：" + strings.Join(lines, "；")
 }
 
-func (s *Service) completeRequirementState(ctx context.Context, ownerID string, r store.AgentRun, state schemas.RequirementState, retries int) error {
-	pending, missing, err := planningProjection(state)
+// completeRequirementState 只按确定性 readiness 收口:incomplete 保持收集并
+// 用领域追问文案;ready 才发布投影后的 RequirementSpec v2 待确认草稿。
+// reply 是 legacy turn 传输适配剥离出的助手文案,仅作展示。
+func (s *Service) completeRequirementState(ctx context.Context, ownerID string, r store.AgentRun, state schemas.RequirementState, reply string, retries int) error {
+	pending, readiness, err := schemas.RequirementStateSpec(state)
 	if err != nil {
 		return err
 	}
 	phase := store.PhaseRequirementReady
 	assistant := ScreeningReadyMessage
-	if state.Reply != "" {
-		assistant = state.Reply
+	if reply != "" {
+		assistant = reply
 	}
-	if state.NextAction == "collect" {
-		phase = store.PhaseCollecting
-	}
-	if len(missing) > 0 {
+	// 唯一就绪判据是领域 ConfirmationEligible:缺失、阻塞冲突(must 或
+	// 条件必填)与未解决 unsupported 都保持收集态,不发布待确认草稿,
+	// 也不发 requirement.ready。
+	if !readiness.ConfirmationEligible {
 		phase = store.PhaseCollecting
 		pending = nil
 		assistant = schemas.RequirementStateQuestions(state)
@@ -163,10 +163,11 @@ func (s *Service) completeRequirementState(ctx context.Context, ownerID string, 
 	if err != nil {
 		return err
 	}
-	if state.Reply == "" && len(missing) == 0 && ws.VersionCount > 0 && sameRequirementJSON(pending, ws.ConfirmedRequirement) {
+	confirmed := confirmedRequirementProjection(ws.ConfirmedRequirementState)
+	if reply == "" && readiness.ConfirmationEligible && ws.VersionCount > 0 && sameRequirementJSON(pending, confirmed) {
 		phase = store.PhaseReady
 		assistant = "当前有效需求保持不变，可继续查看配置或修改需求。"
-	} else if state.Reply == "" && len(missing) == 0 && len(ws.ConfirmedRequirement) > 0 {
+	} else if reply == "" && readiness.ConfirmationEligible && len(confirmed) > 0 {
 		assistant = "需求草稿已更新，原配置保持不变。请确认后生成新的配置版本。"
 	}
 	raw, err := json.Marshal(state)
@@ -191,6 +192,23 @@ func (s *Service) completeRequirementState(ctx context.Context, ownerID string, 
 	}
 	s.publish(ctx, r.ID, "run.completed", map[string]any{"status": "succeeded"})
 	return nil
+}
+
+// confirmedRequirementProjection 返回已确认状态的当前投影;无确认快照或
+// 状态不可投影时返回 nil。
+func confirmedRequirementProjection(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 {
+		return nil
+	}
+	state, err := decodeSessionRequirements(raw)
+	if err != nil {
+		return nil
+	}
+	spec, readiness, err := schemas.RequirementStateSpec(state)
+	if err != nil || !readiness.ConfirmationEligible {
+		return nil
+	}
+	return spec
 }
 
 func sameRequirementJSON(a, b json.RawMessage) bool {
@@ -243,31 +261,45 @@ func requirementReplacementOperations(before, after json.RawMessage) ([]schemas.
 	return operations, nil
 }
 
-func requirementLifecycle(ws store.WebSession) (string, []string) {
-	if ws.Phase == store.PhaseCollecting && len(ws.PendingRequirement) == 0 {
-		return "collecting", []string{}
+// requirementLifecycle 从确定性 readiness 派生旧形状 DTO(临时适配,Builder
+// gate change 中删除):不读模型 next_action,判定只来自领域 readiness 与
+// 投影比对。v1/损坏状态返回稳定错误,由调用方转为问题响应。
+func requirementLifecycle(ws store.WebSession) (string, []string, error) {
+	if len(ws.RequirementState) == 0 {
+		if ws.Phase == store.PhaseCollecting && len(ws.PendingRequirement) == 0 {
+			return "collecting", []string{}, nil
+		}
+		// 有 pending 却没有增量状态:这是 v1 一次性切换遗留的旧会话。
+		return "", nil, schemas.ErrRequirementStateUnsupported
 	}
 	state, err := decodeSessionRequirements(ws.RequirementState)
-	if err != nil || len(ws.RequirementState) == 0 {
-		return "collecting", []string{}
+	if err != nil {
+		return "", nil, err
 	}
-	pending, missing, err := planningProjection(state)
+	readiness, err := schemas.EvaluateRequirementReadiness(state)
+	if err != nil {
+		return "", nil, err
+	}
+	missing := readiness.MissingFields
 	if missing == nil {
 		missing = []string{}
 	}
+	if !readiness.ConfirmationEligible {
+		return "collecting", missing, nil
+	}
+	pending, _, err := schemas.RequirementStateSpec(state)
+	if err != nil {
+		return "", nil, err
+	}
 	if len(ws.ConfirmedRequirement) > 0 {
-		if err == nil && sameRequirementJSON(pending, ws.ConfirmedRequirement) {
-			return "confirmed", missing
+		// confirmed_requirement 存 Builder 输入快照;确认/修改判定比较
+		// 确认状态与当前状态的投影,不依赖快照存储形状。
+		if sameRequirementJSON(pending, confirmedRequirementProjection(ws.ConfirmedRequirementState)) {
+			return "confirmed", missing, nil
 		}
-		return "modified", missing
+		return "modified", missing, nil
 	}
-	if err != nil || len(missing) > 0 {
-		return "collecting", missing
-	}
-	if state.NextAction == "collect" {
-		return "collecting", missing
-	}
-	return "ready_to_confirm", missing
+	return "ready_to_confirm", missing, nil
 }
 
 func (s *Service) attachRequirementState(ctx context.Context, ownerID string, r store.AgentRun, input *ScreenInput) error {
@@ -275,26 +307,26 @@ func (s *Service) attachRequirementState(ctx context.Context, ownerID string, r 
 	if err != nil {
 		return err
 	}
-	state, err := decodeSessionRequirements(ws.RequirementState)
-	if err != nil {
-		return err
-	}
+	var state schemas.RequirementState
 	if len(ws.RequirementState) == 0 {
-		raw := ws.PendingRequirement
+		// v1 一次性切换:没有增量状态的旧会话不再从旧需求单静默重建,
+		// 以稳定错误拒绝,由用户显式新建会话或走运维重建步骤。
+		if len(ws.PendingRequirement) > 0 || len(ws.ConfirmedRequirement) > 0 {
+			return schemas.ErrRequirementStateUnsupported
+		}
 		if _, supportsPlanning := s.store.(proposalStore); !supportsPlanning {
 			return nil // Legacy diagnostic stores keep their original protocol.
 		}
-		if len(raw) == 0 {
-			raw = ws.ConfirmedRequirement
-		}
-		state = schemas.LegacyPlanningState(raw)
+		state = schemas.NewRequirementState()
+	} else if state, err = decodeSessionRequirements(ws.RequirementState); err != nil {
+		return err
 	}
 	input.RequirementState = &state
 	input.HasBuild = ws.VersionCount > 0
 	// The first message of a session always hands back an explicit confirmation;
 	// later messages (and confirmed requirements) may continue into planning
 	// directly — the user's own follow-up is the authorization.
-	input.Conversation.CanPlan = len(ws.ConfirmedRequirement) > 0 || state.Revision > 0 || len(ws.PendingRequirement) > 0
+	input.Conversation.CanPlan = len(ws.ConfirmedRequirement) > 0 || state.Revision > 0
 	if st, ok := s.store.(proposalStore); ok {
 		if ws.VersionCount > 0 {
 			base, err := st.BuildByVersion(ctx, r.SessionID, ws.VersionCount)
@@ -350,9 +382,4 @@ func (s *Service) attachRequirementState(ctx context.Context, ownerID string, r 
 		}
 	}
 	return nil
-}
-
-func planningProjection(state schemas.RequirementState) (json.RawMessage, []string, error) {
-	raw, err := schemas.PlanningRequirement(state)
-	return raw, []string{}, err
 }

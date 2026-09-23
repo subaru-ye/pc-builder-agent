@@ -6,7 +6,7 @@ import (
 )
 
 func TestOwnedContractRoundTrip(t *testing.T) {
-	raw := `{"schema_version":1,"budget_cny":3000,"use_case":{"type":"general"},"existing_parts":["cpu"],"owned_parts":[{"category":"cpu","model":"AMD Ryzen 5 7600"}],"budget_basis":"new_purchase"}`
+	raw := `{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":3000,"use_case":{"type":"general"},"existing_parts":["cpu"],"owned_parts":[{"category":"cpu","model":"AMD Ryzen 5 7600"}],"budget_basis":"new_purchase"}`
 	spec, err := DecodeRequirementSpec([]byte(raw))
 	if err != nil {
 		t.Fatal(err)

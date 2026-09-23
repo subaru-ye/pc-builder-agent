@@ -7,19 +7,45 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
 
-const RequirementStateSchemaVersion = 1
+// RequirementStateSchemaVersion 当前唯一支持的需求状态版本。v2 一次性切换:
+// 移除持久化 reply/next_action(模型不再拥有需求完整性或流程决策权),
+// 新增 use_case.performance_goal。v1 由 DecodeRequirementState 以稳定错误拒绝。
+const RequirementStateSchemaVersion = 2
 
 // ErrRequirementContextField distinguishes background from executable fields.
 // Callers may retain the original text without adopting an incompatible value.
 var ErrRequirementContextField = errors.New("补充背景请使用 notes、recipient 或独立 free.* 条目，不能作为固定执行字段")
 
+// ErrRequirementStateUnsupported 是读取旧版本需求状态的稳定错误:
+// 不静默重建、补默认或自动迁移;开发数据通过显式运维步骤重建。
+var ErrRequirementStateUnsupported = errors.New("requirement state: 不支持的 schema_version(当前仅 2;旧会话需按运维步骤重建)")
+
+// unsupportedCapabilityPrefix 是 observation 的稳定结构化原因码前缀;
+// 自由文本 reason 不做关键词推断,name 只允许 monitor|keyboard|mouse。
+const unsupportedCapabilityPrefix = "unsupported_capability:"
+
+var unsupportedCapabilityNames = []string{"monitor", "keyboard", "mouse"}
+
+// unsupportedCapabilityField 解析 reserved 撤销键 unsupported.<capability>:
+// 该键不是需求字段,只承载"用户明确放弃指定 capability"的撤销操作,
+// 由 Reducer 直接解除同名 unsupported 观察记录,不写入 fields。
+func unsupportedCapabilityField(field string) (string, bool) {
+	name, ok := strings.CutPrefix(field, "unsupported.")
+	if !ok || !containsString(unsupportedCapabilityNames, name) {
+		return "", false
+	}
+	return name, true
+}
+
 var RequirementFieldKeys = []string{
 	"budget_cny", "budget_flex", "budget_basis", "use_case.type", "use_case.titles",
-	"use_case.resolution", "use_case.fps_target", "existing_parts", "owned_parts",
+	"use_case.resolution", "use_case.performance_goal", "use_case.fps_target",
+	"existing_parts", "owned_parts",
 	"brand_pref.cpu", "brand_pref.gpu", "noise_pref", "size_pref", "appearance", "notes", "recipient",
 	"priority",
 }
@@ -79,8 +105,6 @@ type RequirementChange struct {
 }
 
 type RequirementState struct {
-	Reply         string                      `json:"reply,omitempty"`
-	NextAction    string                      `json:"next_action,omitempty"`
 	SchemaVersion int                         `json:"schema_version"`
 	Revision      int                         `json:"revision"`
 	Fields        map[string]RequirementField `json:"fields"`
@@ -102,9 +126,10 @@ type RequirementOperation struct {
 	Evidence string          `json:"evidence,omitempty"`
 }
 
+// RequirementUpdate 是领域需求合同:只含 operations/observations,
+// 不含会话回复与流程动作;reply/next_action 只存在于 pipeline 的临时
+// legacy turn 传输适配中,进入 Reducer 前必须剥离。
 type RequirementUpdate struct {
-	Reply        string                        `json:"reply,omitempty"`
-	NextAction   string                        `json:"next_action,omitempty"`
 	Operations   []RequirementOperation        `json:"operations"`
 	Observations []RequirementObservationInput `json:"observations,omitempty"`
 }
@@ -127,20 +152,41 @@ func DecodeRequirementUpdate(raw []byte) (RequirementUpdate, error) {
 	if update.Operations == nil || len(update.Operations) > 32 || len(update.Observations) > 32 {
 		return update, fmt.Errorf("requirement update: operations 必须为数组且最多 32 项")
 	}
-	if update.NextAction != "" && update.NextAction != "collect" && update.NextAction != "confirm" && update.NextAction != "plan" {
-		return update, fmt.Errorf("requirement update: next_action 无效")
-	}
 	return update, nil
+}
+
+// DecodeRequirementState 是产品读取持久化需求状态的唯一严格入口:
+// v1(含 reply/next_action 外形或 schema_version=1)以稳定错误拒绝。
+func DecodeRequirementState(raw []byte) (RequirementState, error) {
+	var state RequirementState
+	if len(raw) == 0 {
+		return state, nil
+	}
+	if err := decodeStrict(raw, &state); err != nil {
+		return state, fmt.Errorf("requirement state: %w", err)
+	}
+	if state.SchemaVersion != RequirementStateSchemaVersion {
+		return state, ErrRequirementStateUnsupported
+	}
+	return state, nil
 }
 
 // ApplyRequirementUpdate 是聊天和界面编辑的唯一 reducer。完整校验成功才返回新状态，
 // 未出现的字段保持，仅联动已有件品类与型号；传入值不被修改，可保留为已确认快照。
+// v2 语义:operations 与 observations 均为空时是字节级 no-op(不增 revision);
+// 每个成功的非空批次只将 revision 增加 1;任一项失败则输入状态原样返回。
 func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, source RequirementSource) (RequirementState, error) {
 	if source.Kind != "chat" && source.Kind != "edit" {
 		return state, fmt.Errorf("requirement source: kind 仅允许 chat 或 edit")
 	}
 	if len(update.Operations) > 32 {
 		return state, fmt.Errorf("requirement update: 每轮最多 32 项")
+	}
+	if len(update.Observations) > 32 {
+		return state, fmt.Errorf("requirement update: observations 最多 32 项")
+	}
+	if len(update.Operations) == 0 && len(update.Observations) == 0 {
+		return state, nil
 	}
 	raw, err := json.Marshal(state)
 	if err != nil {
@@ -151,18 +197,12 @@ func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, so
 		return state, err
 	}
 	if next.SchemaVersion != 0 && next.SchemaVersion != RequirementStateSchemaVersion {
-		return state, fmt.Errorf("requirement state: 不支持的 schema_version")
+		return state, ErrRequirementStateUnsupported
 	}
 	if next.Fields == nil {
 		next = NewRequirementState()
 	}
 	next.SchemaVersion = RequirementStateSchemaVersion
-	for _, key := range RequirementFieldKeys {
-		if _, ok := next.Fields[key]; !ok {
-			next.Fields[key] = RequirementField{Status: "unknown"}
-		}
-	}
-	next.Reply, next.NextAction = update.Reply, update.NextAction
 	next.Revision++
 	next.Changes = []RequirementChange{}
 	if next.Alternatives == nil {
@@ -172,7 +212,40 @@ func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, so
 		next.History = []RequirementChange{}
 	}
 	for _, op := range update.Operations {
+		if capability, reserved := unsupportedCapabilityField(op.Field); reserved {
+			if op.Op != "remove" || len(op.Value) > 0 {
+				return state, fmt.Errorf("requirement update: %s 仅支持携带本轮证据的撤销(remove)", op.Field)
+			}
+			evidence := source
+			if source.Kind == "chat" {
+				if strings.TrimSpace(op.Quote) == "" || !strings.Contains(source.Quote, op.Quote) {
+					return state, fmt.Errorf("requirement update: %s 缺少本轮用户原文证据", op.Field)
+				}
+				evidence.Quote = op.Quote
+			}
+			withdrawn := false
+			for i := range next.Observations {
+				if name, coded := unsupportedCapabilityName(next.Observations[i].Reason); coded && name == capability && !next.Observations[i].Resolved {
+					next.Observations[i].Resolved = true
+					withdrawn = true
+				}
+			}
+			if !withdrawn {
+				return state, fmt.Errorf("requirement update: %s 没有可撤销的 unsupported 观察记录", op.Field)
+			}
+			change := RequirementChange{Revision: next.Revision, Op: "remove", Field: op.Field, Source: evidence}
+			next.Changes = append(next.Changes, change)
+			next.History = append(next.History, change)
+			continue
+		}
 		before, ok := next.Fields[op.Field]
+		if !ok && knownRequirementField(op.Field) {
+			// 已知字段允许缺席于旧状态映射(v1 外形/部分构造状态):
+			// 按 unknown 起算,只有操作实际落地时才写入该键,
+			// 不为未触碰字段凭空补 unknown 键。
+			before = RequirementField{Status: "unknown"}
+			ok = true
+		}
 		if !ok && FreeField(op.Field) {
 			before = RequirementField{Status: "unknown"}
 			next.Fields[op.Field] = before
@@ -232,6 +305,7 @@ func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, so
 			if err := validateRequirementValue(op.Field, op.Value); err != nil {
 				return state, err
 			}
+			op.Value = normalizeRequirementValue(op.Field, op.Value)
 		}
 		after := RequirementField{Value: append(json.RawMessage(nil), op.Value...), Status: "active", Strength: strength, Scope: scope, Source: &evidence, Kind: kind, Evidence: op.Evidence}
 		switch op.Op {
@@ -266,9 +340,6 @@ func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, so
 		recordRequirementChange(&next, op.Field, op.Op, before, after, evidence)
 		syncOwnershipFields(&next, op, after, evidence)
 	}
-	if len(update.Observations) > 32 {
-		return state, fmt.Errorf("requirement update: observations 最多 32 项")
-	}
 	for _, observation := range update.Observations {
 		if observation.Field == "" {
 			observation.Field = "notes"
@@ -282,10 +353,14 @@ func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, so
 		if len([]rune(observation.Reason)) > 500 {
 			return state, fmt.Errorf("requirement update: observation 原因过长")
 		}
+		if name, structured := strings.CutPrefix(observation.Reason, unsupportedCapabilityPrefix); structured &&
+			!slices.Contains(unsupportedCapabilityNames, name) {
+			return state, fmt.Errorf("requirement update: unsupported_capability 仅允许 %s", strings.Join(unsupportedCapabilityNames, "|"))
+		}
 		evidence := source
 		evidence.Quote = observation.Quote
 		removedThisTurn := false
-		if next.Fields[observation.Field].Status == "removed" {
+		if _, coded := unsupportedCapabilityName(observation.Reason); !coded && next.Fields[observation.Field].Status == "removed" {
 			for _, change := range next.Changes {
 				if change.Field == observation.Field && change.Op == "remove" {
 					removedThisTurn = true
@@ -294,7 +369,107 @@ func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, so
 		}
 		next.Observations = append(next.Observations, RequirementObservation{Field: observation.Field, Text: observation.Quote, Reason: observation.Reason, Source: evidence, Resolved: removedThisTurn})
 	}
+	if err := validateOwnershipInvariant(next); err != nil {
+		return state, err
+	}
 	return next, nil
+}
+
+// validateOwnershipInvariant 拒绝 existing/owned 联动被破坏的批结果:
+// 不允许 existing=[] 而 owned 非空,owned 品类必须落在 existing 内。
+func validateOwnershipInvariant(state RequirementState) error {
+	var existing []Category
+	var owned []OwnedPart
+	if field := state.Fields["existing_parts"]; field.Status == "active" {
+		if json.Unmarshal(field.Value, &existing) != nil {
+			return fmt.Errorf("requirement update: existing_parts 值无法解析")
+		}
+	}
+	if field := state.Fields["owned_parts"]; field.Status == "active" {
+		if json.Unmarshal(field.Value, &owned) != nil {
+			return fmt.Errorf("requirement update: owned_parts 值无法解析")
+		}
+	}
+	if len(existing) == 0 && len(owned) > 0 {
+		return fmt.Errorf("requirement update: existing_parts 为空时不能保留 owned_parts")
+	}
+	categories := map[Category]bool{}
+	for _, c := range existing {
+		categories[c] = true
+	}
+	for _, part := range owned {
+		if !categories[part.Category] {
+			return fmt.Errorf("requirement update: owned_parts.%s 不在 existing_parts 内", part.Category)
+		}
+	}
+	return nil
+}
+
+// normalizeRequirementValue 在校验通过后做确定性规范化:titles 修剪去重保序,
+// 品类数组去重并按领域固定顺序输出,owned_parts 按品类固定顺序排列。
+// 只做形状规范化,不从文本推断任何事实。
+func normalizeRequirementValue(key string, raw json.RawMessage) json.RawMessage {
+	switch key {
+	case "use_case.titles":
+		var titles []string
+		if json.Unmarshal(raw, &titles) != nil {
+			return raw
+		}
+		seen := map[string]bool{}
+		normalized := make([]string, 0, len(titles))
+		for _, title := range titles {
+			title = strings.TrimSpace(title)
+			if title == "" || seen[title] {
+				continue
+			}
+			seen[title] = true
+			normalized = append(normalized, title)
+		}
+		out, err := json.Marshal(normalized)
+		if err != nil {
+			return raw
+		}
+		return out
+	case "existing_parts", "priority":
+		var cats []Category
+		if json.Unmarshal(raw, &cats) != nil {
+			return raw
+		}
+		seen := map[Category]bool{}
+		normalized := make([]Category, 0, len(cats))
+		for _, known := range AllCategories {
+			for _, c := range cats {
+				if c == known && !seen[c] {
+					seen[c] = true
+					normalized = append(normalized, c)
+				}
+			}
+		}
+		out, err := json.Marshal(normalized)
+		if err != nil {
+			return raw
+		}
+		return out
+	case "owned_parts":
+		var parts []OwnedPart
+		if json.Unmarshal(raw, &parts) != nil {
+			return raw
+		}
+		normalized := make([]OwnedPart, 0, len(parts))
+		for _, known := range AllCategories {
+			for _, part := range parts {
+				if part.Category == known {
+					normalized = append(normalized, part)
+				}
+			}
+		}
+		out, err := json.Marshal(normalized)
+		if err != nil {
+			return raw
+		}
+		return out
+	}
+	return raw
 }
 
 func ValidRequirementKind(kind string) bool {
@@ -341,13 +516,15 @@ func validateRequirementValue(key string, raw json.RawMessage) error {
 	case "budget_flex":
 		var n float64
 		err = json.Unmarshal(raw, &n)
-		if err == nil && n < 0 {
-			err = fmt.Errorf("必须为非负数")
+		if err == nil && (n < 0 || n > maxBudgetFlex) {
+			err = fmt.Errorf("必须在 0–%.1f 之间", maxBudgetFlex)
 		}
 	case "use_case.type":
 		value = new(UseCaseType)
 	case "use_case.resolution":
 		value = new(Resolution)
+	case "use_case.performance_goal":
+		value = new(PerformanceGoal)
 	case "size_pref":
 		value = new(SizePref)
 	case "noise_pref":
@@ -371,6 +548,14 @@ func validateRequirementValue(key string, raw json.RawMessage) error {
 	case "use_case.titles":
 		var titles []string
 		err = json.Unmarshal(raw, &titles)
+		if err == nil {
+			for _, title := range titles {
+				if strings.TrimSpace(title) == "" {
+					err = fmt.Errorf("元素 trim 后必须非空")
+					break
+				}
+			}
+		}
 	case "budget_basis":
 		var basis string
 		err = json.Unmarshal(raw, &basis)
@@ -395,27 +580,31 @@ func validateRequirementValue(key string, raw json.RawMessage) error {
 	return nil
 }
 
-// RequirementStateSpec 只投影 active 字段，不从历史、备选或默认值生成用户偏好。
-// 返回 nil payload 表示尚缺必要信息；生成侧默认值只在最终 spec 解码时展开。
-func RequirementStateSpec(state RequirementState) (json.RawMessage, []string, error) {
-	values := map[string]any{"schema_version": RequirementSpecSchemaVersion}
+// RequirementStateSpec 是 Planning、确认与 API 读取共用的唯一投影入口:
+// 先走同一 readiness 规则,任何 incomplete(缺失、阻塞冲突、unsupported)
+// 都返回 nil spec 和完整 readiness,不生成可供 Builder 使用的 RequirementSpec。
+// 调用方必须以 readiness.ConfirmationEligible 判定就绪,不得自行数 missing;
+// ready 时只投影 active 用户字段,系统默认由 RequirementSpec v2 解码展开。
+// 传入状态不被修改。
+func RequirementStateSpec(state RequirementState) (json.RawMessage, RequirementReadiness, error) {
+	readiness, err := EvaluateRequirementReadiness(state)
+	if err != nil {
+		return nil, readiness, err
+	}
+	if !readiness.ConfirmationEligible {
+		return nil, readiness, nil
+	}
+	values := map[string]any{"schema_version": RequirementSpecSchemaVersion, "configuration_scope": []string{ConfigurationScopeTower}}
 	strengths := map[string]string{}
 	semantics := map[string]string{}
 	details := map[string]json.RawMessage{}
-	var missing []string
 	for _, key := range RequirementFieldKeys {
 		field := state.Fields[key]
-		if field.Status == "conflict" {
-			if requirementConflictNeedsConfirmation(state, key, field) {
-				missing = append(missing, key)
-			}
-			continue
-		}
 		if field.Status != "active" {
 			continue
 		}
 		if err := validateRequirementValue(key, field.Value); err != nil {
-			return nil, nil, err
+			return nil, readiness, err
 		}
 		strengths[key] = field.Strength
 		if field.Kind != "" {
@@ -437,33 +626,20 @@ func RequirementStateSpec(state RequirementState) (json.RawMessage, []string, er
 			values[key] = field.Value
 		}
 	}
-	for _, key := range []string{"budget_cny", "use_case.type"} {
-		if state.Fields[key].Status != "active" && state.Fields[key].Status != "conflict" {
-			missing = append(missing, key)
+	// free.* 是有来源、可独立修改的用户事实,整体进入 requirement_details;
+	// 不满足结构化必填,也不生成 RequirementSpec 未定义的嵌套对象。
+	for _, key := range sortedFieldKeys(state.Fields) {
+		if !FreeField(key) || state.Fields[key].Status != "active" {
+			continue
 		}
-	}
-	if state.Fields["use_case.type"].Status == "active" && string(state.Fields["use_case.type"].Value) == `"gaming"` && state.Fields["use_case.resolution"].Status != "active" && state.Fields["use_case.resolution"].Status != "conflict" {
-		missing = append(missing, "use_case.resolution")
-	}
-	var existing []Category
-	var owned []OwnedPart
-	if field := state.Fields["existing_parts"]; field.Status == "active" {
-		_ = json.Unmarshal(field.Value, &existing)
-	}
-	if field := state.Fields["owned_parts"]; field.Status == "active" {
-		_ = json.Unmarshal(field.Value, &owned)
-	}
-	basis := ""
-	if field := state.Fields["budget_basis"]; field.Status == "active" {
-		_ = json.Unmarshal(field.Value, &basis)
-	}
-	for _, key := range MissingOwnedFields(RequirementSpec{ExistingParts: existing, OwnedParts: owned, BudgetBasis: basis}) {
-		if !containsString(missing, key) {
-			missing = append(missing, key)
+		if err := validateRequirementValue(key, state.Fields[key].Value); err != nil {
+			return nil, readiness, err
 		}
-	}
-	if len(missing) > 0 {
-		return nil, missing, nil
+		details[key] = state.Fields[key].Value
+		strengths[key] = state.Fields[key].Strength
+		if kind := state.Fields[key].Kind; kind != "" {
+			semantics[key] = kind
+		}
 	}
 	values["constraint_strengths"] = strengths
 	if len(semantics) > 0 {
@@ -475,11 +651,11 @@ func RequirementStateSpec(state RequirementState) (json.RawMessage, []string, er
 			observations = append(observations, observation)
 		}
 	}
-	// 可选软字段的歧义保留给后续理解，不把旧值继续作为 active，也不阻塞
-	// 已充分的预算/用途；真实硬条件与生成依赖字段仍需确认后才能投影。
+	// 可选软字段的歧义保留给后续理解,不把旧值继续作为 active,也不阻塞
+	// 已充分的预算/用途;真实硬条件与生成依赖字段仍需确认后才能投影。
 	for _, key := range RequirementFieldKeys {
 		field := state.Fields[key]
-		if field.Status == "conflict" && !requirementConflictNeedsConfirmation(state, key, field) && field.Source != nil && field.Source.Quote != "" {
+		if field.Status == "conflict" && field.Strength != "must" && field.Source != nil && field.Source.Quote != "" {
 			alreadyRecorded := false
 			for _, observation := range observations {
 				if observation.Field == key && observation.Text == field.Source.Quote && observation.Source.MessageID == field.Source.MessageID {
@@ -499,30 +675,14 @@ func RequirementStateSpec(state RequirementState) (json.RawMessage, []string, er
 	}
 	raw, err := json.Marshal(values)
 	if err != nil {
-		return nil, nil, err
+		return nil, readiness, err
 	}
 	spec, err := DecodeRequirementSpec(raw)
 	if err != nil {
-		return nil, nil, err
+		return nil, readiness, err
 	}
 	raw, err = EncodeRequirementSpec(spec)
-	return raw, nil, err
-}
-
-func requirementConflictNeedsConfirmation(state RequirementState, key string, field RequirementField) bool {
-	switch key {
-	case "budget_cny", "budget_flex", "budget_basis", "use_case.type", "existing_parts", "owned_parts":
-		return true
-	case "use_case.resolution":
-		if string(state.Fields["use_case.type"].Value) == `"gaming"` {
-			return true
-		}
-	case "notes":
-		if field.Kind == "fact" || field.Kind == "context" {
-			return false
-		}
-	}
-	return field.Strength == "must"
+	return raw, readiness, err
 }
 
 func containsString(items []string, value string) bool {
@@ -534,17 +694,19 @@ func containsString(items []string, value string) bool {
 	return false
 }
 
+// RequirementStateQuestions 是产品层的展示文案:字段与顺序完全来自
+// readiness 的 missing/blocking 结论,不维护第二份优先级清单。
 func RequirementStateQuestions(state RequirementState) string {
-	_, missing, err := RequirementStateSpec(state)
+	readiness, err := EvaluateRequirementReadiness(state)
 	if err != nil {
 		return "需求记录存在无法处理的字段，请检查本轮修改。"
 	}
+	conflicts := map[string]bool{}
+	for _, key := range readiness.BlockingConflicts {
+		conflicts[key] = true
+	}
 	var questions []string
-	for _, key := range missing {
-		if state.Fields[key].Status == "conflict" {
-			questions = append(questions, "请确认"+RequirementFieldLabel(key)+"应采用哪个要求。")
-			continue
-		}
+	for _, key := range readiness.MissingFields {
 		switch key {
 		case "budget_cny":
 			questions = append(questions, "请提供预算金额，单位元。")
@@ -558,6 +720,12 @@ func RequirementStateQuestions(state RequirementState) string {
 			questions = append(questions, "请补充"+RequirementFieldLabel(key)+"。")
 		}
 	}
+	for _, key := range readiness.BlockingConflicts {
+		questions = append(questions, "请确认"+RequirementFieldLabel(key)+"应采用哪个要求。")
+	}
+	if len(readiness.UnsupportedCapabilities) > 0 {
+		questions = append(questions, "当前配置范围仅支持主机（tower），显示器、键盘、鼠标暂不在本次范围内；如需包含请说明可先放弃，或等待后续支持。")
+	}
 	return strings.Join(questions, "")
 }
 
@@ -565,7 +733,7 @@ func RequirementFieldLabel(key string) string {
 	if FreeField(key) {
 		return "补充要求"
 	}
-	labels := map[string]string{"budget_cny": "预算", "budget_flex": "预算弹性", "budget_basis": "预算口径", "use_case.type": "用途", "use_case.titles": "游戏或软件", "use_case.resolution": "分辨率", "use_case.fps_target": "目标帧率", "existing_parts": "已有配件", "owned_parts": "已有配件型号", "brand_pref.cpu": "CPU 品牌", "brand_pref.gpu": "显卡品牌", "noise_pref": "静音", "size_pref": "尺寸", "appearance": "外观", "notes": "补充说明", "recipient": "装机对象"}
+	labels := map[string]string{"budget_cny": "预算", "budget_flex": "预算弹性", "budget_basis": "预算口径", "use_case.type": "用途", "use_case.titles": "游戏或软件", "use_case.resolution": "分辨率", "use_case.performance_goal": "性能取向", "use_case.fps_target": "目标帧率", "existing_parts": "已有配件", "owned_parts": "已有配件型号", "brand_pref.cpu": "CPU 品牌", "brand_pref.gpu": "显卡品牌", "noise_pref": "静音", "size_pref": "尺寸", "appearance": "外观", "notes": "补充说明", "recipient": "装机对象"}
 	if label := labels[key]; label != "" {
 		return label
 	}

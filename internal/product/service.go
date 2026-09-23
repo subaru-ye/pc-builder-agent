@@ -127,7 +127,11 @@ func (s *Service) GetSession(ctx context.Context, ownerID, sessionID string) (Se
 	if err != nil {
 		return SessionDetail{}, err
 	}
-	status, missing := requirementLifecycle(ws)
+	status, missing, err := requirementLifecycle(ws)
+	if err != nil {
+		return SessionDetail{}, NewProblem("requirement_state_unsupported", "会话需求版本不受支持", 409,
+			"该会话使用旧版需求格式，不能在当前版本继续；请新建会话重新记录需求，原配置数据保持不变。", sessionID)
+	}
 	s.presentMessages(ctx, sessionID, messages)
 	var proposal json.RawMessage
 	if st, ok := s.store.(proposalStore); ok {
@@ -314,32 +318,11 @@ func (s *Service) executeScreening(ctx context.Context, r store.AgentRun, ownerI
 			s.fail(ctx, r, NewProblem("schema_validation_failed", "需求更新未保存", 422, "初筛没有返回有效的本轮需求操作，请重试。", r.ID), store.PhaseCollecting, "")
 			return
 		}
+		// 模型 next_action 不再有状态权威:只有 operations/observations 进入
+		// Reducer,聊天文字不能替代确认 API 启动 Builder(v2 veto V4)。
 		state, mergeErr := schemas.ApplyRequirementUpdate(*input.RequirementState, *result.RequirementUpdate, input.RequirementSource)
-		if mergeErr == nil && state.NextAction == "plan" && input.Conversation.CanPlan {
-			// A follow-up chat command authorizing execution in the user's own
-			// words is the confirmation; continue the same run when the store
-			// supports it. First messages keep the explicit confirmation.
-			continuable := false
-			if _, ok := s.store.(interface {
-				ContinueScreeningRun(context.Context, string, string, string, schemas.RequirementState) (store.AgentRun, json.RawMessage, error)
-			}); ok {
-				continuable = true
-			}
-			if continuable {
-				mergeErr = s.planFromScreening(ctx, ownerID, r, state, input.RequirementSource)
-				if mergeErr != nil {
-					s.failInternal(ctx, r, store.PhaseCollecting, "")
-				}
-				return
-			}
-		}
-		if mergeErr == nil && state.NextAction == "plan" && !input.Conversation.CanPlan {
-			// Initial requirement confirmation remains explicit. A model action
-			// cannot silently skip it or claim execution before it starts.
-			state.NextAction, state.Reply = "confirm", ScreeningReadyMessage
-		}
 		if mergeErr == nil {
-			mergeErr = s.completeRequirementState(ctx, ownerID, r, state, result.RetryCount)
+			mergeErr = s.completeRequirementState(ctx, ownerID, r, state, result.Reply, result.RetryCount)
 		}
 		if mergeErr != nil {
 			s.fail(ctx, r, NewProblem("schema_validation_failed", "需求更新未保存", 422, mergeErr.Error(), r.ID), store.PhaseCollecting, "")

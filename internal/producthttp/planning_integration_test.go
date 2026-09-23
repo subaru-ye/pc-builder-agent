@@ -124,8 +124,8 @@ func (g *planningReplayGateway) Screen(ctx context.Context, owner, sessionID str
 		output = `{"next_action":"plan","operations":[]}`
 	case "预算调整为6500，其他要求保留并继续选配":
 		output = `{"next_action":"plan","operations":[{"op":"set","field":"budget_cny","value":6500,"strength":"must","quote":"预算调整为6500"}]}`
-	case "预算7000，剪1080p多轨视频，不要求静音":
-		output = `{"next_action":"confirm","operations":[{"op":"set","field":"budget_cny","value":7000,"strength":"must","quote":"预算7000"},{"op":"set","field":"free.workload_resolution","value":"1080p多轨视频剪辑","kind":"fact","strength":"must","quote":"剪1080p多轨视频"},{"op":"remove","field":"noise_pref","quote":"不要求静音"}]}`
+	case "预算7000，剪1080p多轨视频，不要求静音，配件全部新买":
+		output = `{"next_action":"confirm","operations":[{"op":"set","field":"budget_cny","value":7000,"strength":"must","quote":"预算7000"},{"op":"set","field":"use_case.type","value":"productivity","kind":"fact","strength":"must","quote":"剪1080p多轨视频"},{"op":"set","field":"use_case.titles","value":["1080p多轨视频剪辑"],"kind":"fact","strength":"must","quote":"剪1080p多轨视频"},{"op":"set","field":"free.workload_resolution","value":"1080p多轨视频剪辑","kind":"fact","strength":"must","quote":"剪1080p多轨视频"},{"op":"set","field":"existing_parts","value":[],"kind":"fact","strength":"must","quote":"配件全部新买"},{"op":"remove","field":"noise_pref","quote":"不要求静音"}]}`
 	case "把处理器换更好的，预算还很充足啊，其他配件尽量不动":
 		if input.Conversation.CanPlan && (!input.HasBuild || !strings.Contains(string(input.Conversation.BaseDraft), "cpu-r5-5600") || !strings.Contains(string(input.Conversation.Parts), "Ryzen 5 5600") || len(input.Conversation.Quote) == 0 || input.RequirementState.Fields["free.workload_resolution"].Status != "active") {
 			return product.ScreenResult{}, fmt.Errorf("upgrade did not receive actual current configuration and workload")
@@ -174,8 +174,10 @@ func (g *planningReplayGateway) Remote(ctx context.Context, _, sessionID string,
 	if input.Request != nil && (input.Request.Quote == "换成缺规格主板候选继续核实" || input.Request.Quote == "读取资料补齐主板规格并继续校验" || input.Request.Quote == "按当前方案继续校验") {
 		return g.supplementReplay(ctx, sessionID, input)
 	}
-	if input.Request != nil && input.State.Fields["priority"].Status == "active" {
-		if len(input.BaseDraft) == 0 || len(input.PreviousProposal) == 0 || input.Request.MessageID == "" {
+	if input.State.Fields["priority"].Status == "active" {
+		// v2:确认路径(而非聊天续跑)触发换件时同样携带基版本与上一方案;
+		// Request 只在聊天执行授权时存在,不再作为续跑上下文的必要条件。
+		if len(input.BaseDraft) == 0 || len(input.PreviousProposal) == 0 {
 			return product.RemoteResult{}, fmt.Errorf("missing continuation context")
 		}
 		var base map[string]json.RawMessage
@@ -252,6 +254,16 @@ func (m *planningReplayModel) GenerateContent(_ context.Context, req *model.LLMR
 	}
 }
 
+// v2CompleteSeed 生成满足最低确认矩阵的编辑种子(预算/用途/分辨率/已有件表态)。
+func v2CompleteSeed(budget int) []schemas.RequirementOperation {
+	return []schemas.RequirementOperation{
+		{Op: "set", Field: "budget_cny", Value: json.RawMessage(fmt.Sprintf(`%d`, budget)), Strength: "must"},
+		{Op: "set", Field: "use_case.type", Value: json.RawMessage(`"gaming"`), Kind: "fact", Strength: "must"},
+		{Op: "set", Field: "use_case.resolution", Value: json.RawMessage(`"2K"`), Kind: "fact", Strength: "must"},
+		{Op: "set", Field: "existing_parts", Value: json.RawMessage(`[]`), Kind: "fact", Strength: "must"},
+	}
+}
+
 func TestPlanningProposalPersistentWorkflow(t *testing.T) {
 	_, service, st := requirementIntegrationAPI(t, true)
 	ctx := context.Background()
@@ -298,7 +310,7 @@ func TestPlanningProposalPersistentWorkflow(t *testing.T) {
 		t.Fatal("run timeout")
 		return product.SessionDetail{}
 	}
-	edit(schemas.RequirementOperation{Op: "set", Field: "budget_cny", Value: json.RawMessage(`12000`), Strength: "must"})
+	edit(v2CompleteSeed(12000)...)
 	first := confirm()
 	if first.Session.VersionCount != 1 {
 		t.Fatalf("first build not saved: %s", first.Proposal)
@@ -380,7 +392,7 @@ func TestPlanningResultArchivedAndTransportDegraded(t *testing.T) {
 	if gateway == nil {
 		t.Fatal("planning gateway not registered")
 	}
-	edit(schemas.RequirementOperation{Op: "set", Field: "budget_cny", Value: json.RawMessage(`12000`), Strength: "must"})
+	edit(v2CompleteSeed(12000)...)
 	first := confirm()
 	if first.Session.VersionCount != 1 {
 		t.Fatalf("first build not saved: %s", first.Proposal)
@@ -493,7 +505,7 @@ func TestPlanningReplayDegradesDivergentVerification(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
-	edit(schemas.RequirementOperation{Op: "set", Field: "budget_cny", Value: json.RawMessage(`12000`), Strength: "must"})
+	edit(v2CompleteSeed(12000)...)
 	r, e := service.StartConfirm(ctx, owner, ws.ID, uuid.NewString())
 	if e != nil {
 		t.Fatal(e)
@@ -554,14 +566,17 @@ func TestPlanningDailyTokenBudgetRefusesNewRuns(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	edit := func() {
+	edit := func(ops ...schemas.RequirementOperation) {
 		d, e := service.GetSession(ctx, owner, ws.ID)
 		if e != nil {
 			t.Fatal(e)
 		}
 		var state schemas.RequirementState
 		_ = json.Unmarshal(d.Session.RequirementState, &state)
-		if _, e = service.EditRequirement(ctx, owner, ws.ID, uuid.NewString(), product.RequirementEdit{ExpectedRevision: state.Revision, Operations: []schemas.RequirementOperation{{Op: "set", Field: "budget_cny", Value: json.RawMessage(`12000`), Strength: "must"}}}); e != nil {
+		if ops == nil {
+			ops = v2CompleteSeed(12000)
+		}
+		if _, e = service.EditRequirement(ctx, owner, ws.ID, uuid.NewString(), product.RequirementEdit{ExpectedRevision: state.Revision, Operations: ops}); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -592,7 +607,9 @@ func TestPlanningDailyTokenBudgetRefusesNewRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("DAILY_TOKEN_BUDGET", "1")
-	edit()
+	// v2:同值重设的投影与确认快照一致,会话保持 ready;预算拒绝路径
+	// 需要一次真实修改(预算上调)才会回到 requirement_ready。
+	edit(v2CompleteSeed(13000)...)
 	if err := confirm(); err == nil || !strings.Contains(err.Error(), "daily_budget_exceeded") {
 		t.Fatalf("expected daily budget refusal: %v", err)
 	}

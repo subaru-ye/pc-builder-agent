@@ -259,7 +259,7 @@ func TestMandatoryCandidateShortageIsSpecificBusinessResultBeforeModel(t *testin
 			}
 			m := &fakeModel{}
 			h, err := New(Config{Model: m, Planner: planner, Repairer: NewRepairPlanner(), Eval: evalFunc(func(context.Context, schemas.BuildSelection) (validate.Result, error) {
-				t.Fatal("missing hard candidates reached evaluation")
+				t.Fatal("readiness.MissingFields hard candidates reached evaluation")
 				return validate.Result{}, nil
 			})})
 			if err != nil {
@@ -286,7 +286,7 @@ func TestMandatoryGPUCannotBeOmittedFromProductivityConfiguration(t *testing.T) 
 	h := newTestHarness(t, m, func(_ context.Context, selection schemas.BuildSelection) (validate.Result, error) {
 		evaluated++
 		if selection.GPU == nil {
-			t.Fatal("missing mandatory GPU reached compatibility pass")
+			t.Fatal("readiness.MissingFields mandatory GPU reached compatibility pass")
 		}
 		return passingResult("8000.00"), nil
 	})
@@ -340,15 +340,15 @@ func TestAppearanceDetailsDoNotTurnLegacyWorkloadIntoMandatoryProperty(t *testin
 		t.Run(appearance, func(t *testing.T) {
 			state := schemas.NewRequirementState()
 			for field, value := range map[string]string{
-				"budget_cny": `6000`, "use_case.type": `"productivity"`, "use_case.titles": `["剪4K视频"]`, "notes": `"剪4K视频"`,
+				"budget_cny": `6000`, "use_case.type": `"productivity"`, "use_case.titles": `["剪4K视频"]`, "notes": `"剪4K视频"`, "existing_parts": `[]`,
 			} {
 				state.Fields[field] = schemas.RequirementField{Status: "active", Value: json.RawMessage(value), Strength: "must", Scope: "session"}
 			}
 			state.Fields["noise_pref"] = schemas.RequirementField{Status: "active", Value: json.RawMessage(`"silent"`), Strength: "prefer", Scope: "session"}
 			state.Fields["appearance"] = schemas.RequirementField{Status: "active", Value: rawJSON(appearance), Strength: "prefer", Kind: "constraint", Scope: "session"}
-			raw, missing, err := schemas.RequirementStateSpec(state)
-			if err != nil || len(missing) > 0 {
-				t.Fatalf("projecting historical workload failed: %v missing=%v", err, missing)
+			raw, readiness, err := schemas.RequirementStateSpec(state)
+			if err != nil || len(readiness.MissingFields) > 0 {
+				t.Fatalf("projecting historical workload failed: %v readiness.MissingFields=%v", err, readiness.MissingFields)
 			}
 			spec, err := schemas.DecodeRequirementSpec(raw)
 			if err != nil || spec.Notes != "剪4K视频" || appearanceRequirementText(spec) != appearance || spec.ConstraintStrengths["notes"] != "must" {

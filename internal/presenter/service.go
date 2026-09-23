@@ -224,8 +224,7 @@ func (s *Service) Build(ctx context.Context, sessionID string, version int) (Bui
 			budgetTotal = value
 		}
 	}
-	var planningInput schemas.PlanningInput
-	if json.Unmarshal(row.Spec, &planningInput) == nil && planningInput.SchemaVersion == 2 {
+	if planningInput, ok := decodePlanningInput(row.Spec); ok {
 		if f := planningInput.State.Fields["budget_basis"]; f.Status == "active" {
 			_ = json.Unmarshal(f.Value, &basis)
 		}

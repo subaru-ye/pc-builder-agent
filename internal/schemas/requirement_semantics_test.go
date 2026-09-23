@@ -124,18 +124,19 @@ func TestRequirementAppearanceDoesNotRewriteWorkloadNotes(t *testing.T) {
 func TestRequirementOptionalSoftConflictDoesNotBlockKnownRequirements(t *testing.T) {
 	state := completeRequirementState(t)
 	state = updateState(t, state, "声音普通还是尽量安静都还没想好", `[{"op":"conflict","field":"noise_pref","kind":"constraint","strength":"prefer","evidence":"uncertain","quote":"声音普通还是尽量安静都还没想好"}]`)
-	raw, missing, err := RequirementStateSpec(state)
-	if err != nil || len(missing) > 0 || RequirementStateQuestions(state) != "" {
-		t.Fatalf("optional soft conflict blocked known requirements: %v %v", missing, err)
+	raw, readiness, err := RequirementStateSpec(state)
+	if err != nil || len(readiness.MissingFields) > 0 || RequirementStateQuestions(state) != "" {
+		t.Fatalf("optional soft conflict blocked known requirements: %v %v", readiness.MissingFields, err)
 	}
 	spec, _ := DecodeRequirementSpec(raw)
 	if spec.NoisePref != NoisePrefAny || len(spec.RequirementObservations) != 1 || spec.RequirementObservations[0].Field != "noise_pref" {
 		t.Fatal("old soft preference remained active or ambiguity lost")
 	}
 	state = updateState(t, state, "噪声标准必须确认后再装", `[{"op":"conflict","field":"noise_pref","kind":"constraint","strength":"must","evidence":"uncertain","quote":"噪声标准必须确认后再装"}]`)
-	_, missing, _ = RequirementStateSpec(state)
-	if len(missing) != 1 || missing[0] != "noise_pref" {
-		t.Fatal("real hard conflict was ignored")
+	// v2:must 冲突单列 blocking_conflicts,不与 readiness.MissingFields 混排。
+	if readiness, err := EvaluateRequirementReadiness(state); err != nil ||
+		len(readiness.MissingFields) != 0 || len(readiness.BlockingConflicts) != 1 || readiness.BlockingConflicts[0] != "noise_pref" {
+		t.Fatalf("real hard conflict was ignored: %+v %v", readiness, err)
 	}
 }
 

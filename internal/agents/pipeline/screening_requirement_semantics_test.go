@@ -28,10 +28,11 @@ func semanticTurn(t *testing.T, state schemas.RequirementState, input, output st
 	if m.calls != 1 {
 		t.Fatalf("unexpected model calls: %d", m.calls)
 	}
-	update, err := schemas.DecodeRequirementUpdate([]byte(delivered))
+	turn, err := DecodeLegacyRequirementTurn([]byte(delivered))
 	if err != nil {
 		t.Fatal(err)
 	}
+	update := turn.Update()
 	next, err := schemas.ApplyRequirementUpdate(state, update, source)
 	if err != nil {
 		t.Fatal(err)
@@ -41,10 +42,12 @@ func semanticTurn(t *testing.T, state schemas.RequirementState, input, output st
 
 // 语义答案是人工 oracle，测试开放表达不会被后端词表拦截，不冒充模型准确率。
 func TestScreeningOpenLanguageAndPartialUncertainty(t *testing.T) {
-	input := "兜里六千来块，给朋友拿去把旅行拍的一堆片子拼起来，别像吹风机；箱子能搬来搬去就行，帧数说不准"
+	input := "兜里六千来块，给朋友拿去把旅行拍的一堆片子拼起来，别像吹风机；箱子能搬来搬去就行，帧数说不准，配件全部新买"
 	next := semanticTurn(t, schemas.NewRequirementState(), input, `{"operations":[
 		{"op":"set","field":"budget_cny","value":6000,"kind":"constraint","evidence":"stated","quote":"兜里六千来块"},
 		{"op":"set","field":"use_case.type","value":"productivity","kind":"fact","evidence":"stated","quote":"把旅行拍的一堆片子拼起来"},
+		{"op":"set","field":"use_case.titles","value":["视频剪辑"],"kind":"fact","evidence":"stated","quote":"把旅行拍的一堆片子拼起来"},
+		{"op":"set","field":"existing_parts","value":[],"kind":"fact","evidence":"stated","quote":"配件全部新买"},
 		{"op":"set","field":"recipient","value":"朋友","kind":"fact","evidence":"stated","quote":"给朋友"},
 		{"op":"set","field":"noise_pref","value":"silent","kind":"constraint","evidence":"stated","strength":"prefer","quote":"别像吹风机"},
 		{"op":"set","field":"use_case.fps_target","value":"不知道","evidence":"uncertain","strength":"prefer","quote":"帧数说不准"},
@@ -56,9 +59,9 @@ func TestScreeningOpenLanguageAndPartialUncertainty(t *testing.T) {
 	if schemas.RequirementStateQuestions(next) != "" {
 		t.Fatal("optional uncertainty blocked complete requirements")
 	}
-	raw, missing, err := schemas.RequirementStateSpec(next)
-	if err != nil || len(missing) != 0 {
-		t.Fatalf("projection failed: %v %v", missing, err)
+	raw, readiness, err := schemas.RequirementStateSpec(next)
+	if err != nil || len(readiness.MissingFields) != 0 {
+		t.Fatalf("projection failed: %v %v", readiness.MissingFields, err)
 	}
 	spec, _ := schemas.DecodeRequirementSpec(raw)
 	if spec.RequirementSemantics["use_case.type"] != "fact" || len(spec.RequirementObservations) != 3 || next.Fields["budget_flex"].Status != "unknown" {
@@ -146,8 +149,8 @@ func TestScreeningFormatRetryAcceptsCorrectedOutput(t *testing.T) {
 	if m.calls != 2 || retries != 1 {
 		t.Fatalf("retry not exercised: %d %d", m.calls, retries)
 	}
-	update, err := schemas.DecodeRequirementUpdate([]byte(delivered))
-	if err != nil || len(update.Operations) != 1 || string(update.Operations[0].Value) != "8000" {
+	corrected, err := DecodeLegacyRequirementTurn([]byte(delivered))
+	if err != nil || len(corrected.Operations) != 1 || string(corrected.Operations[0].Value) != "8000" {
 		t.Fatalf("corrected output lost: %s %v", delivered, err)
 	}
 }
@@ -187,9 +190,10 @@ func TestScreeningInvalidBudgetCorrectionDoesNotReuseOldBudget(t *testing.T) {
 }
 
 func TestScreeningNoChangePreservesConfirmedProjection(t *testing.T) {
-	state := semanticTurn(t, schemas.NewRequirementState(), "预算六千，文档表格用", `{"operations":[
+	state := semanticTurn(t, schemas.NewRequirementState(), "预算六千，文档表格用，配件全部新买。", `{"operations":[
 		{"op":"set","field":"budget_cny","value":6000,"kind":"constraint","evidence":"stated","quote":"预算六千"},
-		{"op":"set","field":"use_case.type","value":"general","kind":"fact","evidence":"stated","quote":"文档表格用"}
+		{"op":"set","field":"use_case.type","value":"general","kind":"fact","evidence":"stated","quote":"文档表格用"},
+		{"op":"set","field":"existing_parts","value":[],"kind":"fact","evidence":"stated","quote":"配件全部新买"}
 	]}`)
 	before, _, err := schemas.RequirementStateSpec(state)
 	if err != nil {

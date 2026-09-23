@@ -120,8 +120,6 @@ const RequirementObservation = z.object({
 });
 const RequirementState = z.object({
   schema_version: z.number().int(),
-  reply: z.string().optional(),
-  next_action: z.enum(["collect", "confirm", "plan"]).optional(),
   revision: z.number().int().gte(0),
   fields: z.record(z.string(), RequirementField),
   alternatives: z.array(RequirementAlternative),
@@ -290,6 +288,11 @@ const RequirementSpec = z.object({
   schema_version: z.number().int(),
   budget_cny: z.number().int().gte(1),
   budget_flex: z.number().gte(0).lte(0.3).optional().default(0.1),
+  configuration_scope: z
+    .array(z.literal("tower"))
+    .min(1)
+    .max(1)
+    .default(["tower"]),
   use_case: z.unknown(),
   size_pref: z.enum(["atx", "matx", "itx", "any"]).optional().default("any"),
   noise_pref: z.enum(["silent", "normal", "any"]).optional().default("any"),
@@ -318,10 +321,7 @@ const RequirementSpec = z.object({
     .record(z.string(), z.enum(["fact", "context", "constraint"]))
     .optional(),
   requirement_observations: z.array(RequirementObservation).optional(),
-  requirement_details: z
-    .object({ appearance: z.string(), recipient: z.string() })
-    .partial()
-    .optional(),
+  requirement_details: z.record(z.string(), z.string()).optional(),
 });
 const Problem = z
   .object({

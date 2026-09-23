@@ -63,7 +63,7 @@ func fixtureBuild(t *testing.T, version int, mutate func(*wireDraft, *validate.Q
 	}
 }
 
-const specJSON = `{"schema_version":1,"budget_cny":8000,"use_case":{"type":"gaming","resolution":"2K"}}`
+const specJSON = `{"schema_version":2,"configuration_scope":["tower"],"budget_cny":8000,"use_case":{"type":"gaming","resolution":"2K"}}`
 
 func TestDecodeBuildIntentLabels(t *testing.T) {
 	b := fixtureBuild(t, 1, nil)
@@ -117,7 +117,7 @@ func TestRenderDiff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("解码 v1 失败: %v", err)
 	}
-	toRow, err := decodeBuild(v3, json.RawMessage(`{"schema_version":1,"budget_cny":7500,"use_case":{"type":"gaming","resolution":"2K"}}`))
+	toRow, err := decodeBuild(v3, json.RawMessage(`{"schema_version":2,"configuration_scope":["tower"],"budget_cny":7500,"use_case":{"type":"gaming","resolution":"2K"}}`))
 	if err != nil {
 		t.Fatalf("解码 v3 失败: %v", err)
 	}

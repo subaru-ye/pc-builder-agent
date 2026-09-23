@@ -12,7 +12,6 @@ import (
 
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/validate"
 	"github.com/subaru-ye/pc-builder-agent/internal/planning"
-	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 )
@@ -116,7 +115,7 @@ func TestCPUChangeRequiresDifferentSelectionAndPreviousDraft(t *testing.T) {
 		}
 		encoded, _ := json.Marshal(draft)
 		for _, previous := range []*StepRecord{nil, &prior} {
-			r := StepRecord{Result: &planning.Result{Draft: encoded}, State: schemas.RequirementState{NextAction: "collect"}}
+			r := StepRecord{Result: &planning.Result{Draft: encoded}, StateNextAction: "collect"}
 			Grade(&r, Expect{CPUChanged: true, NextAction: "plan"}, previous)
 			for _, c := range r.Checks {
 				if c.Name == "changed_cpu" && c.Pass != (changed && previous != nil) {

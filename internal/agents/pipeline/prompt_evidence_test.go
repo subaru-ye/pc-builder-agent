@@ -15,9 +15,9 @@ func (*promptEvidenceModel) Name() string { return "offline-prompt-evidence" }
 func (m *promptEvidenceModel) GenerateContent(_ context.Context, req *model.LLMRequest, _ bool) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {
 		m.requests = append(m.requests, req)
-		raw := `{"schema_version":1,"budget_cny":8000,"use_case":{"type":"general"},"priority":["noise"]}`
+		raw := `{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":8000,"use_case":{"type":"general"},"priority":["noise"]}`
 		if len(m.requests) > 1 {
-			raw = `{"schema_version":1,"budget_cny":8000,"use_case":{"type":"general"}}`
+			raw = `{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":8000,"use_case":{"type":"general"}}`
 		}
 		yield(&model.LLMResponse{Content: genai.NewContentFromText(raw, genai.RoleModel)}, nil)
 	}

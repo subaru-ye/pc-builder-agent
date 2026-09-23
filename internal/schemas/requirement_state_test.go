@@ -28,7 +28,8 @@ func completeRequirementState(t *testing.T) RequirementState {
 		{"op":"set","field":"use_case.resolution","value":"2K","quote":"2K游戏"},
 		{"op":"set","field":"noise_pref","value":"silent","strength":"prefer","quote":"尽量安静"},
 		{"op":"set","field":"brand_pref.gpu","value":"nvidia","strength":"must","quote":"显卡必须英伟达"},
-		{"op":"set","field":"recipient","value":"朋友","quote":"给朋友装机"}
+		{"op":"set","field":"recipient","value":"朋友","quote":"给朋友装机"},
+		{"op":"set","field":"existing_parts","value":[],"quote":"给朋友装机"}
 	]`)
 }
 
@@ -36,9 +37,9 @@ func TestRequirementStateBudgetChangeKeepsFactsAndConfirmationImmutable(t *testi
 	confirmed := completeRequirementState(t)
 	before, _ := json.Marshal(confirmed)
 	next := updateState(t, confirmed, "预算改为9000", `[{"op":"set","field":"budget_cny","value":9000,"quote":"预算改为9000"}]`)
-	raw, missing, err := RequirementStateSpec(next)
-	if err != nil || len(missing) > 0 {
-		t.Fatalf("projection: %s %v %v", raw, missing, err)
+	raw, readiness, err := RequirementStateSpec(next)
+	if err != nil || len(readiness.MissingFields) > 0 {
+		t.Fatalf("projection: %s %v %v", raw, readiness.MissingFields, err)
 	}
 	spec, _ := DecodeRequirementSpec(raw)
 	if spec.BudgetCNY != 9000 || spec.NoisePref != NoisePrefSilent || spec.BrandPref.GPU != GPUBrandNvidia || spec.UseCase.Resolution != Resolution2K {
@@ -51,7 +52,7 @@ func TestRequirementStateBudgetChangeKeepsFactsAndConfirmationImmutable(t *testi
 	if !bytes.Equal(before, after) {
 		t.Fatal("mutated confirmed snapshot")
 	}
-	if len(next.Changes) != 1 || len(next.History) != 7 || next.Fields["noise_pref"].Source.MessageID == "预算改为9000" {
+	if len(next.Changes) != 1 || len(next.History) != 8 || next.Fields["noise_pref"].Source.MessageID == "预算改为9000" {
 		t.Fatalf("invalid provenance/history: %+v", next)
 	}
 	if question := RequirementStateQuestions(next); question != "" {
@@ -81,9 +82,9 @@ func TestRequirementStateUnknownAndRemovedNeverBecomeStatedDefaults(t *testing.T
 		t.Fatal("removed preference still passed to builder")
 	}
 	state = updateState(t, state, "用途暂时没定", `[{"op":"remove","field":"use_case.type","quote":"用途暂时没定"}]`)
-	_, missing, _ := RequirementStateSpec(state)
-	if !reflect.DeepEqual(missing, []string{"use_case.type"}) {
-		t.Fatalf("unrelated missing fields: %v", missing)
+	_, readiness, _ := RequirementStateSpec(state)
+	if !reflect.DeepEqual(readiness.MissingFields, []string{"use_case.type"}) {
+		t.Fatalf("unrelated missing fields: %v", readiness.MissingFields)
 	}
 }
 
@@ -103,9 +104,12 @@ func TestRequirementStateAlternativeTemporaryConflictAndRestore(t *testing.T) {
 		t.Fatalf("bad restore: %+v", field)
 	}
 	state = updateState(t, state, "预算必须8000，也必须9000", `[{"op":"conflict","field":"budget_cny","value":8000,"quote":"预算必须8000，也必须9000"}]`)
-	_, missing, err := RequirementStateSpec(state)
-	if err != nil || !reflect.DeepEqual(missing, []string{"budget_cny"}) || strings.Contains(RequirementStateQuestions(state), "用途") {
-		t.Fatalf("conflict asks unrelated questions: %v %v", missing, err)
+	// v2:conflict 单列 blocking,不再混入 readiness.MissingFields;追问优先指向冲突本身。
+	readiness, err := EvaluateRequirementReadiness(state)
+	_, projectionReadiness, specErr := RequirementStateSpec(state)
+	if err != nil || specErr != nil || len(readiness.MissingFields) != 0 || !reflect.DeepEqual(readiness.BlockingConflicts, []string{"budget_cny"}) || len(projectionReadiness.BlockingConflicts) != 1 ||
+		!strings.Contains(RequirementStateQuestions(state), "预算") || strings.Contains(RequirementStateQuestions(state), "用途") {
+		t.Fatalf("conflict asks unrelated questions: %v %v %v", readiness.MissingFields, readiness.BlockingConflicts, err)
 	}
 }
 
@@ -162,9 +166,15 @@ func TestRequirementStateOwnedRemovalClearsAssociatedModels(t *testing.T) {
 		{"op":"set","field":"owned_parts","value":[{"category":"gpu","model":"RTX 4060","quantity":1}],"quote":"已有RTX 4060显卡"},
 		{"op":"set","field":"budget_basis","value":"new_purchase","quote":"预算只算新增"}]`)
 	state = updateState(t, state, "不再使用已有配件", `[{"op":"remove","field":"existing_parts","quote":"不再使用已有配件"}]`)
-	raw, missing, err := RequirementStateSpec(state)
-	if err != nil || len(missing) > 0 {
-		t.Fatalf("withdrawn owned still questioned: %v %v", missing, err)
+	// v2:撤销必填按缺失处理;已有件型号必须已被联动清除。
+	raw, readiness, err := RequirementStateSpec(state)
+	if err != nil || !reflect.DeepEqual(readiness.MissingFields, []string{"existing_parts"}) || state.Fields["owned_parts"].Status != "removed" {
+		t.Fatalf("withdrawn owned still questioned: %v %v", readiness.MissingFields, err)
+	}
+	state = updateState(t, state, "那就算全部新买", `[{"op":"set","field":"existing_parts","value":[],"quote":"那就算全部新买"}]`)
+	raw, readiness, err = RequirementStateSpec(state)
+	if err != nil || len(readiness.MissingFields) > 0 {
+		t.Fatalf("explicit empty existing still questioned: %v %v", readiness.MissingFields, err)
 	}
 	spec, _ := DecodeRequirementSpec(raw)
 	if len(spec.ExistingParts) > 0 || len(spec.OwnedParts) > 0 {
@@ -180,7 +190,7 @@ func TestRequirementStatePromptViewIsBoundedAndDeclaresTruncation(t *testing.T) 
 		t.Fatal("small state must not declare truncation")
 	}
 	if !strings.Contains(string(view), `"budget_cny"`) {
-		t.Fatal("structured fields missing from small view")
+		t.Fatal("structured fields readiness.MissingFields from small view")
 	}
 
 	state := completeRequirementState(t)

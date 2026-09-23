@@ -17,13 +17,34 @@
    "docs/changes/requirement-confirmation-builder-gate-v2.md（三轴状态、policy、快照）",
    "docs/changes/requirement-workspace-sidebar-v2.md（ui-contract 展示真值）"
   ],
-  "revision": "2026-09-22 v5（reqv2-grader-v2）：provider_success/latency_p95/max_model_calls_per_turn/预算一致性改为统计 extraction+conversations 全部真实 provider 轮（verdict layer=model），样本范围与 report.usage 一致；此前 v4：补齐 case_success/final_state/provider_success/latency_p95/max_calls_per_turn/预算一致性门槛，replay 恢复真实 repeats；此前 v3：gate verdict 结构化、pass^k 折叠修正、关键字段零容忍与 min_signal_turns 冻结、同轮更正取后值并新增家庭预算冲突例；此前 v2：按人工验收意见修正——“预算3000左右”改为记录 budget_cny=3000（近似由默认 budget_flex 表达）；rd-reject-inferred 原话不再包含金额，仅剩推断路径；新增 rdy-gaming-any-resolution-not-satisfied（any 是 active 值但不满足 gaming 最低矩阵）；gates 模型质量阈值冻结为具体数值。",
+  "revision": "2026-09-23 金标定向修正（grader 不变 reqv2-grader-v2,manifest 升为 abb9cd25…）：按授权更正两条建基时按 v1 行为误标的 readiness 金标——rdy-budget-conflict-blocks.missing_fields 补 existing_parts（同形状人工复核金标 ex-budget-conflict-family 期望 [use_case.type, existing_parts],与 rdy-existing-unknown-blocks/rdy-fresh 的 v2 矩阵一致）；rdy-holdout-owned-basis.missing_fields 补 use_case.titles（productivity 条件必填,与 rdy-productivity-no-titles 一致）。仅此两条,其余金标、split 与 gates 未动,holdout 未运行。2026-09-22 v5（reqv2-grader-v2）：provider_success/latency_p95/max_model_calls_per_turn/预算一致性改为统计 extraction+conversations 全部真实 provider 轮（verdict layer=model），样本范围与 report.usage 一致；此前 v4：补齐 case_success/final_state/provider_success/latency_p95/max_calls_per_turn/预算一致性门槛，replay 恢复真实 repeats；此前 v3：gate verdict 结构化、pass^k 折叠修正、关键字段零容忍与 min_signal_turns 冻结、同轮更正取后值并新增家庭预算冲突例；此前 v2：按人工验收意见修正——“预算3000左右”改为记录 budget_cny=3000（近似由默认 budget_flex 表达）；rd-reject-inferred 原话不再包含金额，仅剩推断路径；新增 rdy-gaming-any-resolution-not-satisfied（any 是 active 值但不满足 gaming 最低矩阵）；gates 模型质量阈值冻结为具体数值。",
   "known_boundaries": [
    "ex-monitor-request 的“不猜用途”、ex-budget-correction-same-turn 的“同轮自我更正取后值 set”与 ex-budget-conflict-family 的“互斥明确约束记 conflict”是新增边界，已随 2026-09-22 人工复核（16/16 接受）确认。",
    "conversations 用例为确定性用户脚本；LLM 用户模拟器生成的探索性候选未纳入。",
    "catalog.json 取自 current-178-20260917 冻结目录每品类首件（8 件），仅满足隔离数据库外键，不代表评估选件范围。"
   ],
-  "review_sheet": "docs/eval/requirement-v2/人工复核-20260922.md（holdout 全量与关键边界，供产品方逐项确认；holdout 未运行）"
+  "review_sheet": "docs/eval/requirement-v2/人工复核-20260922.md（holdout 全量与关键边界，供产品方逐项确认；holdout 未运行）",
+  "gold_corrections": {
+   "date": "2026-09-23",
+   "authorized_by": "requirement-state-readiness-v2 定向返工授权（本轮）",
+   "review_sheet": "docs/eval/requirement-v2/人工复核-20260923.md",
+   "grader_version_unchanged": true,
+   "corrections": [
+    {
+     "case": "rdy-budget-conflict-blocks",
+     "split": "development",
+     "change": "missing_fields [use_case.type] → [use_case.type, existing_parts]",
+     "reason": "状态 existing_parts=unknown,v2 最低矩阵必填;同形状人工复核金标 ex-budget-conflict-family 亦含 existing_parts"
+    },
+    {
+     "case": "rdy-holdout-owned-basis",
+     "split": "holdout",
+     "change": "missing_fields [budget_basis] → [use_case.titles, budget_basis]",
+     "reason": "状态 use_case.type=productivity 且 titles=unknown,v2 条件必填至少一项软件或任务"
+    }
+   ],
+   "note": "holdout 仅做本授权内的静态修正与完整性检查,未运行、未用于调参;旧 manifest(558de144…)与旧基线产物原样保留。"
+  }
  },
  "splits": {
   "rule": "按 case 的 session 字段划分；同一 session 与同一 variants_of 模板不得跨 split。今天人工模拟的 FPS/7500/全部新买对话（cv-fps-progressive）按 spec 归入 development。",

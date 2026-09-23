@@ -89,7 +89,7 @@ func TestRunCancelLifecycle(t *testing.T) {
 	}
 
 	// 取消后同会话可继续对话并走到 requirement_ready。
-	_, err = svc.StartMessage(ctx, owner, ws.ID, uuid.NewString(), "预算8000，玩游戏，要安静一点，尽量用N卡，帮朋友装机")
+	_, err = svc.StartMessage(ctx, owner, ws.ID, uuid.NewString(), "预算8000，玩游戏，要安静一点，尽量用N卡，帮朋友装机，2K分辨率，配件全部新买")
 	if err != nil {
 		t.Fatalf("取消后会话仍被锁:%v", err)
 	}

@@ -99,8 +99,14 @@ func replayScreening(ctx context.Context, input product.ScreenInput, output stri
 	if m.calls > 2 {
 		return product.ScreenResult{}, fmt.Errorf("offline screening calls=%d, expected at most two (one collect fallback retry)", m.calls)
 	}
-	update, err := schemas.DecodeRequirementUpdate(pipeline.ExtractPayload(text))
-	return product.ScreenResult{Kind: product.ScreenRequirement, Text: text, RequirementUpdate: &update}, err
+	// 脚本输出保留 v1 传输外形(含 reply/next_action):经 legacy turn decoder
+	// 接收并剥离;领域更新不得携带会话回复与流程动作。
+	turn, err := pipeline.DecodeLegacyRequirementTurn(pipeline.ExtractPayload(text))
+	if err != nil {
+		return product.ScreenResult{}, err
+	}
+	update := turn.Update()
+	return product.ScreenResult{Kind: product.ScreenRequirement, Text: text, Reply: turn.Reply, RequirementUpdate: &update}, nil
 }
 
 func (g *requirementReplayGateway) ContextAvailable(context.Context, string, string) (bool, error) {
@@ -123,8 +129,10 @@ func (g *requirementReplayGateway) Screen(ctx context.Context, _, _ string, inpu
 			return product.ScreenResult{}, err
 		}
 		return replayScreening(ctx, input, output)
-	case "预算8000，玩游戏，要安静一点，尽量用N卡，帮朋友装机":
-		ops = []schemas.RequirementOperation{op("budget_cny", 8000, "must"), op("use_case.type", "gaming", "must"), op("noise_pref", "silent", "prefer"), op("brand_pref.gpu", "nvidia", "prefer"), op("recipient", "朋友", "must")}
+	case "预算8000，玩游戏，要安静一点，尽量用N卡，帮朋友装机，2K分辨率，配件全部新买":
+		ops = []schemas.RequirementOperation{op("budget_cny", 8000, "must"), op("use_case.type", "gaming", "must"), op("use_case.resolution", "2K", "must"), op("existing_parts", []any{}, "must"), op("noise_pref", "silent", "prefer"), op("brand_pref.gpu", "nvidia", "prefer"), op("recipient", "朋友", "must")}
+	case "配件全部新买，就用这套剪片子":
+		ops = []schemas.RequirementOperation{op("existing_parts", []any{}, "must"), op("use_case.titles", []string{"4K 视频剪辑"}, "must")}
 	case "预算改成6000":
 		ops = []schemas.RequirementOperation{op("budget_cny", 6000, "must")}
 	case "用2K":
@@ -355,7 +363,7 @@ func TestRequirementStatePersistentWorkflow(t *testing.T) {
 		}
 		return state
 	}
-	detail := chat("预算8000，玩游戏，要安静一点，尽量用N卡，帮朋友装机")
+	detail := chat("预算8000，玩游戏，要安静一点，尽量用N卡，帮朋友装机，2K分辨率，配件全部新买")
 	if len(detail.MissingFields) != 0 {
 		t.Fatalf("重复追问已知字段: %v", detail.MissingFields)
 	}
@@ -521,6 +529,13 @@ func TestVideoRequirementConfirmationReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	detail := wait(started.Run.ID, store.RunSucceeded)
+	// 真实录制不含 v2 最低矩阵的必答项;补一轮脚本化输入完成 existing/titles,
+	// 录制本身仍用于验证工作负载分辨率不冒充显示目标。
+	complete, err := service.StartMessage(ctx, owner, ws.ID, uuid.NewString(), "配件全部新买，就用这套剪片子")
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail = wait(complete.Run.ID, store.RunSucceeded)
 	state := stateOf(detail)
 	if len(detail.MissingFields) != 0 || state.Fields["budget_flex"].Status != "unknown" || state.Fields["use_case.resolution"].Status == "active" {
 		t.Fatalf("invented preference or unnecessary question: %+v", detail)

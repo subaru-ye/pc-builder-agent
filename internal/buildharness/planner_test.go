@@ -316,10 +316,11 @@ func TestPlannerPostgreSQLCatalogIntegration(t *testing.T) {
 
 func fixtureRequirement() schemas.RequirementSpec {
 	return schemas.RequirementSpec{
-		SchemaVersion: 1, BudgetCNY: 8000, BudgetFlex: 0.1,
+		SchemaVersion: schemas.RequirementSpecSchemaVersion, BudgetCNY: 8000, BudgetFlex: 0.1,
 		UseCase:  schemas.UseCase{Type: schemas.UseCaseGaming, Resolution: schemas.Resolution2K},
 		SizePref: schemas.SizePrefAny, NoisePref: schemas.NoisePrefAny,
-		BrandPref: schemas.BrandPref{CPU: schemas.CPUBrandAny, GPU: schemas.GPUBrandAny},
+		BrandPref:          schemas.BrandPref{CPU: schemas.CPUBrandAny, GPU: schemas.GPUBrandAny},
+		ConfigurationScope: []string{schemas.ConfigurationScopeTower},
 	}
 }
 

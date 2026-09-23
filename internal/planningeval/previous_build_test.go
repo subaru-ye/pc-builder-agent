@@ -28,7 +28,7 @@ func TestHistoricalBaseAndBatchProductFlow(t *testing.T) {
 	var wire struct{ Selection json.RawMessage }
 	_ = json.Unmarshal(output.Draft, &wire)
 	selection, _ := json.Marshal(map[string]any{"schema_version": 1, "build_ref": draft.BuildRef, "parts": wire.Selection})
-	c.PreviousBuild = &PreviousBuildFixture{Selection: selection, Requirement: json.RawMessage(`{"schema_version":1,"budget_cny":6000,"use_case":{"type":"productivity"}}`), Source: "Saved real candidate selection; test historical precondition"}
+	c.PreviousBuild = &PreviousBuildFixture{Selection: selection, Requirement: json.RawMessage(`{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":6000,"use_case":{"type":"productivity"}}`), Source: "Saved real candidate selection; test historical precondition"}
 	var update schemas.RequirementUpdate
 	if err := json.Unmarshal(c.Steps[0].Screen, &update); err != nil {
 		t.Fatal(err)

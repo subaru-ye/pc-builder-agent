@@ -137,7 +137,7 @@ func TestPurchaseBudgetGradeRequiresVerifiedProcurementQuote(t *testing.T) {
 }
 
 func TestHistoricalGradeRejectsUnsupportedPendingAndWrongSelection(t *testing.T) {
-	draft := json.RawMessage(`{"schema_version":1,"requirement_ref":"current","build_ref":"test","selection":{"cpu":"cpu-a","gpu":"gpu-a","motherboard":"mb-a","memory":"mem-a","ssd":[{"sku":"ssd-a","quantity":1}],"psu":"psu-a","case":"case-a","cooler":"cooler-a"}}`)
+	draft := json.RawMessage(`{"schema_version": 2, "configuration_scope": ["tower"],"requirement_ref":"current","build_ref":"test","selection":{"cpu":"cpu-a","gpu":"gpu-a","motherboard":"mb-a","memory":"mem-a","ssd":[{"sku":"ssd-a","quantity":1}],"psu":"psu-a","case":"case-a","cooler":"cooler-a"}}`)
 	r := StepRecord{PlanningInput: &schemas.PlanningInput{}, Result: &planning.Result{Outcome: "proposal", Draft: draft, Issues: []string{"缺少噪声测试"}, Candidates: []planning.Candidate{{ID: "cpu-a", Category: schemas.CategoryCPU, Brand: "AMD"}}}}
 	Grade(&r, Expect{OutcomeOneOf: []string{"proposal", "clarify"}, IssuesAny: []string{"预算"}, SelectedParts: map[string]string{"cpu": "cpu-b"}, SelectedBrands: map[string]string{"cpu": "Intel"}, SelectedOptions: map[string][]string{"cpu": {"cpu-b", "cpu-c"}}}, nil)
 	for _, name := range []string{"specific_issue_any", "selected_part:cpu", "selected_brand:cpu", "selected_option:cpu"} {

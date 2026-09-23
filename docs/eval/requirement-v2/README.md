@@ -45,7 +45,13 @@ go run ./cmd/evalrequirement -mode compare -baseline <A> -candidate <B>
 
 产物目录包含完整 fixture 副本、`plan.json`（manifest/gates/grader/程序哈希、模型脱敏配置、预算、split、repeats）、`events.jsonl`（逐 turn 观测与模型调用）、`results.jsonl`（逐 case 冻结观测 + 断言）、`report.json` / `report.md`。不记录凭据与隐藏思维链。
 
-## 冻结基线（2026-09-22，reqv2-grader-v2，当前 v1 实现）
+## 金标定向修正（2026-09-23，grader 不变，manifest abb9cd25…）
+
+- 授权更正两条建基时按 v1 行为误标的 readiness 金标：`rdy-budget-conflict-blocks` 补 `existing_parts`、`rdy-holdout-owned-basis` 补 `use_case.titles`;其余金标、split、gates 未动,holdout 未运行。记录见 [人工复核-20260923.md](人工复核-20260923.md) 与 `provenance.json` 的 `labeling.gold_corrections`。
+- manifest:`558de144… → abb9cd25…`(readiness/cases.json `485436e6… → c9952e79…`,frozen_at 2026-09-23);grader 判定逻辑未变,版本保持 `reqv2-grader-v2`。
+- 产物:旧基线原样保留;新零模型重判 `artifacts/reqv2/replay-goldfix-deterministic-20260923`(replay 旧基线冻结观测,67 例,verdict 变化 0);Spec 2 实现候选 `artifacts/reqv2/spec2-rework-deterministic-20260923`(dev+cal:reducer 11/11、readiness 12/12,这两层 veto 0;policy 3/8、veto V9×1,ui-contract 0/3,归属后续 change)。
+
+## 历史冻结基线（2026-09-22，reqv2-grader-v2，当时的 v1 实现）
 
 | Run | 产物 | 口径 |
 |---|---|---|

@@ -217,10 +217,10 @@ func TestRequirementStateLiveSmoke(t *testing.T) {
 		if err := json.Unmarshal(stored, &state); err != nil {
 			t.Fatal(err)
 		}
-		raw, missing, err := schemas.RequirementStateSpec(state)
+		raw, readiness, err := schemas.RequirementStateSpec(state)
 		turns = append(turns, turnEvidence{Input: input, State: state, Spec: raw})
-		if err != nil || len(missing) > 0 || schemas.RequirementStateQuestions(state) != "" {
-			t.Fatalf("turn=%d 已知需求仍被追问: missing=%v err=%v", index+1, missing, err)
+		if err != nil || len(readiness.MissingFields) > 0 || schemas.RequirementStateQuestions(state) != "" {
+			t.Fatalf("turn=%d 已知需求仍被追问: readiness.MissingFields=%v err=%v", index+1, readiness.MissingFields, err)
 		}
 		spec, err := schemas.DecodeRequirementSpec(raw)
 		if err != nil {

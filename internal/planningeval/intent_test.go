@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
 	"github.com/subaru-ye/pc-builder-agent/internal/decision"
 	"github.com/subaru-ye/pc-builder-agent/internal/product"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
@@ -334,10 +335,13 @@ func TestJevIntentV1SyntheticOraclesReduceToExpectations(t *testing.T) {
 			if step.Kind != "message" {
 				continue
 			}
-			update, err := schemas.DecodeRequirementUpdate(step.Screen)
+			// 冻结 Jev 轨迹是 v1 传输外形:经 legacy turn decoder 取剥离后的
+			// 领域更新;动作声明只作对照标签,不再有产品权威。
+			turn, err := pipeline.DecodeLegacyRequirementTurn(step.Screen)
 			if err != nil {
 				t.Fatalf("%s: oracle does not decode: %v", c.ID, err)
 			}
+			update := turn.Update()
 			next, err := schemas.ApplyRequirementUpdate(state, update, schemas.RequirementSource{Kind: "chat", Quote: step.Text})
 			if err != nil {
 				t.Fatalf("%s: oracle does not reduce: %v", c.ID, err)
@@ -346,12 +350,12 @@ func TestJevIntentV1SyntheticOraclesReduceToExpectations(t *testing.T) {
 			// state before this turn, so the first message keeps an explicit
 			// confirmation even when the model hands over plan.
 			canPlan := state.Revision > 0
-			final := update.NextAction
+			final := turn.NextAction
 			if final == "plan" && !canPlan {
 				final = "confirm"
 			}
 			if step.Expect.NextAction != final {
-				t.Fatalf("%s: oracle action %s (final %s) != label %s", c.ID, next.NextAction, final, step.Expect.NextAction)
+				t.Fatalf("%s: oracle action (final %s) != label %s", c.ID, final, step.Expect.NextAction)
 			}
 			assertFieldExpectations(t, c.ID, next, step.Expect.Fields)
 			state = next

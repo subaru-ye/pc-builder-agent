@@ -23,24 +23,51 @@ import (
 	"google.golang.org/adk/v2/model"
 )
 
-// CurrentReadiness 是当前实现对 v2 readiness 合同的最诚实投影：missing 来自
-// schemas.RequirementStateSpec；blocking 分离与 effective defaults 当前没有
-// 表达面，记入 ContractGaps 而不是伪造。
+// 装载侧机械适配:仅升 schema_version 并补 configuration_scope,不改值、
+// 不生成用户事实;产品路径不得调用。
+func upgradeLegacyEvalSpec(raw json.RawMessage) json.RawMessage {
+	var header struct {
+		SchemaVersion int `json:"schema_version"`
+	}
+	if json.Unmarshal(raw, &header) != nil || header.SchemaVersion != 1 {
+		return raw
+	}
+	decoded := map[string]json.RawMessage{}
+	if json.Unmarshal(raw, &decoded) != nil {
+		return raw
+	}
+	version, _ := json.Marshal(schemas.RequirementSpecSchemaVersion)
+	scope, _ := json.Marshal([]string{schemas.ConfigurationScopeTower})
+	decoded["schema_version"] = version
+	decoded["configuration_scope"] = scope
+	if out, err := json.Marshal(decoded); err == nil {
+		return out
+	}
+	return raw
+}
+
+// reqV2UpgradeState 把冻结 fixture 的 v1 外形机械升格为 v2 领域输入:
+// 只改 schema_version,不改写、不补造任何字段或用户事实。
+// 本适配仅限 planningeval 消费冻结 fixture;产品路径不得调用
+// (产品 decoder 以稳定错误拒绝 v1,见 schemas.DecodeRequirementState)。
+func reqV2UpgradeState(state schemas.RequirementState) schemas.RequirementState {
+	state.SchemaVersion = schemas.RequirementStateSchemaVersion
+	return state
+}
+
+// CurrentReadiness 走 v2 领域 readiness:missing/blocking/unsupported/defaults
+// 全部来自 schemas.EvaluateRequirementReadiness,不再有契约缺口标记。
 func CurrentReadiness(state schemas.RequirementState) ReqV2ReadinessResult {
-	r := ReqV2ReadinessResult{Status: "incomplete", MissingFields: []string{}, BlockingConflicts: []string{}, ContractGaps: []string{"blocking_conflicts_separation", "effective_defaults"}}
-	_, missing, err := schemas.RequirementStateSpec(state)
+	r, err := schemas.EvaluateRequirementReadiness(reqV2UpgradeState(state))
+	out := ReqV2ReadinessResult{Status: r.Status, MissingFields: r.MissingFields, BlockingConflicts: r.BlockingConflicts,
+		UnsupportedCapabilities: r.UnsupportedCapabilities, ConfirmationEligible: r.ConfirmationEligible}
+	for _, d := range r.EffectiveDefaults {
+		out.EffectiveDefaults = append(out.EffectiveDefaults, ReqV2DefaultGold{Field: d.Field, Value: d.Value, Origin: d.Origin})
+	}
 	if err != nil {
-		r.Error = err.Error()
-		return r
+		out.Error = err.Error()
 	}
-	if missing != nil {
-		r.MissingFields = missing
-	}
-	if len(r.MissingFields) == 0 {
-		r.Status = "ready"
-		r.ConfirmationEligible = true
-	}
-	return r
+	return out
 }
 
 // ReqV2RunOptions 控制一次评估。
@@ -849,8 +876,10 @@ func observeReducerCase(dataset *ReqV2Dataset, id string) (ReqV2CaseObservation,
 		if state.Fields == nil {
 			state = schemas.NewRequirementState()
 		}
+		// 判卷的 initial 投影保持 fixture 原外形;只有进入领域 API 的副本
+		// 做机械版本升格,错误路径仍按原始状态断言"输入不变"。
 		source := schemas.RequirementSource{Kind: c.Update.Source, MessageID: "turn-1", Quote: c.UserMessage}
-		next, err := schemas.ApplyRequirementUpdate(state, schemas.RequirementUpdate{Operations: c.Update.Operations}, source)
+		next, err := schemas.ApplyRequirementUpdate(reqV2UpgradeState(state), schemas.RequirementUpdate{Operations: c.Update.Operations}, source)
 		obs := ReqV2TurnObservation{}
 		if err != nil {
 			obs.Error = err.Error()
@@ -924,13 +953,13 @@ func (d *v2Driver) currentState(ctx context.Context) (schemas.RequirementState, 
 }
 
 // scriptTurn 执行一轮 scripted screening 消息（零 provider 调用）。
-// operations 必须序列化为数组，空批用 []，否则产品解码会拒绝。
-func (d *v2Driver) scriptTurn(ctx context.Context, text string, update schemas.RequirementUpdate) error {
-	raw, err := json.Marshal(update)
+// operations 必须序列化为数组，空批用 []，否则 legacy turn 解码会拒绝。
+func (d *v2Driver) scriptTurn(ctx context.Context, text string, turn pipeline.LegacyRequirementTurn) error {
+	raw, err := json.Marshal(turn)
 	if err != nil {
 		return err
 	}
-	d.g.begin(Step{Kind: "message", Text: text, Screen: raw, ScreenFallback: scriptFallback(update)})
+	d.g.begin(Step{Kind: "message", Text: text, Screen: raw, ScreenFallback: scriptFallback(turn)})
 	started, err := d.svc.StartMessage(ctx, d.owner, d.sessionID, uuid.NewString(), text)
 	if err != nil {
 		return err
@@ -1032,9 +1061,9 @@ func (d *v2Driver) turn(ctx context.Context, kind, text string, scripted, script
 					text += p.Text
 				}
 			}
-			if update, e := schemas.DecodeRequirementUpdate(pipeline.ExtractPayload(text)); e == nil && update.Operations != nil {
-				obs.Operations = update.Operations
-				for _, o := range update.Observations {
+			if turn, e := pipeline.DecodeLegacyRequirementTurn(pipeline.ExtractPayload(text)); e == nil && turn.Operations != nil {
+				obs.Operations = turn.Operations
+				for _, o := range turn.Observations {
 					obs.Observations = append(obs.Observations, ReqV2ObservationProjection{Field: o.Field, Text: o.Quote, Reason: o.Reason})
 				}
 			} else if e != nil && trace.ProviderCalled {
@@ -1053,9 +1082,9 @@ func (d *v2Driver) turn(ctx context.Context, kind, text string, scripted, script
 	}
 	// scripted 轮的 operations 来自脚本本身（产品确实应用了同一份输出）。
 	if !obs.ScreenModelCalled && kind == "message" && len(scripted) > 0 {
-		var update schemas.RequirementUpdate
-		if json.Unmarshal(scripted, &update) == nil {
-			obs.Operations = update.Operations
+		var turn pipeline.LegacyRequirementTurn
+		if json.Unmarshal(scripted, &turn) == nil {
+			obs.Operations = turn.Operations
 		}
 	}
 	if d.journal != nil {
@@ -1092,18 +1121,18 @@ func normalizedHash(raw []byte) string {
 	return fmt.Sprintf("%x", sha256.Sum256(normalized))
 }
 
-// seedUpdate 组装 scripted screening 输出；空操作批序列化为 []，
-// 否则 DecodeRequirementUpdate 会拒绝。
-func seedUpdate(ops []schemas.RequirementOperation, nextAction string) schemas.RequirementUpdate {
+// seedTurn 组装 scripted screening 输出(legacy v1 传输外形,含 reply/next_action
+// 声明);空操作批序列化为 []，否则 DecodeLegacyRequirementTurn 会拒绝。
+func seedTurn(ops []schemas.RequirementOperation, nextAction string) pipeline.LegacyRequirementTurn {
 	if ops == nil {
 		ops = []schemas.RequirementOperation{}
 	}
-	return schemas.RequirementUpdate{Operations: ops, NextAction: nextAction}
+	return pipeline.LegacyRequirementTurn{Operations: ops, NextAction: nextAction}
 }
 
 // scriptFallback 为 guard 的"collect+已齐备"纠偏重调准备第二条 scripted
 // 输出：同一批操作与回复，next_action 改为 confirm，避免 oracle 耗尽。
-func scriptFallback(update schemas.RequirementUpdate) json.RawMessage {
+func scriptFallback(update pipeline.LegacyRequirementTurn) json.RawMessage {
 	if update.NextAction != "collect" {
 		return nil
 	}
@@ -1130,7 +1159,7 @@ func observePolicyCase(ctx context.Context, dataset *ReqV2Dataset, st *store.Sto
 		}
 		defer d.shutdown(ctx)
 		if len(c.Seed) > 0 {
-			if err := d.scriptTurn(ctx, c.SeedUserMessage, seedUpdate(c.Seed, c.StateNextAction)); err != nil {
+			if err := d.scriptTurn(ctx, c.SeedUserMessage, seedTurn(c.Seed, c.StateNextAction)); err != nil {
 				return ReqV2CaseObservation{Error: err.Error()}, nil
 			}
 		}
@@ -1160,13 +1189,13 @@ func observePolicyCase(ctx context.Context, dataset *ReqV2Dataset, st *store.Sto
 func (d *v2Driver) runPolicyTurn(ctx context.Context, t ReqV2PolicyTurn, c ReqV2PolicyCase, wait bool) (ReqV2TurnObservation, error) {
 	switch t.Kind {
 	case "message":
-		update := seedUpdate(t.Ops, c.StateNextAction)
-		update.Reply = t.ScriptedReply
-		raw, err := json.Marshal(update)
+		turn := seedTurn(t.Ops, c.StateNextAction)
+		turn.Reply = t.ScriptedReply
+		raw, err := json.Marshal(turn)
 		if err != nil {
 			return ReqV2TurnObservation{}, err
 		}
-		return d.turn(ctx, "message", t.Text, raw, scriptFallback(update), nil, 0, wait)
+		return d.turn(ctx, "message", t.Text, raw, scriptFallback(turn), nil, 0, wait)
 	case "confirm":
 		return d.turn(ctx, "confirm", "", nil, nil, nil, 0, wait)
 	case "edit":
@@ -1201,13 +1230,13 @@ func observeUICase(ctx context.Context, dataset *ReqV2Dataset, st *store.Store, 
 		}
 		defer d.shutdown(ctx)
 		if len(c.Seed) > 0 {
-			if err := d.scriptTurn(ctx, c.SeedUserMessage, seedUpdate(c.Seed, c.StateNextAction)); err != nil {
+			if err := d.scriptTurn(ctx, c.SeedUserMessage, seedTurn(c.Seed, c.StateNextAction)); err != nil {
 				return ReqV2CaseObservation{Error: err.Error()}, nil
 			}
 		}
 		// 触发一次 scripted next_action 轮，让 DTO 进入目标可观察状态。
 		if c.StateNextAction != "" && c.StateNextAction != "collect" {
-			if err := d.scriptTurn(ctx, "继续", seedUpdate(nil, c.StateNextAction)); err != nil {
+			if err := d.scriptTurn(ctx, "继续", seedTurn(nil, c.StateNextAction)); err != nil {
 				return ReqV2CaseObservation{Error: err.Error()}, nil
 			}
 		}
@@ -1265,12 +1294,12 @@ func observeExtractionCase(ctx context.Context, dataset *ReqV2Dataset, st *store
 		}
 		defer d.shutdown(ctx)
 		if len(c.Seed) > 0 {
-			if err := d.scriptTurn(ctx, c.SeedUserMessage, seedUpdate(c.Seed, "collect")); err != nil {
+			if err := d.scriptTurn(ctx, c.SeedUserMessage, seedTurn(c.Seed, "collect")); err != nil {
 				return ReqV2CaseObservation{Error: err.Error()}, nil
 			}
 		}
 		if c.PriorAssistantTurn != nil {
-			if err := d.scriptTurn(ctx, c.PriorAssistantTurn.UserMessage, schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{}, Reply: c.PriorAssistantTurn.Reply}); err != nil {
+			if err := d.scriptTurn(ctx, c.PriorAssistantTurn.UserMessage, pipeline.LegacyRequirementTurn{Operations: []schemas.RequirementOperation{}, Reply: c.PriorAssistantTurn.Reply}); err != nil {
 				return ReqV2CaseObservation{Error: err.Error()}, nil
 			}
 		}

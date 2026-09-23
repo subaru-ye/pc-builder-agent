@@ -127,21 +127,24 @@ type Check struct {
 	Detail string `json:"detail,omitempty"`
 }
 type StepRecord struct {
-	Kind            string                   `json:"kind"`
-	Text            string                   `json:"text,omitempty"`
-	State           schemas.RequirementState `json:"state"`
-	ScreenInput     *product.ScreenInput     `json:"screen_input,omitempty"`
-	PlanningInput   *schemas.PlanningInput   `json:"planning_input,omitempty"`
-	Result          *planning.Result         `json:"result,omitempty"`
-	PlanningAttempt *planning.Result         `json:"planning_attempt,omitempty"` // Diagnostics/accounting, never proof of a saved proposal.
-	Versions        int                      `json:"versions"`
-	Reply           string                   `json:"reply"`
-	Trace           []Trace                  `json:"trace"`
-	Checks          []Check                  `json:"checks"`
-	DurationMS      int64                    `json:"duration_ms"`
-	Error           string                   `json:"error,omitempty"`
-	Classification  string                   `json:"classification"`
-	Intent          *IntentObservation       `json:"intent,omitempty"`
+	Kind  string                   `json:"kind"`
+	Text  string                   `json:"text,omitempty"`
+	State schemas.RequirementState `json:"state"`
+	// StateNextAction 只为冻结的 v1 轨迹回放保留:从原始状态 JSON 读取
+	// 旧记录的 next_action;v2 运行恒为空,不参与任何产品判定。
+	StateNextAction string                 `json:"state_next_action,omitempty"`
+	ScreenInput     *product.ScreenInput   `json:"screen_input,omitempty"`
+	PlanningInput   *schemas.PlanningInput `json:"planning_input,omitempty"`
+	Result          *planning.Result       `json:"result,omitempty"`
+	PlanningAttempt *planning.Result       `json:"planning_attempt,omitempty"` // Diagnostics/accounting, never proof of a saved proposal.
+	Versions        int                    `json:"versions"`
+	Reply           string                 `json:"reply"`
+	Trace           []Trace                `json:"trace"`
+	Checks          []Check                `json:"checks"`
+	DurationMS      int64                  `json:"duration_ms"`
+	Error           string                 `json:"error,omitempty"`
+	Classification  string                 `json:"classification"`
+	Intent          *IntentObservation     `json:"intent,omitempty"`
 }
 
 // IntentObservation records one bounded Jev call beside the Screening decision.

@@ -34,7 +34,6 @@ type ScreeningConversation struct {
 
 func PlanningRequirement(state RequirementState) (json.RawMessage, error) {
 	// Routing copy is not part of requirement equality or the confirmed snapshot.
-	state.Reply, state.NextAction = "", ""
 	state.Changes, state.History = []RequirementChange{}, []RequirementChange{}
 	return json.Marshal(PlanningInput{SchemaVersion: 2, State: state})
 }
@@ -45,8 +44,8 @@ func FreeField(key string) bool {
 	return strings.HasPrefix(key, "free.") && len(key) > 5 && len(key) <= 100
 }
 
-// LegacyPlanningState adapts a saved requirement without inventing message
-// provenance or treating old execution defaults as stated preferences.
+// LegacyPlanningState 仅供建立在 v1 历史产物上的评估工具回放旧归档使用;
+// 产品运行时不得调用(v2 一次性切换,旧会话以稳定错误拒绝,不静默重建)。
 func LegacyPlanningState(raw json.RawMessage) RequirementState {
 	state := NewRequirementState()
 	var values map[string]json.RawMessage

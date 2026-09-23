@@ -33,6 +33,24 @@ func validateOwned(spec *RequirementSpec) error {
 	return nil
 }
 
+// MissingOwnedModels 返回 existing 中缺少对应 owned 准确型号的品类。
+// 这是 readiness 与 RequirementSpec 解码共用的组合谓词,不维护第二套矩阵。
+func MissingOwnedModels(existing []Category, owned []OwnedPart) []Category {
+	models := map[Category]bool{}
+	for _, part := range owned {
+		if strings.TrimSpace(part.Model) != "" {
+			models[part.Category] = true
+		}
+	}
+	var missing []Category
+	for _, category := range existing {
+		if !models[category] {
+			missing = append(missing, category)
+		}
+	}
+	return missing
+}
+
 // MissingOwnedFields 不改变旧 JSON 的可解码性，在执行前明确需要补充的信息。
 func MissingOwnedFields(spec RequirementSpec) []string {
 	var fields []string

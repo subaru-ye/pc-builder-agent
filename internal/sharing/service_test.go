@@ -95,7 +95,7 @@ func TestCreateReturnsStableURLAndHashOnlyRecord(t *testing.T) {
 }
 
 func TestPublicViewExcludesNotesAndObserved(t *testing.T) {
-	requirement := json.RawMessage(`{"schema_version":1,"budget_cny":8000,"budget_flex":0.1,"use_case":{"type":"gaming","titles":["黑神话"],"resolution":"2K"},"notes":"private-note"}`)
+	requirement := json.RawMessage(`{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":8000,"budget_flex":0.1,"use_case":{"type":"gaming","titles":["黑神话"],"resolution":"2K"},"notes":"private-note"}`)
 	view := presenter.BuildView{
 		SchemaVersion: 1,
 		Summary: presenter.BuildSummary{SchemaVersion: 1, Version: 3, Intent: "swap_part", TotalCNY: "7000.00",

@@ -1,10 +1,15 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "configuration_scope": [
+    "tower"
+  ],
   "budget_cny": 6000,
   "budget_flex": 0.1,
   "use_case": {
     "type": "productivity",
-    "titles": ["剪4K视频"]
+    "titles": [
+      "剪4K视频"
+    ]
   },
   "noise_pref": "silent",
   "notes": "剪4K视频",

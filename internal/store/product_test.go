@@ -83,7 +83,8 @@ func TestProductSessionRunLifecycle(t *testing.T) {
 		{Op: "set", Field: "budget_cny", Value: json.RawMessage(`8000`)},
 		{Op: "set", Field: "use_case.type", Value: json.RawMessage(`"gaming"`)},
 		{Op: "set", Field: "use_case.resolution", Value: json.RawMessage(`"2K"`)},
-	}}, schemas.RequirementSource{Kind: "edit", MessageID: message1, Quote: "8000 元 2K 玩黑神话"})
+		{Op: "set", Field: "existing_parts", Value: json.RawMessage(`[]`)},
+	}}, schemas.RequirementSource{Kind: "edit", MessageID: message1, Quote: "8000 元 2K 玩黑神话，配件全部新买"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,60 +142,6 @@ func TestProductSessionRunLifecycle(t *testing.T) {
 		OwnerID: owner, SessionID: sessionID, RequestID: confirmKey2, RunID: run3,
 	}); err != nil || duplicate {
 		t.Fatalf("error 状态显式重试失败:duplicate=%v err=%v", duplicate, err)
-	}
-}
-
-func TestContinueScreeningRunAllowsUnconfirmedSession(t *testing.T) {
-	s := setupStore(t)
-	ctx := context.Background()
-
-	const (
-		owner     = "owner-test"
-		sessionID = "session-continuation-test"
-		createKey = "00000000-0000-4000-8000-000000000011"
-		runID     = "00000000-0000-4000-8000-000000000012"
-		messageID = "00000000-0000-4000-8000-000000000013"
-	)
-
-	if _, err := s.CreateWebSession(ctx, sessionID, owner, createKey); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := s.StartMessageRun(ctx, StartMessageRunParams{
-		OwnerID: owner, SessionID: sessionID, RequestID: createKey, RunID: runID,
-		MessageID: messageID, Text: "预算8000，直接开始配", Title: "预算8000，直接开始配",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	state, err := schemas.ApplyRequirementUpdate(schemas.NewRequirementState(), schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{
-		{Op: "set", Field: "budget_cny", Value: json.RawMessage(`8000`), Quote: "预算8000"},
-		{Op: "set", Field: "use_case.type", Value: json.RawMessage(`"gaming"`), Quote: "直接开始配"},
-	}}, schemas.RequirementSource{Kind: "chat", MessageID: messageID, Quote: "预算8000，直接开始配"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// 会话从未确认、无 confirmed_requirement，用户本轮执行消息即授权延续。
-	r, pending, err := s.ContinueScreeningRun(ctx, owner, sessionID, runID, state)
-	if err != nil {
-		t.Fatalf("未确认会话应可延续:%v", err)
-	}
-	if r.Kind != RunBuild {
-		t.Fatalf("run 未升级为 build:%+v", r)
-	}
-	if len(pending) == 0 {
-		t.Fatal("pending requirement 为空")
-	}
-	ws, err := s.WebSessionByOwner(ctx, owner, sessionID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ws.Phase != PhaseBuilding || len(ws.PendingRequirement) == 0 || len(ws.ConfirmedRequirement) == 0 {
-		t.Fatalf("延续后回写不完整:%+v", ws)
-	}
-	// 陈旧 revision 再次延续必须拒绝。
-	stale := state
-	stale.Revision = state.Revision
-	if _, _, err := s.ContinueScreeningRun(ctx, owner, sessionID, runID, stale); err == nil {
-		t.Fatal("重复延续应被拒绝")
 	}
 }
 

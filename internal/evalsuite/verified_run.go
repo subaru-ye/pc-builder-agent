@@ -56,9 +56,13 @@ func ReadVerifiedRun(dir string) (ReportMeta, []CaseRecord, error) {
 		}
 		seen[key] = true
 		if c.Stage == StageBuild {
-			var actual, expected any
+			// 记录侧与题目侧走同一评估专用解码 + 规范编码路径,
+			// v1 冻结记录与 v2 新记录按语义比较,不做两套判定。
 			canonical, err := schemas.EncodeRequirementSpec(c.Requirement)
-			if err != nil || json.Unmarshal(r.Requirement, &actual) != nil || json.Unmarshal(canonical, &expected) != nil || !reflect.DeepEqual(actual, expected) {
+			recorded, derr := schemas.DecodeLegacyRequirementSpec(r.Requirement)
+			canonicalRecorded, eerr := schemas.EncodeRequirementSpec(recorded)
+			var actual, expected any
+			if err != nil || derr != nil || eerr != nil || json.Unmarshal(canonicalRecorded, &actual) != nil || json.Unmarshal(canonical, &expected) != nil || !reflect.DeepEqual(actual, expected) {
 				return meta, nil, fmt.Errorf("%s 记录需求与冻结题目不一致", key)
 			}
 		}

@@ -83,7 +83,7 @@ func TestRequirementStateReplaysSavedDialogueInputs(t *testing.T) {
 				if err := json.Unmarshal(stored, &state); err != nil {
 					t.Fatal(err)
 				} // 每轮从持久化状态恢复。
-				specRaw, missing, err := schemas.RequirementStateSpec(state)
+				specRaw, readiness, err := schemas.RequirementStateSpec(state)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -92,19 +92,19 @@ func TestRequirementStateReplaysSavedDialogueInputs(t *testing.T) {
 						t.Fatalf("turn %d: incomplete requirement became spec", i+1)
 					}
 					for _, field := range turn.Expect.Clarify {
-						if !replayHasField(missing, field) {
-							t.Fatalf("turn %d: missing %s absent: %v", i+1, field, missing)
+						if !replayHasField(readiness.MissingFields, field) {
+							t.Fatalf("turn %d: readiness.MissingFields %s absent: %v", i+1, field, readiness.MissingFields)
 						}
 					}
 					for _, field := range turn.Expect.Forbidden {
-						if replayHasField(missing, field) {
+						if replayHasField(readiness.MissingFields, field) {
 							t.Fatalf("turn %d: repeated known question %s", i+1, field)
 						}
 					}
 					continue
 				}
-				if len(missing) > 0 {
-					t.Fatalf("turn %d: repeated questions %v", i+1, missing)
+				if len(readiness.MissingFields) > 0 {
+					t.Fatalf("turn %d: repeated questions %v", i+1, readiness.MissingFields)
 				}
 				spec, _ := schemas.DecodeRequirementSpec(specRaw)
 				if turn.Expect.Budget > 0 && spec.BudgetCNY != turn.Expect.Budget {

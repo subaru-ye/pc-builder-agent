@@ -966,7 +966,7 @@ components:
       required: [op, field]
       properties:
         op: {type: string, enum: [set, remove, restore, alternative, conflict]}
-        field: {type: string}
+        field: {type: string, description: 需求字段路径;保留键 unsupported.monitor|keyboard|mouse 仅接受携带本轮证据的 remove,用于撤销对应 unsupported capability 观察记录}
         value: {}
         strength: {type: string, enum: [must, prefer]}
         scope: {type: string, enum: [session, temporary]}
@@ -1005,7 +1005,7 @@ components:
       properties:
         revision: {type: integer, minimum: 1}
         op: {type: string, enum: [set, remove, restore, alternative, conflict]}
-        field: {type: string}
+        field: {type: string, description: 需求字段路径;保留键 unsupported.monitor|keyboard|mouse 仅接受携带本轮证据的 remove,用于撤销对应 unsupported capability 观察记录}
         before: {$ref: "#/components/schemas/RequirementField"}
         after: {$ref: "#/components/schemas/RequirementField"}
         source: {$ref: "#/components/schemas/RequirementSource"}
@@ -1013,11 +1013,9 @@ components:
       type: object
       additionalProperties: false
       required: [schema_version, revision, fields, alternatives, changes, history]
-      description: 仅当前装机会话的需求真值；未知、撤销、冲突字段不被程序默认值覆盖；临时例外可恢复之前的字段。备选讨论不改变当前有效需求。
+      description: 仅当前装机会话的需求真值(v2；不持久化 reply/next_action，模型动作无状态权威；v1 由解码边界稳定拒绝)；未知、撤销、冲突字段不被程序默认值覆盖；临时例外可恢复之前的字段。备选讨论不改变当前有效需求。readiness/投影/追问计划的唯一实现见 internal/schemas/requirement_readiness.go。
       properties:
-        schema_version: {type: integer, const: 1}
-        reply: {type: string}
-        next_action: {type: string, enum: [collect, confirm, plan], description: "plan 仅用于首次需求确认后的明确聊天执行指令；同一运行继续规划。"}
+        schema_version: {type: integer, const: 2}
         revision: {type: integer, minimum: 0}
         fields:
           type: object
@@ -1167,19 +1165,27 @@ components:
     RequirementSpec:
       type: object
       additionalProperties: false
-      required: [schema_version, budget_cny, use_case]
+      required: [schema_version, budget_cny, use_case, configuration_scope]
       properties:
-        schema_version: {type: integer, const: 1}
+        schema_version: {type: integer, const: 2}
         budget_cny: {type: integer, minimum: 1}
         budget_flex: {type: number, minimum: 0, maximum: 0.3, default: 0.1}
+        configuration_scope:
+          type: array
+          items: {type: string, enum: [tower]}
+          minItems: 1
+          maxItems: 1
+          default: [tower]
+          description: 产品能力边界(系统默认注入,非用户陈述);当前仅支持 tower,显示器/键鼠按 unsupported observation 阻塞确认。
         use_case:
           type: object
           additionalProperties: false
           required: [type]
           properties:
             type: {type: string, enum: [gaming, productivity, general]}
-            titles: {type: array, items: {type: string}, default: []}
-            resolution: {type: string, enum: [1080p, 2K, 4K]}
+            titles: {type: array, items: {type: string, minLength: 1}, default: [], description: 元素 trim 后非空,去重保序}
+            resolution: {type: string, enum: [1080p, 2K, 4K, any], description: any 仅是 RequirementState 的有证据用户值;gaming 组合校验拒绝 any}
+            performance_goal: {type: string, enum: [balanced, fps_first, quality_first], default: balanced, description: 仅 gaming 未明确时使用系统默认 balanced}
             fps_target: {type: integer, minimum: 1}
           allOf:
             - if:
@@ -1236,11 +1242,11 @@ components:
           description: 尚未解决的原文及来源，用于理解用途和后续必要确认，不能冒充已核验硬条件。
         requirement_details:
           type: object
-          additionalProperties: false
+          additionalProperties: {type: string}
           properties:
             appearance: {type: string}
             recipient: {type: string}
-          description: 当前会话的有效外观与装机对象说明；不含已撤销信息、备选方案或长期画像。
+          description: 当前会话的有效外观、装机对象与 free.* 用户事实；不含已撤销信息、备选方案或长期画像。
     PartCategory:
       type: string
       enum: [cpu, gpu, motherboard, memory, ssd, psu, case, cooler]

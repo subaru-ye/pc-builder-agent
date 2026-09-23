@@ -185,7 +185,7 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 	check("run_completed", r.Error == "", r.Error)
 	check("version_count", r.Versions == e.Versions, r.Versions)
 	if e.NextAction != "" {
-		check("next_action", r.State.NextAction == e.NextAction, r.State.NextAction)
+		check("next_action", r.StateNextAction == e.NextAction, r.StateNextAction)
 	}
 	for name, want := range e.Fields {
 		got, ok := r.State.Fields[name]

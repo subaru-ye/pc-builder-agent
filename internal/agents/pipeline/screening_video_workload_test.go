@@ -24,7 +24,7 @@ func TestScreeningVideoWorkloadReplay(t *testing.T) {
 	m := &stateProtocolModel{output: output}
 	state := schemas.NewRequirementState()
 	state.Fields["notes"] = schemas.RequirementField{Status: "active", Value: json.RawMessage(`"需要无线网络"`), Strength: "prefer"}
-	source := schemas.RequirementSource{Kind: "chat", MessageID: "video-editing", Quote: "预算 6000，主要剪 4K 视频，尽量安静"}
+	source := schemas.RequirementSource{Kind: "chat", MessageID: "video-editing", Quote: "预算 6000，主要剪 4K 视频，尽量安静，配件全部新买"}
 	ctx := WithRequirementState(context.Background(), state, source)
 	var delivered string
 	for response, err := range (screeningGuard{LLM: m}).GenerateContent(ctx, &model.LLMRequest{}, false) {
@@ -33,11 +33,11 @@ func TestScreeningVideoWorkloadReplay(t *testing.T) {
 		}
 		delivered = screeningText(response.Content)
 	}
-	update, err := schemas.DecodeRequirementUpdate([]byte(delivered))
+	turn, err := DecodeLegacyRequirementTurn([]byte(delivered))
 	if err != nil {
 		t.Fatal(err)
 	}
-	next, err := schemas.ApplyRequirementUpdate(state, update, source)
+	next, err := schemas.ApplyRequirementUpdate(state, turn.Update(), source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,6 +50,12 @@ func TestScreeningVideoWorkloadReplay(t *testing.T) {
 	if note := string(next.Fields["notes"].Value); !strings.Contains(note, "无线网络") || len(next.Observations) != 1 || !strings.Contains(next.Observations[0].Text, "4K 视频") {
 		t.Fatalf("lost workload or prior note: %s", note)
 	}
+	// v2 最低矩阵补齐(真实录制不包含的必答项),再验证显示分辨率更新
+	// 不抹掉工作负载观察。
+	next = semanticTurn(t, next, "主要就是剪片子，配件全部新买。", `{"operations":[
+		{"op":"set","field":"use_case.titles","value":["4K 视频剪辑"],"kind":"fact","evidence":"stated","quote":"主要就是剪片子"},
+		{"op":"set","field":"existing_parts","value":[],"kind":"fact","evidence":"stated","quote":"配件全部新买"}
+	]}`)
 	next = semanticTurn(t, next, "显示器打算用2K", `{"operations":[{"op":"set","field":"use_case.resolution","value":"2K","kind":"fact","evidence":"stated","quote":"显示器打算用2K"}]}`)
 	rawSpec, _, err := schemas.RequirementStateSpec(next)
 	if err != nil {

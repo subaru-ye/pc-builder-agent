@@ -35,9 +35,8 @@ func TestRecordedUnknownInformationIsNotConflict(t *testing.T) {
 						t.Fatalf("step %d: absent information became conflict: %s", i+1, name)
 					}
 				}
-				if state.NextAction != "confirm" {
-					t.Fatal("recorded next action changed")
-				}
+				// v2 起 next_action 不再进入状态;录制响应中的动作声明
+				// 只由 legacy decoder 接收,不构成状态断言对象。
 				if (c.ID == "L5-304" && i == 0) || (c.ID == "L5-309" && i == 1) {
 					field := "owned_parts"
 					if c.ID == "L5-309" {

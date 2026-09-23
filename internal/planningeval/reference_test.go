@@ -15,7 +15,7 @@ func TestReferenceRetentionUsesSavedContent(t *testing.T) {
 		state  schemas.RequirementState
 		passed bool
 	}{
-		{"reply only", schemas.RequirementState{Reply: quote}, false},
+		{"empty state", schemas.RequirementState{}, false},
 		{"active background", schemas.RequirementState{Fields: map[string]schemas.RequirementField{"free.gpu_reference": {Status: "active", Kind: "context", Value: value}}}, true},
 		{"removed background", schemas.RequirementState{Fields: map[string]schemas.RequirementField{"free.gpu_reference": {Status: "removed", Kind: "context", Value: value}}}, false},
 		{"unrelated field source", schemas.RequirementState{Fields: map[string]schemas.RequirementField{"use_case.type": {Status: "active", Value: json.RawMessage(`"gaming"`), Source: &schemas.RequirementSource{Quote: quote}}}}, false},

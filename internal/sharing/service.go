@@ -216,7 +216,9 @@ func toPublic(view presenter.BuildView, createdAt time.Time) (PublicBuildView, e
 	var input schemas.PlanningInput
 	known := []string(nil)
 	var knownFields *[]string
-	if json.Unmarshal(view.Requirement, &input) == nil && input.SchemaVersion == 2 {
+	// PlanningInput 与扁平 RequirementSpec v2 的 schema_version 同为 2,
+	// 以 requirement_state 字段形状判别,避免把扁平需求单当状态快照读空。
+	if json.Unmarshal(view.Requirement, &input) == nil && input.SchemaVersion == 2 && input.State.Fields != nil {
 		err = nil
 		requirement = schemas.RequirementSpec{}
 		known = []string{}

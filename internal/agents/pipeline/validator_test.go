@@ -207,7 +207,7 @@ func TestDecideReviewDeliversUnknownOnFinalRound(t *testing.T) {
 }
 
 func budgetChangeCtx(budget int, flex float64) *changeCtx {
-	raw := json.RawMessage(fmt.Sprintf(`{"schema_version":1,"budget_cny":%d,"budget_flex":%g,"use_case":{"type":"general"}}`, budget, flex))
+	raw := json.RawMessage(fmt.Sprintf(`{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":%d,"budget_flex":%g,"use_case":{"type":"general"}}`, budget, flex))
 	return &changeCtx{ActiveSpec: raw}
 }
 

@@ -1,59 +1,59 @@
 {
-  "source": "artifacts/planning-legacy-screening-current-20260915-r1/events.jsonl",
-  "source_sha256": "b88fb22bb859cbfa8a619e284f0de7cc0ed352a51042647c06ffa9edc7d09230",
-  "meaning": "Unmodified saved live responses; replay is offline, not a new live score.",
-  "cases": [
+ "source": "artifacts/planning-legacy-screening-current-20260915-r1/events.jsonl",
+ "source_sha256": "b88fb22bb859cbfa8a619e284f0de7cc0ed352a51042647c06ffa9edc7d09230",
+ "meaning": "Unmodified saved live responses; replay is offline, not a new live score.",
+ "cases": [
+  {
+   "id": "L5-304",
+   "steps": [
     {
-      "id": "L5-304",
-      "steps": [
-        {
-          "message": "办公电脑预算6000元，我已经有CPU，其他配件要新买。",
-          "raw_response": "{\"operations\":[{\"op\":\"set\",\"field\":\"budget_cny\",\"value\":6000,\"kind\":\"constraint\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"办公电脑预算6000元\"},{\"op\":\"set\",\"field\":\"use_case.type\",\"value\":\"general\",\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"办公电脑\"},{\"op\":\"set\",\"field\":\"existing_parts\",\"value\":[\"cpu\"],\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"我已经有CPU\"},{\"op\":\"set\",\"field\":\"owned_parts\",\"value\":[{\"category\":\"cpu\",\"model\":null,\"quantity\":1}],\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"我已经有CPU\"}],\"next_action\":\"confirm\",\"reply\":\"已记录办公用途、6000元预算，以及您已有CPU、其他配件需新买。请核对需求面板后开始选配。\"}",
-          "model": "deepseek-v4-flash-0731",
-          "call": 17,
-          "response_sha256": "50f6a05fdec496b0ebd61a4d0da5d7f3390368bcc69af8464cc5a8f1b0d97120"
-        },
-        {
-          "message": "已有CPU是 AMD Ryzen 5 7600，一颗。",
-          "raw_response": "{\"operations\":[{\"op\":\"set\",\"field\":\"owned_parts\",\"value\":[{\"category\":\"cpu\",\"model\":\"AMD Ryzen 5 7600\",\"quantity\":1}],\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"已有CPU是 AMD Ryzen 5 7600，一颗。\"}],\"observations\":[],\"next_action\":\"confirm\",\"reply\":\"已记录您已有 AMD Ryzen 5 7600 CPU，请核对需求面板后开始选配。\"}",
-          "model": "deepseek-v4-flash-0731",
-          "call": 18,
-          "response_sha256": "ef1909fd5221580848e579ce575fab59ccdf2776437248bc22238e2e6fb486d8"
-        },
-        {
-          "message": "这6000元只算新增购买费用。",
-          "raw_response": "{\"operations\":[{\"op\":\"set\",\"field\":\"budget_basis\",\"value\":\"new_purchase\",\"kind\":\"constraint\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"这6000元只算新增购买费用\"}],\"next_action\":\"confirm\",\"reply\":\"已记录预算6000元仅用于新增购买，已拥有的CPU不在预算内，请核对需求面板后开始选配。\"}",
-          "model": "deepseek-v4-flash-0731",
-          "call": 19,
-          "response_sha256": "b5f9967f0a7f053383386d78808c200b4a3bcd4f5a84246ca37ec27df4408775"
-        }
-      ]
+     "message": "办公电脑预算6000元，我已经有CPU，其他配件要新买。",
+     "raw_response": "{\"operations\":[{\"op\":\"set\",\"field\":\"budget_cny\",\"value\":6000,\"kind\":\"constraint\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"办公电脑预算6000元\"},{\"op\":\"set\",\"field\":\"use_case.type\",\"value\":\"general\",\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"办公电脑\"},{\"op\":\"set\",\"field\":\"existing_parts\",\"value\":[\"cpu\"],\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"我已经有CPU\"},{\"op\":\"set\",\"field\":\"owned_parts\",\"value\":[{\"category\":\"cpu\",\"model\":null,\"quantity\":1}],\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"我已经有CPU\"}],\"next_action\":\"confirm\",\"reply\":\"已记录办公用途、6000元预算，以及您已有CPU、其他配件需新买。请核对需求面板后开始选配。\"}",
+     "model": "deepseek-v4-flash-0731",
+     "call": 17,
+     "response_sha256": "50f6a05fdec496b0ebd61a4d0da5d7f3390368bcc69af8464cc5a8f1b0d97120"
     },
     {
-      "id": "L5-309",
-      "steps": [
-        {
-          "message": "新主机预算8000元，用来日常办公。",
-          "raw_response": "{\"operations\":[{\"op\":\"set\",\"field\":\"budget_cny\",\"value\":8000,\"kind\":\"constraint\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"新主机预算8000元\"},{\"op\":\"set\",\"field\":\"use_case.type\",\"value\":\"general\",\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"用来日常办公\"}],\"next_action\":\"confirm\",\"reply\":\"已记录预算8000元和日常办公用途，请核对需求面板后开始选配。\"}",
-          "model": "deepseek-v4-flash-0731",
-          "call": 28,
-          "response_sha256": "590d762ca01614f54b43eae967d3ed796b78518d8cc42803049139ab0a040f3c"
-        },
-        {
-          "message": "用途改成主要玩游戏，分辨率还没说。",
-          "raw_response": "{\"operations\":[{\"op\":\"set\",\"field\":\"use_case.type\",\"value\":\"gaming\",\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"用途改成主要玩游戏\"},{\"op\":\"set\",\"field\":\"use_case.resolution\",\"value\":null,\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"uncertain\",\"quote\":\"分辨率还没说\"}],\"observations\":[{\"field\":\"use_case.resolution\",\"quote\":\"分辨率还没说\",\"reason\":\"分辨率尚未确定，保持未知\"}],\"next_action\":\"confirm\",\"reply\":\"已记录用途改为主要玩游戏，分辨率可稍后补充，请核对需求面板后开始选配。\"}",
-          "model": "deepseek-v4-flash-0731",
-          "call": 29,
-          "response_sha256": "301101460dda03255fb89ffc2b17191f12cee5d5a322992b9325a0a1e4e22485"
-        },
-        {
-          "message": "分辨率2K，预算仍是8000元。",
-          "raw_response": "{\"operations\":[{\"op\":\"set\",\"field\":\"use_case.resolution\",\"value\":\"2K\",\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"分辨率2K\"},{\"op\":\"set\",\"field\":\"budget_cny\",\"value\":8000,\"kind\":\"constraint\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"预算仍是8000元\"}],\"next_action\":\"confirm\",\"reply\":\"已记录2K分辨率和8000元预算，请核对需求面板后开始选配。\"}",
-          "model": "deepseek-v4-flash-0731",
-          "call": 30,
-          "response_sha256": "b382126d2dbd8ad90944071db877c37eadb5c692bbd91da1694e96da8f59f91b"
-        }
-      ]
+     "message": "已有CPU是 AMD Ryzen 5 7600，一颗。",
+     "raw_response": "{\"operations\":[{\"op\":\"set\",\"field\":\"owned_parts\",\"value\":[{\"category\":\"cpu\",\"model\":\"AMD Ryzen 5 7600\",\"quantity\":1}],\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"已有CPU是 AMD Ryzen 5 7600，一颗。\"}],\"observations\":[],\"next_action\":\"confirm\",\"reply\":\"已记录您已有 AMD Ryzen 5 7600 CPU，请核对需求面板后开始选配。\"}",
+     "model": "deepseek-v4-flash-0731",
+     "call": 18,
+     "response_sha256": "ef1909fd5221580848e579ce575fab59ccdf2776437248bc22238e2e6fb486d8"
+    },
+    {
+     "message": "这6000元只算新增购买费用。",
+     "raw_response": "{\"operations\":[{\"op\":\"set\",\"field\":\"budget_basis\",\"value\":\"new_purchase\",\"kind\":\"constraint\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"这6000元只算新增购买费用\"}],\"next_action\":\"confirm\",\"reply\":\"已记录预算6000元仅用于新增购买，已拥有的CPU不在预算内，请核对需求面板后开始选配。\"}",
+     "model": "deepseek-v4-flash-0731",
+     "call": 19,
+     "response_sha256": "b5f9967f0a7f053383386d78808c200b4a3bcd4f5a84246ca37ec27df4408775"
     }
-  ]
+   ]
+  },
+  {
+   "id": "L5-309",
+   "steps": [
+    {
+     "message": "新主机预算8000元，用来日常办公。",
+     "raw_response": "{\"operations\":[{\"op\":\"set\",\"field\":\"budget_cny\",\"value\":8000,\"kind\":\"constraint\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"新主机预算8000元\"},{\"op\":\"set\",\"field\":\"use_case.type\",\"value\":\"general\",\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"用来日常办公\"}],\"next_action\":\"confirm\",\"reply\":\"已记录预算8000元和日常办公用途，请核对需求面板后开始选配。\"}",
+     "model": "deepseek-v4-flash-0731",
+     "call": 28,
+     "response_sha256": "590d762ca01614f54b43eae967d3ed796b78518d8cc42803049139ab0a040f3c"
+    },
+    {
+     "message": "用途改成主要玩游戏，分辨率还没说。",
+     "raw_response": "{\"operations\":[{\"op\":\"set\",\"field\":\"use_case.type\",\"value\":\"gaming\",\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"用途改成主要玩游戏\"},{\"op\":\"set\",\"field\":\"use_case.resolution\",\"value\":null,\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"uncertain\",\"quote\":\"分辨率还没说\"}],\"observations\":[{\"field\":\"use_case.resolution\",\"quote\":\"分辨率还没说\",\"reason\":\"分辨率尚未确定，保持未知\"}],\"next_action\":\"confirm\",\"reply\":\"已记录用途改为主要玩游戏，分辨率可稍后补充，请核对需求面板后开始选配。\"}",
+     "model": "deepseek-v4-flash-0731",
+     "call": 29,
+     "response_sha256": "301101460dda03255fb89ffc2b17191f12cee5d5a322992b9325a0a1e4e22485"
+    },
+    {
+     "message": "分辨率2K，预算仍是8000元。",
+     "raw_response": "{\"operations\":[{\"op\":\"set\",\"field\":\"use_case.resolution\",\"value\":\"2K\",\"kind\":\"fact\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"分辨率2K\"},{\"op\":\"set\",\"field\":\"budget_cny\",\"value\":8000,\"kind\":\"constraint\",\"strength\":\"must\",\"scope\":\"session\",\"evidence\":\"stated\",\"quote\":\"预算仍是8000元\"}],\"next_action\":\"confirm\",\"reply\":\"已记录2K分辨率和8000元预算，请核对需求面板后开始选配。\"}",
+     "model": "deepseek-v4-flash-0731",
+     "call": 30,
+     "response_sha256": "b382126d2dbd8ad90944071db877c37eadb5c692bbd91da1694e96da8f59f91b"
+    }
+   ]
+  }
+ ]
 }

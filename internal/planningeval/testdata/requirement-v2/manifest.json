@@ -1,7 +1,7 @@
 {
   "dataset": "requirement-v2",
   "grader_version": "reqv2-grader-v2",
-  "frozen_at": "2026-09-22",
+  "frozen_at": "2026-09-23",
   "files": [
     {
       "path": "reducer/cases.json",
@@ -11,7 +11,7 @@
     },
     {
       "path": "readiness/cases.json",
-      "sha256": "485436e653b8e2338e839ced5e0f3089bed9692828f7780452ec7454228791d6",
+      "sha256": "c9952e7974143a48bd456173247de8c0a3734aec70bad24f73ade401f4dc3570",
       "cases": 14,
       "sessions": 14
     },

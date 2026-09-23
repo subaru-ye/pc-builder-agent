@@ -23,7 +23,7 @@ func TestReplayRequiresActualSourceTextAndEvidence(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	check(os.WriteFile(filepath.Join(caseDir, "Q.json"), []byte(`{"id":"Q","title":"owned","stage":"build","requirement":{"schema_version":1,"budget_cny":6000,"use_case":{"type":"general"},"existing_parts":["cpu"],"budget_basis":"new_purchase"},"expect":{"outcome":"clarify","reason":"missing_owned_information"}}`), 0600))
+	check(os.WriteFile(filepath.Join(caseDir, "Q.json"), []byte(`{"id":"Q","title":"owned","stage":"build","requirement":{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":6000,"use_case":{"type":"general"},"existing_parts":["cpu"],"budget_basis":"new_purchase"},"expect":{"outcome":"clarify","reason":"missing_owned_information"}}`), 0600))
 	suitePath := filepath.Join(t.TempDir(), "suite.json")
 	check(evalsuite.FreezeSuite(caseDir, suitePath, "test", "2026-09-09"))
 	suite, cases, err := evalsuite.LoadSuite(suitePath, caseDir)

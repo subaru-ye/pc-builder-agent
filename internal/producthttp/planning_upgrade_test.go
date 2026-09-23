@@ -15,7 +15,10 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
-func TestChatUpgradeContinuesIntoToolsWithoutReconfirmation(t *testing.T) {
+// v2:聊天不再直接启动 Builder。升级旅程 = 首条完整需求(readiness 就绪)
+// → 显式确认生成 v1 → 聊天表达升级意图(仅更新需求草稿,回到待确认)
+// → 再次显式确认生成 v2;续跑上下文(基版本/上一方案)仍完整送达 Builder。
+func TestChatUpgradeRequiresExplicitConfirmation(t *testing.T) {
 	_, service, st := requirementIntegrationAPI(t, true)
 	ctx := context.Background()
 	owner := strings.Repeat("u", 43)
@@ -52,15 +55,22 @@ func TestChatUpgradeContinuesIntoToolsWithoutReconfirmation(t *testing.T) {
 		t.Helper()
 		return wait(service.StartMessage(ctx, owner, ws.ID, uuid.NewString(), text))
 	}
-	initial := message("预算7000，剪1080p多轨视频，不要求静音")
-	if initial.Session.VersionCount != 0 || initial.Session.Phase != store.PhaseRequirementReady {
-		t.Fatal("initial confirmation skipped")
+	confirm := func() product.SessionDetail {
+		t.Helper()
+		return wait(service.StartConfirm(ctx, owner, ws.ID, uuid.NewString()))
 	}
-	// The first message always hands back an explicit confirmation. The user's
-	// own follow-up words are the authorization: no separate confirm call.
-	first := message("没有具体偏好，直接继续选配")
+	initial := message("预算7000，剪1080p多轨视频，不要求静音，配件全部新买")
+	if initial.Session.VersionCount != 0 || initial.Session.Phase != store.PhaseRequirementReady {
+		t.Fatal("initial readiness did not reach requirement_ready")
+	}
+	// v1 必须来自显式确认;模型 next_action=plan 不再有权威。
+	probe := message("没有具体偏好，直接继续选配")
+	if probe.Session.VersionCount != 0 || probe.Session.Phase != store.PhaseRequirementReady {
+		t.Fatalf("chat must not start builder under v2: %+v", probe.Session)
+	}
+	first := confirm()
 	if first.Session.VersionCount != 1 || first.Session.Phase != store.PhaseReady {
-		t.Fatalf("follow-up execution did not build: %s", first.Proposal)
+		t.Fatalf("explicit confirmation did not build: %s", first.Proposal)
 	}
 	v1, err := st.BuildByVersion(ctx, ws.ID, 1)
 	if err != nil {
@@ -69,26 +79,33 @@ func TestChatUpgradeContinuesIntoToolsWithoutReconfirmation(t *testing.T) {
 	requestID := uuid.NewString()
 	text := "把处理器换更好的，预算还很充足啊，其他配件尽量不动"
 	start, err := service.StartMessage(ctx, owner, ws.ID, requestID, text)
-	upgraded := wait(start, err)
-	if upgraded.Session.Phase != store.PhaseReady || upgraded.Session.VersionCount != 2 {
-		t.Fatalf("chat did not deliver: %s", upgraded.Proposal)
+	if err != nil {
+		t.Fatal(err)
 	}
-	run, err := service.GetRun(ctx, owner, start.Run.ID)
-	if err != nil || run.Kind != store.RunChange {
-		t.Fatalf("not one continued change run: %+v %v", run, err)
+	draftUpdate := wait(start, err)
+	// 聊天升级意图只更新需求草稿,回到待确认;不直接执行。
+	if draftUpdate.Session.Phase != store.PhaseRequirementReady || draftUpdate.Session.VersionCount != 1 {
+		t.Fatalf("upgrade chat must stay unconfirmed: %+v", draftUpdate.Session)
+	}
+	if run, err := service.GetRun(ctx, owner, start.Run.ID); err != nil || run.Kind != store.RunScreening {
+		t.Fatalf("upgrade chat must remain a screening run: %+v %v", run, err)
+	}
+	upgraded := confirm()
+	if upgraded.Session.Phase != store.PhaseReady || upgraded.Session.VersionCount != 2 {
+		t.Fatalf("confirmed upgrade did not deliver: %s", upgraded.Proposal)
 	}
 	var result struct {
 		Result      planning.Result
 		Requirement schemas.PlanningInput
 	}
-	if err = json.Unmarshal(upgraded.Proposal, &result); err != nil {
+	if err := json.Unmarshal(upgraded.Proposal, &result); err != nil {
 		t.Fatal(err)
 	}
 	if result.Result.ToolCalls != 2 || result.Result.ModelCalls != 3 || result.Result.Delivery.Status != "delivered" || result.Result.Quote.TotalCNY != "4929.90" {
 		t.Fatalf("not a priced tool-backed upgrade: %s", upgraded.Proposal)
 	}
-	if result.Requirement.Request == nil || result.Requirement.Request.Quote != text || result.Requirement.State.Fields["noise_pref"].Status != "removed" || result.Requirement.State.Fields["free.preserve_other_parts"].Strength != "prefer" || string(result.Requirement.State.Fields["budget_cny"].Value) != "7000" {
-		t.Fatalf("lost execution request/requirements: %+v", result.Requirement)
+	if result.Requirement.State.Fields["noise_pref"].Status != "removed" || result.Requirement.State.Fields["free.preserve_other_parts"].Strength != "prefer" || string(result.Requirement.State.Fields["budget_cny"].Value) != "7000" {
+		t.Fatalf("lost execution requirements: %+v", result.Requirement)
 	}
 	v2, err := st.BuildByVersion(ctx, ws.ID, 2)
 	if err != nil {
@@ -138,8 +155,8 @@ func TestChatUpgradeContinuesIntoToolsWithoutReconfirmation(t *testing.T) {
 	if state.Fields["free.workload_resolution"].Status != "active" || state.Fields["noise_pref"].Status != "removed" {
 		t.Fatal("lost unchanged/removed fields")
 	}
-	continued := message("没有具体偏好，直接继续选配")
-	if continued.Session.VersionCount != 3 {
-		t.Fatalf("continuation failed: %s", continued.Proposal)
+	final := confirm()
+	if final.Session.VersionCount != 3 {
+		t.Fatalf("final explicit confirmation did not deliver: %s", final.Proposal)
 	}
 }

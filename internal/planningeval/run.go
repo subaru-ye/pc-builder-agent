@@ -49,37 +49,37 @@ func Load(raw []byte) (Suite, error) {
 				return s, fmt.Errorf("%s previous build: %w", c.ID, err)
 			}
 		}
-			for _, step := range c.Steps {
-				if s.Live && (len(step.Screen) != 0 || len(step.Builder) != 0) {
-					return s, fmt.Errorf("live suite must not contain model oracles")
+		for _, step := range c.Steps {
+			if s.Live && (len(step.Screen) != 0 || len(step.Builder) != 0) {
+				return s, fmt.Errorf("live suite must not contain model oracles")
+			}
+			switch step.Kind {
+			case "message":
+				if !s.Live && len(step.Screen) == 0 {
+					return s, fmt.Errorf("missing screening oracle in %s", c.ID)
 				}
-				switch step.Kind {
-				case "message":
-					if !s.Live && len(step.Screen) == 0 {
-						return s, fmt.Errorf("missing screening oracle in %s", c.ID)
-					}
-				case "confirm", "edit", "refresh", "retry":
-				default:
-					return s, fmt.Errorf("unknown step kind %q", step.Kind)
-				}
+			case "confirm", "edit", "refresh", "retry":
+			default:
+				return s, fmt.Errorf("unknown step kind %q", step.Kind)
 			}
 		}
-		if s.IntentSplit != nil {
-			assigned := map[string]bool{}
-			for _, list := range [][]string{s.IntentSplit.Calibration, s.IntentSplit.Holdout} {
-				for _, id := range list {
-					if !seen[id] {
-						return s, fmt.Errorf("intent_split lists unknown case %q", id)
-					}
-					if assigned[id] {
-						return s, fmt.Errorf("case %q is listed in both intent splits", id)
-					}
-					assigned[id] = true
-				}
-			}
-		}
-		return s, nil
 	}
+	if s.IntentSplit != nil {
+		assigned := map[string]bool{}
+		for _, list := range [][]string{s.IntentSplit.Calibration, s.IntentSplit.Holdout} {
+			for _, id := range list {
+				if !seen[id] {
+					return s, fmt.Errorf("intent_split lists unknown case %q", id)
+				}
+				if assigned[id] {
+					return s, fmt.Errorf("case %q is listed in both intent splits", id)
+				}
+				assigned[id] = true
+			}
+		}
+	}
+	return s, nil
+}
 
 // VerifyProvenance rejects fixture drift before any database or model work.
 func VerifyProvenance(raw, provenance []byte) error {
@@ -267,6 +267,11 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 			}
 			record.Versions = after.Session.VersionCount
 			_ = json.Unmarshal(after.Session.RequirementState, &record.State)
+			var legacyAction struct {
+				NextAction string `json:"next_action"`
+			}
+			_ = json.Unmarshal(after.Session.RequirementState, &legacyAction)
+			record.StateNextAction = legacyAction.NextAction
 			if len(after.Messages) > 0 {
 				record.Reply = after.Messages[len(after.Messages)-1].Content
 			}
@@ -311,7 +316,7 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 				// Fill the comparison fields after the step settles: the
 				// existing decision is the final reduced state action.
 				o := record.Intent
-				o.ExistingDecision = record.State.NextAction
+				o.ExistingDecision = record.StateNextAction
 				o.GroundTruth = step.Expect.NextAction
 				o.Agreement = o.ErrorClass == "" && o.ExistingDecision != "" && o.Prediction == o.ExistingDecision
 				o.Correct = o.ErrorClass == "" && o.GroundTruth != "" && o.Prediction == o.GroundTruth

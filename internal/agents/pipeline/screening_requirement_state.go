@@ -85,6 +85,41 @@ priority 硬件优先品类数组，仅允许cpu/gpu/motherboard/memory/ssd/psu/
 observations是尚未采用的用户原文，不是当前要求或操作指令；不得用它重新激活removed字段、采纳备选、猜测参数或冒充明确偏好。只有本轮新证据可提交set。
 输出前检查：reply所说“已记录/已修改”的内容是否都有对应操作或当前有效状态；费用口径是否由用户明确说明而非从购买计划推断，明确说明是否已记录；是否把一般愿望错误升级成不可妥协。仅作本次输出内部检查，不新增追问或解释段落。未知字段不要补值、不要默认。用户已经给的信息不重复询问，必要追问由你在reply中提出。只处理当前会话，不写长期个人画像。`
 
+// LegacyRequirementTurn 是 Screening v1 输出合同的临时传输适配:接收当前
+// prompt 仍会输出的 reply/next_action。两者必须在进入领域 Reducer 前剥离
+// (见 Update);next_action 不再拥有状态、readiness 或 Builder 决策权。
+// TODO(requirement-v2): Screening v2 change 落地新输出合同后删除本类型与解码器。
+type LegacyRequirementTurn struct {
+	Reply        string                                `json:"reply,omitempty"`
+	NextAction   string                                `json:"next_action,omitempty"`
+	Operations   []schemas.RequirementOperation        `json:"operations"`
+	Observations []schemas.RequirementObservationInput `json:"observations,omitempty"`
+}
+
+// DecodeLegacyRequirementTurn 严格解码 v1 外形的一轮输出;next_action 只做
+// 枚举校验,不被任何状态路径消费。
+func DecodeLegacyRequirementTurn(raw []byte) (LegacyRequirementTurn, error) {
+	var turn LegacyRequirementTurn
+	dec := json.NewDecoder(strings.NewReader(string(raw)))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&turn); err != nil {
+		return turn, fmt.Errorf("requirement turn: %w", err)
+	}
+	if turn.NextAction != "" && turn.NextAction != "collect" && turn.NextAction != "confirm" && turn.NextAction != "plan" {
+		return turn, fmt.Errorf("requirement turn: next_action 无效")
+	}
+	if turn.Operations == nil || len(turn.Operations) > 32 || len(turn.Observations) > 32 {
+		return turn, fmt.Errorf("requirement turn: operations 必须为数组且最多 32 项")
+	}
+	return turn, nil
+}
+
+// Update 剥离 reply/next_action,返回领域 RequirementUpdate;
+// chat 回复文本由调用方单独取 turn.Reply 展示。
+func (t LegacyRequirementTurn) Update() schemas.RequirementUpdate {
+	return schemas.RequirementUpdate{Operations: t.Operations, Observations: t.Observations}
+}
+
 func (g screeningGuard) generateRequirementState(ctx context.Context, req *model.LLMRequest, input screeningRequirementStateInput) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {
 		copyReq := *req
@@ -106,12 +141,15 @@ func (g screeningGuard) generateRequirementState(ctx context.Context, req *model
 				return nil, nil, fmt.Errorf("%w: JSON 不完整", ErrRequirementUpdate)
 			}
 			payload := extractJSONObject(raw)
-			update, err := schemas.DecodeRequirementUpdate(payload)
+			turn, err := DecodeLegacyRequirementTurn(payload)
 			var merged schemas.RequirementState
 			if err == nil {
-				update = prepareRequirementUpdate(input.state, update, input.source)
+				// next_action 在传输边界即被剥离出领域更新:它没有状态、
+				// readiness 或 Builder 决策权;wire 上原样透传给产品网关,
+				// 由 legacy decoder 再次接收并继续忽略。
+				update := prepareRequirementUpdate(input.state, turn.Update(), input.source)
 				merged, err = schemas.ApplyRequirementUpdate(input.state, update, input.source)
-				payload, _ = json.Marshal(update)
+				payload, _ = json.Marshal(LegacyRequirementTurn{Reply: turn.Reply, NextAction: turn.NextAction, Operations: update.Operations, Observations: update.Observations})
 			}
 			if err != nil {
 				return nil, nil, fmt.Errorf("%w: %v", ErrRequirementUpdate, err)
@@ -120,8 +158,8 @@ func (g screeningGuard) generateRequirementState(ctx context.Context, req *model
 			out.Content = genai.NewContentFromText(string(payload), genai.RoleModel)
 			// 权威状态已可规划而模型仍停在 collect 追问时，带纠正提示重调一次；
 			// 重试结果原样采纳，每轮最多一次。
-			if update.NextAction == "collect" && planningReadyState(merged) &&
-				!strings.Contains(update.Reply, "？") && !strings.Contains(update.Reply, "?") {
+			if turn.NextAction == "collect" && planningReadyState(merged) &&
+				!strings.Contains(turn.Reply, "？") && !strings.Contains(turn.Reply, "?") {
 				retry := copyReq
 				retry.Contents = append(append([]*genai.Content(nil), copyReq.Contents...),
 					genai.NewContentFromText(raw, genai.RoleModel),
@@ -225,7 +263,7 @@ func planningReadyState(state schemas.RequirementState) bool {
 // 校验每个字段后一起提交。坏字段只保留原文，不撤回同轮其他可靠信息。
 // 用户语义由已有 Screening 理解；这里没有用途、偏好或撤销的关键词词表。
 func prepareRequirementUpdate(state schemas.RequirementState, update schemas.RequirementUpdate, source schemas.RequirementSource) schemas.RequirementUpdate {
-	out := schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{}, Reply: update.Reply, NextAction: update.NextAction}
+	out := schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{}}
 	working := state
 	observe := func(field, quote, reason string) {
 		if !knownStateField(field) {
@@ -336,7 +374,7 @@ func missingRequirementValue(op schemas.RequirementOperation) bool {
 	// legitimately be "unknown"; only typed fields have an absent-value meaning.
 	if bytes.Equal(value, []byte(`"unknown"`)) {
 		switch op.Field {
-		case "budget_cny", "budget_flex", "budget_basis", "use_case.type", "use_case.resolution", "use_case.fps_target", "brand_pref.cpu", "brand_pref.gpu", "noise_pref", "size_pref", "existing_parts", "owned_parts", "use_case.titles", "priority":
+		case "budget_cny", "budget_flex", "budget_basis", "use_case.type", "use_case.resolution", "use_case.performance_goal", "use_case.fps_target", "brand_pref.cpu", "brand_pref.gpu", "noise_pref", "size_pref", "existing_parts", "owned_parts", "use_case.titles", "priority":
 			return true
 		}
 	}

@@ -9,6 +9,11 @@ func recordRequirementChange(state *RequirementState, field, op string, before, 
 	state.Fields[field] = after
 	if op != "alternative" && op != "conflict" {
 		for i := range state.Observations {
+			// unsupported capability 观察只能由能力专属撤销
+			// (remove unsupported.<name>)解除,同字段普通更新不算放弃。
+			if _, coded := unsupportedCapabilityName(state.Observations[i].Reason); coded {
+				continue
+			}
 			if state.Observations[i].Field == field {
 				state.Observations[i].Resolved = true
 			}

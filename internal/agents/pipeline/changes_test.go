@@ -12,7 +12,8 @@ import (
 )
 
 const baseSpecJSON = `{
-  "schema_version": 1,
+  "schema_version": 2,
+  "configuration_scope": ["tower"],
   "budget_cny": 8000,
   "use_case": {"type": "gaming", "resolution": "2K"}
 }`
@@ -28,7 +29,7 @@ const baseSelectionJSON = `{
   "cooler": "thermalright-pa120-se"
 }`
 
-// stateJSON 一份 v1 已落库的改单状态块(prepare/persistVersion 测试共用)。
+// stateJSON 一份已落库的改单状态块(prepare/persistVersion 测试共用)。
 func stateJSON(t *testing.T) string {
 	t.Helper()
 	bs := buildState{

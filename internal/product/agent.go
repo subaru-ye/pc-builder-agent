@@ -37,7 +37,10 @@ type ScreenResult struct {
 	Payload           json.RawMessage
 	Err               error
 	RequirementUpdate *schemas.RequirementUpdate
-	RetryCount        int // guard 发起的同模型重请求次数(F3 retry_count)
+	// Reply 是 legacy turn 传输适配剥离出的助手文案,仅用于消息展示;
+	// 不进入 RequirementState,也不携带任何流程决策权。
+	Reply      string
+	RetryCount int // guard 发起的同模型重请求次数(F3 retry_count)
 }
 
 type RemoteResult struct {
@@ -123,11 +126,14 @@ func (g *ADKAgentGateway) Screen(ctx context.Context, userID, sessionID string, 
 	}
 	if input.RequirementState != nil {
 		payload := pipeline.ExtractPayload(lastText)
-		update, err := schemas.DecodeRequirementUpdate(payload)
+		// 临时 legacy turn decoder:接收当前 Screening 输出的 reply/next_action,
+		// 只把剥离后的领域 update 交给 Reducer;next_action 在此即失去全部权威。
+		turn, err := pipeline.DecodeLegacyRequirementTurn(payload)
 		if err != nil {
 			return ScreenResult{}, err
 		}
-		return ScreenResult{Kind: ScreenRequirement, Text: lastText, RequirementUpdate: &update, RetryCount: retries}, nil
+		update := turn.Update()
+		return ScreenResult{Kind: ScreenRequirement, Text: lastText, Reply: turn.Reply, RequirementUpdate: &update, RetryCount: retries}, nil
 	}
 	result, err := ParseScreeningResult(lastText, input.Text)
 	result.RetryCount = retries

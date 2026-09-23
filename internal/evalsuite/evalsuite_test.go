@@ -61,7 +61,7 @@ func passingResult(totalCNY string) buildharness.BuildResult {
 func ptr(s string) *string { return &s }
 
 func testCase() Case {
-	raw := json.RawMessage(`{"schema_version":1,"budget_cny":8000,"use_case":{"type":"gaming","resolution":"2K"},"brand_pref":{"cpu":"amd","gpu":"nvidia"}}`)
+	raw := json.RawMessage(`{"schema_version":2,"configuration_scope":["tower"],"budget_cny":8000,"use_case":{"type":"gaming","resolution":"2K"},"brand_pref":{"cpu":"amd","gpu":"nvidia"}}`)
 	spec, err := schemas.DecodeRequirementSpec(raw)
 	if err != nil {
 		panic(err)

@@ -30,7 +30,7 @@ func TestLegacyMessageSummaryRetainsOriginalAndHistoricalVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	quote, _ := json.Marshal(fixture.Quote)
-	params := store.SaveBuildVersionParams{SessionID: ws.ID, RequirementSpec: json.RawMessage(`{"schema_version":1,"budget_cny":8000,"use_case":{"type":"gaming","resolution":"2K","titles":[]}}`), Draft: fixture.Draft, Quote: quote, Validation: json.RawMessage(`{"overall_status":"pass","checks":[]}`)}
+	params := store.SaveBuildVersionParams{SessionID: ws.ID, RequirementSpec: json.RawMessage(`{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":8000,"use_case":{"type":"gaming","resolution":"2K","titles":[]}}`), Draft: fixture.Draft, Quote: quote, Validation: json.RawMessage(`{"overall_status":"pass","checks":[]}`)}
 	v1, err := st.SaveBuildVersion(ctx, params)
 	if err != nil {
 		t.Fatal(err)

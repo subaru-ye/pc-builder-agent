@@ -18,7 +18,7 @@ func TestBuildShareLifecycleAndOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := s.SaveBuildVersion(ctx, SaveBuildVersionParams{
-		SessionID: "share-session", RequirementSpec: json.RawMessage(`{"schema_version":1,"budget_cny":8000,"use_case":{"type":"gaming","resolution":"2K"}}`),
+		SessionID: "share-session", RequirementSpec: json.RawMessage(`{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":8000,"use_case":{"type":"gaming","resolution":"2K"}}`),
 		Draft:      json.RawMessage(`{"build_ref":"b","selection":{},"rationale":{}}`),
 		Validation: json.RawMessage(`{"build_ref":"b","overall_status":"pass","checks":[]}`),
 		Quote:      json.RawMessage(`{"schema_version":1,"build_ref":"b","snapshot_date":"2026-08-09","lines":[],"total_cny":"0.00","missing_count":0,"missing_skus":[]}`),

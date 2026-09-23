@@ -12,7 +12,7 @@ import (
 
 func TestOwnedPurchaseDisplayAndExport(t *testing.T) {
 	b := fixture(t, 1, 700, "800.00", "gpu-amd")
-	raw := json.RawMessage(`{"schema_version":1,"budget_cny":700,"use_case":{"type":"general"},"owned_parts":[{"category":"cpu","model":"CPU 1"}],"budget_basis":"new_purchase"}`)
+	raw := json.RawMessage(`{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":700,"use_case":{"type":"general"},"existing_parts":["cpu"],"owned_parts":[{"category":"cpu","model":"CPU 1"}],"budget_basis":"new_purchase"}`)
 	spec, err := schemas.DecodeRequirementSpec(raw)
 	if err != nil {
 		t.Fatal(err)

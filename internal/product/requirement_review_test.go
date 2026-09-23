@@ -39,7 +39,8 @@ func newRequirementReviewService(t *testing.T) (*Service, requirementReviewStore
 		{Op: "set", Field: "budget_cny", Value: json.RawMessage(`8000`), Strength: "must"},
 		{Op: "set", Field: "use_case.type", Value: json.RawMessage(`"general"`), Strength: "must"},
 		{Op: "set", Field: "brand_pref.gpu", Value: json.RawMessage(`"nvidia"`), Strength: "must"},
-	}}, schemas.RequirementSource{Kind: "edit", MessageID: "setup", Quote: "预算8000，办公，显卡必须英伟达"})
+		{Op: "set", Field: "existing_parts", Value: json.RawMessage(`[]`), Strength: "must"},
+	}}, schemas.RequirementSource{Kind: "edit", MessageID: "setup", Quote: "预算8000，办公，显卡必须英伟达，配件全部新买"})
 	if err != nil {
 		t.Fatal(err)
 	}

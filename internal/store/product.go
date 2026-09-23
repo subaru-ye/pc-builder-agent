@@ -484,29 +484,26 @@ func (s *Store) StartConfirmRun(ctx context.Context, p StartConfirmRunParams) (A
 	if !allowed || len(pending) == 0 {
 		return AgentRun{}, nil, false, &InvalidPhaseError{Phase: phase}
 	}
-	// 锁内核验投影，先处理已完成请求重试，再校验本次要确认的新草稿。
+	// 锁内核验投影：确认入口与 Planning/API 共用 schemas.RequirementStateSpec
+	// (确定性 readiness 门控),不再存在返回固定空 missing 的旁路;
+	// readiness 不完整或待确认草稿与当前投影不一致都拒绝确认。
 	if len(requirementState) > 0 {
-		var state schemas.RequirementState
-		if err := json.Unmarshal(requirementState, &state); err != nil {
+		state, err := schemas.DecodeRequirementState(requirementState)
+		if err != nil {
 			return AgentRun{}, nil, false, ErrRequirementRevision
 		}
-		spec, missing, err := planningProjection(state)
-		var header struct {
-			SchemaVersion int `json:"schema_version"`
-		}
-		_ = json.Unmarshal(pending, &header)
-		if header.SchemaVersion == 1 && err == nil {
-			// Explicit confirmation upgrades this draft only. Historical builds
-			// retain their original requirement and candidate snapshots.
-			pending = spec
-			if _, err := tx.Exec(ctx, `UPDATE web_sessions SET pending_requirement = $2 WHERE id = $1`, p.SessionID, pending); err != nil {
-				return AgentRun{}, nil, false, err
-			}
-		}
+		spec, readiness, err := schemas.RequirementStateSpec(state)
 		var actual, proposed any
-		if err != nil || len(missing) > 0 || json.Unmarshal(spec, &proposed) != nil || json.Unmarshal(pending, &actual) != nil || !reflect.DeepEqual(actual, proposed) {
+		if err != nil || !readiness.ConfirmationEligible || json.Unmarshal(spec, &proposed) != nil || json.Unmarshal(pending, &actual) != nil || !reflect.DeepEqual(actual, proposed) {
 			return AgentRun{}, nil, false, ErrRequirementRevision
 		}
+		pending, err = schemas.PlanningRequirement(state)
+		if err != nil {
+			return AgentRun{}, nil, false, err
+		}
+	} else {
+		// v1 一次性切换:没有增量状态的旧会话不能继续确认。
+		return AgentRun{}, nil, false, schemas.ErrRequirementStateUnsupported
 	}
 	r, err := insertRunTx(ctx, tx, p.RunID, p.SessionID, p.RequestID, RunBuild)
 	if isRunningConflict(err) {
@@ -515,9 +512,12 @@ func (s *Store) StartConfirmRun(ctx context.Context, p StartConfirmRunParams) (A
 	if err != nil {
 		return AgentRun{}, nil, false, err
 	}
+	// 确认快照冻结 Builder 实际输入(PlanningInput 包装):Builder 输入 hash
+	// 必须与确认快照一致(veto V5);展示/编辑差异比对使用
+	// confirmed_requirement_state 的投影,不依赖本列形状。
 	if _, err := tx.Exec(ctx, `UPDATE web_sessions SET phase = 'building', recovery_phase = NULL,
-		confirmed_requirement = pending_requirement, confirmed_requirement_state = requirement_state,
-		confirmed_at = now(), last_error = NULL, updated_at = now() WHERE id = $1`, p.SessionID); err != nil {
+		confirmed_requirement = $2, confirmed_requirement_state = requirement_state,
+		confirmed_at = now(), last_error = NULL, updated_at = now() WHERE id = $1`, p.SessionID, pending); err != nil {
 		return AgentRun{}, nil, false, fmt.Errorf("store: 更新确认阶段失败: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -797,9 +797,4 @@ func (s *Store) LatestBuildVersion(ctx context.Context, sessionID string) (int, 
 		return 0, false, nil
 	}
 	return *v, true, nil
-}
-
-func planningProjection(state schemas.RequirementState) (json.RawMessage, []string, error) {
-	raw, err := schemas.PlanningRequirement(state)
-	return raw, []string{}, err
 }

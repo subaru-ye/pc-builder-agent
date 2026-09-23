@@ -170,7 +170,7 @@ func decodeCase(data []byte) (Case, error) {
 		if len(w.Requirement) == 0 {
 			return Case{}, fmt.Errorf("build 用例必须带 requirement")
 		}
-		spec, err := schemas.DecodeRequirementSpec(w.Requirement)
+		spec, err := schemas.DecodeLegacyRequirementSpec(w.Requirement)
 		if err != nil {
 			return Case{}, fmt.Errorf("requirement: %w", err)
 		}

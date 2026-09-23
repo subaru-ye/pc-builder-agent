@@ -28,7 +28,7 @@ func TestBuildBusinessFailurePersistsSafeReasonAndKeepsVersions(t *testing.T) {
 	st := newFakeProductStore()
 	st.latest = 1
 	st.session.Phase = store.PhaseRequirementReady
-	st.session.PendingRequirement = json.RawMessage(`{"schema_version":1,"budget_cny":6000,"use_case":{"type":"productivity"}}`)
+	st.session.PendingRequirement = json.RawMessage(`{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":6000,"use_case":{"type":"productivity"}}`)
 	agent := &stoppedBuildAgent{fakeAgent: &fakeAgent{store: st}, result: RemoteResult{
 		Text: "internal raw diagnostic", Decision: &buildharness.Decision{Kind: "data_unavailable", Reason: "requirement_evidence_missing", Fields: []string{"noise_pref"}, Message: "private validation output"},
 	}}

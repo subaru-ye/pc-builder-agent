@@ -20,8 +20,8 @@
 ```mermaid
 stateDiagram-v2
     [*] --> collecting
-    collecting --> collecting: 初筛继续追问
-    collecting --> requirement_ready: 得到合法 RequirementSpec
+    collecting --> collecting: readiness 不完整,按追问计划补问
+    collecting --> requirement_ready: readiness 完整,投影 RequirementSpec v2
     requirement_ready --> requirement_ready: 用户编辑需求
     requirement_ready --> building: 用户确认
     building --> ready: v1 保存成功
@@ -47,11 +47,11 @@ stateDiagram-v2
 
 ### 需求确认与改单
 
-1. API 只运行初筛 Agent；具有需求状态的新会话注入当前有效状态与本轮用户原文，复用 Screening 单次调用输出字段操作。
-2. 服务端核验本轮来源并归并操作，保存 `requirement_state`;缺失必要字段时生成针对性追问，phase 保持 collecting。
-3. 字段充足时确定性投影为 RequirementSpec，写入 pending_requirement，phase 变 requirement_ready;先发 requirement.updated，再发 requirement.ready。
+1. API 只运行初筛 Agent；具有需求状态的新会话注入当前有效状态与本轮用户原文，复用 Screening 单次调用输出字段操作。模型输出的 `next_action` 只是传输字段(由 pipeline 临时 legacy turn decoder 接收并在进入 Reducer 前剥离),对会话状态、readiness 与 Builder 启动均无权威;`plan`/`confirm` 都不能让聊天替代确认 API。
+2. 服务端核验本轮来源并归并操作，保存 `requirement_state`;确定性 readiness 判定不完整时按领域追问计划生成针对性追问，phase 保持 collecting。
+3. readiness 完整时确定性投影为 RequirementSpec v2(含 configuration_scope=[tower] 与来源可追溯的系统默认),写入 pending_requirement，phase 变 requirement_ready;先发 requirement.updated，再发 requirement.ready。
 4. `PATCH requirement-state` 接受带 expected_revision 的字段操作，与聊天走同一 reducer;旧 PATCH requirement 完整替换入口保留兼容。
-5. confirm 从数据库读取 pending_requirement 并冻结确认快照，随后调用 A2A remote 生成配置。
+5. confirm 在锁内重算 readiness 门控投影并与 pending_requirement 逐字比对,通过后冻结确认快照并调用 A2A remote 生成配置;RequirementState/Spec v1 在解码边界以稳定错误拒绝,不静默迁移。
 
 ready 后继续将用户修改归并为新草稿；原确认快照与配置版本不变，再次确认后生成新版本。快捷按钮仍只预填自然语言，没有 card-change 专用入口。Redis 中 A2A context/build_state 过期时返回可识别的 context_expired problem,UI 提供「按当前需求整单重生成」，重生成固定为新根会话，不伪造增量改单保证。
 

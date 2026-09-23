@@ -51,7 +51,7 @@ func validatePreviousBuild(f PreviousBuildFixture) error {
 			return fmt.Errorf("historical snapshot selection differs from precondition")
 		}
 	}
-	_, err = schemas.DecodeRequirementSpec(f.Requirement)
+	_, err = schemas.DecodeLegacyRequirementSpec(f.Requirement)
 	return err
 }
 

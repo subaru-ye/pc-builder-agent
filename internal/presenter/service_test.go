@@ -120,7 +120,7 @@ func TestPriceFreshnessStaleAndUnknown(t *testing.T) {
 
 func requirement(t *testing.T, budget int) json.RawMessage {
 	t.Helper()
-	return json.RawMessage(`{"schema_version":1,"budget_cny":` + formatInteger(budget) + `,"use_case":{"type":"gaming","resolution":"2K"}}`)
+	return json.RawMessage(`{"schema_version": 2, "configuration_scope": ["tower"],"budget_cny":` + formatInteger(budget) + `,"use_case":{"type":"gaming","resolution":"2K"}}`)
 }
 
 func formatInteger(value int) string {

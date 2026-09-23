@@ -144,8 +144,10 @@ func projectField(f schemas.RequirementField) ReqV2FieldProjection {
 }
 
 func ProjectRequirementState(s schemas.RequirementState) ReqV2StateProjection {
+	// v2 起 RequirementState 不再有 reply/next_action;投影字段保留为零值,
+	// 供旧产物按同一形状解码与 reply_next_action_absent 断言。
 	p := ReqV2StateProjection{
-		SchemaVersion: s.SchemaVersion, Revision: s.Revision, Reply: s.Reply, NextAction: s.NextAction,
+		SchemaVersion: s.SchemaVersion, Revision: s.Revision,
 		Fields: map[string]ReqV2FieldProjection{},
 	}
 	for name, f := range s.Fields {

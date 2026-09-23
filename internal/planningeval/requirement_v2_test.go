@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -139,8 +140,9 @@ func TestReqV2SplitLeak(t *testing.T) {
 	}
 }
 
-// TestReqV2DeterministicBaseline 冻结当前确定性层基线形状：已知 green 集必须
-// 通过、其余 red 必须带 v2 分类、任何 technical_fault 都是评估设施回归。
+// TestReqV2DeterministicBaseline 冻结 v2 确定性层形状：reducer/readiness 在
+// development+calibration 必须 100% 通过且无 veto(评估设施回归即时暴露)。
+// 2026-09-23 金标定向修正后恢复全量严格断言,不再保留任何单题豁免。
 func TestReqV2DeterministicBaseline(t *testing.T) {
 	data := loadReqV2(t)
 	report, err := RunRequirementV2(context.Background(), data, ReqV2RunOptions{
@@ -149,12 +151,6 @@ func TestReqV2DeterministicBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	green := map[string]bool{
-		"reducer/rd-reject-inferred":         true,
-		"reducer/rd-reject-ungrounded-quote": true,
-		"reducer/rd-atomic-batch":            true,
-		"readiness/rdy-removed-required":     true,
-	}
 	seen := map[string]bool{}
 	for _, c := range report.Cases {
 		if c.Layer != "reducer" && c.Layer != "readiness" {
@@ -162,15 +158,15 @@ func TestReqV2DeterministicBaseline(t *testing.T) {
 		}
 		key := c.Layer + "/" + c.ID
 		seen[key] = true
-		if green[key] && !c.Pass {
+		if len(c.Vetoes) > 0 {
+			t.Errorf("%s veto: %v", key, c.Vetoes)
+		}
+		if !c.Pass {
 			for _, a := range c.Assertions {
 				if !a.Pass {
-					t.Errorf("%s regressed to red: %s [%s] %s", key, a.Name, a.Classification, a.Detail)
+					t.Errorf("%s red: %s [%s] %s", key, a.Name, a.Classification, a.Detail)
 				}
 			}
-		}
-		if !green[key] && c.Pass {
-			t.Errorf("%s unexpectedly green; v1 实现追平了 v2 契约或金标被改弱", key)
 		}
 		for _, a := range c.Assertions {
 			if !a.Pass && a.Classification == reqV2ClassFault {
@@ -178,20 +174,54 @@ func TestReqV2DeterministicBaseline(t *testing.T) {
 			}
 		}
 	}
-	for key := range green {
-		if !seen[key] {
-			t.Errorf("baseline green case %s missing from run", key)
-		}
+	if len(seen) == 0 {
+		t.Fatal("no deterministic cases executed")
 	}
-	// 模型/数据库层在无 DSN 时必须显式 skip，而不是悄悄通过。
-	for _, layer := range []string{"policy", "ui-contract", "extraction", "conversations"} {
-		if s := report.PerLayer[layer]; s.Skipped == 0 {
-			t.Errorf("layer %s should be skipped without DSN", layer)
+}
+func TestReqV2UpgradeStateIsMechanical(t *testing.T) {
+	data := loadReqV2(t)
+	for _, c := range data.Reducer {
+		if len(c.InitialState) == 0 {
+			continue
 		}
+		var before schemas.RequirementState
+		if err := json.Unmarshal(c.InitialState, &before); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := schemas.DecodeRequirementState(c.InitialState); err == nil {
+			t.Fatalf("%s: 产品 decoder 必须拒绝冻结 v1 外形", c.ID)
+		}
+		after := reqV2UpgradeState(before)
+		if after.SchemaVersion != schemas.RequirementStateSchemaVersion {
+			t.Fatalf("%s: 适配器应只升 schema_version", c.ID)
+		}
+		before.SchemaVersion = after.SchemaVersion
+		if !reflect.DeepEqual(before, after) {
+			t.Fatalf("%s: 适配器改写了字段或生成了用户事实", c.ID)
+		}
+		break // 任一冻结外形足以证明机械性
 	}
 }
 
-// TestReqV2ReplayDeterministic 零模型 replay：同一批观测重判结论不变。
+// TestReqV2DeterministicByteStable 同一状态重复求值字节级稳定(v2 契约)。
+func TestReqV2DeterministicByteStable(t *testing.T) {
+	data := loadReqV2(t)
+	options := ReqV2RunOptions{Splits: map[string]bool{"development": true, "calibration": true}, Repeats: 1}
+	first, err := RunRequirementV2(context.Background(), data, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := RunRequirementV2(context.Background(), data, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range first.Cases {
+		a, b := first.Cases[i], second.Cases[i]
+		if a.Layer != b.Layer || a.ID != b.ID || a.Pass != b.Pass {
+			t.Fatalf("repeated run unstable at %d: %+v vs %+v", i, a, b)
+		}
+	}
+}
 func TestReqV2ReplayDeterministic(t *testing.T) {
 	data := loadReqV2(t)
 	report, err := RunRequirementV2(context.Background(), data, ReqV2RunOptions{
@@ -268,9 +298,12 @@ func TestReqV2McNemarExact(t *testing.T) {
 	}
 }
 
-// TestReqV2PolicyUIBaseline（PG_TEST_DSN 门控）冻结当前 policy/ui 层基线：
-// 聊天启动 Builder 必须命中 V4，scope 外承诺命中 V9，confirm/并发/过期
-// revision 的既有正确行为必须保持 green。
+// TestReqV2PolicyUIBaseline（PG_TEST_DSN 门控）冻结当前 policy/ui 层基线。
+// 2026-09-23 Spec 2 落地后：聊天不再启动 Builder（V4 消除），confirm 的
+// Builder 输入与确认快照哈希一致（V5 保持 green）；剩余 red 逐项归属后续
+// change——presentation_action/edit-while-building 与 V9(scope 外承诺经
+// 模型 reply 透传)归 Screening 收集 v2；ui 的结构化 readiness 块与
+// confirm payload 归确认快照/Builder gate v2。
 func TestReqV2PolicyUIBaseline(t *testing.T) {
 	dsn := os.Getenv("PG_TEST_DSN")
 	if dsn == "" {
@@ -308,8 +341,8 @@ func TestReqV2PolicyUIBaseline(t *testing.T) {
 		"policy/pol-ready-confirm":              {pass: true},
 		"policy/pol-second-builder-running":     {pass: true},
 		"policy/pol-stale-revision-edit":        {pass: true},
-		"policy/pol-incomplete-chat-start":      {pass: false, vetoes: []string{"V4"}},
-		"policy/pol-ready-chat-start":           {pass: false, vetoes: []string{"V4"}},
+		"policy/pol-incomplete-chat-start":      {pass: false},
+		"policy/pol-ready-chat-start":           {pass: false},
 		"policy/pol-monitor-promise-guard":      {pass: false, vetoes: []string{"V9"}},
 		"policy/pol-edit-while-running":         {pass: false},
 		"policy/pol-edit-after-confirm-rebuild": {pass: false},

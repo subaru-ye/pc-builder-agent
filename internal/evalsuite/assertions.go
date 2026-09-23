@@ -171,7 +171,8 @@ func AssertScreeningCase(c Case, text string) Verdict {
 
 	var spec *schemas.RequirementSpec
 	if len(payload) > 0 {
-		decoded, err := schemas.DecodeRequirementSpec(payload)
+		// replay 的 v1 录制输出经评估专用 legacy 解码;live v2 输出不受影响。
+		decoded, err := schemas.DecodeLegacyRequirementSpec(payload)
 		if err != nil {
 			// 可能是 ChangeRequest(改单),初筛用例当前不期望它。
 			add("S1", "输出形态", "提取到 JSON 但不是合法 RequirementSpec:%v", err)

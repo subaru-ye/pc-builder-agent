@@ -2,6 +2,7 @@ package product
 
 import (
 	"bytes"
+	"slices"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 	"github.com/subaru-ye/pc-builder-agent/internal/upstream"
@@ -24,6 +26,8 @@ type fakeProductStore struct {
 	messages     []store.WebMessage
 	latest       int
 	fingerprints map[string]string
+	onMessageRun func(messageID string) // planningFakeStore 挂接建议消费等扩展语义
+	onComplete   func(store.CompleteRunParams)
 }
 
 func newFakeProductStore() *fakeProductStore {
@@ -107,7 +111,10 @@ func (f *fakeProductStore) ReplacePendingRequirement(_ context.Context, _, _ str
 	f.session.Phase = store.PhaseRequirementReady
 	return nil
 }
-func (f *fakeProductStore) StartMessageRun(_ context.Context, p store.StartMessageRunParams) (store.AgentRun, bool, error) {
+func (f *fakeProductStore) StartMessageRun(ctx context.Context, p store.StartMessageRunParams) (store.AgentRun, bool, error) {
+	if hook := f.onMessageRun; hook != nil {
+		defer hook(p.MessageID)
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	kind := store.RunScreening
@@ -133,7 +140,10 @@ func (f *fakeProductStore) StartConfirmRun(_ context.Context, p store.StartConfi
 	f.session.Phase = store.PhaseBuilding
 	return r, f.session.PendingRequirement, false, nil
 }
-func (f *fakeProductStore) CompleteRun(_ context.Context, p store.CompleteRunParams) (*store.WebMessage, error) {
+func (f *fakeProductStore) CompleteRun(ctx context.Context, p store.CompleteRunParams) (*store.WebMessage, error) {
+	if hook := f.onComplete; hook != nil {
+		defer hook(p)
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	r := f.runs[p.RunID]
@@ -144,6 +154,9 @@ func (f *fakeProductStore) CompleteRun(_ context.Context, p store.CompleteRunPar
 	f.session.LastError = p.Error
 	if p.SetPending {
 		f.session.PendingRequirement = p.PendingRequirement
+	}
+	if p.SetRequirementState {
+		f.session.RequirementState = p.RequirementState
 	}
 	if p.AssistantContent == "" {
 		return nil, nil
@@ -184,7 +197,81 @@ func (f *fakeProductStore) ReclaimStaleRuns(context.Context, string) ([]store.In
 
 // planningFakeStore 在基础假 store 上补齐增量协议能力（proposalStore +
 // ContinueScreeningRun），模拟生产 Store 的能力面；旧协议测试继续用基础版。
-type planningFakeStore struct{ *fakeProductStore }
+type planningFakeStore struct {
+	*fakeProductStore
+	proposals []fakeRequirementProposal
+}
+
+func newPlanningFakeStore() *planningFakeStore {
+	planner := &planningFakeStore{fakeProductStore: newFakeProductStore()}
+	planner.onMessageRun = planner.consumeProposals
+	planner.onComplete = planner.saveProposals
+	return planner
+}
+
+type fakeRequirementProposal struct {
+	sessionID, assistantMessageID, field string
+	value                                json.RawMessage
+	text, consumedBy                     string
+	resolved                             bool
+}
+
+// ActiveRequirementProposals 与生产语义一致:只返回绑定本轮用户消息、
+// 未解析的建议;裸"可以"没有可验证对象时返回空。
+func (f *planningFakeStore) ActiveRequirementProposals(_ context.Context, sessionID, userMessageID string) ([]store.RequirementProposalRecord, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []store.RequirementProposalRecord{}
+	for _, proposal := range f.proposals {
+		if proposal.sessionID == sessionID && proposal.consumedBy == userMessageID && !proposal.resolved {
+			out = append(out, store.RequirementProposalRecord{Field: proposal.field, Value: proposal.value, Text: proposal.text})
+		}
+	}
+	return out, nil
+}
+
+// consumeProposals 模拟 StartMessageRun 事务内的紧邻消费:只有"最后一条
+// assistant 消息"绑定的未消费建议对本轮有效。
+func (f *planningFakeStore) consumeProposals(userMessageID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	lastAssistant := ""
+	for _, message := range f.messages {
+		if message.Role == "assistant" {
+			lastAssistant = message.ID
+		}
+	}
+	for i := range f.proposals {
+		if f.proposals[i].assistantMessageID == lastAssistant && f.proposals[i].consumedBy == "" && !f.proposals[i].resolved {
+			f.proposals[i].consumedBy = userMessageID
+		}
+	}
+}
+
+// saveProposals 与生产同事务语义:文本未展示的建议丢弃。
+func (f *planningFakeStore) saveProposals(p store.CompleteRunParams) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, proposal := range p.SaveProposals {
+		if !strings.Contains(p.AssistantContent, proposal.Text) {
+			continue
+		}
+		f.proposals = append(f.proposals, fakeRequirementProposal{
+			sessionID: p.SessionID, assistantMessageID: p.AssistantMessageID,
+			field: proposal.Field, value: proposal.Value, text: proposal.Text,
+		})
+	}
+	for i := range f.proposals {
+		if f.proposals[i].sessionID != p.SessionID || f.proposals[i].consumedBy != p.ConsumeMessageID || f.proposals[i].resolved {
+			continue
+		}
+		for _, accepted := range p.ResolveProposals {
+			if accepted.Field == f.proposals[i].field && sameRequirementJSON(accepted.Value, f.proposals[i].value) {
+				f.proposals[i].resolved = true
+			}
+		}
+	}
+}
 
 func (f *planningFakeStore) LatestProposal(context.Context, string) (json.RawMessage, error) {
 	return nil, nil
@@ -202,6 +289,12 @@ func (f *planningFakeStore) CompletePlanningRun(ctx context.Context, p store.Com
 	return store.PlanningCompletion{Result: p.Result, Version: f.latest}, nil
 }
 
+// turnScreenResult 把净化后的更新批包装为 v2 一轮结果供服务层消费。
+func turnScreenResult(update *schemas.RequirementUpdate, answer string) ScreenResult {
+	turn := pipeline.RequirementTurnResult{Operations: update.Operations, Observations: update.Observations, Answer: answer}
+	return ScreenResult{Turn: &turn, RequirementUpdate: update}
+}
+
 type fakeAgent struct {
 	store            *fakeProductStore
 	screen           ScreenResult
@@ -215,6 +308,12 @@ type fakeAgent struct {
 func (f *fakeAgent) Screen(_ context.Context, _, _ string, input ScreenInput) (ScreenResult, error) {
 	f.screenCalls++
 	f.screenInput = input
+	if f.screen.Turn == nil && f.screen.RequirementUpdate != nil {
+		f.screen.Turn = &pipeline.RequirementTurnResult{
+			Operations:   f.screen.RequirementUpdate.Operations,
+			Observations: f.screen.RequirementUpdate.Observations,
+		}
+	}
 	return f.screen, f.screenErr
 }
 func (f *fakeAgent) Remote(_ context.Context, _, _ string, payload json.RawMessage) (RemoteResult, error) {
@@ -317,14 +416,14 @@ func TestServiceRequirementConfirmBuild(t *testing.T) {
 // 零模型回归:首句模糊需求(缺分辨率/已有件)不得因模型 next_action=confirm
 // 提前 ready;必须被确定性 readiness 拦在 collecting。
 func TestFirstVagueMessageIsBlockedByReadiness(t *testing.T) {
-	st := &planningFakeStore{newFakeProductStore()}
+	st := newPlanningFakeStore()
 	update := &schemas.RequirementUpdate{
 		Operations: []schemas.RequirementOperation{
 			{Op: "set", Field: "budget_cny", Value: json.RawMessage("8000"), Kind: "constraint", Strength: "must", Scope: "session", Evidence: "stated", Quote: "预算8000"},
 			{Op: "set", Field: "use_case.type", Value: json.RawMessage(`"gaming"`), Kind: "fact", Strength: "must", Scope: "session", Evidence: "stated", Quote: "游戏"},
 		},
 	}
-	agent := &fakeAgent{store: st.fakeProductStore, screen: ScreenResult{RequirementUpdate: update, Reply: "需求已经整理好，请确认。"}, contextAvailable: true}
+	agent := &fakeAgent{store: st.fakeProductStore, screen: turnScreenResult(update, "需求已经整理好，请确认。"), contextAvailable: true}
 	sink := newFakeSink()
 	svc, err := NewService(context.Background(), st, agent, sink)
 	if err != nil {
@@ -341,8 +440,9 @@ func TestFirstVagueMessageIsBlockedByReadiness(t *testing.T) {
 	}
 	messages, _ := st.WebMessages(context.Background(), "session-1")
 	last := messages[len(messages)-1]
-	if last.Role != "assistant" || !strings.Contains(last.Content, "分辨率") || !strings.Contains(last.Content, "已有配件") {
-		t.Fatalf("追问应覆盖缺失的分辨率与已有件: %s", last.Content)
+	// v2 每轮最多一个问题组:按领域优先级先问已有配件,分辨率留到下一轮。
+	if last.Role != "assistant" || !strings.Contains(last.Content, "已有配件") {
+		t.Fatalf("追问应指向领域问题计划选中的首个缺失项: %s", last.Content)
 	}
 }
 
@@ -379,7 +479,7 @@ func TestLegacyV1RequirementStateIsRejected(t *testing.T) {
 // 仅 must 冲突(无缺失)时必须保持 collecting:不发布待确认草稿、不发
 // requirement.ready、不启动 Builder,提示指向冲突本身。
 func TestMustConflictOnlyKeepsCollecting(t *testing.T) {
-	st := &planningFakeStore{newFakeProductStore()}
+	st := newPlanningFakeStore()
 	update := &schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{
 		{Op: "set", Field: "budget_cny", Value: json.RawMessage("8000"), Kind: "constraint", Strength: "must", Scope: "session", Evidence: "stated", Quote: "预算8000"},
 		{Op: "set", Field: "use_case.type", Value: json.RawMessage(`"gaming"`), Kind: "fact", Strength: "must", Scope: "session", Evidence: "stated", Quote: "游戏"},
@@ -418,7 +518,7 @@ func TestMustConflictOnlyKeepsCollecting(t *testing.T) {
 
 // 仅 unsupported 阻塞(其余齐备)时同样保持 collecting,并提示当前 tower 边界。
 func TestUnsupportedOnlyKeepsCollecting(t *testing.T) {
-	st := &planningFakeStore{newFakeProductStore()}
+	st := newPlanningFakeStore()
 	update := &schemas.RequirementUpdate{
 		Operations: []schemas.RequirementOperation{
 			{Op: "set", Field: "budget_cny", Value: json.RawMessage("8000"), Kind: "constraint", Strength: "must", Scope: "session", Evidence: "stated", Quote: "预算8000"},
@@ -453,7 +553,7 @@ func TestUnsupportedOnlyKeepsCollecting(t *testing.T) {
 }
 
 func TestFirstExecutionMessageDoesNotStartBuilder(t *testing.T) {
-	st := &planningFakeStore{newFakeProductStore()}
+	st := newPlanningFakeStore()
 	update := &schemas.RequirementUpdate{
 		Operations: []schemas.RequirementOperation{
 			{Op: "set", Field: "budget_cny", Value: json.RawMessage("8000"), Kind: "constraint", Strength: "must", Scope: "session", Evidence: "stated", Quote: "预算8000"},
@@ -462,7 +562,10 @@ func TestFirstExecutionMessageDoesNotStartBuilder(t *testing.T) {
 			{Op: "set", Field: "existing_parts", Value: json.RawMessage("[]"), Kind: "fact", Strength: "must", Scope: "session", Evidence: "stated", Quote: "全部新买"},
 		},
 	}
-	agent := &fakeAgent{store: st.fakeProductStore, screen: ScreenResult{RequirementUpdate: update, Reply: "开始为本轮选配。"}, contextAvailable: true}
+	result := turnScreenResult(update, "开始为本轮选配。")
+	// 用户"直接开始配"是本轮请求事实:多标签 signal 不是授权,仍需核定面板。
+	result.Turn.Signals.RequestsBuild = true
+	agent := &fakeAgent{store: st.fakeProductStore, screen: result, contextAvailable: true}
 	sink := newFakeSink()
 	svc, err := NewService(context.Background(), st, agent, sink)
 	if err != nil {
@@ -490,8 +593,12 @@ func TestFirstExecutionMessageDoesNotStartBuilder(t *testing.T) {
 		t.Fatalf("待确认草稿应是 RequirementSpec v2: %s err=%v", ws.PendingRequirement, err)
 	}
 	messages, _ := st.WebMessages(context.Background(), "session-1")
-	if len(messages) == 0 || messages[len(messages)-1].Role != "assistant" || messages[len(messages)-1].Content != "开始为本轮选配。" {
-		t.Fatalf("legacy reply 应作为助手文案展示: %+v", messages)
+	if len(messages) == 0 || messages[len(messages)-1].Role != "assistant" || !strings.Contains(messages[len(messages)-1].Content, "开始为本轮选配。") ||
+		!strings.Contains(messages[len(messages)-1].Content, "现在可以核定需求") {
+		t.Fatalf("最终回复应先展示模型回答,再提示核定而不启动 Builder: %+v", messages)
+	}
+	if !slices.Contains(sink.names(), "presentation.action") {
+		t.Fatalf("ready+requests_build 应产生 open_requirement_review: %v", sink.names())
 	}
 }
 

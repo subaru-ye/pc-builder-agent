@@ -313,3 +313,56 @@ func unsupportedCapabilityName(reason string) (string, bool) {
 	}
 	return name, true
 }
+
+// RequirementQuestionText 是每轮最多一个问题组的确定性文案:字段选择完全
+// 来自 NextRequirementQuestion,本函数不维护第二份字段顺序;ready 返回空。
+// 文案属于产品展示层,可以随产品改写,不影响 readiness/问题计划语义。
+func RequirementQuestionText(state RequirementState) (string, error) {
+	question, err := NextRequirementQuestion(state)
+	if err != nil {
+		return "", err
+	}
+	if question == nil {
+		return "", nil
+	}
+	var parts []string
+	for _, field := range question.Fields {
+		switch {
+		case question.ReasonCode == "requirement_conflict":
+			parts = append(parts, "请确认"+RequirementFieldLabel(field)+"应采用哪个要求。")
+		case question.ReasonCode == "unsupported_capability":
+			parts = append(parts, "当前配置范围仅支持主机（tower），"+requirementCapabilityLabel(field)+"暂不在本次范围内；如需包含请先放弃该项，或等待后续支持。")
+		case strings.HasPrefix(field, "owned_parts."):
+			parts = append(parts, "请提供已有"+strings.TrimSuffix(strings.TrimPrefix(field, "owned_parts."), ".model")+"的完整型号。")
+		default:
+			parts = append(parts, requirementMissingQuestion(field))
+		}
+	}
+	// 多个 owned 型号合并为一组;其余 reason 的 Fields 至多一项。
+	return strings.Join(parts, ""), nil
+}
+
+func requirementCapabilityLabel(name string) string {
+	labels := map[string]string{"monitor": "显示器", "keyboard": "键盘", "mouse": "鼠标"}
+	if label := labels[name]; label != "" {
+		return label
+	}
+	return name
+}
+
+// requirementMissingQuestion 与 RequirementStateQuestions 的既有文案保持一致,
+// 不引入新的追问内容,只收敛为"每轮一个问题组"。
+func requirementMissingQuestion(field string) string {
+	switch field {
+	case "budget_cny":
+		return "请提供预算金额，单位元。"
+	case "use_case.type":
+		return "这台电脑主要用于什么用途？"
+	case "use_case.resolution":
+		return "主要使用的游戏分辨率是1080p、2K还是4K？"
+	case "budget_basis":
+		return "这笔预算是只用于新增购买配件，还是包含已有配件价值的整机参考总价？"
+	default:
+		return "请补充" + RequirementFieldLabel(field) + "。"
+	}
+}

@@ -24,6 +24,12 @@
         "无畏契约"
        ],
        "quote_contains": "无畏契约"
+      },
+      {
+       "op": "set",
+       "field": "use_case.performance_goal",
+       "value": "fps_first",
+       "quote_contains": "帧率"
       }
      ],
      "expected_missing_fields": [
@@ -196,7 +202,33 @@
     "expect": {
      "expected_missing_fields": [],
      "expected_confirmation_eligible": true,
-     "expected_next_action_absent": true
+     "expected_next_action_absent": true,
+     "expected_operations": [
+      {
+       "op": "set",
+       "field": "use_case.type",
+       "value": "gaming",
+       "quote_contains": "打游戏"
+      },
+      {
+       "op": "set",
+       "field": "use_case.resolution",
+       "value": "1080p",
+       "quote_contains": "1080p"
+      },
+      {
+       "op": "set",
+       "field": "budget_cny",
+       "value": 7500,
+       "quote_contains": "7500"
+      },
+      {
+       "op": "set",
+       "field": "existing_parts",
+       "value": [],
+       "quote_contains": "新买"
+      }
+     ]
     }
    },
    {
@@ -381,7 +413,16 @@
     "expect": {
      "expected_observations": [
       {
-       "text_contains": "显示器"
+       "text_contains": "显示器",
+       "reason_contains": "unsupported_capability:monitor"
+      },
+      {
+       "text_contains": "键鼠",
+       "reason_contains": "unsupported_capability:keyboard"
+      },
+      {
+       "text_contains": "键鼠",
+       "reason_contains": "unsupported_capability:mouse"
       }
      ],
      "forbidden_operations": [
@@ -395,7 +436,8 @@
       "budget_cny",
       "existing_parts"
      ],
-     "expected_confirmation_eligible": false
+     "expected_confirmation_eligible": false,
+     "expected_operations": []
     }
    }
   ],
@@ -493,7 +535,33 @@
     "expect": {
      "expected_missing_fields": [],
      "expected_confirmation_eligible": true,
-     "expected_next_action_absent": true
+     "expected_next_action_absent": true,
+     "expected_operations": [
+      {
+       "op": "set",
+       "field": "use_case.type",
+       "value": "gaming",
+       "quote_contains": "打游戏"
+      },
+      {
+       "op": "set",
+       "field": "use_case.resolution",
+       "value": "1080p",
+       "quote_contains": "1080p"
+      },
+      {
+       "op": "set",
+       "field": "budget_cny",
+       "value": 7500,
+       "quote_contains": "7500"
+      },
+      {
+       "op": "set",
+       "field": "existing_parts",
+       "value": [],
+       "quote_contains": "新买"
+      }
+     ]
     }
    },
    {

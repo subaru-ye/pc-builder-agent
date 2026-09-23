@@ -94,6 +94,19 @@ data: {"schema_version":1,"run_id":"...","timestamp":"...","payload":{"kind":"bu
 - `RequirementState` 的变化不修改已确认快照与已有配置版本。`requirement_status` 和必要的 `missing_fields` 以随后读取的 Session 为准；仅讨论备选不等于有效需求发生修改。
 - 界面编辑接口直接返回完整 Session，并保存一个不调用模型的完成 run；页面无需为了获得编辑结果另行发起模型请求。
 
+### 3.3.2 presentation.action
+
+```json
+{"action":"open_requirement_review","fields":["budget_cny"]}
+```
+
+- Screening v2 的短期 presentation action,由确定性代码(readiness + 本轮 turn signals)在 assistant 回复组装后发送;模型没有决策权,本事件不代表已启动 Builder。
+- action 当前取值:
+  - `open_requirement_review`:需求已就绪且用户本轮请求核对/开始,前端可打开核定面板;仍需用户显式确认。
+  - `focus_missing_requirement`:用户请求核对/开始但需求未就绪;fields 是领域问题计划选中的首个阻塞项(可能是 conflict、unsupported capability 或缺失字段)。
+- fields 为稳定机器值(字段名或 capability 名),前端不得从中渲染业务文案。
+- 后续 confirmation/build 三轴 Policy 在同一入口扩展;不产生 action 的轮次不发送本事件。
+
 ### 3.4 assistant.delta
 
 ```json
@@ -190,6 +203,7 @@ run.progress(screening)
 assistant.delta *
 requirement.updated?
 assistant.completed?
+presentation.action?
 requirement.ready?
 run.completed(succeeded)
 ```

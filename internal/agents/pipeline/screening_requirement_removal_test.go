@@ -24,11 +24,11 @@ func TestScreeningStateSavedLiveRemovalBindsExplicitCurrentSource(t *testing.T) 
 		}
 		delivered = screeningText(response.Content)
 	}
-	update, err := schemas.DecodeRequirementUpdate([]byte(delivered))
+	removalTurn, err := DecodeRequirementTurn([]byte(delivered))
 	if err != nil {
 		t.Fatal(err)
 	}
-	next, err := schemas.ApplyRequirementUpdate(state, update, source)
+	next, err := schemas.ApplyRequirementUpdate(state, removalTurn.Update(), source)
 	if err != nil || next.Fields["brand_pref.gpu"].Status != "removed" || next.Fields["noise_pref"].Strength != "prefer" || next.Fields["noise_pref"].Status != "active" {
 		t.Fatalf("explicit removal failed or changed unrelated preference: %+v err=%v", next, err)
 	}

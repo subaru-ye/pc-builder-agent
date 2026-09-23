@@ -12,12 +12,12 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
 	"github.com/subaru-ye/pc-builder-agent/internal/product"
-	"github.com/subaru-ye/pc-builder-agent/internal/runevents"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 	"google.golang.org/adk/v2/model"
@@ -911,18 +911,101 @@ func observeReadinessCase(dataset *ReqV2Dataset, id string) (ReqV2CaseObservatio
 }
 
 // v2Driver 在隔离数据库里驱动真实 product.Service；scripted screening 轮
-// 是适配器输入（当前 v1 协议的模型输出替身），不是金标。
+// 是适配器输入（v2 一轮合同的模型输出替身），不是金标。
 type v2Driver struct {
 	g                *gateway
 	svc              *product.Service
+	sink             *recordingEventSink
 	owner, sessionID string
 	live             bool
 	journal          func(any) error
 }
 
+// recordingEventSink 记录产品事件供断言(presentation action 等);
+// 不落 Redis/PG,生命周期与 driver 相同。
+type recordedEvent struct {
+	Name    string
+	Payload json.RawMessage
+}
+
+type recordingEventSink struct {
+	mu     sync.Mutex
+	events map[string][]recordedEvent
+}
+
+func newRecordingEventSink() *recordingEventSink {
+	return &recordingEventSink{events: map[string][]recordedEvent{}}
+}
+
+func (r *recordingEventSink) Append(_ context.Context, runID, name string, payload any) (string, error) {
+	// 产品 publish 传入 json.RawMessage;其他调用方可能是 string/map。
+	var raw []byte
+	switch value := payload.(type) {
+	case json.RawMessage:
+		raw = value
+	case []byte:
+		raw = value
+	case string:
+		raw = []byte(value)
+	default:
+		out, err := json.Marshal(payload)
+		if err != nil {
+			return "", err
+		}
+		raw = out
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events[runID] = append(r.events[runID], recordedEvent{Name: name, Payload: raw})
+	return fmt.Sprintf("%d-%d", len(r.events[runID]), 1), nil
+}
+
+func (r *recordingEventSink) Has(context.Context, string) (bool, error) { return true, nil }
+func (r *recordingEventSink) Degraded() bool                            { return false }
+
+// waitForCompleted 等到该 run 的事件序列写完(run.completed 是 publish 的
+// 最后一个事件),消除"落库即可见、事件尚未发布"的观测竞态。
+func (r *recordingEventSink) waitForCompleted(runID string, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		r.mu.Lock()
+		done := false
+		for _, event := range r.events[runID] {
+			if event.Name == "run.completed" {
+				done = true
+			}
+		}
+		r.mu.Unlock()
+		if done {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// presentationAction 返回该 run 最后一次 presentation.action 的动作名。
+func (r *recordingEventSink) presentationAction(runID string) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	action := ""
+	for _, event := range r.events[runID] {
+		if event.Name != "presentation.action" {
+			continue
+		}
+		var payload struct {
+			Action string `json:"action"`
+		}
+		if json.Unmarshal(event.Payload, &payload) == nil && payload.Action != "" {
+			action = payload.Action
+		}
+	}
+	return action
+}
+
 func newDriver(ctx context.Context, st *store.Store, opts ReqV2RunOptions, screening model.LLM, holdBuilder bool) (*v2Driver, error) {
 	g := &gateway{store: st, models: Models{Screening: screening, MaxCalls: opts.MaxCalls, Journal: opts.Journal, BuilderHold: holdBuilder}}
-	svc, err := product.NewService(ctx, st, g, runevents.NewMemory())
+	sink := newRecordingEventSink()
+	svc, err := product.NewService(ctx, st, g, sink)
 	if err != nil {
 		return nil, err
 	}
@@ -932,7 +1015,7 @@ func newDriver(ctx context.Context, st *store.Store, opts ReqV2RunOptions, scree
 		_ = svc.Shutdown(ctx)
 		return nil, err
 	}
-	return &v2Driver{g: g, svc: svc, owner: owner, sessionID: ws.ID, live: screening != nil, journal: opts.Journal}, nil
+	return &v2Driver{g: g, svc: svc, sink: sink, owner: owner, sessionID: ws.ID, live: screening != nil, journal: opts.Journal}, nil
 }
 
 func (d *v2Driver) shutdown(ctx context.Context) { _ = d.svc.Shutdown(ctx) }
@@ -953,13 +1036,13 @@ func (d *v2Driver) currentState(ctx context.Context) (schemas.RequirementState, 
 }
 
 // scriptTurn 执行一轮 scripted screening 消息（零 provider 调用）。
-// operations 必须序列化为数组，空批用 []，否则 legacy turn 解码会拒绝。
-func (d *v2Driver) scriptTurn(ctx context.Context, text string, turn pipeline.LegacyRequirementTurn) error {
+// turn 是 v2 一轮合同形状的模型输出替身(适配器输入,不是金标)。
+func (d *v2Driver) scriptTurn(ctx context.Context, text string, turn pipeline.RequirementTurnResult) error {
 	raw, err := json.Marshal(turn)
 	if err != nil {
 		return err
 	}
-	d.g.begin(Step{Kind: "message", Text: text, Screen: raw, ScreenFallback: scriptFallback(turn)})
+	d.g.begin(Step{Kind: "message", Text: text, Screen: raw})
 	started, err := d.svc.StartMessage(ctx, d.owner, d.sessionID, uuid.NewString(), text)
 	if err != nil {
 		return err
@@ -1002,6 +1085,12 @@ func (d *v2Driver) turn(ctx context.Context, kind, text string, scripted, script
 	obs.State = ProjectRequirementState(state)
 	readiness := CurrentReadiness(state)
 	obs.Readiness = &readiness
+	if (kind == "message" || kind == "confirm") && started.Run.ID != "" {
+		if wait {
+			d.sink.waitForCompleted(started.Run.ID, 2*time.Second)
+		}
+		obs.PresentationAction = d.sink.presentationAction(started.Run.ID)
+	}
 	if len(after.Messages) > 0 && after.Messages[len(after.Messages)-1].Role == "assistant" {
 		obs.Reply = after.Messages[len(after.Messages)-1].Content
 	}
@@ -1054,18 +1143,29 @@ func (d *v2Driver) turn(ctx context.Context, kind, text string, scripted, script
 			obs.ProviderError = trace.Error
 			obs.ProviderErrorClass = classifyProviderError(trace.Error)
 		}
-		if trace.Response != nil {
+		// 优先观测 guard 净化后的一轮输出(与产品消费同口径);
+		// 追溯旧产物/离线 trace 时回退到原始模型输出解码。
+		if len(record.ScreenTurn) > 0 {
+			if turn, e := pipeline.DecodeRequirementTurn(record.ScreenTurn); e == nil {
+				obs.Operations = turn.Operations
+				for _, o := range turn.Observations {
+					obs.Observations = append(obs.Observations, ReqV2ObservationProjection{Field: o.Field, Text: o.Quote, Reason: o.Reason})
+				}
+				obs.Signals, obs.SignalsKnown = reqV2SignalsFrom(turn.Signals), true
+			}
+		} else if trace.Response != nil {
 			text := ""
 			for _, p := range trace.Response.Parts {
 				if p != nil && !p.Thought {
 					text += p.Text
 				}
 			}
-			if turn, e := pipeline.DecodeLegacyRequirementTurn(pipeline.ExtractPayload(text)); e == nil && turn.Operations != nil {
+			if turn, e := pipeline.DecodeRequirementTurn(pipeline.ExtractPayload(text)); e == nil && turn.Operations != nil {
 				obs.Operations = turn.Operations
 				for _, o := range turn.Observations {
 					obs.Observations = append(obs.Observations, ReqV2ObservationProjection{Field: o.Field, Text: o.Quote, Reason: o.Reason})
 				}
+				obs.Signals, obs.SignalsKnown = reqV2SignalsFrom(turn.Signals), true
 			} else if e != nil && trace.ProviderCalled {
 				obs.ProviderError = fmt.Sprintf("%s; decode: %s", obs.ProviderError, e.Error())
 				if obs.ProviderErrorClass == "" {
@@ -1080,17 +1180,26 @@ func (d *v2Driver) turn(ctx context.Context, kind, text string, scripted, script
 	} else if !tokensKnown {
 		obs.InputTokens, obs.OutputTokens = nil, nil
 	}
-	// scripted 轮的 operations 来自脚本本身（产品确实应用了同一份输出）。
+	// scripted 轮的 operations/signals 来自脚本本身（产品确实应用了同一份输出）。
 	if !obs.ScreenModelCalled && kind == "message" && len(scripted) > 0 {
-		var turn pipeline.LegacyRequirementTurn
+		var turn pipeline.RequirementTurnResult
 		if json.Unmarshal(scripted, &turn) == nil {
 			obs.Operations = turn.Operations
+			obs.Signals, obs.SignalsKnown = reqV2SignalsFrom(turn.Signals), true
 		}
 	}
 	if d.journal != nil {
 		_ = d.journal(map[string]any{"event": "turn_observed", "session": d.sessionID, "kind": kind, "builder_started": obs.BuilderStarted, "state_revision": obs.State.Revision, "duration_ms": obs.DurationMS})
 	}
 	return obs, nil
+}
+
+// reqV2SignalsFrom 把 pipeline 的 turn signals 投影为观测形状。
+func reqV2SignalsFrom(signals pipeline.RequirementTurnSignals) *ReqV2TurnSignals {
+	return &ReqV2TurnSignals{
+		AsksQuestion: signals.AsksQuestion, RequestsReview: signals.RequestsReview,
+		RequestsBuild: signals.RequestsBuild, Ambiguous: signals.Ambiguous,
+	}
 }
 
 func classifyProviderError(err string) string {
@@ -1121,28 +1230,19 @@ func normalizedHash(raw []byte) string {
 	return fmt.Sprintf("%x", sha256.Sum256(normalized))
 }
 
-// seedTurn 组装 scripted screening 输出(legacy v1 传输外形,含 reply/next_action
-// 声明);空操作批序列化为 []，否则 DecodeLegacyRequirementTurn 会拒绝。
-func seedTurn(ops []schemas.RequirementOperation, nextAction string) pipeline.LegacyRequirementTurn {
+// seedTurn 组装 scripted screening 输出(v2 一轮合同形状)。fixture 的
+// state_next_action 是 v1 遗留的"模型宣称"极端输入:plan 宣称映射为
+// requests_build 信号继续进入产品路径,由确定性 policy 决定结果;其余宣称
+// 在 v2 中没有对应语义,直接丢弃。空操作批序列化为 []。
+func seedTurn(ops []schemas.RequirementOperation, nextAction string) pipeline.RequirementTurnResult {
 	if ops == nil {
 		ops = []schemas.RequirementOperation{}
 	}
-	return pipeline.LegacyRequirementTurn{Operations: ops, NextAction: nextAction}
-}
-
-// scriptFallback 为 guard 的"collect+已齐备"纠偏重调准备第二条 scripted
-// 输出：同一批操作与回复，next_action 改为 confirm，避免 oracle 耗尽。
-func scriptFallback(update pipeline.LegacyRequirementTurn) json.RawMessage {
-	if update.NextAction != "collect" {
-		return nil
+	turn := pipeline.RequirementTurnResult{Operations: ops}
+	if nextAction == "plan" {
+		turn.Signals.RequestsBuild = true
 	}
-	fallback := update
-	fallback.NextAction = "confirm"
-	raw, err := json.Marshal(fallback)
-	if err != nil {
-		return nil
-	}
-	return raw
+	return turn
 }
 
 func observePolicyCase(ctx context.Context, dataset *ReqV2Dataset, st *store.Store, opts ReqV2RunOptions, id string) (ReqV2CaseObservation, error) {
@@ -1185,17 +1285,21 @@ func observePolicyCase(ctx context.Context, dataset *ReqV2Dataset, st *store.Sto
 }
 
 // runPolicyTurn 执行一个 policy 轮并返回观测；消息轮的 scripted screening
-// 输出来自 case 的 next_action/ops/reply 声明（适配器输入，不是金标）。
+// 输出来自 case 的 next_action/ops/reply/signals 声明（适配器输入，不是金标）。
 func (d *v2Driver) runPolicyTurn(ctx context.Context, t ReqV2PolicyTurn, c ReqV2PolicyCase, wait bool) (ReqV2TurnObservation, error) {
 	switch t.Kind {
 	case "message":
 		turn := seedTurn(t.Ops, c.StateNextAction)
-		turn.Reply = t.ScriptedReply
+		turn.Answer = t.ScriptedReply
+		turn.Signals.AsksQuestion = turn.Signals.AsksQuestion || t.Signals.AsksQuestion
+		turn.Signals.RequestsReview = turn.Signals.RequestsReview || t.Signals.RequestsReview
+		turn.Signals.RequestsBuild = turn.Signals.RequestsBuild || t.Signals.RequestsBuild
+		turn.Signals.Ambiguous = turn.Signals.Ambiguous || t.Signals.Ambiguous
 		raw, err := json.Marshal(turn)
 		if err != nil {
 			return ReqV2TurnObservation{}, err
 		}
-		return d.turn(ctx, "message", t.Text, raw, scriptFallback(turn), nil, 0, wait)
+		return d.turn(ctx, "message", t.Text, raw, nil, nil, 0, wait)
 	case "confirm":
 		return d.turn(ctx, "confirm", "", nil, nil, nil, 0, wait)
 	case "edit":
@@ -1299,7 +1403,22 @@ func observeExtractionCase(ctx context.Context, dataset *ReqV2Dataset, st *store
 			}
 		}
 		if c.PriorAssistantTurn != nil {
-			if err := d.scriptTurn(ctx, c.PriorAssistantTurn.UserMessage, pipeline.LegacyRequirementTurn{Operations: []schemas.RequirementOperation{}, Reply: c.PriorAssistantTurn.Reply}); err != nil {
+			// 装置构造:fixture 建基时没有 proposal 协议,prior_assistant_turn 只
+			// 有回复文本。适配器从本轮 gold 的 accepted_proposal 期望反推上一轮
+			// 助手建议过的 {field,value}(rationale 声明的场景),text 用回复原文。
+			// 这只让 case 变得可评估:产品仍必须真正实现"展示→绑定→紧邻→核验"
+			// 协议才能通过;没有它该边界恒 red。
+			prior := pipeline.RequirementTurnResult{Operations: []schemas.RequirementOperation{}}
+			for _, want := range c.Expected.Operations {
+				if want.Op != "set" || want.Field == "" || len(want.Value) == 0 {
+					continue
+				}
+				// 上一轮助手建议过的值:fixture 的 prior reply 就是该建议句。
+				prior.Proposals = append(prior.Proposals, pipeline.RequirementProposal{
+					Field: want.Field, Value: want.Value, Text: c.PriorAssistantTurn.Reply,
+				})
+			}
+			if err := d.scriptTurn(ctx, c.PriorAssistantTurn.UserMessage, prior); err != nil {
 				return ReqV2CaseObservation{Error: err.Error()}, nil
 			}
 		}

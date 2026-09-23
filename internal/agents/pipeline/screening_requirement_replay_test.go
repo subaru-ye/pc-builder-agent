@@ -71,11 +71,11 @@ func TestRequirementStateReplaysSavedDialogueInputs(t *testing.T) {
 				if m.calls != 1 {
 					t.Fatalf("turn %d: extra model invocation", i+1)
 				}
-				actualUpdate, err := schemas.DecodeRequirementUpdate([]byte(delivered))
+				actualTurn, err := DecodeRequirementTurn([]byte(delivered))
 				if err != nil {
 					t.Fatal(err)
 				}
-				next, err := schemas.ApplyRequirementUpdate(state, actualUpdate, source)
+				next, err := schemas.ApplyRequirementUpdate(state, actualTurn.Update(), source)
 				if err != nil {
 					t.Fatal(err)
 				}

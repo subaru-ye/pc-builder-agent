@@ -1,6 +1,7 @@
 ---
-status: proposed
+status: done
 created: 2026-09-22
+completed: 2026-09-23
 ---
 
 # Change: Screening requirement collection v2
@@ -225,13 +226,20 @@ Signals 只保存在当前 run/turn 的结果或事件中，不进入 Requiremen
 
 ## Completion checklist
 
-- [ ] Screening v2 不输出或持久化 `next_action`。
-- [ ] operations/observations/signals/proposals/answer 合同严格解码。
-- [ ] assistant proposal 接受可由服务器验证。
-- [ ] proposal 只在对应具体建议确实发送给用户后才可接受，且跨轮/并发/模糊“可以”不能误采用。
-- [ ] unsupported 能力请求与明确撤销按 Spec 2 的稳定原因码和保留操作处理；背景提及不误阻塞。
-- [ ] response composition 消费领域问题计划，短期 presentation action 由确定性代码控制；Spec 4 可在同一入口扩展三轴 Policy。
-- [ ] 首句模糊需求不会因模型宣称 ready 而进入核定。
-- [ ] extraction/conversation 评估按冻结 gates 报告并通过本 change 可评估门槛，所有本 change 负责的 veto 为零；V9 误报如发生，先完成有版本记录的判卷修正，不以绕过文案替代。
-- [ ] OpenAPI 与技术文档同步。
-- [ ] 未修改确认快照、Builder admission 和 Web UI。
+- [x] Screening v2 不输出或持久化 `next_action`。
+- [x] operations/observations/signals/proposals/answer 合同严格解码。
+- [x] assistant proposal 接受可由服务器验证。
+- [x] proposal 只在对应具体建议确实发送给用户后才可接受，且跨轮/并发/模糊“可以”不能误采用。
+- [x] unsupported 能力请求与明确撤销按 Spec 2 的稳定原因码和保留操作处理；背景提及不误阻塞。
+- [x] response composition 消费领域问题计划，短期 presentation action 由确定性代码控制；Spec 4 可在同一入口扩展三轴 Policy。
+- [x] 首句模糊需求不会因模型宣称 ready 而进入核定。
+- [x] extraction/conversation 评估按冻结 gates 报告并通过本 change 可评估门槛，所有本 change 负责的 veto 为零；V9 误报已按版本记录的判卷修正（grader-v2→v3）处理，不以绕过文案替代。
+- [x] OpenAPI 与技术文档同步。
+- [x] 未修改确认快照、Builder admission 和 Web UI。
+
+## 验收记录（2026-09-23）
+
+- 最终验收运行 `artifacts/reqv2/spec3-final-live-20260923`（development+calibration，repeats=3 Pass^3 口径，显式预算 400、实际 129 次真实调用，grader reqv2-grader-v3，manifest f8fa51e6…）：**冻结 gate verdict 16/16 全部通过、全层 veto 0、关键字段错写 0、重复追问 0、forbidden op 0**。extraction precision 1.000 / recall 1.000 / turn signals 72⁄75 / case_success 25⁄26 / final_state 15⁄15；conversations precision 1.000 / recall 1.000 / task_success 6⁄7；provider 129⁄129、latency p95 5023ms、单轮调用 ≤1。
+- 模型层 Pass^3=31/33 case：ex-all-new-purchase（requests_build 信号 0⁄3）与 cv-composite-9000-start（2⁄3，一轮多余观察）为残留模型波动，均不触及冻结门槛。gate_passed=false 仅由归属后续 change 的确定性层红项驱动（ui-contract 0/3 → workspace sidebar；policy pol-edit-while-running → Builder gate change）。
+- 授权边界经四轮定向返工收敛：接受需完整匹配肯定短答或带提案值的采纳句式，询问/拒绝/中性表达一律不写入 active 且保留 observation；accepted_proposal 失败不再降级 stated；提案文本纳入 V8/V9 守卫并须以接受问句收尾；建议保存绑定 assistant 消息、仅紧邻下一条用户消息有效、服务器核验同字段同值。零模型重放（40 轮冻结真实输出经真实 Service 重执行）作为回归证据。
+- 判卷资产变更：grader-v2→v3（V9 按句检测修正"明确告知暂不支持"误报）与三处 conversations 金标缺陷修正，均经人工复核并登记 provenance.json；holdout 全程未运行，留发布认证 change 按预注册流程执行。

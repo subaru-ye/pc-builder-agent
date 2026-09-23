@@ -1,6 +1,6 @@
 {
   "dataset": "requirement-v2",
-  "grader_version": "reqv2-grader-v2",
+  "grader_version": "reqv2-grader-v3",
   "frozen_at": "2026-09-23",
   "files": [
     {
@@ -35,14 +35,14 @@
     },
     {
       "path": "conversations/cases.json",
-      "sha256": "4e6e3ec41b1fd39be3567c55fa496e2ff571bbb39f674d3160ecc2bf60813e63",
+      "sha256": "60b1ec89bcb6c119f66afc92ed777f58c362c7aad4ef48038a97e593d27200bf",
       "cases": 8,
       "sessions": 8
     },
     {
       "path": "selftest.json",
-      "sha256": "d2b9835154a94a95b5eb88cadd28a5cca8a667dba7a1ca169d93de1eb86588a3",
-      "cases": 14,
+      "sha256": "e288ea71f666186109004b1e932fc74ad307704ca9baa2cd7f6118f5e1ab4421",
+      "cases": 15,
       "sessions": 0
     },
     {

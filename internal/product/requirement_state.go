@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/subaru-ye/pc-builder-agent/internal/agents/pipeline"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
@@ -75,7 +76,8 @@ func (s *Service) EditRequirement(ctx context.Context, ownerID, sessionID, reque
 	}
 	if !duplicate {
 		s.publish(ctx, r.ID, "run.started", map[string]any{"kind": r.Kind})
-		if err := s.completeRequirementState(ctx, ownerID, r, next, "", 0); err != nil {
+		source := schemas.RequirementSource{MessageID: messageID, Kind: "edit", Quote: text}
+		if err := s.completeRequirementTurn(ctx, ownerID, r, next, source, nil, nil, 0); err != nil {
 			s.failInternal(ctx, r, store.PhaseCollecting, "")
 			return SessionDetail{}, err
 		}
@@ -133,65 +135,6 @@ func requirementEditText(operations []schemas.RequirementOperation) string {
 		}
 	}
 	return "通过需求面板修改：" + strings.Join(lines, "；")
-}
-
-// completeRequirementState 只按确定性 readiness 收口:incomplete 保持收集并
-// 用领域追问文案;ready 才发布投影后的 RequirementSpec v2 待确认草稿。
-// reply 是 legacy turn 传输适配剥离出的助手文案,仅作展示。
-func (s *Service) completeRequirementState(ctx context.Context, ownerID string, r store.AgentRun, state schemas.RequirementState, reply string, retries int) error {
-	pending, readiness, err := schemas.RequirementStateSpec(state)
-	if err != nil {
-		return err
-	}
-	phase := store.PhaseRequirementReady
-	assistant := ScreeningReadyMessage
-	if reply != "" {
-		assistant = reply
-	}
-	// 唯一就绪判据是领域 ConfirmationEligible:缺失、阻塞冲突(must 或
-	// 条件必填)与未解决 unsupported 都保持收集态,不发布待确认草稿,
-	// 也不发 requirement.ready。
-	if !readiness.ConfirmationEligible {
-		phase = store.PhaseCollecting
-		pending = nil
-		assistant = schemas.RequirementStateQuestions(state)
-		if len(state.Changes) > 0 || len(state.Observations) > 0 {
-			assistant = "本轮可确认的信息和原文已保存。" + assistant
-		}
-	}
-	ws, err := s.store.WebSessionByOwner(ctx, ownerID, r.SessionID)
-	if err != nil {
-		return err
-	}
-	confirmed := confirmedRequirementProjection(ws.ConfirmedRequirementState)
-	if reply == "" && readiness.ConfirmationEligible && ws.VersionCount > 0 && sameRequirementJSON(pending, confirmed) {
-		phase = store.PhaseReady
-		assistant = "当前有效需求保持不变，可继续查看配置或修改需求。"
-	} else if reply == "" && readiness.ConfirmationEligible && len(confirmed) > 0 {
-		assistant = "需求草稿已更新，原配置保持不变。请确认后生成新的配置版本。"
-	}
-	raw, err := json.Marshal(state)
-	if err != nil {
-		return err
-	}
-	msg, err := s.store.CompleteRun(context.WithoutCancel(ctx), store.CompleteRunParams{
-		RunID: r.ID, SessionID: r.SessionID, AssistantMessageID: uuid.NewString(),
-		AssistantContent: assistant, Status: store.RunSucceeded, Phase: phase,
-		PendingRequirement: pending, SetPending: true, RequirementState: raw, SetRequirementState: true,
-		ScreeningModel: s.screeningModelFor(r.Kind), RetryCount: retries,
-	})
-	if err != nil {
-		return err
-	}
-	s.publish(ctx, r.ID, "requirement.updated", json.RawMessage(raw))
-	if msg != nil {
-		s.publish(ctx, r.ID, "assistant.completed", map[string]any{"message": messagePayload(*msg)})
-	}
-	if phase == store.PhaseRequirementReady && len(pending) > 0 {
-		s.publish(ctx, r.ID, "requirement.ready", pending)
-	}
-	s.publish(ctx, r.ID, "run.completed", map[string]any{"status": "succeeded"})
-	return nil
 }
 
 // confirmedRequirementProjection 返回已确认状态的当前投影;无确认快照或
@@ -381,5 +324,42 @@ func (s *Service) attachRequirementState(ctx context.Context, ownerID string, r 
 			break
 		}
 	}
+	s.attachTurnContext(ctx, r, input)
 	return nil
+}
+
+// attachTurnContext 组装 v2 输入构造的有界参考:确定性 readiness 摘要、
+// 领域下一步追问、上一条助手回复绑定的未解决建议。它们是参考,不赋予
+// 模型覆盖权;TurnProposals 是服务器侧核验记录,不发给模型。
+func (s *Service) attachTurnContext(ctx context.Context, r store.AgentRun, input *ScreenInput) {
+	if input.RequirementState == nil {
+		return
+	}
+	readiness, err := schemas.EvaluateRequirementReadiness(*input.RequirementState)
+	if err != nil {
+		return
+	}
+	question, err := schemas.NextRequirementQuestion(*input.RequirementState)
+	if err != nil {
+		return
+	}
+	readinessJSON, err := json.Marshal(readiness)
+	if err != nil {
+		return
+	}
+	promptContext := pipeline.RequirementTurnPromptContext{
+		Readiness: json.RawMessage(readinessJSON), NextQuestion: question,
+		HasBuild: input.HasBuild,
+	}
+	if st, ok := s.store.(requirementProposalStore); ok && input.RequirementSource.MessageID != "" {
+		if proposals, err := st.ActiveRequirementProposals(ctx, r.SessionID, input.RequirementSource.MessageID); err == nil {
+			input.TurnProposals = proposals
+			for _, proposal := range proposals {
+				promptContext.Proposals = append(promptContext.Proposals, pipeline.RequirementProposalView{
+					Field: proposal.Field, Value: proposal.Value, Text: proposal.Text,
+				})
+			}
+		}
+	}
+	input.TurnContext = &promptContext
 }

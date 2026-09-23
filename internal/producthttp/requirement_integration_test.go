@@ -73,6 +73,13 @@ func (m *requirementRecordedModel) GenerateContent(_ context.Context, _ *model.L
 }
 
 func replayScreening(ctx context.Context, input product.ScreenInput, output string) (product.ScreenResult, error) {
+	// 冻结录制/手写脚本可能是 v1 传输外形(含 reply/next_action):先机械升格
+	// 为 v2 一轮形状,guard 的严格解码不再接受 legacy 字段。
+	if upgraded, err := pipeline.DecodeLegacyTurnForReplay([]byte(output)); err == nil {
+		if raw, merr := json.Marshal(upgraded); merr == nil {
+			output = string(raw)
+		}
+	}
 	m := &requirementRecordedModel{output: output}
 	screening, err := pipeline.NewProductScreening(m)
 	if err != nil {
@@ -97,16 +104,16 @@ func replayScreening(ctx context.Context, input product.ScreenInput, output stri
 		}
 	}
 	if m.calls > 2 {
-		return product.ScreenResult{}, fmt.Errorf("offline screening calls=%d, expected at most two (one collect fallback retry)", m.calls)
+		return product.ScreenResult{}, fmt.Errorf("offline screening calls=%d, expected at most two (one bounded format retry)", m.calls)
 	}
-	// 脚本输出保留 v1 传输外形(含 reply/next_action):经 legacy turn decoder
-	// 接收并剥离;领域更新不得携带会话回复与流程动作。
-	turn, err := pipeline.DecodeLegacyRequirementTurn(pipeline.ExtractPayload(text))
+	// 冻结轨迹保留 v1 传输外形(含 reply/next_action):机械升格为 v2 一轮
+	// 形状;next_action 丢弃,领域更新不携带会话回复与流程动作。
+	turn, err := pipeline.DecodeLegacyTurnForReplay(pipeline.ExtractPayload(text))
 	if err != nil {
 		return product.ScreenResult{}, err
 	}
 	update := turn.Update()
-	return product.ScreenResult{Kind: product.ScreenRequirement, Text: text, Reply: turn.Reply, RequirementUpdate: &update}, nil
+	return product.ScreenResult{Kind: product.ScreenRequirement, Text: text, Turn: &turn, RequirementUpdate: &update}, nil
 }
 
 func (g *requirementReplayGateway) ContextAvailable(context.Context, string, string) (bool, error) {

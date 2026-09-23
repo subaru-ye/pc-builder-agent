@@ -299,11 +299,12 @@ func TestReqV2McNemarExact(t *testing.T) {
 }
 
 // TestReqV2PolicyUIBaseline（PG_TEST_DSN 门控）冻结当前 policy/ui 层基线。
-// 2026-09-23 Spec 2 落地后：聊天不再启动 Builder（V4 消除），confirm 的
-// Builder 输入与确认快照哈希一致（V5 保持 green）；剩余 red 逐项归属后续
-// change——presentation_action/edit-while-building 与 V9(scope 外承诺经
-// 模型 reply 透传)归 Screening 收集 v2；ui 的结构化 readiness 块与
-// confirm payload 归确认快照/Builder gate v2。
+// 2026-09-23 Spec 3 落地后：presentation action 全部转绿（focus_missing_
+// requirement/open_requirement_review 由确定性代码发布）；V9 判卷缺陷已按
+// 冻结资产变更流程修正（grader-v3），产品诚实说明 tower 边界不再误报。
+// 剩余 red 归属后续 change——pol-edit-while-running(生成中编辑策略)归
+// 确认/Builder gate v2；ui 的结构化 readiness 块与 confirm payload 归
+// workspace sidebar。
 func TestReqV2PolicyUIBaseline(t *testing.T) {
 	dsn := os.Getenv("PG_TEST_DSN")
 	if dsn == "" {
@@ -341,11 +342,11 @@ func TestReqV2PolicyUIBaseline(t *testing.T) {
 		"policy/pol-ready-confirm":              {pass: true},
 		"policy/pol-second-builder-running":     {pass: true},
 		"policy/pol-stale-revision-edit":        {pass: true},
-		"policy/pol-incomplete-chat-start":      {pass: false},
-		"policy/pol-ready-chat-start":           {pass: false},
-		"policy/pol-monitor-promise-guard":      {pass: false, vetoes: []string{"V9"}},
+		"policy/pol-incomplete-chat-start":      {pass: true},
+		"policy/pol-ready-chat-start":           {pass: true},
+		"policy/pol-monitor-promise-guard":      {pass: true},
 		"policy/pol-edit-while-running":         {pass: false},
-		"policy/pol-edit-after-confirm-rebuild": {pass: false},
+		"policy/pol-edit-after-confirm-rebuild": {pass: true},
 		"ui-contract/ui-collecting-fresh":       {pass: false},
 		"ui-contract/ui-ready-unconfirmed":      {pass: false},
 		"ui-contract/ui-incomplete-shown-ready": {pass: false},

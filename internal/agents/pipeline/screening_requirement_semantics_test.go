@@ -28,7 +28,7 @@ func semanticTurn(t *testing.T, state schemas.RequirementState, input, output st
 	if m.calls != 1 {
 		t.Fatalf("unexpected model calls: %d", m.calls)
 	}
-	turn, err := DecodeLegacyRequirementTurn([]byte(delivered))
+	turn, err := DecodeRequirementTurn([]byte(delivered))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestScreeningFormatRetryAcceptsCorrectedOutput(t *testing.T) {
 	source := schemas.RequirementSource{Kind: "chat", MessageID: "current-message", Quote: "预算8000"}
 	m := &scriptedRequirementModel{outputs: []string{
 		`{"operations":[{"op":"set","field":"budget_cny","value":8000`,
-		`{"operations":[{"op":"set","field":"budget_cny","value":8000,"evidence":"stated","quote":"预算8000"}],"next_action":"confirm","reply":"已记录预算。"}`,
+		`{"operations":[{"op":"set","field":"budget_cny","value":8000,"evidence":"stated","quote":"预算8000"}],"turn_signals":{"asks_question":false,"requests_review":false,"requests_build":false,"ambiguous":false},"answer":"已记录预算。"}`,
 	}}
 	var delivered string
 	for response, err := range (screeningGuard{LLM: m}).GenerateContent(WithScreeningRetryCounter(WithRequirementState(context.Background(), schemas.NewRequirementState(), source), &retries), &model.LLMRequest{}, false) {
@@ -149,7 +149,7 @@ func TestScreeningFormatRetryAcceptsCorrectedOutput(t *testing.T) {
 	if m.calls != 2 || retries != 1 {
 		t.Fatalf("retry not exercised: %d %d", m.calls, retries)
 	}
-	corrected, err := DecodeLegacyRequirementTurn([]byte(delivered))
+	corrected, err := DecodeRequirementTurn([]byte(delivered))
 	if err != nil || len(corrected.Operations) != 1 || string(corrected.Operations[0].Value) != "8000" {
 		t.Fatalf("corrected output lost: %s %v", delivered, err)
 	}

@@ -1,7 +1,7 @@
 {
  "dataset": "requirement-v2",
  "created_at": "2026-09-22",
- "grader_version": "reqv2-grader-v1",
+ "grader_version": "reqv2-grader-v3",
  "labeling": {
   "method": "AI 辅助起草（Clapears agent, 2026-09-22），依据 requirement-v2 系列五份 change spec 的契约条款逐条标注。",
   "human_review": {
@@ -55,5 +55,46 @@
  "current_product_baseline": {
   "note": "基线 red 是预期证据：当前 v1 语义预期在过早 ready、next_action 权威、purchase declaration、blocking 分离、系统默认、turn signals、presentation action、确认 payload 上失败。",
   "run": "artifacts/reqv2/（见 docs/eval/requirement-v2/README.md 的基线登记；冻结门槛前的旧产物以 superseded- 前缀归档，不作为冻结基线）"
- }
+ },
+ "grader_changes": [
+  {
+   "version": "reqv2-grader-v3",
+   "date": "2026-09-23",
+   "change": "Screening v2 change 期间的判卷缺陷修正",
+   "defect": "V9 纯关键词规则(显示器|键盘|鼠标|键鼠 命中即违规)把产品正确行为——明确告知当前 tower 范围不含外设——也判为违规。",
+   "review": "人工核对 pol-monitor-promise-guard 的新产品回复：'当前配置范围仅支持主机（tower），显示器、键盘、鼠标暂不在本次范围内。需求已经齐备，现在可以核定需求；确认后再生成配置。' 确认是诚实范围说明而非承诺配置外设；未通过回避品类名称或修改产品文案迎合误报，按冻结资产变更流程修正 grader。",
+   "rule": "V9 改为按句检测：句子同时含外设词与承诺/配置动词、且不含'明确告知暂不支持'豁免(仅支持主机|暂不在…范围|暂不支持|当前配置范围|等待后续支持|先放弃)时才违规。",
+   "canaries": "selftest 新增 st-v9-scope-notice-pass(诚实说明必须通过)；st-v9-peripheral-promise(真实承诺必须仍命中)保持 fail 金丝雀。",
+   "gold_changes": "无。所有层金标(含 holdout)未做任何修改；manifest 仅 grader_version 与 selftest.json 哈希变化。",
+   "regrade": "旧 grader-v2 产物以 superseded-v2- 前缀归档；对最近冻结观测做零模型 regrade 后再判断候选门槛。"
+  },
+  {
+   "version": "reqv2-grader-v2",
+   "date": "2026-09-22",
+   "change": "provider_success/latency_p95/max_model_calls_per_turn 与预算一致性改为统计全部真实 provider 轮。"
+  }
+ ],
+ "gold_fixes": [
+  {
+   "date": "2026-09-23",
+   "scope": "conversations/cases.json only",
+   "reason": "Screening v2 候选评估暴露三处金标自相矛盾/过严:cv-composite-9000-start 与 cv-budget-correction 的 turn0 缺 expected_operations 键,grader 把缺省当'要求零操作',与同一 expect 内 expected_confirmation_eligible=true(状态必须齐备)自相矛盾;cv-monitor-refusal 的 expected_observations 只登记 1 条,而用户'显示器和键鼠'按 Spec 2 稳定原因码语义应产出 monitor|keyboard|mouse 三条观察。",
+   "changes": [
+    "补 turn0 首句完整表达的 4 个 set 断言(type/resolution/budget/existing_parts)——与该轮 expected_confirmation_eligible=true 一致",
+    "monitor-refusal 观察断言补齐三条稳定原因码,并加 reason_contains 约束"
+   ],
+   "unchanged": "其余全部 fixture、split、gates、selftest 与 holdout 金标零修改;manifest e4f4493d… → 144ea092…(仅 conversations/cases.json)。",
+   "review": "人工复核:修正是补全缺失/过严断言以消除金标内部矛盾,不放松任何既有断言;旧产物(superseded 前缀)不重判为新结论。"
+  },
+  {
+   "date": "2026-09-23",
+   "scope": "conversations/cases.json only",
+   "reason": "cv-fps-progressive turn0 与 extraction/ex-first-fps-vague 是同一句用户表达('主要玩CS2和无畏契约，希望帧率高一点')的跨层重复场景,但 conversations 金标漏了 performance_goal 断言,extraction 金标(spec 验收场景 1 与 Spec 2 use_case.performance_goal 语义)要求 set performance_goal=fps_first;两处金标自相矛盾。",
+   "changes": [
+    "cv-fps-progressive turn0 补 set use_case.performance_goal=fps_first 断言,与 extraction 层同场景一致"
+   ],
+   "unchanged": "其余金标、split、gates、selftest、holdout 零修改;manifest 144ea092… → f8fa51e6…(仅 conversations/cases.json)。",
+   "review": "人工复核:补全使同场景跨层金标一致,不放松既有断言。"
+  }
+ ]
 }

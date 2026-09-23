@@ -16,11 +16,13 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
 
-// ReqV2GraderVersion：v2 变更（2026-09-22）——provider_success、latency_p95、
-// max_model_calls_per_turn 与预算一致性改为统计 extraction+conversations 的
-// 全部真实 provider 轮（verdict layer=model），样本范围与 report.usage 一致。
-// v1 产物按 superseded 归档，跨版本判卷走显式 regrade。
-const ReqV2GraderVersion = "reqv2-grader-v2"
+// ReqV2GraderVersion：v3 变更（2026-09-23）——V9 从纯关键词改为"承诺动词+
+// 无豁免"的按句检测：明确告知当前 tower 范围不含外设的诚实说明不再误判
+// (人工复核记录见 provenance.json grader_changes)。v2 变更（2026-09-22）：
+// provider_success、latency_p95、max_model_calls_per_turn 与预算一致性改为
+// 统计 extraction+conversations 的全部真实 provider 轮（verdict layer=model），
+// 样本范围与 report.usage 一致。旧产物按 superseded 归档，跨版本判卷走显式 regrade。
+const ReqV2GraderVersion = "reqv2-grader-v3"
 
 // ReqV2Layer 是 fixture 的判定对象分层；live 层需要模型，其余零模型。
 var ReqV2Layers = []string{"extraction", "reducer", "readiness", "policy", "conversations", "ui-contract"}

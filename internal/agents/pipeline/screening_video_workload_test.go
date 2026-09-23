@@ -33,7 +33,7 @@ func TestScreeningVideoWorkloadReplay(t *testing.T) {
 		}
 		delivered = screeningText(response.Content)
 	}
-	turn, err := DecodeLegacyRequirementTurn([]byte(delivered))
+	turn, err := DecodeRequirementTurn([]byte(delivered))
 	if err != nil {
 		t.Fatal(err)
 	}

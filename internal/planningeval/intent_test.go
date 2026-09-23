@@ -335,9 +335,9 @@ func TestJevIntentV1SyntheticOraclesReduceToExpectations(t *testing.T) {
 			if step.Kind != "message" {
 				continue
 			}
-			// 冻结 Jev 轨迹是 v1 传输外形:经 legacy turn decoder 取剥离后的
-			// 领域更新;动作声明只作对照标签,不再有产品权威。
-			turn, err := pipeline.DecodeLegacyRequirementTurn(step.Screen)
+			// 冻结 Jev 轨迹是 v1 传输外形:机械升格为 v2 一轮形状后取领域更新;
+			// 动作声明只作对照标签,不再有产品权威。
+			turn, err := pipeline.DecodeLegacyTurnForReplay(step.Screen)
 			if err != nil {
 				t.Fatalf("%s: oracle does not decode: %v", c.ID, err)
 			}
@@ -350,7 +350,12 @@ func TestJevIntentV1SyntheticOraclesReduceToExpectations(t *testing.T) {
 			// state before this turn, so the first message keeps an explicit
 			// confirmation even when the model hands over plan.
 			canPlan := state.Revision > 0
-			final := turn.NextAction
+			// v1 轨迹的动作声明直接从原始 JSON 读取,只作对照标签。
+			var rawAction struct {
+				NextAction string `json:"next_action"`
+			}
+			_ = json.Unmarshal(step.Screen, &rawAction)
+			final := rawAction.NextAction
 			if final == "plan" && !canPlan {
 				final = "confirm"
 			}

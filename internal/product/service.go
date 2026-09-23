@@ -307,22 +307,35 @@ func (s *Service) executeScreening(ctx context.Context, r store.AgentRun, ownerI
 	s.captureEvidence(ctx, r.ID, "screening_input", screeningEvidence(input))
 	result, err := s.agent.Screen(ctx, ownerID, r.SessionID, input)
 	if err == nil {
-		s.captureEvidence(ctx, r.ID, "screening_output", map[string]any{"kind": result.Kind, "text": result.Text, "payload": result.Payload, "requirement_update": result.RequirementUpdate})
+		s.captureEvidence(ctx, r.ID, "screening_output", map[string]any{"kind": result.Kind, "text": result.Text, "turn": result.Turn})
 	}
 	if err != nil {
 		s.failFromError(ctx, r, err, store.PhaseCollecting, "")
 		return
 	}
 	if input.RequirementState != nil {
-		if result.RequirementUpdate == nil {
-			s.fail(ctx, r, NewProblem("schema_validation_failed", "需求更新未保存", 422, "初筛没有返回有效的本轮需求操作，请重试。", r.ID), store.PhaseCollecting, "")
+		if result.Turn == nil {
+			s.fail(ctx, r, NewProblem("schema_validation_failed", "需求更新未保存", 422, "初筛没有返回有效的本轮语义结果，请重试。", r.ID), store.PhaseCollecting, "")
 			return
 		}
-		// 模型 next_action 不再有状态权威:只有 operations/observations 进入
+		// 回复与动作不进入 RequirementState:只有 operations/observations 进入
 		// Reducer,聊天文字不能替代确认 API 启动 Builder(v2 veto V4)。
-		state, mergeErr := schemas.ApplyRequirementUpdate(*input.RequirementState, *result.RequirementUpdate, input.RequirementSource)
+		turn := *result.Turn
+		var accepted []store.RequirementProposalAccept
+		if st, ok := s.store.(requirementProposalStore); ok && input.RequirementSource.MessageID != "" {
+			proposals, perr := st.ActiveRequirementProposals(ctx, r.SessionID, input.RequirementSource.MessageID)
+			if perr != nil {
+				s.failInternal(ctx, r, store.PhaseCollecting, "")
+				return
+			}
+			accepted = verifyAcceptedProposals(&turn, proposals, input.RequirementSource)
+		} else {
+			// 不支持建议协议的旧存储:模型标签一律不接受。
+			accepted = verifyAcceptedProposals(&turn, nil, input.RequirementSource)
+		}
+		state, mergeErr := schemas.ApplyRequirementUpdate(*input.RequirementState, turn.Update(), input.RequirementSource)
 		if mergeErr == nil {
-			mergeErr = s.completeRequirementState(ctx, ownerID, r, state, result.Reply, result.RetryCount)
+			mergeErr = s.completeRequirementTurn(ctx, ownerID, r, state, input.RequirementSource, &turn, accepted, result.RetryCount)
 		}
 		if mergeErr != nil {
 			s.fail(ctx, r, NewProblem("schema_validation_failed", "需求更新未保存", 422, mergeErr.Error(), r.ID), store.PhaseCollecting, "")

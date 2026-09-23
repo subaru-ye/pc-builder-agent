@@ -46,9 +46,11 @@ stateDiagram-v2
 
 ### 需求确认与改单
 
-1. API 只运行初筛 Agent；具有需求状态的新会话注入当前有效状态与本轮用户原文，复用 Screening 单次调用输出字段操作。模型输出的 `next_action` 只是传输字段(由 pipeline 临时 legacy turn decoder 接收并在进入 Reducer 前剥离),对会话状态、readiness 与 Builder 启动均无权威;`plan`/`confirm` 都不能让聊天替代确认 API。
-2. 服务端核验本轮来源并归并操作，保存 `requirement_state`;确定性 readiness 判定不完整时按领域追问计划生成针对性追问，phase 保持 collecting。
+1. API 只运行初筛 Agent；具有需求状态的新会话注入有界上下文(RequirementStatePromptView、确定性 readiness 摘要与领域下一步追问、最近一条助手回复及未解决建议、是否有配置版本、当前 capability=tower)与本轮用户原文。Screening v2 一轮合同只输出 `operations`/`observations`/`turn_signals`/`proposals`/`answer`,严格解码拒绝未知字段(含 `next_action`/`reply`,legacy 传输适配已删除);`has_requirement_update` 由 operations/observations 派生,模型不输出。
+2. 服务端核验本轮来源并归并操作，保存 `requirement_state`;确定性 readiness 判定不完整时按领域追问计划(`NextRequirementQuestion`,每轮一个问题组,conflict/unsupported 优先)生成针对性追问，phase 保持 collecting。
 3. readiness 完整时确定性投影为 RequirementSpec v2(含 configuration_scope=[tower] 与来源可追溯的系统默认),写入 pending_requirement，phase 变 requirement_ready;先发 requirement.updated，再发 requirement.ready。
+3a. 回复由产品层确定性组合(展示守卫后的 answer → 展示建议问句 → 追问或就绪提示),并按 readiness+turn signals 发布短期 presentation action(`presentation.action` 事件:open_requirement_review / focus_missing_requirement),不启动 Builder;后续三轴 Policy 在同一入口扩展。模型 answer 声称已开始生成或承诺主机外品类时,被确定性守卫替换为诚实范围说明。
+3b. 助手建议(proposal)只在建议问句确实展示给用户后与 assistant 消息同事务保存(迁移 00022 `requirement_proposals`),绑定真实 assistant message id,只对紧接着的下一条用户消息有效;用户明确接受时 operation 携带 `evidence=accepted_proposal`,服务器核验同字段同规范化值、消息归属与紧邻轮次后才进入 Reducer,接受后建议 resolved,拒绝/覆盖/跨轮不得复用。
 4. `PATCH requirement-state` 接受带 expected_revision 的字段操作，与聊天走同一 reducer;旧 PATCH requirement 完整替换入口保留兼容。
 5. confirm 在锁内重算 readiness 门控投影并与 pending_requirement 逐字比对,通过后冻结确认快照并调用 A2A remote 生成配置;RequirementState/Spec v1 在解码边界以稳定错误拒绝,不静默迁移。
 

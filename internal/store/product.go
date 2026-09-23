@@ -381,6 +381,10 @@ func (s *Store) StartMessageRun(ctx context.Context, p StartMessageRunParams) (A
 		VALUES ($1, $2, $3, 'user', $4, $5, NULLIF($6, ''))`, p.MessageID, p.SessionID, p.RequestID, p.Text, p.RunID, p.RequestFingerprint); err != nil {
 		return AgentRun{}, false, fmt.Errorf("store: 写入用户消息失败: %w", err)
 	}
+	// 紧邻轮次语义:上一条 assistant 消息绑定的未消费建议只对本轮有效。
+	if err := consumeRequirementProposalsTx(ctx, tx, p.SessionID, p.MessageID); err != nil {
+		return AgentRun{}, false, err
+	}
 	pendingExpr := "pending_requirement"
 	if clearPending {
 		pendingExpr = "NULL"
@@ -566,6 +570,11 @@ type CompleteRunParams struct {
 	DurationMS                   int64
 	CatalogSnapshotID            int64
 	RetryCount                   int
+	// SaveProposals 与 assistant 消息同事务保存的需求建议(仅文本已展示的)。
+	SaveProposals []RequirementProposalSave
+	// ConsumeMessageID 是本轮用户消息;ResolveProposals 按其定位被采纳建议。
+	ConsumeMessageID  string
+	ResolveProposals []RequirementProposalAccept
 }
 
 // CompleteRun 原子完成 run、可选 assistant 消息与产品会话最终状态。
@@ -627,6 +636,16 @@ func completeRunTx(ctx context.Context, tx pgx.Tx, p CompleteRunParams) (*WebMes
 		p.SetRequirementState, nullableJSON(p.RequirementState))
 	if err != nil {
 		return nil, fmt.Errorf("store: 更新运行最终阶段失败: %w", err)
+	}
+	if len(p.SaveProposals) > 0 && message != nil {
+		if err := saveRequirementProposalsTx(ctx, tx, p.SessionID, message.ID, p.AssistantContent, p.SaveProposals); err != nil {
+			return nil, err
+		}
+	}
+	if len(p.ResolveProposals) > 0 && p.ConsumeMessageID != "" {
+		if err := resolveAcceptedProposalsTx(ctx, tx, p.SessionID, p.ConsumeMessageID, p.ResolveProposals); err != nil {
+			return nil, err
+		}
 	}
 	return message, nil
 }

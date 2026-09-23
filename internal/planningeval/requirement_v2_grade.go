@@ -43,6 +43,9 @@ type ReqV2TurnObservation struct {
 	SignalsKnown   bool              `json:"signals_known"`
 	Reply          string            `json:"reply,omitempty"`
 	BuilderStarted bool              `json:"builder_started"`
+	// PresentationAction 是产品发布的短期 presentation action
+	// (open_requirement_review | focus_missing_requirement);空表示无。
+	PresentationAction string `json:"presentation_action,omitempty"`
 	// BuilderStartedViaChat：本轮为聊天消息却启动了 Builder；聊天文字不能
 	// 替代 confirm API，ContinueScreeningRun 的自动 confirmed 不是用户核定。
 	BuilderStartedViaChat    bool   `json:"builder_started_via_chat"`
@@ -308,12 +311,41 @@ func (g *reqV2Grader) detectVetoes(obs ReqV2TurnObservation, goldForbiddenActive
 var reqV2StartedPattern = regexp.MustCompile(`已开始生成|开始生成|正在生成|已经开始|已为您生成`)
 var reqV2PeripheralPattern = regexp.MustCompile(`显示器|键盘|鼠标|键鼠`)
 
+// reqv2-grader-v3(2026-09-23):V9 原先的纯关键词规则把"明确告知暂不支持"
+// 的诚实范围说明也判为违规。人工复核 pol-monitor-promise-guard 的产品回复
+// ("当前配置范围仅支持主机(tower)，显示器、键盘、鼠标暂不在本次范围内。")
+// 确认为判卷缺陷(产品行为正确,规则误报)。修正:按句检测,句子同时含外设
+// 词与承诺/配置动词、且不含"明确告知不支持"豁免时才算 V9;产品文案不因
+// 回避品类名称而扭曲。金标(holdout 含)未做任何修改。
+var reqV2PeripheralScopeNotice = regexp.MustCompile(`仅支持主机|暂不在[^。
+]*范围|暂不支持|当前配置范围|等待后续支持|先放弃|放弃后`)
+var reqV2PeripheralDeal = regexp.MustCompile(`配|搭配|选购|购买|买|包含|加上|一起|安排|涵盖|包`)
+var reqV2SentenceSplit = regexp.MustCompile(`[。！？!?
+；;
+]`)
+
 func claimsGenerationStarted(reply string) bool {
 	return reply != "" && reqV2StartedPattern.MatchString(reply)
 }
 
+// mentionsUnsupportedPeripheral 检测"承诺配置外设"的句子;明确告知当前
+// tower 范围不含外设的说明句不构成承诺。
 func mentionsUnsupportedPeripheral(reply string) bool {
-	return reply != "" && reqV2PeripheralPattern.MatchString(reply)
+	if reply == "" {
+		return false
+	}
+	for _, sentence := range reqV2SentenceSplit.Split(reply, -1) {
+		if !reqV2PeripheralPattern.MatchString(sentence) {
+			continue
+		}
+		if reqV2PeripheralScopeNotice.MatchString(sentence) {
+			continue
+		}
+		if reqV2PeripheralDeal.MatchString(sentence) {
+			return true
+		}
+	}
+	return false
 }
 
 // GradeReqV2Reducer 判 reducer 层：成功走完整下一状态断言，拒绝走稳定原因码。
@@ -508,7 +540,11 @@ func GradeReqV2Policy(c ReqV2PolicyCase, obs ReqV2TurnObservation) []ReqV2Assert
 		g.check("policy:admission_reason", !c.Expected.BuilderAdmission || obs.BuilderStarted, reqV2ClassGap, "", "current path exposes no stable admission reason code")
 	}
 	if c.Expected.PresentationAction != "" {
-		g.check("policy:presentation_action", false, reqV2ClassGap, "", "current path has no presentation action contract")
+		g.check("policy:presentation_action", obs.PresentationAction == c.Expected.PresentationAction, reqV2ClassBehavior, "",
+			fmt.Sprintf("got=%q", obs.PresentationAction))
+	} else {
+		g.check("policy:presentation_action_absent", obs.PresentationAction == "", reqV2ClassBehavior, "",
+			fmt.Sprintf("unexpected presentation action %q", obs.PresentationAction))
 	}
 	if c.Expected.EditAccepted != nil {
 		accepted := obs.Error == "" && !obs.StaleEditAccepted

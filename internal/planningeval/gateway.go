@@ -191,6 +191,9 @@ func (g *gateway) Screen(ctx context.Context, owner, id string, input product.Sc
 		return product.ScreenResult{}, err
 	}
 	ctx = pipeline.WithRequirementState(ctx, *input.RequirementState, input.RequirementSource, input.Conversation)
+	if input.TurnContext != nil {
+		ctx = pipeline.WithRequirementTurnPromptContext(ctx, *input.TurnContext)
+	}
 	var text string
 	for event, err := range r.Run(ctx, owner, uuid.NewString(), genai.NewContentFromText(input.Context, genai.RoleUser), agent.RunConfig{}) {
 		if err != nil {
@@ -204,9 +207,18 @@ func (g *gateway) Screen(ctx context.Context, owner, id string, input product.Sc
 			}
 		}
 	}
-	turn, err := pipeline.DecodeLegacyRequirementTurn(pipeline.ExtractPayload(text))
+	turn, err := pipeline.DecodeRequirementTurn(pipeline.ExtractPayload(text))
+	if err != nil {
+		return product.ScreenResult{}, err
+	}
 	update := turn.Update()
-	return product.ScreenResult{Kind: product.ScreenRequirement, Text: text, Reply: turn.Reply, RequirementUpdate: &update}, err
+	// 记录 guard 净化后的一轮输出:评估对象是"模型+输入视图+结构化输出+重试+
+	// 后处理"的组合,观测与产品实际消费保持同一口径(原始模型输出在 trace.Response)。
+	screenTurn, _ := json.Marshal(turn)
+	g.mu.Lock()
+	g.record.ScreenTurn = screenTurn
+	g.mu.Unlock()
+	return product.ScreenResult{Kind: product.ScreenRequirement, Text: text, Turn: &turn, RequirementUpdate: &update}, nil
 }
 
 // observeIntent shadows the Screening decision point with one bounded Jev

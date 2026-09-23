@@ -18,6 +18,7 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/hostruntime"
 	"github.com/subaru-ye/pc-builder-agent/internal/planning"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
+	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
 type ScreenKind string
@@ -37,9 +38,9 @@ type ScreenResult struct {
 	Payload           json.RawMessage
 	Err               error
 	RequirementUpdate *schemas.RequirementUpdate
-	// Reply 是 legacy turn 传输适配剥离出的助手文案,仅用于消息展示;
-	// 不进入 RequirementState,也不携带任何流程决策权。
-	Reply      string
+	// Turn 是 Screening v2 的本轮语义结果(净化后的 operations/observations、
+	// signals、proposals 与 answer);回答与动作不进入 RequirementState。
+	Turn       *pipeline.RequirementTurnResult
 	RetryCount int // guard 发起的同模型重请求次数(F3 retry_count)
 }
 
@@ -59,6 +60,10 @@ type ScreenInput struct {
 	RequirementState  *schemas.RequirementState
 	RequirementSource schemas.RequirementSource
 	Conversation      schemas.ScreeningConversation
+	// TurnContext 是发给模型的确定性参考(readiness/追问/未解决建议);
+	// TurnProposals 是服务器侧本轮可用建议记录,只用于接受核验,不发给模型。
+	TurnContext   *pipeline.RequirementTurnPromptContext
+	TurnProposals []store.RequirementProposalRecord
 }
 
 type AgentGateway interface {
@@ -118,6 +123,9 @@ func (g *ADKAgentGateway) Screen(ctx context.Context, userID, sessionID string, 
 		}
 		source.Quote = input.Text
 		ctx = pipeline.WithRequirementState(ctx, *input.RequirementState, source, input.Conversation)
+		if input.TurnContext != nil {
+			ctx = pipeline.WithRequirementTurnPromptContext(ctx, *input.TurnContext)
+		}
 	}
 	lastText, err := collectAgentText(g.screeningRunner.Run(ctx, userID, sessionID,
 		genai.NewContentFromText(input.Context, genai.RoleUser), agent.RunConfig{}), "")
@@ -126,14 +134,14 @@ func (g *ADKAgentGateway) Screen(ctx context.Context, userID, sessionID string, 
 	}
 	if input.RequirementState != nil {
 		payload := pipeline.ExtractPayload(lastText)
-		// 临时 legacy turn decoder:接收当前 Screening 输出的 reply/next_action,
-		// 只把剥离后的领域 update 交给 Reducer;next_action 在此即失去全部权威。
-		turn, err := pipeline.DecodeLegacyRequirementTurn(payload)
+		// v2 turn 合同:operations/observations/turn_signals/proposals/answer;
+		// 没有 next_action/reply 字段,回答由产品组合器确定性组装。
+		turn, err := pipeline.DecodeRequirementTurn(payload)
 		if err != nil {
 			return ScreenResult{}, err
 		}
 		update := turn.Update()
-		return ScreenResult{Kind: ScreenRequirement, Text: lastText, Reply: turn.Reply, RequirementUpdate: &update, RetryCount: retries}, nil
+		return ScreenResult{Kind: ScreenRequirement, Text: lastText, Turn: &turn, RequirementUpdate: &update, RetryCount: retries}, nil
 	}
 	result, err := ParseScreeningResult(lastText, input.Text)
 	result.RetryCount = retries

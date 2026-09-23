@@ -9,7 +9,7 @@
 - **模型与 Harness 组合**（extraction / conversations，live 时需要真实 Screening）：字段操作、observation、turn signals 与多轮渐进对话的语义正确性。
 - **确定性组件**（reducer / readiness / policy / ui-contract，永远零模型）：程序 oracle，必须 100% 通过，不能用模型层平均分抵消。
 
-判卷版本 `reqv2-grader-v2`（v2 变更：provider_success/latency_p95/max_model_calls_per_turn/预算一致性统计 extraction+conversations 全部真实 provider 轮，verdict layer=model，样本范围与 report.usage 一致；v1 产物以 superseded-v1- 归档，跨版本判卷走显式 `-mode replay -regrade`，replay/compare 拒绝混用 grader 版本）：金标以结构化真值为主（expected_operations / expected_state / missing / blocking / eligible / defaults / turn signals / presentation action），不比较措辞。失败分三类：`v2_contract_gap`（当前实现没有该概念，如 turn signals、presentation action、系统默认、blocking 分离、schema 2）、`behavior_failure`（双方契约共有但行为错误）、`provider_failure`；`technical_fault` 是评估设施自身回归，必须为零。
+判卷版本 `reqv2-grader-v3`（v3 变更 2026-09-23：V9 从纯关键词改为按句检测"承诺动词+无豁免"，明确告知当前 tower 范围不含外设的诚实说明不再误判，见下方判卷修正记录；v2 变更：provider_success/latency_p95/max_model_calls_per_turn/预算一致性统计 extraction+conversations 全部真实 provider 轮，verdict layer=model，样本范围与 report.usage 一致；旧产物以 superseded- 前缀归档，跨版本判卷走显式 `-mode replay -regrade`，replay/compare 拒绝混用 grader 版本）：金标以结构化真值为主（expected_operations / expected_state / missing / blocking / eligible / defaults / turn signals / presentation action），不比较措辞。失败分三类：`v2_contract_gap`（当前实现没有该概念，如 turn signals、presentation action、系统默认、blocking 分离、schema 2）、`behavior_failure`（双方契约共有但行为错误）、`provider_failure`；`technical_fault` 是评估设施自身回归，必须为零。
 
 ## Split
 
@@ -45,18 +45,26 @@ go run ./cmd/evalrequirement -mode compare -baseline <A> -candidate <B>
 
 产物目录包含完整 fixture 副本、`plan.json`（manifest/gates/grader/程序哈希、模型脱敏配置、预算、split、repeats）、`events.jsonl`（逐 turn 观测与模型调用）、`results.jsonl`（逐 case 冻结观测 + 断言）、`report.json` / `report.md`。不记录凭据与隐藏思维链。
 
+## 判卷修正：grader-v3（2026-09-23，Screening v2 change 期间）
+
+- 缺陷：V9 纯关键词规则（`显示器|键盘|鼠标|键鼠` 命中即违规）把产品正确行为——明确告知当前 tower 范围不含外设——也判为违规（`pol-monitor-promise-guard` 的新产品回复为诚实范围说明，人工复核确认非承诺配置）。
+- 修正：V9 按句检测，句子同时含外设词与承诺/配置动词、且不含"明确告知暂不支持"豁免（仅支持主机|暂不在…范围|暂不支持|当前配置范围|等待后续支持|先放弃）时才违规。产品文案未为迎合判卷而修改。
+- 金丝雀：`selftest.json` 新增 `st-v9-scope-notice-pass`（诚实说明必须通过）；`st-v9-peripheral-promise`（真实承诺必须命中）保持 fail。
+- 金标：全部层金标（含 holdout）零修改；manifest 仅 `grader_version` 与 `selftest.json` 哈希变化（`abb9cd25… → e4f4493d…`）。
+- 归档与 regrade：grader-v2 产物以 `superseded-v2-` 前缀归档；对最近冻结观测做零模型 regrade（67 cases，verdict changes: 0），provenance 记录于 `provenance.json grader_changes`。
+
 ## 金标定向修正（2026-09-23，grader 不变，manifest abb9cd25…）
 
 - 授权更正两条建基时按 v1 行为误标的 readiness 金标：`rdy-budget-conflict-blocks` 补 `existing_parts`、`rdy-holdout-owned-basis` 补 `use_case.titles`;其余金标、split、gates 未动,holdout 未运行。记录见 [人工复核-20260923.md](人工复核-20260923.md) 与 `provenance.json` 的 `labeling.gold_corrections`。
 - manifest:`558de144… → abb9cd25…`(readiness/cases.json `485436e6… → c9952e79…`,frozen_at 2026-09-23);grader 判定逻辑未变,版本保持 `reqv2-grader-v2`。
-- 产物:旧基线原样保留;新零模型重判 `artifacts/reqv2/replay-goldfix-deterministic-20260923`(replay 旧基线冻结观测,67 例,verdict 变化 0);Spec 2 实现候选 `artifacts/reqv2/spec2-rework-deterministic-20260923`(dev+cal:reducer 11/11、readiness 12/12,这两层 veto 0;policy 3/8、veto V9×1,ui-contract 0/3,归属后续 change)。
+- 产物:旧基线原样保留;新零模型重判 `artifacts/reqv2/superseded-v2-replay-goldfix-deterministic-20260923`(replay 旧基线冻结观测,67 例,verdict 变化 0);Spec 2 实现候选 `artifacts/reqv2/superseded-v2-spec2-rework-deterministic-20260923`(dev+cal:reducer 11/11、readiness 12/12,这两层 veto 0;policy 3/8、veto V9×1,ui-contract 0/3,归属后续 change)。
 
 ## 历史冻结基线（2026-09-22，reqv2-grader-v2，当时的 v1 实现）
 
 | Run | 产物 | 口径 |
 |---|---|---|
-| 零模型基线 | `artifacts/reqv2/baseline-deterministic-20260922` | development+calibration，repeats=1，零调用，grader v2 直跑 |
-| live 基线 | `artifacts/reqv2/baseline-live-20260922` | grader v2 对 `superseded-v1-live-20260922` 冻结观测的零模型 regrade（plan.json 记录 source_run/source_grader_version/source_report_sha256；未调用 provider） |
+| 零模型基线 | `artifacts/reqv2/superseded-v2-baseline-deterministic-20260922` | development+calibration，repeats=1，零调用，grader v2 直跑 |
+| live 基线 | `artifacts/reqv2/superseded-v2-baseline-live-20260922` | grader v2 对 `superseded-v1-live-20260922` 冻结观测的零模型 regrade（plan.json 记录 source_run/source_grader_version/source_report_sha256；未调用 provider） |
 | 已废弃 | `superseded-v0-*`、`superseded-v1-*` | 门槛冻结前与 grader-v1 产物，不作冻结基线 |
 
 live 基线（以下全部取自冻结 report.json，`gate_passed=false，候选不可发布`）：
@@ -96,3 +104,18 @@ live 基线（以下全部取自冻结 report.json，`gate_passed=false，候选
 - compare 只统计 extraction/conversations 的独立 case（repeat 折叠为 pass^k）；确定性层单独报告且不参与 minimum_paired_samples；模型层独立样本 <30 时显式声明“样本不足，不能宣称改善”。
 - 金标人工复核表见 [人工复核-20260922](人工复核-20260922.md)（9 个 holdout 全量 + cv-fps-progressive + ex-monitor-request + accepted-proposal 边界；holdout 未运行）。
 - 同一 case 的 repeat 按 pass^k AND 折叠后才进入任务成功率与配对比较；repeat 不是独立样本。
+
+## Spec 3（Screening 收集 v2）最终验收 live 运行（2026-09-23，grader-v3，代码冻结后）
+
+- 产物 `artifacts/reqv2/spec3-final-live-20260923`（development+calibration，repeats=3（Pass^3），max-calls=400，实际 129 次真实调用，grader reqv2-grader-v3，manifest f8fa51e6…）。授权边界四轮定向返工的迭代产物 `spec3-live/rework/rework2-live-20260923` 均保留，旧分数未沿用。
+- 授权边界最终形态：接受需完整匹配肯定短答（可以/好的/同意/就这样…）或以采纳前缀开头且带具体提案值的采纳句（按/就按/就用/定为/敲定/采纳/确认/来个 + 值）；询问/拒绝/中性表达一律不写入 active 且保留 observation；accepted_proposal 失败不降级 stated；提案文本经 V8/V9 守卫并须以接受问句收尾；建议保存绑定 assistant 消息、仅紧邻下一条用户消息有效；多提案裸"可以"指向不明不自动采用。
+- **最终结果：冻结 gate verdict 16/16 全部通过、全层 veto 0**——extraction precision 1.000 / recall 1.000 / turn signals 72⁄75 / case_success 25⁄26（0.962） / final_state 15⁄15 / forbidden op 0 / 关键字段错写 0；conversations precision 1.000 / recall 1.000 / task_success 6⁄7（0.857） / 重复追问 0 / 错写 0；provider 129⁄129、p95 5023ms、单轮调用 ≤1、总调用 129≤400。
+- 模型层 Pass^3=31/33：ex-all-new-purchase（requests_build 0⁄3）、cv-composite-9000-start（2⁄3）为残留模型波动，不触及冻结门槛；gate_passed=false 仅由归属后续 change 的确定性层红项（ui-contract 0/3 → workspace sidebar、policy pol-edit-while-running → Builder gate）驱动，不作为本 change 失败。
+- 零模型回归证据：冻结真实输出 40 轮经真实 Service 单轮重执行（requirement_rework_replay_test.go），无 accepted_proposal 非法写入；eval check/replay 通过。
+
+## Spec 3（Screening 收集 v2）确定性运行（2026-09-23，grader-v3）
+
+- 产物 `artifacts/reqv2/spec3-deterministic-20260923`（dev+cal，repeats=1，零模型）：
+  - reducer 11/11、readiness 12/12（veto 0）。
+  - policy 7/8、veto 0：presentation action（focus_missing_requirement / open_requirement_review）全部转绿；`pol-edit-while-running`（生成中编辑策略）仍 red，归确认/Builder gate change。
+  - ui-contract 0/3 仍红（结构化 readiness 块、confirm payload、effective defaults 展示），归 workspace sidebar change；不以此宣称整体验收。

@@ -145,6 +145,8 @@ type StepRecord struct {
 	Error           string                 `json:"error,omitempty"`
 	Classification  string                 `json:"classification"`
 	Intent          *IntentObservation     `json:"intent,omitempty"`
+	// ScreenTurn 是 v2 一轮合同经 guard 净化后的输出(产品实际消费口径)。
+	ScreenTurn json.RawMessage `json:"screen_turn,omitempty"`
 }
 
 // IntentObservation records one bounded Jev call beside the Screening decision.

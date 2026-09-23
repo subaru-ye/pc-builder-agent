@@ -29,7 +29,7 @@ func TestRecordedUnknownInformationIsNotConflict(t *testing.T) {
 		t.Run(c.ID, func(t *testing.T) {
 			state := schemas.NewRequirementState()
 			for i, step := range c.Steps {
-				state = semanticTurn(t, state, step.Message, step.Response)
+				state = semanticTurn(t, state, step.Message, upgradeLegacyRecordedJSON(t, step.Response))
 				for name, field := range state.Fields {
 					if field.Status == "conflict" {
 						t.Fatalf("step %d: absent information became conflict: %s", i+1, name)

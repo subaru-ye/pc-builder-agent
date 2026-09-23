@@ -8,6 +8,26 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
 
+// decodeLegacyRecordedTurn 机械转换冻结的 v1 录制为 v2 一轮形状。
+func decodeLegacyRecordedTurn(t *testing.T, raw []byte) RequirementTurnResult {
+	t.Helper()
+	turn, err := DecodeLegacyTurnForReplay(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return turn
+}
+
+// upgradeLegacyRecordedJSON 把冻结录制转为 v2 wire 形状,供 semanticTurn 回放。
+func upgradeLegacyRecordedJSON(t *testing.T, raw string) string {
+	t.Helper()
+	out, err := json.Marshal(decodeLegacyRecordedTurn(t, []byte(raw)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
+
 func TestRecordedOwnedModelsSynchronizeCategories(t *testing.T) {
 	raw, err := os.ReadFile("testdata/owned_live_recording_20260915.json")
 	if err != nil {
@@ -30,10 +50,7 @@ func TestRecordedOwnedModelsSynchronizeCategories(t *testing.T) {
 		t.Run(c.ID, func(t *testing.T) {
 			state := schemas.NewRequirementState()
 			for _, step := range c.Steps {
-				turn, err := DecodeLegacyRequirementTurn([]byte(step.Response))
-				if err != nil {
-					t.Fatal(err)
-				}
+				turn := decodeLegacyRecordedTurn(t, []byte(step.Response))
 				update := turn.Update()
 				source := schemas.RequirementSource{Kind: "chat", MessageID: step.Message, Quote: step.Message}
 				update = prepareRequirementUpdate(state, update, source)
@@ -83,7 +100,7 @@ func TestRecordedOwnershipAndBudgetScope(t *testing.T) {
 		t.Run(c.ID, func(t *testing.T) {
 			state := schemas.NewRequirementState()
 			for i, step := range c.Steps {
-				state = semanticTurn(t, state, step.Message, step.Response)
+				state = semanticTurn(t, state, step.Message, upgradeLegacyRecordedJSON(t, step.Response))
 				if c.ID != "L5-305" {
 					for _, field := range []string{"owned_parts", "existing_parts", "budget_basis"} {
 						if state.Fields[field].Status != "unknown" {

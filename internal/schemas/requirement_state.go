@@ -254,11 +254,17 @@ func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, so
 		if !ok || !knownRequirementField(op.Field) {
 			return state, fmt.Errorf("requirement update: 未知字段 %q", op.Field)
 		}
-		if op.Evidence != "" && op.Evidence != "stated" && op.Evidence != "uncertain" && op.Evidence != "inferred" {
+		if op.Evidence != "" && op.Evidence != "stated" && op.Evidence != "uncertain" && op.Evidence != "inferred" && op.Evidence != "accepted_proposal" {
 			return state, fmt.Errorf("requirement update: 非法 evidence")
 		}
 		if op.Evidence == "inferred" || (op.Evidence == "uncertain" && op.Op != "conflict") {
 			return state, fmt.Errorf("requirement update: 推断或不确定信息不能作为已表达要求")
+		}
+		// accepted_proposal 是用户明确接受助手建议的表达:领域层只做合同校验
+		// (仅 set、仅 chat 来源、绑定本轮原文);proposal 的存在、字段/值/归属
+		// 与紧邻轮次由产品层在持久化边界验证,模型标签本身不构成证据。
+		if op.Evidence == "accepted_proposal" && (op.Op != "set" || source.Kind != "chat") {
+			return state, fmt.Errorf("requirement update: accepted_proposal 仅支持聊天轮的 set 操作")
 		}
 		kind := op.Kind
 		// 强度编辑沿用同一值的语义；换成新文本却缺少分类时不得把旧 fact/context
@@ -692,6 +698,19 @@ func containsString(items []string, value string) bool {
 		}
 	}
 	return false
+}
+
+// NormalizeRequirementValue 校验并做确定性规范化(供 proposal 值比对等
+// 持久化边界使用):非法值返回错误,不改写、不丢弃。
+func NormalizeRequirementValue(key string, raw json.RawMessage) (json.RawMessage, error) {
+	if err := validateRequirementValue(key, raw); err != nil {
+		return nil, err
+	}
+	normalized := normalizeRequirementValue(key, raw)
+	if len(normalized) == 0 {
+		return nil, fmt.Errorf("requirement update: %s 必须提供非空 JSON 值", key)
+	}
+	return append(json.RawMessage(nil), normalized...), nil
 }
 
 // RequirementStateQuestions 是产品层的展示文案:字段与顺序完全来自

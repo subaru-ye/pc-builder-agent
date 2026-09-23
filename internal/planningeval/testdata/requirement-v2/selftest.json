@@ -366,6 +366,26 @@
     "blocking_conflicts": [],
     "confirmation_eligible": false
    }
+  },
+  {
+   "id": "st-v9-scope-notice-pass",
+   "layer": "turn",
+   "expect": "pass",
+   "description": "明确告知暂不支持外设的诚实范围说明不构成 V9(grader-v3 修正)",
+   "gold": {
+    "expected_operations": []
+   },
+   "actual": {
+    "state": {
+     "schema_version": 2,
+     "revision": 1,
+     "fields": {},
+     "alternatives": [],
+     "observations": []
+    },
+    "reply": "当前配置范围仅支持主机（tower），显示器、键盘、鼠标暂不在本次范围内；如需包含请说明可先放弃，或等待后续支持。",
+    "watch_unsupported_scope": true
+   }
   }
  ]
 }

@@ -23,11 +23,12 @@ var errNotFound = errors.New("运行不存在或产物已移除")
 
 // Store never opens environment files, databases, model clients or raw log files.
 type Store struct {
-	root    string
-	mu      sync.Mutex
-	cache   map[string]*savedRun
-	gitMu   sync.Mutex
-	commits map[string]CommitSummary
+	root       string
+	mu         sync.Mutex
+	cache      map[string]*savedRun
+	cacheReqV2 map[string]*savedReqV2Run
+	gitMu      sync.Mutex
+	commits    map[string]CommitSummary
 }
 
 type savedRun struct {
@@ -51,7 +52,7 @@ func NewStore(root string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Store{root: absolute, cache: map[string]*savedRun{}}, nil
+	return &Store{root: absolute, cache: map[string]*savedRun{}, cacheReqV2: map[string]*savedReqV2Run{}}, nil
 }
 
 func runID(relative string) string {

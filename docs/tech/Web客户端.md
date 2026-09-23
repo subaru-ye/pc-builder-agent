@@ -24,7 +24,7 @@
 
 Next.js 不定义业务 Route Handler 或 Server Action；开发环境由 next.config rewrite 把 /api/:path* 转发到 Go API,生产由同源反向代理承担。
 
-本机评估 `/eval` 入口：显式设置 `EVALDESK_API_BASE_URL` 后经 rewrite 连接独立 `cmd/evaldesk`,前后端均绑定 loopback,详见[评估设施](评估设施.md)。
+本机评估 `/eval` 入口：显式设置 `EVALDESK_API_BASE_URL` 后经 rewrite 连接独立 `cmd/evaldesk`,前后端均绑定 loopback,详见[评估设施](评估设施.md)。页面顶层分"Requirement v2(有产物时默认)/ 历史评估"两桌;v2 桌面只读审阅 `artifacts/reqv2` 冻结证据(门槛三态、六层、逐题逐轮、同身份对比),Next.js 不做任何评分或比较计算。
 
 ## 3. 页面与导航
 

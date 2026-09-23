@@ -50,7 +50,7 @@ function allPassed(run: ReturnType<typeof savedRun>) {
   }).length;
 }
 async function selectPair(page: Page, baseline: string, candidate: string) {
-  await page.goto("/eval");
+  await page.goto("/eval?desk=legacy");
   for (const [name, path] of [["基线运行", baseline], ["候选运行", candidate]]) {
     const select = page.getByRole("combobox", { name, exact: true });
     const option = select.locator(`option[data-run-label="${path}"]`);
@@ -243,7 +243,7 @@ test("legacy and interrupted runs retain unknown evidence and the planned denomi
   const oldRows = records(paths.legacy), oldMeta = artifact<SavedMeta>(paths.legacy, "meta.json");
   expect(oldMeta.requested_seeds).toBeUndefined();
   expect(oldRows.every(row => !row.usage)).toBe(true);
-  await page.goto("/eval");
+  await page.goto("/eval?desk=legacy");
   const legacy = await runRow(page, paths.legacy);
   await expect(legacy).toContainText("旧格式");
   await expect(legacy).toContainText("题库未记录");

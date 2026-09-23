@@ -1,7 +1,7 @@
 "use client";
 
 import { BookOpen, GitCommitHorizontal, History, ListChecks, Menu, Rows3, X } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import type { RunSummary } from "@/lib/evaldesk/types";
 import { getSuiteVersions } from "@/lib/evaldesk/catalog";
@@ -16,7 +16,7 @@ const entries = [
   { key: "timeline", label: "溯源时间线", icon: History },
 ] as const;
 
-export function WorkbenchNavigation({ active, version, runs, navigate }: { active: DeskSection; version: string; runs: RunSummary[]; navigate: (section: DeskSection, version?: string) => void }) {
+export function WorkbenchNavigation({ active, version, runs, navigate, topSlot }: { active: DeskSection; version: string; runs: RunSummary[]; navigate: (section: DeskSection, version?: string) => void; topSlot?: ReactNode }) {
   const [expanded, setExpanded] = useState(false);
   const versions = getSuiteVersions(runs);
   const label = entries.find(e => e.key === active)!.label;
@@ -29,6 +29,7 @@ export function WorkbenchNavigation({ active, version, runs, navigate }: { activ
     <div className={styles.mobileBar}><Button variant="outline" aria-expanded={expanded} aria-controls="evaldesk-navigation" onClick={() => setExpanded(!expanded)}>{expanded ? <X size={16} /> : <Menu size={16} />}工作台菜单</Button><span>{label}</span></div>
     <aside className={`${styles.sidebar} ${expanded ? styles.expanded : ""}`} id="evaldesk-navigation">
       <p className={styles.caption}>评估工作台</p>
+      {topSlot}
       <nav aria-label="工作台导航">{entries.map(({ key, label: text, icon: Icon }, index) => <div key={key}>
         {index === 2 && <p className={styles.groupLabel}>资料溯源</p>}
         <button className={styles.navItem} aria-current={active === key ? "page" : undefined} onClick={() => select(key)}><Icon size={17} aria-hidden="true" /><span>{text}</span></button>

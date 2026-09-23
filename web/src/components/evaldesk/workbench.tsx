@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronRight, CircleHelp, FlaskConical, RefreshCw, Search, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronRight, CircleHelp, FlaskConical, History, ListChecks, RefreshCw, Search, X } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -13,6 +13,7 @@ import { ReadableChanges } from "./change-summary";
 import { RunProvenance, RunTimeline } from "./provenance";
 import { CommitHistory, SuiteLibrary } from "./catalog";
 import { WorkbenchNavigation, type DeskSection } from "./navigation";
+import { ReqV2Workbench } from "./reqv2";
 import styles from "./workbench.module.css";
 
 const statusLabels: Record<CaseStatus, string> = { regressed: "退步", improved: "改善", persistent_failure: "持续失败", output_changed: "成绩不变 · 输出变化", unchanged: "未变化", added: "新增题", removed: "删除题", modified: "修改题", unavailable: "证据不足" };
@@ -177,8 +178,12 @@ export function EvalWorkbench() {
   const queryClient = useQueryClient();
   const baseline = params.get("baseline") ?? "", candidate = params.get("candidate") ?? "", caseId = params.get("case") ?? "";
   const requestedView = params.get("view");
+  // 旧深链(view/baseline/candidate)未显式选桌时保持进入历史评估,不破坏既有链接。
+  const hasLegacyParams = !!(params.get("view") || params.get("baseline") || params.get("candidate"));
+  const desk = params.get("desk") ?? (hasLegacyParams ? "legacy" : "reqv2");
   // 旧的题库溯源链接继续可用，显示新的独立题目页面。
   const view = requestedView === "provenance" ? "suites" : ["compare", "suites", "commits", "timeline", "archive"].includes(requestedView ?? "") ? requestedView! : "runs";
+  void desk;
   const comparing = view === "compare" && !!baseline && !!candidate;
   const showingList = view === "runs", showingSelection = showingList || view === "compare";
   const activeSection: DeskSection = view === "archive" ? "runs" : view as DeskSection;
@@ -212,10 +217,25 @@ export function EvalWorkbench() {
   runs.data?.runs.forEach(run => { const caption = runCaption(run); captions.set(caption, (captions.get(caption) ?? 0) + 1); });
   const optionCaption = (run: RunSummary) => { const caption = runCaption(run); return (captions.get(caption) ?? 0) > 1 ? `${caption} · 编号 ${run.id.slice(0, 8)}` : caption; };
   const runSelect = (role: "baseline" | "candidate") => <label className={styles.selectLabel}><span>{role === "baseline" ? "基线运行 · 作为参照" : "候选运行 · 查看变化"}</span><small>{role === "baseline" ? "选一次历史评估，作为比较的起点" : "选另一次评估，看它相对基线的变化"}</small><select aria-label={role === "baseline" ? "基线运行" : "候选运行"} aria-describedby="eval-selection-help" value={role === "baseline" ? baseline : candidate} onChange={e => navigate({ [role]: e.target.value, case: null })}><option value="">{role === "baseline" ? "选择作为参照的运行" : "选择要比较的运行"}</option>{runs.data?.runs.map(run => <option key={run.id} value={run.id} data-run-label={run.label}>{optionCaption(run)}</option>)}</select></label>;
+  const deskSwitch = (
+    <nav aria-label="评估体系" style={{ display: "grid", gap: 4 }}>
+      <button className={styles.navItem} aria-current={desk !== "legacy" ? "page" : undefined} onClick={() => navigate({ desk: null })}><ListChecks size={17} aria-hidden /><span>Requirement v2</span></button>
+      <button className={styles.navItem} aria-current={desk === "legacy" ? "page" : undefined} onClick={() => navigate({ desk: "legacy", view: "runs", run: null, case: null, layer: null })}><History size={17} aria-hidden /><span>历史评估</span></button>
+    </nav>
+  );
   return <div className={styles.workspace}>
     <header className={styles.header}><Link href="/" className={styles.brand}><FlaskConical size={19} aria-hidden="true" /><span>装机配置单 <span className={styles.desktopOnly}>Agent</span></span></Link><span className={styles.readonly}>本机评估 · 只读</span><label className={styles.theme}><span className="sr-only">外观</span><select aria-label="外观" value={theme} onChange={e => setTheme(e.target.value as ThemePreference)}><option value="system">系统</option><option value="dark">深色</option><option value="light">浅色</option></select></label></header>
-    <div className={styles.layout}><WorkbenchNavigation active={activeSection} version={version} runs={runs.data?.runs ?? []} navigate={switchSection} />
-    <main className={styles.content}><div className={styles.titleRow}><div><h1 id="eval-page-heading" tabIndex={-1}>{titles[view][0]}</h1><p>{titles[view][1]}</p></div><Button variant="outline" onClick={() => void queryClient.invalidateQueries({ queryKey: ["evaldesk"] })}><RefreshCw size={15} />重新读取</Button></div>
+    <div className={styles.layout}>
+    {desk !== "legacy" ? <>
+      <aside className={styles.sidebar} id="evaldesk-navigation">
+        <p className={styles.caption}>评估工作台</p>
+        {deskSwitch}
+        <p className={styles.hint}>只读本机产物 · 不重跑、不重判、不改门槛。</p>
+      </aside>
+      <ReqV2Workbench params={params} navigate={navigate} onReread={() => void queryClient.invalidateQueries({ queryKey: ["evaldesk"] })} />
+    </> : <>
+      <WorkbenchNavigation active={activeSection} version={version} runs={runs.data?.runs ?? []} navigate={switchSection} topSlot={deskSwitch} />
+      <main className={styles.content}><div className={styles.titleRow}><div><h1 id="eval-page-heading" tabIndex={-1}>{titles[view][0]}</h1><p>{titles[view][1]}</p></div><Button variant="outline" onClick={() => void queryClient.invalidateQueries({ queryKey: ["evaldesk"] })}><RefreshCw size={15} />重新读取</Button></div>
       {showingSelection && <><div className={styles.selection}>{runSelect("baseline")}<ArrowRight className={styles.selectArrow} size={18} aria-hidden="true" />{runSelect("candidate")}<Button className={styles.compareButton} disabled={!baseline || !candidate} onClick={() => navigate({ view: "compare", case: null })}>对比运行<ArrowRight /></Button></div>
       <p id="eval-selection-help" className={styles.footnote}>比较的是两次评估当时的版本条件与结果。基线由你选择，不代表官方标准或最佳成绩；本页不会运行模型或更改基线。时间为北京时间。</p></>}
       {runs.isPending && <p className={styles.empty} role="status">正在读取本机产物与版本证据…</p>}
@@ -236,6 +256,6 @@ export function EvalWorkbench() {
       {comparing && caseId && detail.error && <ErrorMessage error={detail.error} retry={() => void detail.refetch()} />}
       {comparing && caseId && detail.data && <CaseDetail key={`${baseline}-${candidate}-${caseId}`} data={detail.data} comparison={compare.data} close={() => { navigate({ case: null }); document.querySelector('[aria-label="逐题变化"]')?.scrollIntoView({ block: "start" }); }} />}
       <footer className={styles.footer}>原始日志与凭据不进入本页。历史缺失证据显示“未记录”；多因素变化与小样本波动不构成确定因果。</footer>
-    </main></div>
+    </main></>}</div>
   </div>;
 }

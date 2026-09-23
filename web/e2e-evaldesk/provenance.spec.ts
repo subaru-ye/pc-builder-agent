@@ -195,7 +195,7 @@ test("timeline opens the full frozen exam in its own screen without choosing a c
   const run = savedRun(paths.baseline);
   const dialogue = run.cases.find(c => c.id === "L5-301")!;
   expect(dialogue?.turns?.length).toBeGreaterThan(1);
-  await page.goto("/eval");
+  await page.goto("/eval?desk=legacy");
   const id = await runID(page, run.path);
   await expectPair(page, "", "");
   await navigateSection(page, "溯源时间线");
@@ -247,7 +247,7 @@ test("timeline opens the full frozen exam in its own screen without choosing a c
 
 test("run-list and both comparison provenance links preserve the selected baseline and candidate", async ({ page }, testInfo) => {
   requireArtifacts([paths.baseline, paths.candidate].map(path => [path, ["meta.json", "cases.json", "results.jsonl"]]));
-  await page.goto("/eval");
+  await page.goto("/eval?desk=legacy");
   const baseline = await runID(page, paths.baseline), candidate = await runID(page, paths.candidate);
   await page.getByRole("combobox", { name: "基线运行", exact: true }).selectOption(baseline);
   await page.getByRole("combobox", { name: "候选运行", exact: true }).selectOption(candidate);
@@ -286,7 +286,7 @@ test("missing historical exams stay missing while interrupted runs retain their 
   const unfinished = savedRun(paths.incomplete);
   const question = unfinished.cases.find(c => !!c.input || !!c.turns?.length)!;
   expect(question).toBeDefined();
-  await page.goto("/eval");
+  await page.goto("/eval?desk=legacy");
   const legacyID = await runID(page, paths.legacy), incompleteID = await runID(page, paths.incomplete);
   await navigateSection(page, "溯源时间线");
   await page.getByTestId(`timeline-${paths.legacy}`).getByRole("button", { name: "查看题库", exact: true }).click();
@@ -319,7 +319,7 @@ test("sidebar separates commit records and version catalogs and stays keyboard r
   expect(associated.length).toBeGreaterThan(0);
   const files = execFileSync("git", ["diff-tree", "--no-commit-id", "--name-only", "-z", "-r", commit.commit], { cwd: root, encoding: "utf8" }).split("\0").filter(Boolean);
   expect(files.length).toBeGreaterThan(0);
-  await page.goto("/eval");
+  await page.goto("/eval?desk=legacy");
   const baseline = await runID(page, paths.baseline), candidate = await runID(page, paths.candidate);
   const options = await page.getByRole("combobox", { name: "基线运行", exact: true }).locator("option[data-run-label]").evaluateAll(nodes => nodes.map(node => ({ label: node.getAttribute("data-run-label"), value: node.getAttribute("value") })));
   await page.getByRole("combobox", { name: "基线运行", exact: true }).selectOption(baseline);

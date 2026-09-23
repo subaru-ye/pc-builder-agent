@@ -74,6 +74,42 @@ func Handler(store *Store) http.Handler {
 				return
 			}
 			writeJSON(w, response)
+		case "/api/evaldesk/requirement-v2/runs":
+			writeJSON(w, store.RunsReqV2())
+		case "/api/evaldesk/requirement-v2/run":
+			if query.Get("id") == "" {
+				apiError(w, http.StatusBadRequest, "请选择要查看的运行")
+				return
+			}
+			run, err := store.reqV2Lookup(query.Get("id"))
+			if err != nil {
+				apiError(w, http.StatusNotFound, "运行不存在或产物已移除")
+				return
+			}
+			writeJSON(w, run.detail)
+		case "/api/evaldesk/requirement-v2/case":
+			if query.Get("id") == "" || query.Get("layer") == "" || query.Get("case") == "" {
+				apiError(w, http.StatusBadRequest, "请选择运行、层与题目")
+				return
+			}
+			response, err := store.CaseReqV2(query.Get("id"), query.Get("layer"), query.Get("case"))
+			if err != nil {
+				apiError(w, http.StatusNotFound, "题目或运行不存在")
+				return
+			}
+			writeJSON(w, response)
+		case "/api/evaldesk/requirement-v2/compare":
+			a, b := query.Get("a"), query.Get("b")
+			if a == "" || b == "" {
+				apiError(w, http.StatusBadRequest, "请选择基线和候选运行")
+				return
+			}
+			response, err := store.CompareReqV2(a, b)
+			if err != nil {
+				apiError(w, http.StatusNotFound, "运行不存在或产物已移除")
+				return
+			}
+			writeJSON(w, response)
 		default:
 			apiError(w, http.StatusNotFound, "没有此只读接口")
 		}

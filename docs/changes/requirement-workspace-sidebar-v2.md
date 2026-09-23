@@ -9,6 +9,8 @@ created: 2026-09-22
 
 依赖 `requirement-state-readiness-v2`、`screening-requirement-collection-v2` 和 `requirement-confirmation-builder-gate-v2` 的 OpenAPI 合同。视觉实现必须同步修订根目录 `DESIGN.md`、`DESIGN_CONTEXT.md`、`UI_RULES.md` 和 `docs/tech/Web客户端.md`，因为当前文档明确规定右栏只显示配置，与本 change 的已确认产品方向冲突。
 
+Spec 4 已提供三轴、`review_spec/review_hash` 与确认入口，但当前 Session 读取合同尚未提供失败重试的目标 run ID，也未提供“当前有效预览相对上次确认快照”的字段差异。本 change 允许仅为这两处增加后端只读派生字段、OpenAPI 和聚焦测试；不改变确认门禁、Reducer 或 Builder 执行。前端不得从消息、phase、build 版本或原始 JSON 自行推断它们。
+
 ## Outcome
 
 把桌面右侧共享区域改为可切换的“需求状态 / 配置详情”。需求状态始终可达且作为默认 Tab，让用户直观看见当前已确定、未填写、冲突、撤销和系统默认的需求；配置详情在首个 Builder 版本生成后才可进入。字段可由对话或侧栏手动修改，两条路径共享同一后端 RequirementState 和 Reducer。
@@ -27,6 +29,7 @@ created: 2026-09-22
 - 聊天顶部摘要去重。
 - 响应式、键盘、中文输入法、焦点恢复和无障碍。
 - TanStack Query、SSE invalidation 和 OpenAPI 生成类型接入。
+- 为失败重试目标与重新核定差异补足最小后端只读 DTO；差异由当前 `review_spec` 与最近确认快照的规范化有效值计算，缺少可投影预览时返回空/不可用，不编造比较结果。
 - 设计系统和 Web 客户端文档更新。
 
 ### Out
@@ -54,6 +57,7 @@ created: 2026-09-22
 - Builder 完成后只启用配置 Tab并给出可感知的完成提示，不强制抢走用户当前焦点或自动切换。
 - `version_count=0` 时配置 Tab disabled，旁边说明“生成配置后可查看”。disabled 必须真实不可操作并可由屏幕阅读器理解。
 - 有配置后，无论需求是否修改，配置 Tab 始终可查看。
+- 会话切换或重新进入时重置到需求 Tab；当前 `SessionWorkspace` 默认选中 build、`refreshBuilds` 成功后自动切 build 的旧行为须移除。只有用户显式切换才改变当前会话的瞬时 Tab。
 
 ## Requirement status tab
 
@@ -116,6 +120,7 @@ created: 2026-09-22
 ```
 
 金额使用 tabular nums。预算和上限来自后端 effective projection，前端不得自行套 10% 规则。
+`budget_cny` 为 must 时称“最高预算”；为 prefer 时只能称“预算参考上沿”，不得把软偏好写成硬上限。文案可依后端字段 strength 呈现，不在前端计算金额或改变门禁。
 
 ## Editing
 
@@ -176,12 +181,14 @@ created: 2026-09-22
 - modified：“确认修改并生成新版本”。
 - failed retry：“按相同需求重新生成”。
 
-确认请求携带打开/保存后最新的 `expected_revision` 与服务端预览给出的 `expected_review_hash`；失败重试另传失败 run 的 `retry_of_run_id`，前端不自行计算 hash。409 时面板不关闭，重新载入预览并提示用户需求或系统默认已变化，须重新核定。
+确认请求携带打开/保存后最新的 `expected_revision` 与服务端预览给出的 `expected_review_hash`；失败重试另传服务端 `build_relation.retry_run_id` 指定的 `retry_of_run_id`，前端不从聊天消息寻找 run ID。后端只在最新 build run 已失败、确认仍有效且当前预览与其快照一致时给出 `retry_run_id`，否则为 null，前端无值时不显示重试 CTA。前端不自行计算 hash。409 时面板不关闭，保留未提交编辑，重新载入预览并提示用户需求或系统默认已变化，须重新核定。
+
+同一次确认点击/网络重试复用同一 `Idempotency-Key` 与完全相同的请求体；409 后用户重新核定的提交使用新 key。不能每次网络重试生成新 key，也不能在旧请求未决时重复启动。
 
 ## Configuration tab
 
 - 无版本：disabled，不显示大块空配置状态；需求 Tab 已提供下一步。
-- running：如果已有旧版本，仍展示旧版本并标记当前正在基于确认快照生成；没有版本时 Tab 保持 disabled 或展示稳定进度入口，按最终现有 inspector 结构选择一种，不伪造配置。
+- running：如果已有旧版本，仍展示旧版本并标记当前正在基于确认快照生成；没有版本时配置 Tab 保持 disabled，生成进度留在聊天/需求 Tab，不伪造配置。
 - current：沿用配置、校验、版本和 diff。
 - outdated：顶部显示“此配置基于上一版需求”，提供返回需求 Tab 的明确操作。
 - failed：保留旧配置；错误说明是否已保存、确认是否仍有效、如何重试。
@@ -222,8 +229,10 @@ created: 2026-09-22
 - Session/Requirement/Build 仍由 TanStack Query 管理。
 - Zustand 只保存当前 inspector Tab、mobile pane、局部 drawer 和未提交表单等瞬时 UI。
 - 不在 localStorage 保存业务字段；现有栏宽偏好可继续保存。
-- SSE `requirement.updated` 失效 Session；confirm/run/build 事件按 OpenAPI 精确失效 Session 和 builds。
+- Screening 的 SSE `requirement.updated` 失效 Session；`presentation.action` 只驱动当前 run 的短期 UI 动作，不凭它推断业务状态或无故刷新 builds；`requirement.confirmed`/run/build 事件按合同精确失效 Session/builds。刷新后不重放 presentation action。侧栏 `PATCH requirement-state` 以返回的完整 Session 更新 Query cache，不能等待一个并不存在的编辑 run/SSE；同步修正 `docs/api/SSE事件协议.md` 中对侧栏编辑会创建 run/发送 `requirement.updated` 的过期说法。
 - 前端不得根据消息文本、phase 或 version count 重建 readiness/confirmation。
+
+只读 DTO 补充：`build_relation.retry_run_id: string|null` 由后端派生失败重试资格；`requirement_confirmation.review_diff` 是后端按规范化有效字段生成的 `{field, before, after}` 列表，只在有可比较的当前预览时提供。前端只把字段和值映射为用户可读标签，不自行比较 JSON；新字段须进入 OpenAPI 与生成类型并有服务端正反例测试。
 
 ## Design documentation changes
 
@@ -233,18 +242,20 @@ created: 2026-09-22
 - `DESIGN_CONTEXT.md` Information density 与 Layout principles 改为需求状态默认常驻右栏。
 - `UI_RULES.md` §3 删除“配置栏仅保留配置”，加入双 Tab、状态行和核定抽屉规则。
 - `docs/tech/Web客户端.md` 页面结构、主流程、状态管理、测试要求同步。
+- `docs/api/SSE事件协议.md` 同步当前无 run 的侧栏编辑行为与 `presentation.action`/`requirement.confirmed` 消费边界；不保留 v1 确认与旧 `requirement_status` 叙述。
 
 保留其余设计约束：克制色彩、hairline、rows/dividers、一个 primary action、无卡片墙、无新 token。
 
 ## Verification
 
 - Vitest/Testing Library 覆盖所有字段状态、CTA 状态、Tab disabled、409、running edit 和 stale build。
-- Playwright 覆盖：新会话渐进收集、手动填写、核定、生成、修改后旧配置、running edit、failed retry。
+- Playwright 覆盖：新会话渐进收集、手动填写、核定、生成、修改后旧配置、running edit、failed retry；使用现有 mock 或离线 requirements harness 的脚本化 Screening/Builder，不调用真实模型。
 - 375/768/1440 三档视口。
 - 键盘可完成 Tab、字段编辑、保存、核定和返回；axe 无 serious/critical。
 - 中文输入法、reduced motion、断网、degraded、build failure 均有明确行为。
-- `pnpm typecheck && pnpm lint && pnpm test`，以及项目现有 Playwright 命令。
+- `pnpm typecheck && pnpm lint && pnpm exec vitest run`，以及 `pnpm test:e2e` / 离线 harness 下的 `pnpm test:e2e:requirements`；live E2E 和 holdout 留给发布认证。
 - API 生成类型无漂移；前端源码中不存在最低矩阵和 10% 预算计算的复制实现。
+- 零模型 `ui-contract` 回归无 veto；它验证后端读取合同，不能代替真实浏览器的视觉、焦点和交互验收。
 
 ## Acceptance scenarios
 
@@ -262,6 +273,7 @@ created: 2026-09-22
 - [ ] 右栏共享双 Tab，需求默认、配置按版本启用。
 - [ ] 所有字段状态和 system defaults 诚实展示。
 - [ ] 保存、核定、生成动作边界清晰。
+- [ ] 失败重试使用后端给出的目标 run ID；重新核定差异由后端只读字段提供，前端不猜。
 - [ ] Next.js 不包含业务判定或 hash 比较。
 - [ ] 设计系统四份相关文档已同步，无相互矛盾旧规则。
 - [ ] 桌面、移动端、键盘、IME 和无障碍验收通过。

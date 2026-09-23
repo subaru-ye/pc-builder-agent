@@ -129,8 +129,9 @@ Version tokens may use compact rounded tags. Changed rows get a one-time tint an
 
 ## Responsive model
 
-- ≥1024px:three persistent columns—240px session navigation, the conversation with a compact requirement summary, and a 360–480px build inspector on the right. The chat remains wider than the inspector.
-- Requirement editing opens separately in a drawer up to 672px wide. The desktop build inspector contains only build, validation, and versions; collecting or editing requirements does not replace the displayed build.
+- ≥1024px:three persistent columns—240px session navigation, the conversation with a compact requirement summary, and a 360–480px shared inspector on the right. The chat remains wider than the inspector.
+- The shared inspector is one two-tab surface: 需求状态 is the default, always-reachable tab; 配置详情 becomes usable once the first build version exists and stays readable afterwards. Completion enables the build tab without stealing focus or switching tabs.
+- Requirement status presents sections, dividers, and rows—not per-field cards. Editing simple fields expands inline editors inside the tab; bulk or complex editing opens a drawer up to 672px wide; requirement review (确认) is a distinct confirmation drawer, also up to 672px.
 - <1024px:session navigation opens from the header; the conversation remains the default view.
 - <768px:mobile single column, bottom composer, full-width detail drawer with an explicit return-to-chat action.
 - Account settings have one workspace entry at the bottom of session navigation, including inside the mobile navigation drawer. Do not duplicate it in the workspace header.

@@ -6,7 +6,7 @@ import { AlertTriangle, CheckCircle2, CircleHelp, GitCompareArrows, XCircle } fr
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/query-keys";
-import type { BuildSummary, BuildView, PartCategory } from "@/lib/api/types";
+import type { BuildSummary, BuildView, PartCategory, Session } from "@/lib/api/types";
 import { categories, categoryLabels, ruleLabels, ruleOrder, statusLabel } from "@/lib/domain";
 import { useUIStore } from "@/stores/ui";
 import { Button } from "./ui/button";
@@ -16,18 +16,20 @@ const tabs = [
   ["build", "配置"], ["validation", "校验"], ["versions", "版本"],
 ] as const;
 
-export function BuildInspector({ sessionID, builds, build, latestVersion, canChange, onReplace }: {
+export function BuildInspector({ sessionID, builds, build, latestVersion, canChange, onReplace, relation, onBackToRequirement }: {
   sessionID: string;
   builds: BuildSummary[];
   build?: BuildView;
   latestVersion: number | null;
   canChange: boolean;
   onReplace: (category: PartCategory) => void;
+  relation?: Session["build_relation"];
+  onBackToRequirement?: () => void;
 }) {
   const router = useRouter();
   const search = useSearchParams();
-  const tab = useUIStore((state) => state.inspectorTab);
-  const setTab = useUIStore((state) => state.setInspectorTab);
+  const tab = useUIStore((state) => state.inspectorSection);
+  const setTab = useUIStore((state) => state.setInspectorSection);
   const diffFrom = useUIStore((state) => state.diffFrom);
   const diffTo = useUIStore((state) => state.diffTo);
   const setDiff = useUIStore((state) => state.setDiff);
@@ -48,6 +50,9 @@ export function BuildInspector({ sessionID, builds, build, latestVersion, canCha
   const activeTab = tab;
   const historical = build && latestVersion !== null && build.summary.version !== latestVersion;
   return <section className="flex h-full min-h-0 flex-col bg-[var(--surface-1)]" aria-label="配置检查器">
+    {relation?.status === "running" && <p role="status" className="shrink-0 border-b border-l-2 border-l-[var(--primary)] bg-[var(--surface-1)] px-4 py-2 text-xs text-[var(--ink-muted)]">正在基于已确认的需求快照生成新版本；下面仍显示最近一版配置。</p>}
+    {relation?.status === "outdated" && <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-l-2 border-l-[var(--review)] px-4 py-2 text-xs text-[var(--ink-muted)]"><span>此配置基于上一版需求。</span>{onBackToRequirement && <Button variant="ghost" size="sm" className="min-h-8" onClick={onBackToRequirement}>返回需求状态</Button>}</div>}
+    {relation?.status === "failed" && <p role="status" className="shrink-0 border-b border-l-2 border-l-[var(--error)] px-4 py-2 text-xs text-[var(--ink-muted)]">最近一次生成失败：已保存的数据保持不变{historical ? "，下面为最近成功的一版配置" : ""}；需求确认仍有效时可在需求状态中选择重新生成。</p>}
     <div className="shrink-0 border-b px-4 py-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><div className="text-xs text-[var(--ink-subtle)]">当前查看</div><div className="mt-1 flex items-center gap-2"><span className="text-lg font-semibold">v{build.summary.version}</span>{historical && <span className="rounded border px-2 py-0.5 text-xs text-[var(--ink-muted)]">历史只读</span>}<StatusMark value={build.summary.overall_status} /></div></div>
@@ -91,10 +96,24 @@ function Validation({ build }: { build: BuildView }) {
 
 export function RequirementReadOnly({ build }: { build: BuildView }) {
   const r = build.requirement;
-  // Historical v1 snapshots may omit optional application titles.
-  const titles = r.schema_version === 1 ? r.use_case.titles ?? [] : [];
-  if (r.schema_version === 2) return <div className="space-y-4 p-4">{Object.entries(r.requirement_state.fields).filter(([, f]) => f.status === "active").map(([key, f]) => <div key={key}><p className="text-xs text-[var(--ink-muted)]">{requirementLabel(key)}</p><p className="mt-1">{requirementValue(key, f.value)}</p></div>)}<Disclaimers values={build.disclaimers} /></div>;
-  return <div className="space-y-5 p-4 sm:p-6"><dl className="grid grid-cols-2 gap-4 text-sm"><Meta label="预算" value={`¥${r.budget_cny}`} /><Meta label="弹性" value={r.budget_flex == null ? "未记录" : `${Math.round(r.budget_flex * 100)}%`} /><Meta label="用途" value={r.use_case.type} /><Meta label="尺寸" value={r.size_pref ?? "未记录"} /><Meta label="噪音" value={r.noise_pref ?? "未记录"} /><Meta label="分辨率" value={r.use_case.resolution ?? "—"} /></dl>{titles.length > 0 && <div><div className="text-xs text-[var(--ink-subtle)]">目标应用 / 游戏</div><p className="mt-1">{titles.join("、")}</p></div>}<div><div className="text-xs text-[var(--ink-subtle)]">补充说明</div><p className="mt-1 whitespace-pre-wrap text-[var(--ink-muted)]">{r.notes || "无"}</p></div><Disclaimers values={build.disclaimers} /></div>;
+  // 历史构建的 requirement 可能是归档 PlanningInput:优先其冻结的核定预览。
+  const spec = "requirement_state" in r ? r.effective_constraints?.spec ?? null : r;
+  if (spec) return <div className="space-y-1 p-4">
+    <Meta label="预算" value={`${requirementValue("budget_cny", spec.budget_cny)} · 弹性 ${requirementValue("budget_flex", spec.budget_flex)}`} />
+    <Meta label="用途" value={requirementValue("use_case.type", spec.use_case.type)} />
+    {spec.use_case.titles.length > 0 && <Meta label="游戏 / 应用" value={spec.use_case.titles.join("、")} />}
+    {spec.use_case.resolution && spec.use_case.resolution !== "any" && <Meta label="分辨率" value={requirementValue("use_case.resolution", spec.use_case.resolution)} />}
+    {spec.use_case.fps_target != null && <Meta label="目标帧率" value={`${spec.use_case.fps_target} 帧`} />}
+    {(spec.owned_parts ?? []).length > 0 && <Meta label="复用配件" value={spec.owned_parts!.map((part) => `${categoryLabels[part.category] ?? part.category}：${part.model}`).join("、")} />}
+    {spec.notes && <Meta label="补充说明" value={spec.notes} />}
+    {Object.entries(spec.requirement_details ?? {}).filter(([key]) => !key.startsWith("free.")).map(([key, value]) => <Meta key={key} label={requirementLabel(key)} value={requirementValue(key, value)} />)}
+    <Disclaimers values={build.disclaimers} />
+  </div>;
+  const state = "requirement_state" in r ? r.requirement_state : null;
+  return <div className="space-y-1 p-4">
+    {state && Object.entries(state.fields).filter(([, field]) => field.status === "active").map(([key, field]) => <Meta key={key} label={requirementLabel(key)} value={requirementValue(key, field.value)} />)}
+    <Disclaimers values={build.disclaimers} />
+  </div>;
 }
 
 function Versions({ builds, selected, onSelect, from, to, onDiff, diff, disclaimers }: { builds: BuildSummary[]; selected: number; onSelect: (v: number) => void; from: number; to: number; onDiff: (a: number, b: number) => void; diff?: Awaited<ReturnType<typeof api.getDiff>>; disclaimers: string[] }) {

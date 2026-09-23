@@ -234,3 +234,76 @@ func TestRequirementStatePromptViewIsBoundedAndDeclaresTruncation(t *testing.T) 
 		t.Fatalf("observations not trimmed: %d", len(payload.Observations))
 	}
 }
+
+func reviewDiffSpec(t *testing.T, mutate []RequirementOperation) json.RawMessage {
+	t.Helper()
+	state, err := ApplyRequirementUpdate(NewRequirementState(), RequirementUpdate{Operations: []RequirementOperation{
+		{Op: "set", Field: "budget_cny", Value: json.RawMessage(`8000`), Strength: "must"},
+		{Op: "set", Field: "use_case.type", Value: json.RawMessage(`"gaming"`), Kind: "fact", Strength: "must"},
+		{Op: "set", Field: "use_case.resolution", Value: json.RawMessage(`"2K"`), Kind: "fact", Strength: "must"},
+		{Op: "set", Field: "existing_parts", Value: json.RawMessage(`[]`), Kind: "fact", Strength: "must"},
+	}}, RequirementSource{Kind: "edit", Quote: "预算8000 2K"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mutate) > 0 {
+		state, err = ApplyRequirementUpdate(state, RequirementUpdate{Operations: mutate}, RequirementSource{Kind: "edit", Quote: "调整"})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	spec, readiness, err := RequirementReviewSpec(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec == nil {
+		t.Fatal("夹具应可投影")
+	}
+	_ = readiness
+	return spec
+}
+
+// TestRequirementReviewDiff 覆盖核定差异的正反例:值差异、系统默认差异、
+// 无差异与不可投影输入。
+func TestRequirementReviewDiff(t *testing.T) {
+	before := reviewDiffSpec(t, nil)
+	afterBudget := reviewDiffSpec(t, []RequirementOperation{{Op: "set", Field: "budget_cny", Value: json.RawMessage(`9000`)}})
+	diff, err := RequirementReviewDiff(before, afterBudget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diff) != 1 || diff[0].Field != "budget_cny" {
+		t.Fatalf("只应有一条 budget_cny 差异: %+v", diff)
+	}
+	if string(diff[0].Before) != "8000" || string(diff[0].After) != "9000" {
+		t.Fatalf("差异值错误: %s → %s", diff[0].Before, diff[0].After)
+	}
+
+	// 系统默认变化即使用户字段相同也会出现(此处显式改写 size_pref 模拟)。
+	afterSize := reviewDiffSpec(t, []RequirementOperation{{Op: "set", Field: "size_pref", Value: json.RawMessage(`"itx"`), Kind: "constraint", Strength: "prefer"}})
+	diff, err = RequirementReviewDiff(before, afterSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundSize := false
+	for _, entry := range diff {
+		foundSize = foundSize || entry.Field == "size_pref"
+	}
+	if !foundSize {
+		t.Fatalf("size_pref 差异缺失: %+v", diff)
+	}
+
+	// 相同规范化输入无差异。
+	diff, err = RequirementReviewDiff(before, before)
+	if err != nil || len(diff) != 0 {
+		t.Fatalf("相同输入应无差异: %v %v", diff, err)
+	}
+
+	// 任一侧不可投影时返回错误,不编造结果。
+	if _, err = RequirementReviewDiff(nil, before); err == nil {
+		t.Fatal("空快照应返回错误")
+	}
+	if _, err = RequirementReviewDiff(before, json.RawMessage(`{}`)); err == nil {
+		t.Fatal("空对象应返回错误")
+	}
+}

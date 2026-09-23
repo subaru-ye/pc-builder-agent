@@ -127,15 +127,6 @@ const RequirementState = z.object({
   history: z.array(RequirementChange),
   observations: z.array(RequirementObservation).optional(),
 });
-const PlanningInput = z
-  .object({
-    schema_version: z.number().int(),
-    requirement_state: RequirementState,
-    base_draft: z.object({}).partial().passthrough().optional(),
-    previous_proposal: z.object({}).partial().passthrough().optional(),
-    request: RequirementSource.optional(),
-  })
-  .passthrough();
 const PartCategory = z.enum([
   "cpu",
   "gpu",
@@ -146,6 +137,74 @@ const PartCategory = z.enum([
   "case",
   "cooler",
 ]);
+const RequirementSpec = z.object({
+  schema_version: z.number().int(),
+  budget_cny: z.number().int().gte(1),
+  budget_flex: z.number().gte(0).lte(0.3).optional().default(0.1),
+  configuration_scope: z
+    .array(z.literal("tower"))
+    .min(1)
+    .max(1)
+    .default(["tower"]),
+  use_case: z.unknown(),
+  size_pref: z.enum(["atx", "matx", "itx", "any"]).optional().default("any"),
+  noise_pref: z.enum(["silent", "normal", "any"]).optional().default("any"),
+  brand_pref: z
+    .object({
+      cpu: z.enum(["any", "intel", "amd"]).default("any"),
+      gpu: z.enum(["any", "nvidia", "amd"]).default("any"),
+    })
+    .partial()
+    .optional(),
+  existing_parts: z.array(PartCategory).optional().default([]),
+  budget_basis: z.enum(["new_purchase", "full_build"]).optional(),
+  owned_parts: z
+    .array(
+      z.object({
+        category: PartCategory,
+        model: z.string().min(1),
+        quantity: z.number().int().gte(1).lte(8).optional().default(1),
+      })
+    )
+    .optional(),
+  priority: z.array(PartCategory).optional().default([]),
+  notes: z.string().optional().default(""),
+  constraint_strengths: z.record(z.string(), z.enum(["must", "prefer"])).optional(),
+  requirement_semantics: z
+    .record(z.string(), z.enum(["fact", "context", "constraint"]))
+    .optional(),
+  requirement_observations: z.array(RequirementObservation).optional(),
+  requirement_details: z.record(z.string(), z.string()).optional(),
+});
+const PlanningInput = z
+  .object({
+    schema_version: z.number().int(),
+    requirement_state: RequirementState,
+    effective_constraints: z
+      .union([
+        z
+          .object({
+            spec: RequirementSpec,
+            defaults: z.array(
+              z
+                .object({
+                  field: z.string(),
+                  value: z.unknown(),
+                  origin: z.literal("system_default"),
+                })
+                .passthrough()
+            ),
+          })
+          .passthrough(),
+        z.null(),
+      ])
+      .optional(),
+    base_draft: z.object({}).partial().passthrough().optional(),
+    previous_proposal: z.object({}).partial().passthrough().optional(),
+    run_id: z.string().uuid().optional(),
+    previous_run_id: z.string().uuid().optional(),
+  })
+  .passthrough();
 const PlanningCandidate = z
   .object({
     id: z.string(),
@@ -284,45 +343,60 @@ const SessionProposal = z
     result: PlanningResult,
   })
   .passthrough();
-const RequirementSpec = z.object({
-  schema_version: z.number().int(),
-  budget_cny: z.number().int().gte(1),
-  budget_flex: z.number().gte(0).lte(0.3).optional().default(0.1),
-  configuration_scope: z
-    .array(z.literal("tower"))
-    .min(1)
-    .max(1)
-    .default(["tower"]),
-  use_case: z.unknown(),
-  size_pref: z.enum(["atx", "matx", "itx", "any"]).optional().default("any"),
-  noise_pref: z.enum(["silent", "normal", "any"]).optional().default("any"),
-  brand_pref: z
-    .object({
-      cpu: z.enum(["any", "intel", "amd"]).default("any"),
-      gpu: z.enum(["any", "nvidia", "amd"]).default("any"),
-    })
-    .partial()
-    .optional(),
-  existing_parts: z.array(PartCategory).optional().default([]),
-  budget_basis: z.enum(["new_purchase", "full_build"]).optional(),
-  owned_parts: z
-    .array(
-      z.object({
-        category: PartCategory,
-        model: z.string().min(1),
-        quantity: z.number().int().gte(1).lte(8).optional().default(1),
-      })
-    )
-    .optional(),
-  priority: z.array(PartCategory).optional().default([]),
-  notes: z.string().optional().default(""),
-  constraint_strengths: z.record(z.string(), z.enum(["must", "prefer"])).optional(),
-  requirement_semantics: z
-    .record(z.string(), z.enum(["fact", "context", "constraint"]))
-    .optional(),
-  requirement_observations: z.array(RequirementObservation).optional(),
-  requirement_details: z.record(z.string(), z.string()).optional(),
-});
+const RequirementReadiness = z
+  .object({
+    status: z.enum(["incomplete", "ready"]),
+    missing_fields: z.array(z.string()),
+    blocking_conflicts: z.array(z.string()),
+    unsupported_capabilities: z.array(z.string()),
+    next_question: z.union([
+      z
+        .object({ reason_code: z.string(), fields: z.array(z.string()) })
+        .passthrough(),
+      z.null(),
+    ]),
+    confirmation_eligible: z.boolean(),
+    effective_defaults: z.array(
+      z
+        .object({
+          field: z.string(),
+          value: z.unknown(),
+          origin: z.literal("system_default"),
+        })
+        .passthrough()
+    ),
+  })
+  .passthrough();
+const RequirementConfirmation = z
+  .object({
+    status: z.enum(["unconfirmed", "confirmed", "modified"]),
+    confirmed_revision: z.union([z.number(), z.null()]),
+    confirmed_at: z.union([z.string(), z.null()]),
+    confirmed_review_hash: z.union([z.string(), z.null()]),
+    review_diff: z
+      .union([
+        z.array(
+          z.object({
+            field: z.string(),
+            before: z.unknown(),
+            after: z.unknown(),
+          })
+        ),
+        z.null(),
+      ])
+      .optional(),
+  })
+  .passthrough();
+const BuildRelation = z
+  .object({
+    status: z.enum(["none", "running", "current", "outdated", "failed"]),
+    version: z.union([z.number(), z.null()]),
+    snapshot_id: z.union([z.string(), z.null()]),
+    review_hash: z.union([z.string(), z.null()]),
+    builder_input_hash: z.union([z.string(), z.null()]),
+    retry_run_id: z.union([z.string(), z.null()]).optional(),
+  })
+  .passthrough();
 const Problem = z
   .object({
     type: z.string(),
@@ -371,16 +445,12 @@ const Session = SessionSummary.and(
       proposal: SessionProposal.optional(),
       pending_requirement: z.union([RequirementSpec, z.null()]),
       requirement_state: z.union([RequirementState, z.null()]),
-      requirement_status: z.enum([
-        "collecting",
-        "ready_to_confirm",
-        "confirmed",
-        "modified",
-      ]),
-      confirmed_requirement_state: z.union([RequirementState, z.null()]),
-      confirmed_requirement: z.union([RequirementSpec, z.null()]),
-      confirmed_at: z.union([z.string(), z.null()]),
-      missing_fields: z.array(z.string()),
+      requirement_readiness: z.union([RequirementReadiness, z.null()]),
+      review_spec: z.union([RequirementSpec, z.null()]),
+      review_hash: z.union([z.string(), z.null()]),
+      effective_budget_ceiling_cny: z.union([z.number(), z.null()]),
+      requirement_confirmation: RequirementConfirmation,
+      build_relation: BuildRelation,
       active_run: z.union([Run, z.null()]),
       last_error: z.union([Problem, z.null()]),
       recovery_phase: z.union([
@@ -411,6 +481,12 @@ const RequirementOperation = z.object({
 const updateRequirementState_Body = z.object({
   expected_revision: z.number().int().gte(0),
   operations: z.array(RequirementOperation).min(1).max(32),
+});
+const confirmRequirement_Body = z.object({
+  schema_version: z.number().int(),
+  expected_revision: z.number().int().gte(0),
+  expected_review_hash: z.string().min(1),
+  retry_of_run_id: z.union([z.string(), z.null()]).optional(),
 });
 const FeedbackReason = z.enum([
   "unnecessary_question",
@@ -624,15 +700,18 @@ export const schemas = {
   RequirementChange,
   RequirementObservation,
   RequirementState,
-  PlanningInput,
   PartCategory,
+  RequirementSpec,
+  PlanningInput,
   PlanningCandidate,
   PlanningEvidence,
   ValidationCheck,
   ValidationReport,
   PlanningResult,
   SessionProposal,
-  RequirementSpec,
+  RequirementReadiness,
+  RequirementConfirmation,
+  BuildRelation,
   Problem,
   Run,
   Session,
@@ -640,6 +719,7 @@ export const schemas = {
   createMessageRun_Body,
   RequirementOperation,
   updateRequirementState_Body,
+  confirmRequirement_Body,
   FeedbackReason,
   Feedback,
   FeedbackResponse,

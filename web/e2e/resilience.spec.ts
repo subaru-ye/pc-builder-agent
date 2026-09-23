@@ -4,6 +4,7 @@ const base = {
   schema_version: 1,
   id: "session-resilience",
   title: "恢复测试会话",
+  phase: "collecting",
   created_at: "2026-08-09T10:00:00Z",
   updated_at: "2026-08-09T10:00:02Z",
   version_count: 0,
@@ -12,6 +13,13 @@ const base = {
   last_error: null,
   recovery_phase: null,
   degraded: false,
+  requirement_state: null,
+  requirement_readiness: null,
+  review_spec: null,
+  review_hash: null,
+  effective_budget_ceiling_cny: null,
+  requirement_confirmation: { status: "unconfirmed", confirmed_revision: null, confirmed_at: null, confirmed_review_hash: null, review_diff: null },
+  build_relation: { status: "none", version: null, snapshot_id: null, review_hash: null, builder_input_hash: null, retry_run_id: null },
 };
 
 test.beforeEach(async ({ page }) => {
@@ -33,8 +41,12 @@ test("collecting conversation survives a page refresh", async ({ page }, testInf
   await expect(page.getByText("请先告诉我预算和主要用途。")).toBeVisible();
   await page.reload();
   await expect(page.getByText("请先告诉我预算和主要用途。")).toBeVisible();
-  if (testInfo.project.name !== "desktop") await page.getByRole("button", { name: "配置" }).first().click();
-  await expect(page.getByText("配置尚未生成")).toBeVisible();
+  // 无版本时配置入口真实不可用,并在旁说明原因;不渲染空配置状态。
+  const buildEntry = page.locator('button[aria-label="查看配置详情"]');
+  await expect(buildEntry).toBeDisabled();
+  if (testInfo.project.name === "desktop") await expect(page.locator("#build-tab-disabled-reason")).toBeVisible();
+  else await expect(buildEntry).toContainText("生成配置后可查看");
+  await expect(page.getByText("配置尚未生成")).toHaveCount(0);
 });
 
 test("degraded interrupted session explains recovery instead of losing data", async ({ page }) => {
@@ -47,7 +59,7 @@ test("degraded interrupted session explains recovery instead of losing data", as
     last_error: { type: "/problems/run_interrupted", title: "运行已中断", status: 409, code: "run_interrupted", detail: "API 重启中断", request_id: "request-1" },
   } }));
   await page.goto("/s/session-resilience");
-  await expect(page.getByText(/Redis 当前不可用/)).toBeVisible();
+  await expect(page.getByText("实时事件存储暂不可用", { exact: false })).toBeVisible();
   await expect(page.getByText("服务重启中断了本次运行，可以显式重试。")).toBeVisible();
   await expect(page.getByRole("button", { name: "重试上一步" })).toBeVisible();
 });

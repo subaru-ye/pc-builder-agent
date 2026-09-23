@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Session } from "../src/lib/api/types";
+import { isDesktop, showBuild, showRequirements, snapshot } from "./helpers";
 
 test("tool-backed proposals remain editable, refreshable and separate from confirmed versions", async ({ page }, testInfo) => {
   await page.goto("/");
@@ -8,14 +9,20 @@ test("tool-backed proposals remain editable, refreshable and separate from confi
   await page.waitForURL(/\/s\/[^/]+$/);
   const id = new URL(page.url()).pathname.split("/").at(-1)!;
   const snapshot = async (): Promise<Session> => (await page.request.get(`/api/v1/sessions/${id}`)).json();
+  // 离线录制分两句登记:先给预算/用途,再补购买范围后才可核定。
+  await expect.poll(async () => (await snapshot()).active_run).toBeNull();
+  await page.getByLabel("输入需求或改单内容").fill("配件全部新买，就用这套剪片子");
+  await page.getByRole("button", { name: "发送", exact: true }).click();
   await expect.poll(async () => (await snapshot()).phase).toBe("requirement_ready");
-  await page.getByRole("button", { name: "查看 / 修改", exact: true }).click();
-  const panel = page.getByRole("region", { name: "当前需求", exact: true });
+  const panel = await showRequirements(page);
   await panel.getByRole("button", { name: "修改预算", exact: true }).click();
   await panel.getByLabel("编辑预算", { exact: true }).fill("12000");
   await panel.getByRole("button", { name: "保存需求", exact: true }).click();
   await expect.poll(async () => (await snapshot()).requirement_state!.fields.noise_pref.strength).toBe("prefer");
-  await panel.getByRole("button", { name: "确认并开始选配", exact: true }).click();
+  await panel.getByTestId("requirement-primary").getByRole("button", { name: "核对当前需求", exact: true }).click();
+  const review = page.getByRole("dialog", { name: "核定当前需求", exact: true });
+  await expect(review).toBeVisible();
+  await review.getByRole("button", { name: "确认并开始配置", exact: true }).click();
   await expect.poll(async () => (await snapshot()).version_count).toBe(1);
   const delivered = (await snapshot()).proposal!.result;
   expect(delivered.model_outcome).toBe("proposal");
@@ -23,7 +30,10 @@ test("tool-backed proposals remain editable, refreshable and separate from confi
   expect(delivered.build_version).toBe(1);
   expect(delivered.issues).toEqual([]);
   expect(delivered.quote?.snapshot_date).toBe("2026-07-28");
-  if (testInfo.project.name === "desktop") await expect(page.getByRole("region", { name: "配置检查器", exact: true })).toBeVisible();
+  if (isDesktop(page)) {
+    await page.getByRole("tab", { name: "配置详情" }).click();
+    await expect(page.getByRole("region", { name: "配置检查器", exact: true })).toBeVisible();
+  }
   await page.screenshot({ path: testInfo.outputPath("automatic-delivery.png") });
   const firstBuild = await (await page.request.get(`/api/v1/sessions/${id}/builds/1`)).json();
   const shareResponse = await page.request.post(`/api/v1/sessions/${id}/builds/1/shares`, { headers: { "Idempotency-Key": crypto.randomUUID() } });
@@ -39,11 +49,12 @@ test("tool-backed proposals remain editable, refreshable and separate from confi
   await publicPage.goto(share.url);
   await expect(publicPage.getByRole("heading", { name: "需求摘要", exact: true })).toBeVisible();
   await publicPage.close();
-  await page.getByRole("button", { name: "查看 / 修改", exact: true }).click();
+  await showRequirements(page);
   await panel.getByRole("button", { name: "修改静音", exact: true }).click();
   await panel.getByLabel("静音要求强度", { exact: true }).selectOption("must");
   await panel.getByRole("button", { name: "保存需求", exact: true }).click();
-  await panel.getByRole("button", { name: "确认修改并继续选配", exact: true }).click();
+  await panel.getByTestId("requirement-primary").getByRole("button", { name: "重新核定并生成", exact: true }).click();
+  await page.getByRole("dialog", { name: "核定当前需求", exact: true }).getByRole("button", { name: "确认修改并生成新版本", exact: true }).click();
   await expect.poll(async () => (await snapshot()).proposal?.result.outcome).toBe("proposal");
   const pending = await snapshot();
   expect(pending.phase).not.toBe("error");
@@ -55,7 +66,8 @@ test("tool-backed proposals remain editable, refreshable and separate from confi
   await expect(page.getByLabel("输入需求或改单内容")).toBeEnabled();
   expect((await snapshot()).proposal).toEqual(pending.proposal);
   expect(await (await page.request.get(`/api/v1/sessions/${id}/builds/1`)).json()).toEqual(firstBuild);
-  if (testInfo.project.name !== "desktop") await page.getByRole("button", { name: "查看配置详情", exact: true }).click();
+  if (isDesktop(page)) await page.getByRole("tab", { name: "配置详情" }).click();
+  else await showBuild(page);
   await expect(page.getByRole("region", { name: "待解决方案", exact: true })).toBeVisible();
   const proposalPanel = page.getByRole("region", { name: "待解决方案", exact: true });
   await expect(proposalPanel.getByText("本轮未联网，使用本地资料", { exact: true })).toBeVisible();
@@ -65,22 +77,24 @@ test("tool-backed proposals remain editable, refreshable and separate from confi
   await page.screenshot({ path: testInfo.outputPath("saved-proposal.png") });
   await page.getByRole("button", { name: "已确认配置", exact: true }).click();
   await expect(page.getByText("Ryzen 5 5600", { exact: true }).filter({ visible: true }).first()).toBeVisible();
-  if (testInfo.project.name !== "desktop") await page.getByRole("button", { name: "关闭详情", exact: true }).click();
+  if (!isDesktop(page)) await page.getByRole("button", { name: "关闭详情", exact: true }).click();
   await page.goto(`/s/${id}?version=1`);
   await expect(page.getByLabel("输入需求或改单内容")).toBeEnabled();
   await page.getByLabel("输入需求或改单内容").fill("静音还是尽量满足就好");
   await page.getByRole("button", { name: "发送", exact: true }).click();
   await expect.poll(async () => (await snapshot()).requirement_state!.fields.noise_pref.strength).toBe("prefer");
-  await page.getByRole("button", { name: "查看 / 修改", exact: true }).click();
-  await panel.getByRole("button", { name: "确认修改并继续选配", exact: true }).click();
+  await showRequirements(page);
+  await panel.getByTestId("requirement-primary").getByRole("button", { name: "重新核定并生成", exact: true }).click();
+  await page.getByRole("dialog", { name: "核定当前需求", exact: true }).getByRole("button", { name: "确认修改并生成新版本", exact: true }).click();
   await expect.poll(async () => (await snapshot()).version_count).toBe(2);
-  await expect(page).not.toHaveURL(/version=1/);
+  // 新版本保存后 version 查询参数被清理,回到最新版本视图。
+  await expect.poll(async () => page.url(), { timeout: 10_000 }).not.toMatch(/version=1/);
   expect((await snapshot()).proposal!.result.delivery?.status).toBe("delivered");
   expect(await (await page.request.get(`/api/v1/sessions/${id}/builds/1`)).json()).toEqual(firstBuild);
   await page.reload();
   await expect(page.getByLabel("输入需求或改单内容")).toBeEnabled();
   expect((await snapshot()).version_count).toBe(2);
-  await page.getByRole("button", { name: "查看 / 修改", exact: true }).click();
+  await showRequirements(page);
   await panel.getByText("添加其他要求", { exact: true }).click();
   await panel.getByLabel("具体要求", { exact: true }).fill("必须提供两个网口");
   await panel.getByLabel("重要程度", { exact: true }).selectOption("must");

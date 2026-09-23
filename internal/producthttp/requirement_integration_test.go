@@ -448,6 +448,17 @@ func TestRequirementStatePersistentWorkflow(t *testing.T) {
 	if detail.Axes.Confirmation.Status != product.ConfirmationModified || detail.Session.VersionCount != 1 {
 		t.Fatal("未确认修改覆盖了已有版本")
 	}
+	// 只读核定差异:修改后必须由后端给出字段级 diff,前端不自行比较。
+	diffFound := false
+	for _, entry := range detail.Axes.Confirmation.ReviewDiff {
+		diffFound = diffFound || entry.Field == "budget_cny"
+	}
+	if !diffFound {
+		t.Fatalf("modified 会话应包含 budget_cny 的 review_diff: %+v", detail.Axes.Confirmation.ReviewDiff)
+	}
+	if detail.Axes.Build.RetryRunID != "" {
+		t.Fatal("无失败 run 不应有重试目标")
+	}
 	unchanged, _ := st.RequirementSpecByID(ctx, old.RequirementID)
 	if !reflect.DeepEqual(original, unchanged) {
 		t.Fatal("历史需求被覆盖")

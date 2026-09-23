@@ -123,9 +123,10 @@ export const api = {
       body: { expected_revision: revision, operations },
     }));
   },
-  async confirmRequirement(id: string, key: string): Promise<Run> {
+  async confirmRequirement(id: string, key: string, body: { expected_revision: number; expected_review_hash: string; retry_of_run_id?: string | null }): Promise<Run> {
     return unwrap(await client.POST("/api/v1/sessions/{session_id}/requirement/confirm", {
       params: { path: { session_id: id }, header: { "Idempotency-Key": key } },
+      body: { schema_version: 2, ...body },
     }));
   },
   async cancelRun(id: string, runID: string): Promise<Run> {

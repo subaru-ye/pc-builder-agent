@@ -53,6 +53,8 @@ export type RunEventName =
   | "run.progress"
   | "requirement.ready"
   | "requirement.updated"
+  | "requirement.confirmed"
+  | "presentation.action"
   | "assistant.delta"
   | "assistant.completed"
   | "build.saved"

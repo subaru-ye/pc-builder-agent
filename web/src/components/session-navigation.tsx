@@ -10,7 +10,7 @@ import { api } from "@/lib/api/client";
 import { userMessage } from "@/lib/api/problem";
 import { queryKeys } from "@/lib/api/query-keys";
 import { phaseLabels } from "@/lib/domain";
-import { useUIStore } from "@/stores/ui";
+import { resetWorkspaceUI } from "@/stores/ui";
 import { LocalProfileMenu } from "./local-profile-menu";
 import { SessionActions } from "./session-actions";
 import { SidebarResizeHandle } from "./resizable-workspace";
@@ -20,7 +20,7 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, Dia
 type NavigationProps = { currentSessionID?: string };
 
 function resetSessionView() {
-  useUIStore.setState({ mobilePane: "chat", inspectorTab: "build", diffFrom: null, diffTo: null });
+  resetWorkspaceUI();
 }
 
 export function NewSessionButton({ onCreated, className }: { onCreated?: () => void; className?: string }) {

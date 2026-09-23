@@ -215,7 +215,11 @@ export interface paths {
         head?: never;
         /**
          * 增量编辑当前会话需求
-         * @description 与聊天修改共用服务端需求归并流程。按 expected_revision 防止覆盖并发修改；只更新当前草稿，已确认快照与配置历史不变。不调用模型。
+         * @description 独立原子草稿编辑事务:复用共享 Reducer、权限与幂等约束,按
+         *     expected_revision 防止覆盖并发修改;只更新草稿 RequirementState 与
+         *     revision,不创建 AgentRun、不改变 phase。Builder 运行期间同样可用
+         *     (运行中的 Builder 只读取启动时冻结的快照;确认快照与历史配置不变)。
+         *     生成中确认/生成请求仍被服务端硬拒绝;编辑后以响应中的三轴状态为准。
          */
         patch: operations["updateRequirementState"];
         trace?: never;
@@ -253,7 +257,17 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 确认需求并启动生成 run */
+        /**
+         * 确认需求并启动生成 run(唯一 Builder admission)
+         * @description 唯一的原子 confirm-and-start 入口:同一事务校验 readiness/revision/核定
+         *     预览 hash,冻结不可变确认快照(review_spec + review_hash)与本 run 的完整
+         *     Builder 执行载荷(builder_input_payload + builder_input_hash),并创建唯一
+         *     build run。聊天文字、模型 signal、旧 phase 或恢复路径都不能替代本入口。
+         *     幂等:相同 Idempotency-Key + 相同请求体重放返回原 run;相同 key 不同请求
+         *     返回 409。retry_of_run_id 仅用于失败重试:目标必须属于本会话、kind=build
+         *     且已失败,其确认快照的 review_hash 仍与当前核定预览一致;重试复用快照,选型上下文(需求状态、基线草稿、上一提案)整体继承目标 run
+         *     的冻结载荷,仅替换本轮 run 标识并另冻新载荷与新 hash。
+         */
         post: operations["confirmRequirement"];
         delete?: never;
         options?: never;
@@ -637,20 +651,84 @@ export interface components {
             proposal?: components["schemas"]["SessionProposal"];
             pending_requirement: components["schemas"]["RequirementSpec"] | null;
             requirement_state: components["schemas"]["RequirementState"] | null;
-            /**
-             * @description 根据当前有效需求与已确认快照计算；仅讨论备选或无有效修改不会被标为 modified。
-             * @enum {string}
-             */
-            requirement_status: "collecting" | "ready_to_confirm" | "confirmed" | "modified";
-            confirmed_requirement_state: components["schemas"]["RequirementState"] | null;
-            confirmed_requirement: components["schemas"]["RequirementSpec"] | null;
-            confirmed_at: string | null;
-            /** @description 当前需求生成前仍需补充或消解冲突的必要字段。 */
-            missing_fields: string[];
+            /** @description 后端唯一计算的确定性 readiness 真值;前端只渲染。 */
+            requirement_readiness: components["schemas"]["RequirementReadiness"] | null;
+            /** @description 服务端核定预览(展开有效系统默认后的规范化有效 RequirementSpec v2)。incomplete 时不伪造可确认预览(null)。 */
+            review_spec: components["schemas"]["RequirementSpec"] | null;
+            /** @description review_spec 的规范化 SHA256;确认请求的 expected_review_hash 必须来自本字段。 */
+            review_hash: string | null;
+            /** @description 预算上限展示值 = budget_cny ×(1+budget_flex)取整;预算未表达时为 null。生成侧会计使用精确有理数。 */
+            effective_budget_ceiling_cny: number | null;
+            requirement_confirmation: components["schemas"]["RequirementConfirmation"];
+            build_relation: components["schemas"]["BuildRelation"];
             active_run: components["schemas"]["Run"] | null;
             last_error: components["schemas"]["Problem"] | null;
             recovery_phase: ("collecting" | "requirement_ready" | "ready") | null;
             degraded: boolean;
+        };
+        RequirementReadiness: {
+            /** @enum {string} */
+            status: "incomplete" | "ready";
+            missing_fields: string[];
+            blocking_conflicts: string[];
+            unsupported_capabilities: string[];
+            /** @description 确定性下一步追问(reason_code + 字段组);ready 时为 null。 */
+            next_question: {
+                reason_code: string;
+                fields: string[];
+            } | null;
+            confirmation_eligible: boolean;
+            /** @description 本次预览实际展开的系统默认(origin=system_default);默认规则变化会改变 review_hash。 */
+            effective_defaults: {
+                field: string;
+                value: unknown;
+                /** @enum {string} */
+                origin: "system_default";
+            }[];
+        };
+        RequirementConfirmation: {
+            /**
+             * @description confirmed=当前草稿规范化 review_hash 与最近确认快照相同;modified=存在快照但草稿不同或已不足以投影。
+             * @enum {string}
+             */
+            status: "unconfirmed" | "confirmed" | "modified";
+            confirmed_revision: number | null;
+            confirmed_at: string | null;
+            confirmed_review_hash: string | null;
+            /**
+             * @description 后端按规范化有效字段生成的当前核定预览相对最近确认快照的字段级差异。
+             *     已有确认快照且当前草稿可投影时提供(无差异为空数组);无快照、预览
+             *     不可投影或快照不可解码时为 null。前端只把字段名和值映射为用户可读
+             *     标签,不自行比较 JSON 或重算差异。
+             */
+            review_diff?: {
+                /** @description 需求字段名,与 RequirementState.fields 键一致(含 use_case.* 嵌套路径)。 */
+                field: string;
+                before: unknown;
+                after: unknown;
+            }[] | null;
+        };
+        BuildRelation: {
+            /**
+             * @description none=从无 build run;running 优先表示活动 Builder;current=最新成功 run 关联当前确认快照且草稿未修改;outdated=已有成功配置但当前确认目标已不同;failed=最近一次 build run 失败(确认快照仍有效,历史成功配置经 version 继续可见)。
+             * @enum {string}
+             */
+            status: "none" | "running" | "current" | "outdated" | "failed";
+            /** @description 最新成功 build 的配置版本号;从未成功过为 null。 */
+            version: number | null;
+            /** @description 关联确认快照 ID(有 build run 时)。 */
+            snapshot_id: string | null;
+            /** @description 关联确认快照的 review_hash。 */
+            review_hash: string | null;
+            /** @description 最近(或活动)build run 冻结的完整 Builder 载荷规范化 hash;与实际发送载荷比对即 V5。 */
+            builder_input_hash: string | null;
+            /**
+             * @description 失败重试目标 run ID。仅当最新 build run 已失败(取消中断不算)、确认
+             *     仍有效且当前核定预览与该 run 确认快照一致时给出,否则为 null。确认
+             *     请求的 retry_of_run_id 必须取本字段;前端无值时不得显示重试 CTA,
+             *     也不得从聊天消息、phase 或版本号自行寻找重试目标。
+             */
+            retry_run_id?: string | null;
         };
         Message: {
             /** @constant */
@@ -739,6 +817,7 @@ export interface components {
         RequirementOperation: {
             /** @enum {string} */
             op: "set" | "remove" | "restore" | "alternative" | "conflict";
+            /** @description 需求字段路径;保留键 unsupported.monitor|keyboard|mouse 仅接受携带本轮证据的 remove */
             field: string;
             value?: unknown;
             /** @enum {string} */
@@ -777,21 +856,16 @@ export interface components {
             revision: number;
             /** @enum {string} */
             op: "set" | "remove" | "restore" | "alternative" | "conflict";
+            /** @description 需求字段路径;保留键 unsupported.monitor|keyboard|mouse 仅接受携带本轮证据的 remove */
             field: string;
             before?: components["schemas"]["RequirementField"];
             after?: components["schemas"]["RequirementField"];
             source: components["schemas"]["RequirementSource"];
         };
-        /** @description 仅当前装机会话的需求真值；未知、撤销、冲突字段不被程序默认值覆盖；临时例外可恢复之前的字段。备选讨论不改变当前有效需求。 */
+        /** @description 仅当前装机会话的需求真值(v2；不持久化 reply/next_action，模型动作无状态权威；v1 由解码边界稳定拒绝)；未知、撤销、冲突字段不被程序默认值覆盖；临时例外可恢复之前的字段。备选讨论不改变当前有效需求。readiness/投影/追问计划的唯一实现见 internal/schemas/requirement_readiness.go。 */
         RequirementState: {
             /** @constant */
-            schema_version: 1;
-            reply?: string;
-            /**
-             * @description plan 仅用于首次需求确认后的明确聊天执行指令；同一运行继续规划。
-             * @enum {string}
-             */
-            next_action?: "collect" | "confirm" | "plan";
+            schema_version: 2;
             revision: number;
             fields: {
                 [key: string]: components["schemas"]["RequirementField"];
@@ -801,18 +875,45 @@ export interface components {
             history: components["schemas"]["RequirementChange"][];
             observations?: components["schemas"]["RequirementObservation"][];
         };
+        /**
+         * @description 确认事务冻结的完整 Builder 执行载荷。字段在确认时全部确定(run ID、
+         *     基线草稿、上一提案、有效选型约束);发送路径只读该载荷,不再用会话草稿
+         *     或最新 build 重组。规范化 hash 记录为 run 的 builder_input_hash。
+         *     requirement_state 仅保留用户事实与溯源;有效选型约束以
+         *     effective_constraints 为准(Builder 的模型输入与确定性门槛都读取它)。
+         */
         PlanningInput: {
             /** @constant */
             schema_version: 2;
             requirement_state: components["schemas"]["RequirementState"];
+            /** @description 确认事务冻结的有效选型约束;失败重试整体继承目标 run 的该字段,仅替换 run 标识。null 仅为历史归档/评估回放兼容。 */
+            effective_constraints?: {
+                /** @description 确认时冻结的完整核定预览(展开系统默认后的规范化有效 RequirementSpec v2)。 */
+                spec: components["schemas"]["RequirementSpec"];
+                /** @description 被展开的系统默认及来源(origin=system_default);冻结后修改默认规则不改变旧 run 的执行语义。 */
+                defaults: {
+                    field: string;
+                    value: unknown;
+                    /** @enum {string} */
+                    origin: "system_default";
+                }[];
+            } | null;
             base_draft?: {
                 [key: string]: unknown;
             };
             previous_proposal?: {
                 [key: string]: unknown;
             };
-            /** @description 本轮已授权执行的用户原话，供规划理解修改目标，不作为新增偏好 */
-            request?: components["schemas"]["RequirementSource"];
+            /**
+             * Format: uuid
+             * @description 本轮产品侧 run
+             */
+            run_id?: string;
+            /**
+             * Format: uuid
+             * @description 上一轮 proposal 的 run
+             */
+            previous_run_id?: string;
         };
         PlanningEvidence: {
             id: string;
@@ -950,17 +1051,36 @@ export interface components {
         };
         RequirementSpec: {
             /** @constant */
-            schema_version: 1;
+            schema_version: 2;
             budget_cny: number;
             /** @default 0.1 */
             budget_flex: number;
+            /**
+             * @description 产品能力边界(系统默认注入,非用户陈述);当前仅支持 tower,显示器/键鼠按 unsupported observation 阻塞确认。
+             * @default [
+             *       "tower"
+             *     ]
+             */
+            configuration_scope: "tower"[];
             use_case: {
                 /** @enum {string} */
                 type: "gaming" | "productivity" | "general";
-                /** @default [] */
+                /**
+                 * @description 元素 trim 后非空
+                 * @default []
+                 */
                 titles: string[];
-                /** @enum {string} */
-                resolution?: "1080p" | "2K" | "4K";
+                /**
+                 * @description any 仅是 RequirementState 的有证据用户值;gaming 组合校验拒绝 any
+                 * @enum {string}
+                 */
+                resolution?: "1080p" | "2K" | "4K" | "any";
+                /**
+                 * @description 仅 gaming 未明确时使用系统默认 balanced
+                 * @default balanced
+                 * @enum {string}
+                 */
+                performance_goal: "balanced" | "fps_first" | "quality_first";
                 fps_target?: number;
             } & unknown;
             /**
@@ -1013,10 +1133,12 @@ export interface components {
             };
             /** @description 尚未解决的原文及来源，用于理解用途和后续必要确认，不能冒充已核验硬条件。 */
             requirement_observations?: components["schemas"]["RequirementObservation"][];
-            /** @description 当前会话的有效外观与装机对象说明；不含已撤销信息、备选方案或长期画像。 */
+            /** @description 当前会话的有效外观、装机对象与 free.* 用户事实；不含已撤销信息、备选方案或长期画像。 */
             requirement_details?: {
                 appearance?: string;
                 recipient?: string;
+            } & {
+                [key: string]: string;
             };
         };
         /** @enum {string} */
@@ -1708,7 +1830,20 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @constant */
+                    schema_version: 2;
+                    /** @description 用户打开核定面板时看到的草稿修订号。 */
+                    expected_revision: number;
+                    /** @description 来自最新服务端核定预览(session DTO 的 review_hash)。revision 不变但默认规则/配置范围变化时该 hash 也会变化。 */
+                    expected_review_hash: string;
+                    /** @description 仅失败重试时传目标 build run ID;省略表示新确认。 */
+                    retry_of_run_id?: string | null;
+                };
+            };
+        };
         responses: {
             /** @description 幂等命中已完成 run */
             200: {
@@ -1726,6 +1861,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"];
+                };
+            };
+            /**
+             * @description revision 变化(requirement_revision_conflict)、核定预览失效
+             *     (requirement_review_conflict,含默认/配置范围变化)、存在活动运行
+             *     (session_busy)、重试目标无效(invalid_retry_target)或幂等冲突。
+             *     返回最新会话供用户重新核定。
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description readiness 不完整(requirement_not_ready),响应 detail 指向 requirement_readiness。 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
             "4XX": components["responses"]["Problem"];

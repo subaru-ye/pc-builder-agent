@@ -32,10 +32,13 @@ const (
 )
 
 type ConfirmationView struct {
-	Status             ConfirmationStatus
-	ConfirmedRevision  *int
-	ConfirmedAt        *time.Time
+	Status              ConfirmationStatus
+	ConfirmedRevision   *int
+	ConfirmedAt         *time.Time
 	ConfirmedReviewHash string
+	// ReviewDiff 是当前核定预览相对确认快照的字段级差异;nil 表示不可比较
+	//(无快照或缺少可投影预览),空列表表示可比较且无差异。
+	ReviewDiff []schemas.RequirementReviewDiffEntry
 }
 
 type BuildRelationView struct {
@@ -44,6 +47,9 @@ type BuildRelationView struct {
 	SnapshotID       string
 	ReviewHash       string
 	BuilderInputHash string
+	// RetryRunID 是失败重试目标 run ID;空表示当前不具备失败重试资格,
+	// 前端不得从聊天消息或版本号自行寻找重试目标。
+	RetryRunID string
 }
 
 // RequirementAxes 是一次会话读取派生出的完整三轴结论。ReviewSpec/ReviewHash
@@ -96,15 +102,24 @@ func requirementAxes(ws store.WebSession, confirmation store.RequirementConfirma
 	} else {
 		axes.Confirmation = ConfirmationView{Status: ConfirmationUnconfirmed}
 	}
-	axes.Build = buildRelation(hasConfirmation, confirmation, axes.ReviewHash, runs, active)
+	// review_diff 只在已有快照且当前预览可投影时提供;快照损坏等异常下降级
+	// 为不可用(nil),不阻塞会话读取,也不编造差异。
+	if hasConfirmation && len(axes.ReviewSpec) > 0 {
+		if diff, err := schemas.RequirementReviewDiff(confirmation.RequirementSpec, axes.ReviewSpec); err == nil {
+			axes.Confirmation.ReviewDiff = diff
+		}
+	}
+	axes.Build = buildRelation(hasConfirmation, confirmation, axes.ReviewHash, runs, active, readiness.ConfirmationEligible)
 	return axes, nil
 }
 
 // buildRelation 派生 build 关联:活动 Builder 优先;最近一次运行终态决定
 // current/outdated/failed。outdated 仅在已有成功配置时成立;失败与 modified
 // confirmation 可以并存。current 要求最新成功 run 关联当前确认快照且草稿
-// 未修改。
-func buildRelation(hasConfirmation bool, confirmation store.RequirementConfirmation, draftHash string, runs []store.BuildRun, active *store.AgentRun) BuildRelationView {
+// 未修改。失败重试目标仅在最新 build run 确实失败(非取消中断)、确认仍有效
+// (readiness 可确认)且当前预览与该 run 快照一致时给出,与确认入口的
+// invalid_retry_target 校验保持同一口径。
+func buildRelation(hasConfirmation bool, confirmation store.RequirementConfirmation, draftHash string, runs []store.BuildRun, active *store.AgentRun, confirmationEligible bool) BuildRelationView {
 	view := BuildRelationView{Status: BuildNone}
 	if hasConfirmation {
 		view.SnapshotID, view.ReviewHash = confirmation.ID, confirmation.ReviewHash
@@ -135,9 +150,16 @@ func buildRelation(hasConfirmation bool, confirmation store.RequirementConfirmat
 	}
 	switch last.Status {
 	case store.RunFailed, store.RunInterrupted:
-		// 最近一次 Builder 失败(含取消中断);确认快照仍有效,历史成功配置
+		// 最近一次 Builder 失败或取消中断;确认快照仍有效,历史成功配置
 		// 经 version 继续可见,不误称为本次成功。
 		view.Status = BuildFailed
+		// 重试目标只给确实失败的 run:取消中断与确认入口的
+		// invalid_retry_target 校验同口径,不提供重试 ID。
+		if last.Status == store.RunFailed && confirmationEligible && hasConfirmation &&
+			last.ConfirmationID != "" && last.BuilderInputHash != "" &&
+			draftHash != "" && last.ReviewHash == draftHash {
+			view.RetryRunID = last.ID
+		}
 		return view
 	case store.RunRunning:
 		// 无活动 run 却存在 running 行:读取竞态,按 running 呈现。

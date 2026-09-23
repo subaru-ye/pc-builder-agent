@@ -59,6 +59,8 @@ type requirementConfirmationDTO struct {
 	ConfirmedRevision   *int       `json:"confirmed_revision"`
 	ConfirmedAt         *time.Time `json:"confirmed_at"`
 	ConfirmedReviewHash string     `json:"confirmed_review_hash,omitempty"`
+	// ReviewDiff 是后端派生的核定差异;null=不可比较,[]=无差异。
+	ReviewDiff []schemas.RequirementReviewDiffEntry `json:"review_diff"`
 }
 
 type buildRelationDTO struct {
@@ -67,6 +69,8 @@ type buildRelationDTO struct {
 	SnapshotID       string `json:"snapshot_id,omitempty"`
 	ReviewHash       string `json:"review_hash,omitempty"`
 	BuilderInputHash string `json:"builder_input_hash,omitempty"`
+	// RetryRunID 是失败重试目标 run ID;null=当前不具备失败重试资格。
+	RetryRunID *string `json:"retry_run_id"`
 }
 
 type sessionDTO struct {
@@ -141,6 +145,7 @@ func toSession(detail product.SessionDetail) sessionDTO {
 		RequirementConfirmation: requirementConfirmationDTO{
 			Status: string(detail.Axes.Confirmation.Status), ConfirmedRevision: detail.Axes.Confirmation.ConfirmedRevision,
 			ConfirmedAt: detail.Axes.Confirmation.ConfirmedAt, ConfirmedReviewHash: detail.Axes.Confirmation.ConfirmedReviewHash,
+			ReviewDiff: detail.Axes.Confirmation.ReviewDiff,
 		},
 		BuildRelation: buildRelationDTO{
 			Status: string(detail.Axes.Build.Status), Version: detail.Axes.Build.Version,
@@ -151,6 +156,10 @@ func toSession(detail product.SessionDetail) sessionDTO {
 		LastError:     detail.Session.LastError,
 		RecoveryPhase: detail.Session.RecoveryPhase,
 		Degraded:      detail.Degraded,
+	}
+	if detail.Axes.Build.RetryRunID != "" {
+		retryRunID := detail.Axes.Build.RetryRunID
+		out.BuildRelation.RetryRunID = &retryRunID
 	}
 	if readiness != nil {
 		out.RequirementReadiness = &requirementReadinessDTO{

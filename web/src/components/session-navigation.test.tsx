@@ -5,8 +5,8 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/query-keys";
-import type { Session } from "@/lib/api/types";
-import { useUIStore } from "@/stores/ui";
+import { resetWorkspaceUI, useUIStore } from "@/stores/ui";
+import { makeSession } from "@/test/session-fixture";
 import { NewSessionButton, SessionNavigation } from "./session-navigation";
 
 const push = vi.hoisted(() => vi.fn());
@@ -14,11 +14,7 @@ const replace = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace }) }));
 vi.mock("./local-profile-menu", () => ({ LocalProfileMenu: () => <div>本地访客</div> }));
 
-const session = {
-  schema_version: 1, id: "new-session", title: "新对话", phase: "collecting", created_at: "2026-09-10T00:00:00Z", updated_at: "2026-09-10T00:00:00Z", version_count: 0,
-  messages: [], pending_requirement: null, active_run: null, last_error: null, recovery_phase: null, degraded: false,
-  requirement_state: { schema_version: 1, revision: 0, fields: {}, alternatives: [], changes: [], history: [] }, requirement_status: "collecting", confirmed_requirement_state: null, confirmed_requirement: null, confirmed_at: null, missing_fields: ["budget_cny", "use_case.type"],
-} satisfies Session;
+const session = makeSession({ id: "new-session", title: "新对话", created_at: "2026-09-10T00:00:00Z", updated_at: "2026-09-10T00:00:00Z" });
 
 function renderNavigation(children: ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -31,7 +27,7 @@ describe("SessionNavigation", () => {
     vi.restoreAllMocks();
     push.mockReset();
     replace.mockReset();
-    useUIStore.setState({ mobilePane: "chat", inspectorTab: "build", diffFrom: null, diffTo: null });
+    resetWorkspaceUI();
   });
 
   it("renames through the server and updates the active session cache", async () => {
@@ -82,7 +78,7 @@ describe("SessionNavigation", () => {
     const onCreated = vi.fn();
     const client = renderNavigation(<NewSessionButton onCreated={onCreated} />);
     const invalidate = vi.spyOn(client, "invalidateQueries");
-    useUIStore.setState({ mobilePane: "build", inspectorTab: "versions", diffFrom: 1, diffTo: 2 });
+    useUIStore.setState({ workspaceTab: "build", inspectorSection: "versions", diffFrom: 1, diffTo: 2 });
 
     await userEvent.click(screen.getByRole("button", { name: "新建对话" }));
 
@@ -92,7 +88,7 @@ describe("SessionNavigation", () => {
     expect(onCreated).toHaveBeenCalledOnce();
     expect(client.getQueryData(queryKeys.session(session.id))).toEqual(session);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.sessions });
-    expect(useUIStore.getState()).toMatchObject({ mobilePane: "chat", inspectorTab: "build", diffFrom: null, diffTo: null });
+    expect(useUIStore.getState()).toMatchObject({ workspaceTab: "requirement", inspectorSection: "build", diffFrom: null, diffTo: null });
   });
 
   it("reuses the creation key after an uncertain response instead of creating duplicate sessions", async () => {

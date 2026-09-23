@@ -78,21 +78,15 @@ data: {"schema_version":1,"run_id":"...","timestamp":"...","payload":{"kind":"bu
 
 ### 3.3 requirement.ready
 
-初筛得到可供确认的合法 RequirementSpec 时发送。payload 是完整 RequirementSpec v1。该事件不表示用户已经确认，也不表示配置已生成。收到后前端:
-
-1. 将会话缓存 phase 更新为 requirement_ready。
-2. 展示需求确认卡。
-3. 结束当前输入 loading。
-4. 等待 run.completed 后再刷新会话真值。
+初筛本轮结束时若会话已处于 requirement_ready(存在待核定需求),发送 payload 为完整规范化 RequirementSpec v2(与 Session DTO 的 `pending_requirement`/核定预览同口径)。该事件不表示用户已经确认,也不表示配置已生成。收到后前端:失效 Session,等待 run.completed 后以服务端真值渲染;不得依据本事件自行弹出核定面板或改写需求状态。
 
 ### 3.3.1 requirement.updated
 
-当前会话需求完成持久化后发送，payload 是 OpenAPI 中完整 `RequirementState`，包含 `revision`、当前字段、备选方案、本轮变化和按需展开的历史。即使必要字段尚未收齐，也会发送此事件；不能依赖 `requirement.ready` 才刷新需求面板。
+Screening 本轮需求完成持久化后发送，payload 是 OpenAPI 中完整 `RequirementState`，包含 `revision`、当前字段、备选方案、本轮变化和按需展开的历史。即使必要字段尚未收齐，也会发送此事件；不能依赖 `requirement.ready` 才刷新需求面板。
 
-- 更新来源包括自然语言和 `PATCH /sessions/{session_id}/requirement-state` 界面编辑；二者共用服务端 reducer 和消息来源。
+- 本事件只由 Screening 对话轮发布。侧栏的 `PATCH /sessions/{session_id}/requirement-state` 编辑不创建 run、不发 `requirement.updated`,也没有可等待的编辑 run/SSE:接口同步返回完整 Session,前端以该响应替换 Query 缓存真值。
 - 前端以 `revision` 忽略旧状态，只缓存服务端已保存的字段；不得自己从消息推断或归并需求。
-- `RequirementState` 的变化不修改已确认快照与已有配置版本。`requirement_status` 和必要的 `missing_fields` 以随后读取的 Session 为准；仅讨论备选不等于有效需求发生修改。
-- 界面编辑接口直接返回完整 Session，并保存一个不调用模型的完成 run；页面无需为了获得编辑结果另行发起模型请求。
+- `RequirementState` 的变化不修改已确认快照与已有配置版本。确认状态(`requirement_confirmation`)、缺失项(`requirement_readiness`)以随后读取的 Session 为准；仅讨论备选不等于有效需求发生修改。
 
 ### 3.3.2 presentation.action
 
@@ -105,6 +99,7 @@ data: {"schema_version":1,"run_id":"...","timestamp":"...","payload":{"kind":"bu
   - `open_requirement_review`:需求已就绪且用户本轮请求核对/开始,前端可打开核定面板;仍需用户显式确认。
   - `focus_missing_requirement`:用户请求核对/开始但需求未就绪;fields 是领域问题计划选中的首个阻塞项(可能是 conflict、unsupported capability 或缺失字段)。
 - fields 为稳定机器值(字段名或 capability 名),前端不得从中渲染业务文案。
+- 消费边界:本事件只驱动当前 run 的短期 UI 动作(打开核定面板、聚焦缺失项);前端不得凭它推断业务状态、失效业务缓存或刷新 builds。用户正在输入或编辑时不抢焦点,可降级为非侵入提示;刷新页面后不重放打开动作。
 - 确认/生成三轴 Policy 在同一入口扩展;不产生 action 的轮次不发送本事件;刷新后不自动重放打开动作。
 
 ### 3.3.3 requirement.confirmed
@@ -116,6 +111,7 @@ data: {"schema_version":1,"run_id":"...","timestamp":"...","payload":{"kind":"bu
 - confirm API 在同一事务冻结不可变确认快照与该 run 的完整 Builder 载荷,提交后先发布 run.started 再发布本事件,随后是常规生成进度事件。
 - snapshot_id/review_hash 是用户核定的不可变快照;builder_input_hash 是实际送往远程 Builder 的完整 PlanningInput 载荷规范化 hash(与快照的 review_hash 用途不同,不得互比)。
 - 事件发布失败不回滚已提交的确认/run;客户端可由持久化 run/session 恢复状态。
+- 前端消费:收到后失效 Session(确认快照与三轴状态随之刷新);不得依据消息文本、phase 或版本号自行重建确认状态。
 
 ### 3.4 assistant.delta
 

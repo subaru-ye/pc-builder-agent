@@ -974,6 +974,25 @@ components:
           oneOf:
             - {type: string}
             - {type: "null"}
+        review_diff:
+          oneOf:
+            - type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [field, before, after]
+                properties:
+                  field:
+                    type: string
+                    description: 需求字段名,与 RequirementState.fields 键一致(含 use_case.* 嵌套路径)。
+                  before: {}
+                  after: {}
+            - type: "null"
+          description: |-
+            后端按规范化有效字段生成的当前核定预览相对最近确认快照的字段级差异。
+            已有确认快照且当前草稿可投影时提供(无差异为空数组);无快照、预览
+            不可投影或快照不可解码时为 null。前端只把字段名和值映射为用户可读
+            标签,不自行比较 JSON 或重算差异。
     BuildRelation:
       type: object
       required: [status, version, snapshot_id, review_hash, builder_input_hash]
@@ -1002,6 +1021,15 @@ components:
             - {type: string}
             - {type: "null"}
           description: 最近(或活动)build run 冻结的完整 Builder 载荷规范化 hash;与实际发送载荷比对即 V5。
+        retry_run_id:
+          oneOf:
+            - {type: string, format: uuid}
+            - {type: "null"}
+          description: |-
+            失败重试目标 run ID。仅当最新 build run 已失败(取消中断不算)、确认
+            仍有效且当前核定预览与该 run 确认快照一致时给出,否则为 null。确认
+            请求的 retry_of_run_id 必须取本字段;前端无值时不得显示重试 CTA,
+            也不得从聊天消息、phase 或版本号自行寻找重试目标。
     Message:
       type: object
       additionalProperties: false

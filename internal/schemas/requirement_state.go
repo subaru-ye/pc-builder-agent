@@ -733,6 +733,150 @@ func RequirementReviewSpec(state RequirementState) (json.RawMessage, Requirement
 	return raw, readiness, err
 }
 
+// RequirementReviewDiffEntry 是核定差异的一行:field 与 RequirementState
+// 字段键一致,before/after 是规范化有效 JSON 值(未表达一侧为 null)。
+// 前端只把字段名和值映射为用户可读标签,不自行比较 JSON。
+type RequirementReviewDiffEntry struct {
+	Field  string          `json:"field"`
+	Before json.RawMessage `json:"before"`
+	After  json.RawMessage `json:"after"`
+}
+
+// RequirementReviewDiff 按规范化有效字段比较确认快照与当前核定预览的
+// review_spec。任一侧不可投影(空或无法解码)时返回错误,由调用方降级为
+// “差异不可用”,不编造比较结果;可比较但无差异时返回空列表。
+func RequirementReviewDiff(beforeSpec, afterSpec json.RawMessage) ([]RequirementReviewDiffEntry, error) {
+	before, err := flattenRequirementSpecFields(beforeSpec)
+	if err != nil {
+		return nil, err
+	}
+	after, err := flattenRequirementSpecFields(afterSpec)
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]string, 0, len(before)+len(after))
+	for key := range before {
+		keys = append(keys, key)
+	}
+	for key := range after {
+		if _, ok := before[key]; !ok {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	var diff []RequirementReviewDiffEntry
+	for _, key := range keys {
+		beforeValue, afterValue := before[key], after[key]
+		if len(beforeValue) == len(afterValue) && bytes.Equal(beforeValue, afterValue) {
+			continue
+		}
+		diff = append(diff, RequirementReviewDiffEntry{Field: key, Before: beforeValue, After: afterValue})
+	}
+	return diff, nil
+}
+
+// flattenRequirementSpecFields 把规范化(EncodeRequirementSpec 展开)的
+// RequirementSpec v2 摊平为用户字段路径 → 紧凑 JSON 值。仅比较有效字段;
+// 空输入返回错误,因为确认快照与预览都不该为空。
+func flattenRequirementSpecFields(raw json.RawMessage) (map[string]json.RawMessage, error) {
+	if len(raw) == 0 {
+		return nil, fmt.Errorf("requirement review diff: 缺少可比较的规范化需求单")
+	}
+	var spec requirementSpecWire
+	if err := json.Unmarshal(raw, &spec); err != nil {
+		return nil, fmt.Errorf("requirement review diff: %w", err)
+	}
+	// 规范化 review_spec 必然携带 schema_version(EncodeRequirementSpec 展开);
+	// 缺失说明快照损坏,不可比较。
+	if spec.SchemaVersion == nil {
+		return nil, fmt.Errorf("requirement review diff: 缺少规范化 schema_version")
+	}
+	values := map[string]json.RawMessage{}
+	must := func(key string, value any) {
+		encoded, err := json.Marshal(value)
+		if err == nil {
+			values[key] = compactJSON(encoded)
+		}
+	}
+	optionalString := func(key string, value *string) {
+		if value != nil && *value != "" {
+			must(key, *value)
+		} else {
+			values[key] = compactJSON([]byte("null"))
+		}
+	}
+	if spec.BudgetCNY != nil && *spec.BudgetCNY > 0 {
+		must("budget_cny", *spec.BudgetCNY)
+	} else {
+		values["budget_cny"] = compactJSON([]byte("null"))
+	}
+	if spec.BudgetFlex != nil {
+		must("budget_flex", *spec.BudgetFlex)
+	}
+	if spec.BudgetBasis != "" {
+		must("budget_basis", spec.BudgetBasis)
+	} else {
+		values["budget_basis"] = compactJSON([]byte("null"))
+	}
+	if spec.UseCase != nil {
+		if spec.UseCase.Type != nil {
+			must("use_case.type", *spec.UseCase.Type)
+		}
+		must("use_case.titles", spec.UseCase.Titles)
+		if spec.UseCase.Resolution != nil {
+			must("use_case.resolution", *spec.UseCase.Resolution)
+		} else {
+			values["use_case.resolution"] = compactJSON([]byte("null"))
+		}
+		if spec.UseCase.FPSTarget != nil {
+			must("use_case.fps_target", *spec.UseCase.FPSTarget)
+		} else {
+			values["use_case.fps_target"] = compactJSON([]byte("null"))
+		}
+		if spec.UseCase.PerformanceGoal != nil {
+			must("use_case.performance_goal", *spec.UseCase.PerformanceGoal)
+		}
+	}
+	if spec.SizePref != nil {
+		must("size_pref", *spec.SizePref)
+	}
+	if spec.NoisePref != nil {
+		must("noise_pref", *spec.NoisePref)
+	}
+	if spec.BrandPref != nil {
+		if spec.BrandPref.CPU != nil {
+			must("brand_pref.cpu", *spec.BrandPref.CPU)
+		}
+		if spec.BrandPref.GPU != nil {
+			must("brand_pref.gpu", *spec.BrandPref.GPU)
+		}
+	}
+	must("configuration_scope", spec.ConfigurationScope)
+	must("existing_parts", spec.ExistingParts)
+	if spec.OwnedParts != nil {
+		must("owned_parts", spec.OwnedParts)
+	} else {
+		values["owned_parts"] = compactJSON([]byte("[]"))
+	}
+	must("priority", spec.Priority)
+	optionalString("notes", spec.Notes)
+	for key, value := range spec.RequirementDetails {
+		values[key] = compactJSON(value)
+	}
+	if spec.ConstraintStrengths != nil {
+		must("constraint_strengths", spec.ConstraintStrengths)
+	}
+	return values, nil
+}
+
+func compactJSON(raw json.RawMessage) json.RawMessage {
+	var buffer bytes.Buffer
+	if err := json.Compact(&buffer, raw); err != nil {
+		return raw
+	}
+	return buffer.Bytes()
+}
+
 // NormalizeRequirementValue 校验并做确定性规范化(供 proposal 值比对等
 // 持久化边界使用):非法值返回错误,不改写、不丢弃。
 func NormalizeRequirementValue(key string, raw json.RawMessage) (json.RawMessage, error) {

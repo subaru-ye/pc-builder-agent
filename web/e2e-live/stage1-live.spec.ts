@@ -1,6 +1,16 @@
 import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { request as newRequest, expect, test, type APIResponse, type BrowserContext, type Page, type Response } from "@playwright/test";
+
+
+// requirement 可能是归档 PlanningInput:优先其冻结的核定预览与状态字段。
+function requirementField(build: BuildView, key: string): unknown {
+  const requirement = build.requirement;
+  const state = "requirement_state" in requirement ? requirement.requirement_state.fields : null;
+  if (state) return state[key]?.value;
+  const spec = requirement as { [key: string]: unknown };
+  return spec[key];
+}
 import type { BuildDiff, BuildView, Session } from "../src/lib/api/types";
 
 const controlURL = process.env.P10_CONTROL_URL ?? "http://127.0.0.1:18083";
@@ -66,8 +76,12 @@ test(smokeOnly ? "L1 and L2 provider optimization smoke" : "L1-L6 complete live 
         await confirmRequirement(page);
         await waitPhase(page, sessionID, "ready", 1);
         const build = await apiJSON<BuildView>(page, `/api/v1/sessions/${sessionID}/builds/1`);
-        const budget = Number(build.requirement.schema_version === 2 ? build.requirement.requirement_state.fields["budget_cny"]?.value : build.requirement.budget_cny);
-        const budgetFlex = Number((build.requirement.schema_version === 2 ? build.requirement.requirement_state.fields["budget_flex"]?.value : build.requirement.budget_flex) ?? 0);
+        const requirement = build.requirement;
+        // requirement 可能是归档 PlanningInput:优先其冻结的核定预览与状态字段。
+        const state = "requirement_state" in requirement ? requirement.requirement_state.fields : null;
+        const spec = "requirement_state" in requirement ? requirement.effective_constraints?.spec ?? null : requirement;
+        const budget = Number(state ? state["budget_cny"]?.value : spec?.budget_cny);
+        const budgetFlex = Number((state ? state["budget_flex"]?.value : spec?.budget_flex) ?? 0);
         const total = Number(build.quote.total_cny);
         return trialResult(sessionID, "ready", [1], build, {
           requirement_confirmed: true,
@@ -87,7 +101,7 @@ test(smokeOnly ? "L1 and L2 provider optimization smoke" : "L1-L6 complete live 
         const changed = diff.lines.filter((line) => line.changed).map((line) => line.category);
         return trialResult(sessionID, "ready", [1, 2], build, {
           version_v2: build.summary.version === 2 && build.summary.parent_version === 1,
-          budget_7500: (build.requirement.schema_version === 2 ? build.requirement.requirement_state.fields["budget_cny"]?.value : build.requirement.budget_cny) === 7500,
+          budget_7500: requirementField(build, "budget_cny") === 7500,
           validation_pass: build.validation.overall_status === "pass",
           // v1 若已在 7500 元的弹性区间内,零换件是比强制换件更好的“最少改动”。
           minimal_change: changed.length <= 2,
@@ -176,9 +190,9 @@ test(smokeOnly ? "L1 and L2 provider optimization smoke" : "L1-L6 complete live 
         await waitPhase(l6Page, id, "ready", 1);
         const build = await apiJSON<BuildView>(l6Page, `/api/v1/sessions/${id}/builds/1`);
         return trialResult(id, "ready", [1], build, {
-          edited_budget_used: (build.requirement.schema_version === 2 ? build.requirement.requirement_state.fields["budget_cny"]?.value : build.requirement.budget_cny) === 8500,
-          default_budget_flex_used: (build.requirement.schema_version === 2 ? build.requirement.requirement_state.fields["budget_flex"]?.value : build.requirement.budget_flex) === 0.1,
-          edited_noise_used: (build.requirement.schema_version === 2 ? build.requirement.requirement_state.fields["noise_pref"]?.value : build.requirement.noise_pref) === "silent",
+          edited_budget_used: requirementField(build, "budget_cny") === 8500,
+          default_budget_flex_used: requirementField(build, "budget_flex") === 0.1,
+          edited_noise_used: requirementField(build, "noise_pref") === "silent",
           validation_pass: build.validation.overall_status === "pass",
         });
       });

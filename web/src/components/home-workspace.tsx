@@ -13,7 +13,7 @@ import { SuggestedPrompts } from "./suggested-prompts";
 import { api } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/query-keys";
 import { userMessage } from "@/lib/api/problem";
-import { useUIStore } from "@/stores/ui";
+import { resetWorkspaceUI } from "@/stores/ui";
 
 export function HomeWorkspace({ showEvaldesk = false }: { showEvaldesk?: boolean }) {
   const router = useRouter();
@@ -28,7 +28,7 @@ export function HomeWorkspace({ showEvaldesk = false }: { showEvaldesk?: boolean
     },
     onSuccess: (id) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
-      useUIStore.setState({ mobilePane: "chat", inspectorTab: "build", diffFrom: null, diffTo: null });
+      resetWorkspaceUI();
       router.push(`/s/${encodeURIComponent(id)}`);
     },
   });

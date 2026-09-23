@@ -1,18 +1,30 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { BuildView, RequirementSpec } from "@/lib/api/types";
+import type { BuildView } from "@/lib/api/types";
 import { RequirementReadOnly } from "./build-inspector";
 
 describe("historical requirement", () => {
-  it("renders v1 snapshots with omitted optional titles without changing them", () => {
-    // The API permits omission; generated TS applies the schema's defaults.
-    const requirement: RequirementSpec = JSON.parse('{"schema_version":1,"budget_cny":7000,"use_case":{"type":"productivity"}}');
-    const original = JSON.stringify(requirement);
-    render(<RequirementReadOnly build={{ requirement, disclaimers: [] } as unknown as BuildView} />);
-    expect(screen.getByText("¥7000")).toBeInTheDocument();
-    expect(screen.queryByText("目标应用 / 游戏")).not.toBeInTheDocument();
-    expect(screen.getAllByText("未记录")).toHaveLength(3);
-    expect(screen.queryByText("NaN%")).not.toBeInTheDocument();
-    expect(JSON.stringify(requirement)).toBe(original);
+  const spec = {
+    schema_version: 2, budget_cny: 7000, budget_flex: 0.1, configuration_scope: ["tower"],
+    use_case: { type: "gaming", titles: ["CS2"], performance_goal: "balanced" },
+    size_pref: "any", noise_pref: "any", existing_parts: [], priority: [], notes: "",
+  };
+  const build = (requirement: unknown) => ({ requirement, disclaimers: [] } as unknown as BuildView);
+
+  it("renders the canonical review spec stored with the build", () => {
+    render(<RequirementReadOnly build={build(spec)} />);
+    expect(screen.getByText(/¥7,000/)).toBeInTheDocument();
+    expect(screen.getByText("CS2")).toBeInTheDocument();
+  });
+
+  it("prefers the frozen effective constraints of archived planning inputs", () => {
+    const planningInput = {
+      schema_version: 2,
+      requirement_state: { schema_version: 2, revision: 9, fields: {}, alternatives: [], changes: [], history: [] },
+      effective_constraints: { spec, defaults: [] },
+    };
+    render(<RequirementReadOnly build={build(planningInput)} />);
+    expect(screen.getByText(/¥7,000/)).toBeInTheDocument();
+    expect(screen.queryByText("¥0")).not.toBeInTheDocument();
   });
 });

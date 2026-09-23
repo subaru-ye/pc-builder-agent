@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("appearance menu persists an explicit theme and can return to system mode", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name === "mobile", "移动端首页不显示左侧账号栏");
+  test.skip(testInfo.project.name !== "desktop", "账号菜单仅在 ≥1024px 的常驻会话导航底部");
   await page.goto("/");
 
   await page.getByRole("button", { name: "打开本地访客菜单" }).click();

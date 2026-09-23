@@ -6,7 +6,7 @@
 
 ```bash
 go run ./cmd/authsetup
-docker compose -f docker-compose.yml -f docker-compose.auth.yml up -d postgres redis auth
+docker compose --profile auth up -d postgres redis auth
 go run ./cmd/migrate up
 ```
 
@@ -25,7 +25,7 @@ Auth 只绑定 `127.0.0.1:9999`。`auth-db-init` 是一次性 bootstrap，只创
 ## 启动与检查
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.auth.yml ps postgres redis auth
+docker compose --profile auth ps postgres redis auth
 curl http://127.0.0.1:9999/health
 go run ./cmd/api
 curl http://localhost:8082/readyz
@@ -48,7 +48,7 @@ curl http://localhost:8082/readyz
 设置 `AUTH_ENABLED=false` 并重启 API 即可回到匿名模式；已有账号映射和 Auth 数据不会删除。停止 Auth：
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.auth.yml stop auth
+docker compose --profile auth stop auth
 ```
 
 - Auth 启动失败且提示 schema：确认 `auth-db-init` 已成功退出。

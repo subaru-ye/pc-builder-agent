@@ -7,7 +7,7 @@
 ```bash
 docker compose up -d             # PG → localhost:15432,Redis → localhost:16379
 go run ./cmd/authsetup            # 可选:生成本地 Auth 独立密钥,不覆盖已有 .env 值
-docker compose -f docker-compose.yml -f docker-compose.auth.yml up -d postgres redis auth
+docker compose --profile auth up -d postgres redis auth
 go run ./cmd/migrate up          # 应用 PostgreSQL 编号迁移
 go run ./cmd/buildsvc            # 终端 1:A2A 生成+校验服务
 go run ./cmd/api                 # 终端 2:产品 API,http://localhost:8082

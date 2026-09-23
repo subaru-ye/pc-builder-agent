@@ -71,11 +71,11 @@ docker compose up -d        # PG → localhost:15432,Redis → localhost:16379(�
 go run ./cmd/migrate up     # 应用 PostgreSQL 编号迁移
 ```
 
-复制 `.env.example` 为 `.env`。screening、builder、embedding 可独立配置 `PROVIDER/MODEL/API_KEY/BASE_URL`;未设置 provider 时兼容旧配置并默认百炼。当前示例固定 Builder `qwen3.8-max-0902`、Screening `deepseek-v4-flash-0731` 并清空切换链；显式配置 `*_MODEL_CHAIN` 才启用链内额度切换，不跨供应商回退。MiMo 当前只用于 chat，builder 须关闭思考；embedding 继续使用百炼。`BUILD_HARNESS_MODE` 默认 `planning`，由模型在最多 8 次往返内检索、补充资料并调用客观校验；`v2` 和 `legacy` 仅用于显式历史诊断，失败不自动回退。显式连通性检查使用 `go run ./cmd/modelcheck -role screening|builder|embedding`。分享功能还要求独立的 `SHARE_TOKEN_SECRET`,生成方法见[本地运行手册](docs/ops/本地运行与部署.md)。账号功能默认关闭；需要本地账号时运行 `go run ./cmd/authsetup`，再用 `docker-compose.auth.yml` 启动独立 GoTrue。
+复制 `.env.example` 为 `.env`。screening、builder、embedding 可独立配置 `PROVIDER/MODEL/API_KEY/BASE_URL`;未设置 provider 时兼容旧配置并默认百炼。当前示例固定 Builder `qwen3.8-max-0902`、Screening `deepseek-v4-flash-0731` 并清空切换链；显式配置 `*_MODEL_CHAIN` 才启用链内额度切换，不跨供应商回退。MiMo 当前只用于 chat，builder 须关闭思考；embedding 继续使用百炼。`BUILD_HARNESS_MODE` 默认 `planning`，由模型在最多 8 次往返内检索、补充资料并调用客观校验；`v2` 和 `legacy` 仅用于显式历史诊断，失败不自动回退。显式连通性检查使用 `go run ./cmd/modelcheck -role screening|builder|embedding`。分享功能还要求独立的 `SHARE_TOKEN_SECRET`,生成方法见[本地运行手册](docs/ops/本地运行与部署.md)。账号功能默认关闭；需要本地账号时运行 `go run ./cmd/authsetup`，再用 `docker compose --profile auth up -d auth` 启动独立 GoTrue。
 
 ```bash
 go run ./cmd/authsetup
-docker compose -f docker-compose.yml -f docker-compose.auth.yml up -d postgres redis auth
+docker compose --profile auth up -d postgres redis auth
 go run ./cmd/migrate up
 ```
 

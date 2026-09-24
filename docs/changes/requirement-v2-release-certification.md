@@ -1,6 +1,7 @@
 ---
-status: proposed
+status: done
 created: 2026-09-22
+completed: 2026-09-24
 ---
 
 # Change: Requirement v2 release certification
@@ -247,12 +248,19 @@ NO-GO 后不得在本 change 内修改产品；应新开或恢复对应产品 ch
 
 ## Completion checklist
 
-- [ ] 候选、prompt、模型、suite、grader、gates 和程序已冻结并落盘。
-- [ ] Evaluator 正反例和 baseline replay 通过。
-- [ ] Deterministic、live、E2E 和 UI 套件全部执行。
-- [ ] 关键边界按 Pass^3 报告，无挑选重复。
-- [ ] Model swap 和单因素 ablation 已完成并限定结论。
-- [ ] 所有失败均有证据和主因分类。
-- [ ] 人工抽查完成。
-- [ ] 报告给出明确 GO/NO-GO。
-- [ ] 未在认证阶段修改业务代码、prompt、fixture、grader 或 gates。
+- [x] 候选、prompt、模型、suite、grader、gates 和程序已冻结并落盘。
+- [x] Evaluator 正反例和 baseline replay 通过。
+- [x] Deterministic、live、E2E 和 UI 套件全部执行。
+- [x] 关键边界按 Pass^3 报告，无挑选重复。
+- [x] Model swap 和单因素 ablation 已完成并限定结论。
+- [x] 所有失败均有证据和主因分类。
+- [x] 人工抽查完成。
+- [x] 报告给出明确 GO/NO-GO。
+- [x] 未在认证阶段修改业务代码、prompt、fixture、grader 或 gates。
+
+## 认证收口记录（2026-09-24）
+
+- **结论：NO-GO**——认证完成、当前候选（`e9e0c7d`）不可发布；**不表示产品获准发布**，路线图不标 Requirement v2 已交付。依据（分数自始未变）：①批次 B conversations task_success pass^3 4/7（0.571 < 0.80）；②锁定 holdout 关键边界 Pass^3 6/9（原始结果维持计入；其中 pol-holdout-confirm-incomplete 属评估合同问题，不定责产品）。无 veto、无新增安全失败、E2E 桌面核心与确定性层全绿。另记换模型诊断发现（不构成默认候选独立 NO-GO 依据）：批次 D 已人工确认关键字段错写 1 次（`cv-monitor-refusal` r2 `set existing_parts=[]`）。
+- 人工抽查当日全部完成：两轮勘误定案（E1 归因：模型误标证据类型、服务端按授权合同拒收；pol-holdout 裁定为夹具/评估请求合同待修，不定责产品，修正版须版本化转回归集、新盲测另建 case；swap 仅说明未观察到显著改善）+ D4 错写逐字确认。
+- 最终报告与证据：`artifacts/requirement-v2-certification-20260924/`（report-v2.md 为终版；原版 report.md 保留；erratum-20260924.md 含裁定与收口记录；failures-and-flips-v2.md 为抽查清单）。各批冻结产物在 `artifacts/reqv2/spec6-cert-*`。
+- 后续（按 NO-GO 纪律，不在本 change 内改产品）：新开/恢复对应产品 change 修复——渐进对话证据标签稳定性（stated/accepted_proposal 误标）、holdout 用途捕获类失败（`ex-holdout-budget-approx`、`cv-holdout-productivity`）、越权补写关键字段；评估设施侧修复 pol-holdout fixture 引文/驱动器请求形态/适配器原因码映射。完成后以新候选身份按本 change 流程重新认证。

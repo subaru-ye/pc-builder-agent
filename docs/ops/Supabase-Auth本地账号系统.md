@@ -31,7 +31,7 @@ go run ./cmd/api
 curl http://localhost:8082/readyz
 ```
 
-账号开启时 `/readyz` 的 `dependencies.auth` 必须为 `ok`；`/healthz` 不依赖 Auth。产品页面仍从 `http://localhost:3000` 访问，浏览器不会连接 9999。
+账号开启时 `/readyz` 的 `dependencies.auth` 必须为 `ok`；`/healthz` 不依赖 Auth。产品页面仍从 `http://localhost:3101` 访问，浏览器不会连接 9999。
 
 ## 本地能力与限制
 

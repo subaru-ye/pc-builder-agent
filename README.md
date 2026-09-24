@@ -90,7 +90,7 @@ go run ./cmd/api
 cd web
 pnpm install --frozen-lockfile
 pnpm dev
-# 浏览器访问 http://localhost:3000
+# 浏览器访问 http://localhost:3101
 ```
 
 P11 数据发布只走显式人工流程，不使用本机定时任务。以下命令只使用确定性代码，不调用大模型：

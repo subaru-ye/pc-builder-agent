@@ -188,6 +188,64 @@ describe("RequirementStatusPane 编辑与来源", () => {
   });
 });
 
+describe("RequirementStatusPane 系统默认的诚实展示", () => {
+  // 真实后端形状:所有已知字段都以 unknown 键存在,有效默认来自 readiness。
+  const effectiveDefaults: Session["requirement_readiness"] extends null ? never : NonNullable<Session["requirement_readiness"]>["effective_defaults"] = [
+    { field: "size_pref", value: "any", origin: "system_default" },
+    { field: "noise_pref", value: "any", origin: "system_default" },
+    { field: "brand_pref.cpu", value: "any", origin: "system_default" },
+    { field: "configuration_scope", value: ["tower"], origin: "system_default" },
+  ];
+
+  it("unknown 字段存在有效系统默认时标为系统默认,不误写未指定", () => {
+    const withDefaults = makeRequirementState({
+      budget_cny: { status: "active", value: 8000, strength: "must", scope: "session", source },
+      "use_case.type": { status: "active", value: "gaming", strength: "must", scope: "session", source },
+      size_pref: { status: "unknown" },
+      noise_pref: { status: "unknown" },
+    });
+    render(<RequirementStatusPane {...baseProps} session={paneSession({
+      requirement_state: withDefaults,
+      requirement_readiness: { status: "incomplete", missing_fields: ["existing_parts"], blocking_conflicts: [], unsupported_capabilities: [], next_question: null, confirmation_eligible: false, effective_defaults: effectiveDefaults },
+    })} />);
+    const rows = screen.getAllByText("系统默认")
+      .map((node) => node.closest("[data-field-row]"))
+      .filter((row): row is HTMLElement => row !== null);
+    const texts = rows.map((row) => row.textContent ?? "");
+    for (const label of ["尺寸", "静音", "CPU 品牌"]) {
+      expect(texts.some((text) => text.includes(label))).toBe(true);
+    }
+    for (const text of texts) {
+      expect(text).not.toContain("未指定");
+      expect(text).toContain("不限");
+    }
+  });
+
+  it("撤销墓碑不清除系统默认:显示当前按系统默认与有效值", () => {
+    const removed = makeRequirementState({
+      budget_cny: { status: "active", value: 8000, strength: "must", scope: "session", source },
+      "use_case.type": { status: "active", value: "gaming", strength: "must", scope: "session", source },
+      "brand_pref.cpu": { status: "removed", source },
+    });
+    render(<RequirementStatusPane {...baseProps} session={paneSession({
+      requirement_state: removed,
+      requirement_readiness: { status: "incomplete", missing_fields: ["existing_parts"], blocking_conflicts: [], unsupported_capabilities: [], next_question: null, confirmation_eligible: false, effective_defaults: effectiveDefaults },
+    })} />);
+    const row = screen.getByText("已撤销，当前按系统默认").closest("[data-field-row]");
+    expect(row?.textContent).toContain("CPU 品牌");
+    expect(row?.textContent).toContain("不限");
+    expect(screen.queryByText("已撤销，当前未指定")).not.toBeInTheDocument();
+  });
+
+  it("configuration_scope 是范围声明,不作为需求字段行渲染", () => {
+    render(<RequirementStatusPane {...baseProps} session={paneSession({
+      requirement_readiness: { status: "incomplete", missing_fields: ["budget_cny", "use_case.type"], blocking_conflicts: [], unsupported_capabilities: [], next_question: null, confirmation_eligible: false, effective_defaults: effectiveDefaults },
+    })} />);
+    expect(screen.queryByText(/configuration_scope/)).not.toBeInTheDocument();
+    expect(document.querySelector('[data-field-row="configuration_scope"]')).toBeNull();
+  });
+});
+
 describe("聊天顶部摘要", () => {
   it("stays a summary and never duplicates the editable requirement table", () => {
     const open = vi.fn();

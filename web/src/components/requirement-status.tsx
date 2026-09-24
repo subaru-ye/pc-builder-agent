@@ -131,9 +131,11 @@ export function RequirementStatusPane({ session, busy, onUpdate, onSource, onOpe
     finally { setSaving(false); }
   };
 
-  // 已知字段 = 状态出现过的 + readiness 判定缺失的 + 被系统默认展开的(预算弹性只出现在预算块)。
+  // 已知字段 = 状态出现过的 + readiness 判定缺失的 + 被系统默认展开的(预算弹性
+  // 只出现在预算块;configuration_scope 是范围声明,不是需求字段行)。
   const known = new Set<RowKey>([...Object.keys(state.fields), ...missing, ...defaults.keys()]);
   known.delete("budget_flex");
+  known.delete("configuration_scope");
   const activeCount = Object.values(state.fields).filter((field) => field.status === "active").length;
   const activeAny = (key: string) => state.fields[key]?.status === "active" && (state.fields[key].value === "any");
   const rowState = (key: string): "active" | "conflict" | "removed" | "requiredUnknown" | "optionalUnknown" | "default" => {
@@ -141,10 +143,11 @@ export function RequirementStatusPane({ session, busy, onUpdate, onSource, onOpe
     if (field?.status === "conflict" || conflicts.has(key)) return "conflict";
     if (field?.status === "removed") return "removed";
     if (field?.status === "active") return "active";
-    if (!field && defaults.has(key)) return "default";
     if (missing.includes(key)) return "requiredUnknown";
-    if (field?.status === "unknown") return "optionalUnknown";
-    return defaults.has(key) ? "default" : "optionalUnknown";
+    // 真实状态里所有已知字段都以 unknown 键存在:有效系统默认必须在
+    // unknown 兜底之前判定,否则默认行会被误标为"未指定"。
+    if (defaults.has(key)) return "default";
+    return "optionalUnknown";
   };
   const rowValue = (key: string) => {
     const field = state.fields[key];
@@ -152,7 +155,6 @@ export function RequirementStatusPane({ session, busy, onUpdate, onSource, onOpe
     if (defaults.has(key)) return defaults.get(key);
     return undefined;
   };
-  const isDefaultSource = (key: string) => !state.fields[key] && defaults.has(key);
 
   const rows = [...known].map((key) => ({
     key,
@@ -164,14 +166,16 @@ export function RequirementStatusPane({ session, busy, onUpdate, onSource, onOpe
     const field = state.fields[key];
     const value = rowValue(key);
     const meaning = field ? fieldMeaning(key, field) : null;
-    const isSystemDefault = rowStatus === "default" || isDefaultSource(key);
+    const isSystemDefault = rowStatus === "default";
+    // 撤销墓碑不清除系统默认:有效投影仍按默认执行,须诚实展示而不是"未指定"。
+    const removedBadge = defaults.has(key) ? "已撤销，当前按系统默认" : "已撤销，当前未指定";
     const stateBadge = rowStatus === "conflict" ? <span className="text-xs status-review">需确认</span>
-      : rowStatus === "removed" ? <span className="text-xs text-[var(--ink-subtle)]">已撤销，当前未指定</span>
+      : rowStatus === "removed" ? <span className="text-xs text-[var(--ink-subtle)]">{removedBadge}</span>
       : rowStatus === "requiredUnknown" ? <span className="text-xs text-[var(--ink-subtle)]">待填写</span>
       : rowStatus === "optionalUnknown" ? <span className="text-xs text-[var(--ink-subtle)]">未指定</span>
       : isSystemDefault ? <span className="text-xs text-[var(--ink-subtle)]">系统默认</span>
       : null;
-    const valueText = rowStatus === "removed" ? null
+    const valueText = rowStatus === "removed" && !defaults.has(key) ? null
       : rowStatus === "requiredUnknown" || rowStatus === "optionalUnknown" ? null
       : activeAny(key) && !isSystemDefault ? "不限（用户已确认）"
       : value !== undefined ? requirementValue(key, value) : null;

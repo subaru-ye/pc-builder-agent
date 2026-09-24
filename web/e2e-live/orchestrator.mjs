@@ -14,7 +14,7 @@ const artifactDir = join(root, "artifacts", "p10", runID);
 const metricsDir = join(artifactDir, "metrics");
 const reportPath = join(artifactDir, "live-results.json");
 mkdirSync(metricsDir, { recursive: true, mode: 0o700 });
-const webBaseURL = process.env.P10_WEB_BASE_URL ?? "http://127.0.0.1:3000";
+const webBaseURL = process.env.P10_WEB_BASE_URL ?? "http://127.0.0.1:3101";
 const harnessMode = (process.env.BUILD_HARNESS_MODE ?? "v2").trim().toLowerCase();
 if (harnessMode !== "legacy" && harnessMode !== "v2") {
   throw new Error(`BUILD_HARNESS_MODE=${JSON.stringify(harnessMode)} 非法，只允许 legacy 或 v2`);
@@ -121,7 +121,7 @@ await waitFor("http://127.0.0.1:8081/.well-known/agent-card.json");
 start("api", apiBinary, [], root);
 await waitFor("http://127.0.0.1:8082/readyz");
 start("web", process.execPath, [nextEntrypoint, "dev", "--hostname", "127.0.0.1"], web);
-await waitFor("http://127.0.0.1:3000");
+await waitFor("http://127.0.0.1:3101");
 
 const server = createServer(async (request, response) => {
   response.setHeader("Content-Type", "application/json; charset=utf-8");

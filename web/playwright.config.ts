@@ -7,7 +7,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: "list",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: "http://127.0.0.1:3101",
     trace: "retain-on-failure",
   },
   webServer: [
@@ -18,9 +18,9 @@ export default defineConfig({
     },
     {
       command: "pnpm dev --hostname 127.0.0.1",
-      url: "http://127.0.0.1:3000",
+      url: "http://127.0.0.1:3101",
       reuseExistingServer: !process.env.CI,
-      env: { GO_API_BASE_URL: "http://127.0.0.1:18082", PUBLIC_WEB_BASE_URL: "http://127.0.0.1:3000" },
+      env: { GO_API_BASE_URL: "http://127.0.0.1:18082", PUBLIC_WEB_BASE_URL: "http://127.0.0.1:3101" },
     },
   ],
   projects: [

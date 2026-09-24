@@ -113,19 +113,20 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
     }
     if (event.event === "run.completed") { setRun(null); setStage(null); void client.invalidateQueries({ queryKey: queryKeys.run(event.data.run_id) }); void refreshSession(); }
     // presentation.action 只驱动当前 run 的短期 UI 动作;不据此刷新业务缓存。
+    // 动作由服务端按本轮落库后的 readiness 决定,不读会话缓存复核:
+    // requirement.updated 触发的刷新未完成时缓存仍可能是旧值(如本轮
+    // 刚补齐最后条件),凭缓存判断会把 open_requirement_review 降级丢失。
     if (event.event === "presentation.action") {
       const action = String(event.data.payload.action ?? "");
       const fields = Array.isArray(event.data.payload.fields) ? event.data.payload.fields.map(String) : [];
       if (action === "open_requirement_review") {
-        if (session.data?.requirement_readiness?.confirmation_eligible) {
-          const active = document.activeElement;
-          const typing = active instanceof HTMLElement && (active.id === "message-composer" || ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName));
-          if (typing) setReviewHint(true); else openReview();
-        } else focusFirstMissing(fields);
+        const active = document.activeElement;
+        const typing = active instanceof HTMLElement && (active.id === "message-composer" || ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName));
+        if (typing) setReviewHint(true); else openReview();
       }
       if (action === "focus_missing_requirement") focusFirstMissing(fields);
     }
-  }, [client, focusFirstMissing, openReview, refreshBuilds, refreshSession, session.data?.requirement_readiness?.confirmation_eligible]);
+  }, [client, focusFirstMissing, openReview, refreshBuilds, refreshSession]);
   const connection = useRunStream(currentRun, onEvent, () => { setRun(null); void refreshSession(); });
   useEffect(() => {
     // 会话切换或重新进入时重置到需求 Tab(本地状态随 key 重挂载重置)。
@@ -161,8 +162,10 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
       void refreshSession();
     },
   });
-  const updateRequirement = useCallback(async (operations: RequirementOperation[]) => {
-    const revision = session.data?.requirement_state?.revision;
+  // expectedRevision 由调用方决定:完整编辑器传打开时的基线 revision(并发
+  // 变化必须以 409 暴露);行内编辑等实时场景省略,回退到当前缓存 revision。
+  const updateRequirement = useCallback(async (operations: RequirementOperation[], expectedRevision?: number) => {
+    const revision = expectedRevision ?? session.data?.requirement_state?.revision;
     if (revision === undefined) return;
     try {
       const next = await api.updateRequirementState(sessionID, revision, operations, crypto.randomUUID());
@@ -273,8 +276,12 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
   const configuration = <BuildInspector sessionID={sessionID} builds={builds.data ?? []} build={build.data} latestVersion={latestVersion} canChange={data.phase === "ready"} onReplace={replace} relation={data.build_relation} onBackToRequirement={() => setWorkspaceTab("requirement")} />;
   const inspector = data.proposal ? <ProposalInspector key={data.proposal.id} proposal={data.proposal}>{configuration}</ProposalInspector> : configuration;
   const defaults = new Map((data.requirement_readiness?.effective_defaults ?? []).map((item) => [item.field, item.value]));
+  // 需求编辑在 Builder 运行期间保持可用(服务端 EditRequirement 明确支持):
+  // busy 只锁定网络提交瞬间,不包含 run 活动状态;再次确认启动由
+  // PrimaryAction 的 running 分支与后端 admission(ErrSessionBusy)双重禁止。
+  const requirementBusy = confirm.isPending || send.isPending;
   const requirementPane = data.requirement_state
-    ? <RequirementStatusPane session={data} busy={busy || confirm.isPending || send.isPending} onUpdate={updateRequirement} onSource={showSource} onOpenReview={openReview} onOpenEditor={() => { setReviewOpen(false); setEditorOpen(true); }} />
+    ? <RequirementStatusPane session={data} busy={requirementBusy} onUpdate={updateRequirement} onSource={showSource} onOpenReview={openReview} onOpenEditor={() => { setReviewOpen(false); setEditorOpen(true); }} />
     : <p className="p-6 text-sm text-[var(--ink-muted)]">继续在对话中补充预算和用途，需求整理好后可以在这里核对。</p>;
   const sharedInspector = <SharedInspector
     tab={workspaceTab} onTab={(next) => { setWorkspaceTab(next); if (next === "build") setReviewHint(false); }}
@@ -328,7 +335,7 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
         </DialogContent>
       </Dialog>}
       <Dialog open={reviewOpen} onOpenChange={(open) => { if (!open) setReviewOpen(false); }}>
-        <DialogContent className="flex max-h-[92dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[672px]" onCloseAutoFocus={(event) => {
+        <DialogContent showCloseButton={false} className="flex max-h-[92dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[672px]" onCloseAutoFocus={(event) => {
           event.preventDefault();
           const target = window.matchMedia("(min-width: 1024px)").matches
             ? document.getElementById("workspace-tab-requirement")
@@ -350,13 +357,13 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
         </DialogContent>
       </Dialog>
       <Dialog open={editorOpen} onOpenChange={(open) => { if (!open) setEditorOpen(false); }}>
-        <DialogContent className="flex max-h-[92dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[672px]">
+        <DialogContent showCloseButton={false} className="flex max-h-[92dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[672px]">
           <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b px-4 sm:px-6">
             <DialogTitle>编辑全部需求</DialogTitle>
             <DialogClose asChild><Button variant="ghost" size="sm" aria-label="关闭编辑" onClick={() => setEditorOpen(false)}>关闭</Button></DialogClose>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <RequirementFullEditor session={data} defaults={defaults} busy={confirm.isPending || send.isPending || busy} onSave={async (operations) => { await updateRequirement(operations); setEditorOpen(false); }} onClose={() => setEditorOpen(false)} />
+            <RequirementFullEditor session={data} defaults={defaults} busy={requirementBusy} onSave={async (operations, expectedRevision) => { await updateRequirement(operations, expectedRevision); setEditorOpen(false); }} onClose={() => setEditorOpen(false)} />
           </div>
         </DialogContent>
       </Dialog>

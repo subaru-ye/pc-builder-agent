@@ -298,7 +298,7 @@ func requirementIntegrationAPI(t *testing.T, planningMode ...bool) (*API, *produ
 	t.Cleanup(func() { _ = service.Shutdown(context.Background()) })
 	webURL := os.Getenv("REQUIREMENT_BROWSER_WEB_URL")
 	if webURL == "" {
-		webURL = "http://127.0.0.1:3102"
+		webURL = "http://127.0.0.1:3101"
 	}
 	var shares ShareService = &fakeShareService{}
 	if len(planningMode) > 0 && planningMode[0] {

@@ -5,6 +5,7 @@ const copy: Record<string, string> = {
   session_busy: "当前会话仍在处理，请等待本次运行结束。",
   invalid_session_phase: "当前阶段不能执行这项操作，请刷新会话状态。",
   context_expired: "改单上下文已过期，请新建会话并整单生成。",
+  requirement_revision_conflict: "需求已在别处被修改（冲突），此次修改未保存；请核对当前需求后再试。",
   upstream_unavailable: "生成服务暂时不可用，已保存的数据不会丢失。",
   run_timeout: "本次运行超过 10 分钟，已停止并可重试。",
   run_interrupted: "服务重启中断了本次运行，可以显式重试。",

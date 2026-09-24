@@ -467,7 +467,10 @@ func (f *fakeAgent) ContextAvailable(context.Context, string, string) (bool, err
 	return f.contextAvailable, nil
 }
 
-type recordedEvent struct{ name string }
+type recordedEvent struct {
+	name    string
+	payload string
+}
 type fakeSink struct {
 	mu        sync.Mutex
 	events    []recordedEvent
@@ -475,9 +478,19 @@ type fakeSink struct {
 }
 
 func newFakeSink() *fakeSink { return &fakeSink{completed: make(chan struct{}, 8)} }
-func (f *fakeSink) Append(_ context.Context, _ string, name string, _ any) (string, error) {
+func (f *fakeSink) Append(_ context.Context, _ string, name string, payload any) (string, error) {
+	// publish 传 []byte(json.Marshal 结果),runevents 可能传 json.RawMessage。
+	var raw []byte
+	switch value := payload.(type) {
+	case json.RawMessage:
+		raw = value
+	case []byte:
+		raw = value
+	default:
+		raw, _ = json.Marshal(value)
+	}
 	f.mu.Lock()
-	f.events = append(f.events, recordedEvent{name: name})
+	f.events = append(f.events, recordedEvent{name: name, payload: string(raw)})
 	f.mu.Unlock()
 	if name == "run.completed" {
 		f.completed <- struct{}{}
@@ -494,6 +507,18 @@ func (f *fakeSink) wait(t *testing.T) {
 		t.Fatal("等待 run.completed 超时")
 	}
 }
+// payloadOf 返回指定名称事件的最后一个载荷(如 presentation.action 的动作)。
+func (f *fakeSink) payloadOf(name string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := len(f.events) - 1; i >= 0; i-- {
+		if f.events[i].name == name {
+			return f.events[i].payload
+		}
+	}
+	return ""
+}
+
 func (f *fakeSink) names() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()

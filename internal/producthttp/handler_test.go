@@ -125,10 +125,10 @@ func newTestAPI(t *testing.T, events runevents.Store) (*API, *fakeService) {
 		run:     store.AgentRun{ID: "run-1", SessionID: "session-1", Kind: store.RunScreening, Status: store.RunSucceeded, StartedAt: now},
 	}
 	shareService := &fakeShareService{
-		share:  sharing.Share{SchemaVersion: 1, ID: uuid.NewString(), Version: 1, Token: strings.Repeat("A", 43), URL: "http://localhost:3000/share/test", CreatedAt: now},
+		share:  sharing.Share{SchemaVersion: 1, ID: uuid.NewString(), Version: 1, Token: strings.Repeat("A", 43), URL: "http://localhost:3101/share/test", CreatedAt: now},
 		public: sharing.PublicBuildView{SchemaVersion: 1},
 	}
-	api, err := New(f, fakeBuildPresenter{}, shareService, events, fakeDB{}, fakeRedis{}, Config{PublicWebBaseURL: "http://localhost:3000", BuildsvcURL: "http://127.0.0.1:1"})
+	api, err := New(f, fakeBuildPresenter{}, shareService, events, fakeDB{}, fakeRedis{}, Config{PublicWebBaseURL: "http://localhost:3101", BuildsvcURL: "http://127.0.0.1:1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestCORSDefaultsToPublicWebOrigin(t *testing.T) {
 		origin string
 		want   int
 	}{
-		"public web origin": {origin: "http://localhost:3000", want: http.StatusCreated},
+		"public web origin": {origin: "http://localhost:3101", want: http.StatusCreated},
 		"other origin":      {origin: "http://127.0.0.1:3000", want: http.StatusForbidden},
 	} {
 		t.Run(name, func(t *testing.T) {

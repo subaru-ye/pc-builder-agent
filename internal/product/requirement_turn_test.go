@@ -281,6 +281,50 @@ func TestVerifyAcceptedProposalsValueMustMatch(t *testing.T) {
 	}
 }
 
+// 验收:同轮补齐最后一个缺失条件并请求开始时,readiness 以应用本轮操作
+// 后的新状态计算,presentation.action 必须发出 open_requirement_review,
+// 不因轮前 readiness 滞后而丢失(前端同样不得用会话缓存复核该动作)。
+func TestPresentationActionSurvivesSameTurnCompletion(t *testing.T) {
+	st := newPlanningFakeStore()
+	st.session.RequirementState = marshalState(t, seededGamingState(t)) // 仅缺预算
+	sink := newFakeSink()
+	agent := &fakeAgent{store: st.fakeProductStore, contextAvailable: true}
+	agent.screen = ScreenResult{Turn: &pipeline.RequirementTurnResult{
+		Operations: []schemas.RequirementOperation{
+			{Op: "set", Field: "budget_cny", Value: json.RawMessage("8000"), Kind: "constraint", Strength: "must", Scope: "session", Evidence: "stated", Quote: "预算8000"},
+		},
+		Signals: pipeline.RequirementTurnSignals{RequestsBuild: true},
+	}}
+	svc, err := NewService(context.Background(), st, agent, sink)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sendTurn(t, svc, "00000000-0000-4000-8000-000000000130", "预算8000，开始吧")
+	sink.wait(t)
+	if got := sink.payloadOf("presentation.action"); !strings.Contains(got, "open_requirement_review") {
+		t.Fatalf("同轮补齐最后条件并请求开始必须发出 open_requirement_review: %q", got)
+	}
+	if readiness, _ := schemas.EvaluateRequirementReadiness(decodeState(t, st)); !readiness.ConfirmationEligible {
+		t.Fatalf("落库后的状态应可确认: %+v", readiness)
+	}
+	// 对照:同轮补齐但没有请求开始时,不产生 presentation action。
+	st2 := newPlanningFakeStore()
+	st2.session.RequirementState = marshalState(t, seededGamingState(t))
+	sink2 := newFakeSink()
+	agent2 := &fakeAgent{store: st2.fakeProductStore, contextAvailable: true}
+	agent2.screen = ScreenResult{Turn: &pipeline.RequirementTurnResult{
+		Operations: []schemas.RequirementOperation{
+			{Op: "set", Field: "budget_cny", Value: json.RawMessage("8000"), Kind: "constraint", Strength: "must", Scope: "session", Evidence: "stated", Quote: "预算8000"},
+		},
+	}}
+	svc2, _ := NewService(context.Background(), st2, agent2, sink2)
+	sendTurn(t, svc2, "00000000-0000-4000-8000-000000000131", "预算8000")
+	sink2.wait(t)
+	if got := sink2.payloadOf("presentation.action"); got != "" {
+		t.Fatalf("未请求开始不得打开核定: %q", got)
+	}
+}
+
 // 验收场景 10/11:unsupported 撤销只认能力专属 remove;背景提及不阻塞。
 func TestUnsupportedWithdrawUnblocksOnlyViaCapabilityRemove(t *testing.T) {
 	state := seededGamingState(t)

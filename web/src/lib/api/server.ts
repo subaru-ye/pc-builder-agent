@@ -15,6 +15,6 @@ export async function fetchPublicShare(token: string): Promise<PublicBuildView |
 }
 
 export function configuredWebBaseURL() {
-  try { return new URL(process.env.PUBLIC_WEB_BASE_URL ?? "http://localhost:3000"); }
-  catch { return new URL("http://localhost:3000"); }
+  try { return new URL(process.env.PUBLIC_WEB_BASE_URL ?? "http://localhost:3101"); }
+  catch { return new URL("http://localhost:3101"); }
 }

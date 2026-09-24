@@ -105,7 +105,7 @@ func New(service ProductService, builds BuildPresenter, shares ShareService, eve
 		return nil, fmt.Errorf("product http: service/builds/shares/events/db/redis 不能为空")
 	}
 	if cfg.PublicWebBaseURL == "" {
-		cfg.PublicWebBaseURL = "http://localhost:3000"
+		cfg.PublicWebBaseURL = "http://localhost:3101"
 	}
 	u, err := url.Parse(cfg.PublicWebBaseURL)
 	if err != nil || u.Scheme == "" || u.Host == "" {

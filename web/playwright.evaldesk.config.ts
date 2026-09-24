@@ -12,7 +12,7 @@ export default defineConfig({
   expect: { timeout: 60_000 },
   outputDir: "test-results/evaldesk",
   use: {
-    baseURL: process.env.EVALDESK_WEB_BASE_URL ?? "http://127.0.0.1:3000",
+    baseURL: process.env.EVALDESK_WEB_BASE_URL ?? "http://127.0.0.1:3101",
     trace: "retain-on-failure",
   },
   projects: [

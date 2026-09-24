@@ -257,6 +257,52 @@ Spec 4 已提供三轴、`review_spec/review_hash` 与确认入口，但当前 S
 - API 生成类型无漂移；前端源码中不存在最低矩阵和 10% 预算计算的复制实现。
 - 零模型 `ui-contract` 回归无 veto；它验证后端读取合同，不能代替真实浏览器的视觉、焦点和交互验收。
 
+### 返工验收记录（2026-09-24，针对提交 5a9a28b 的四处定向返工）
+
+状态（2026-09-24 提交时）：**人工验收待完成**——自动化验证结果见下，真实浏览器交互、视觉与窄屏体验由人工验收；离线 requirements harness 503 接线问题未解决（单列见下）；本记录不将 Spec 5 标记为 done。
+
+返工内容：① 完整需求抽屉只提交用户实际改动（diff 基线为打开时的有效值投影，系统默认预填不再被写成 active）；预算留空可单独保存其他字段；预算/帧率/预算弹性按后端 schemas 口径做前端数字校验；保存失败保留输入并展示错误。② Builder 运行期间行内编辑与完整抽屉保持可保存（busy 只锁定网络提交瞬间），再次确认启动仍由 PrimaryAction running 分支与后端 `ErrSessionBusy` admission 双重禁止。③ 需求状态栏对存在有效系统默认的 unknown/removed 字段显示"系统默认"（真实状态所有已知字段都以 unknown 键存在，默认判定必须先于 unknown 兜底；撤销墓碑不清除默认）；`configuration_scope` 不再作为字段行渲染。④ `presentation.action` 的 `open_requirement_review` 直接按服务端动作执行，不再用会话缓存 readiness 复核（同轮补齐最后条件并请求开始时缓存仍为旧值，会把动作降级丢失）。顺带：核定/编辑抽屉不再重复一级标题，默认右上角 X 关闭按钮移除，不再与"返回修改/关闭"重叠。
+
+本次返工已运行的验证（返工最终代码上全部通过）：
+
+- Go 聚焦测试：`go vet` + `go test ./internal/product/... ./internal/schemas/... ./internal/producthttp/...`（另 `./internal/store/...` 通过），含新增 `TestPresentationActionSurvivesSameTurnCompletion`（同轮补齐最后条件 + 请求开始必须发出 open_requirement_review；未请求开始不得发出）。
+- Web 单测：`pnpm typecheck` 通过；`pnpm lint` 0 错误（存量 react-hooks 警告 5 条，非本次引入）；`pnpm exec vitest run` 77/77。新增 `requirement-full-editor.test.tsx` 8 例（只提交实际改动/预算留空可保存/数字校验口径/失败保留输入）与 `requirement-status.test.tsx` 系统默认展示 3 例，均先在修复前代码上确认失败再修复。
+- 1440px 桌面核心流程：`pnpm exec playwright test e2e/requirement-workspace.spec.ts --project=desktop`（mock 路由离线回归，4 条聚焦用例：批量编辑最小 diff、系统默认展示、运行中可编辑不可再次确认、presentation.action 不因缓存滞后丢失），4/4 通过；四条用例均在修复前代码上确认失败。
+- 真实 API 的进程内等价集成测试：`TestRequirementStatePersistentWorkflow`、`TestVideoRequirementConfirmationReplay`（PG_TEST_DSN 指向本地 compose PostgreSQL），确认→生成→版本保存链路通过。
+
+### 返工验收记录（2026-09-24，第二轮定向返工）
+
+第二轮修复两件事：
+
+- 完整需求编辑器输入丢失：编辑基线在表单打开时一次性固定（状态快照 + 有效值预填），父组件重渲染、Session 轮询刷新或 defaults 新建 Map 不再触发 `form.reset`，未保存输入不丢失；保存 diff 始终按打开时的基线计算。保存遇 409 `requirement_revision_conflict` 保留输入并明示冲突（`problem.ts` 补冲突文案），不静默按新 revision 覆盖。为此把后端实际发出的全部 problem code 补齐进 OpenAPI `Problem.code` 枚举（此前 `requirement_revision_conflict` 等 13 个码后端已发出但枚举未登记），并重新生成前端类型。
+- 本地 Web 端口统一为 3101：`web/package.json` dev 脚本固定 `--port 3101`（单一出处），四个 Playwright 配置的 baseURL 默认、mock webServer、`PUBLIC_WEB_BASE_URL` 与 `web/src/lib/api/server.ts` 回退值、`cmd/api` 与 `producthttp` 默认公共 Web 地址、离线 harness 的 `REQUIREMENT_BROWSER_WEB_URL` 默认值（3102→3101）、compose 本地 Auth 回调地址（GOTRUE_SITE_URL/ALLOW_LIST）、`.env.example` 与相关文档（ops 部署文档、产品API文档、README、CLAUDE.md）全部对齐。环境变量覆盖能力保留；后端 API 端口（8082）与 mock API（18082）不变。
+
+第二轮验证（返工最终代码上全部通过）：
+
+- Web：`pnpm typecheck`、`pnpm lint`（0 错误，存量警告不变）、`pnpm exec vitest run` 79/79（新增编辑器"父组件刷新不丢输入"与"409 冲突保留输入"两例，均在第一轮实现上确认失败）。
+- Go：`go build ./...`、`go vet`、`go test ./internal/producthttp/... ./internal/sharing/...` 通过（producthttp 覆盖 problem 映射与来源检查）。
+- 一条 1440px 桌面浏览器链路：`pnpm exec playwright test e2e/requirement-workspace.spec.ts --project=desktop` 4/4，同时验证 3101 端口接线（dev 服务器、baseURL、PUBLIC_WEB_BASE_URL、mock API 18082）。
+
+第二轮仍未解决/未运行：离线 requirements harness 的 503 接线问题独立存在（见下）；移动端/平板、ui-contract、live、holdout、键盘/IME/axe 维持第一轮记录的延期状态。
+
+### 返工验收记录（2026-09-24，第三轮聚焦修正）
+
+- 完整编辑器的保存请求改为携带打开时的基线 revision：`onSave(operations, expectedRevision)` 由 `updateRequirement` 转发到 PATCH `expected_revision`；编辑期间 Session 被并发刷新（轮询/SSE）时保存按旧 revision 提交，由服务端 409 暴露冲突，不再拿最新 revision 静默覆盖。行内编辑不传该参数，继续使用当前缓存 revision。请求级验证：mock e2e 批量编辑用例在编辑期间经真实运行轮询把缓存刷到 revision 2，断言 PATCH `expected_revision` 仍为打开时的 1；单测断言 `onSave` 收到基线 revision 而非刷新后的值。
+- `web/package.json` 的 `start` 脚本补 `--port 3101`，本地生产模式启动与 dev/Playwright/harness 地址一致。
+- 验证：`pnpm typecheck`、`pnpm exec vitest run` 79/79、`playwright test e2e/requirement-workspace.spec.ts --project=desktop` 4/4（含请求级 revision 断言，修正前接线确认失败）。Go 侧本轮无改动。
+
+### 未解决项：离线 requirements harness 确认→生成 503（先于返工存在）
+
+main 上已提交的 `TestRequirementStateBrowserServer`（internal/producthttp/requirement_integration_test.go）以非 planning 接线启动：`requirementReplayGateway.Remote` 按裸 RequirementSpec 解码，而产品 API 的 Builder 载荷是 PlanningInput 形状，任何确认→生成在该 harness 下确定性 503（`upstream_unavailable`）。已用进程内等价复现定位（同一 `requirementIntegrationAPI(t)` 构造 + gaming 流程确认即复现）；planning 模式进程内集成测试（`TestRequirementStatePersistentWorkflow`、`TestVideoRequirementConfirmationReplay`）通过，说明是 harness 接线缺口而非产品路径缺陷。修复方向（如浏览器服务器改用 planning 网关或让裸网关接受 PlanningInput）与完整 `pnpm test:e2e:requirements` 重跑另行安排，不随本返工关闭。
+
+第一轮返工未运行/延期的验证（不得记为通过）：
+
+- 移动端（375）与平板（768）E2E 未在返工最终代码上运行；窄屏与触控交互的人工验收延期。
+- mock 全量 `pnpm test:e2e`（三视口 37 通过、2 存量跳过）运行于返工中期版本（早于编辑器错误文案的一处小调整），未在最终代码上重跑全量；最终代码仅重跑了上述桌面核心流程。
+- 离线 requirements harness（`pnpm test:e2e:requirements`）未完成：首次全量尝试因 harness 的 `REQUIREMENT_BROWSER_WEB_URL` 与 Web 端口不一致被跨域来源检查全部拒绝；修正来源后单条桌面核心流程复现出更深一层问题——main 上已提交的 `TestRequirementStateBrowserServer` 以非 planning 接线启动，任何确认→生成都确定性 503（`requirementReplayGateway.Remote` 收到 PlanningInput 形状载荷；已用进程内等价复现定位）。该缺口先于本次返工存在（返工未改 product/producthttp 源码），planning 模式进程内集成测试通过；harness 接线修复与完整套件重跑另行安排。
+- `ui-contract` 零模型回归、live E2E、holdout 未运行，留给发布认证。
+- 键盘/IME/axe 无障碍扫描未在返工最终代码上重跑（上次全量结果不覆盖本次改动）。
+
 ## Acceptance scenarios
 
 1. 新会话默认显示需求状态，配置 Tab disabled。

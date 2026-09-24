@@ -10,7 +10,7 @@ export default defineConfig({
   expect: { timeout: 30_000 },
   reporter: "list",
   use: {
-    baseURL: process.env.REQUIREMENTS_WEB_URL ?? "http://127.0.0.1:3100",
+    baseURL: process.env.REQUIREMENTS_WEB_URL ?? "http://127.0.0.1:3101",
     trace: "retain-on-failure",
   },
   projects: [

@@ -10,7 +10,7 @@
 |---|---|---|
 | cmd/buildsvc | :8081 | A2A 生成 + 校验远程服务 |
 | cmd/api | :8082 | 产品 HTTP API、匿名会话、后台 run、SSE 和读模型 |
-| Next.js | :3000 | 展示、交互、同源代理与分享图 |
+| Next.js | :3101 | 展示、交互、同源代理与分享图 |
 
 包分三层：transport(HTTP、cookie、SSE、problem+json)、application(会话状态机、run 调度、所有权、幂等)、presenter(配置版本、diff、Markdown 与公开分享读模型)。transport 不直接拼 SQL，application 不直接写 HTTP，presenter 不依赖 ADK/LLM。
 

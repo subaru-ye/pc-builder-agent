@@ -14,7 +14,7 @@ export default defineConfig({
   timeout: 45 * 60 * 1000,
   expect: { timeout: 10 * 60 * 1000 },
   use: {
-    baseURL: process.env.P10_WEB_BASE_URL ?? "http://127.0.0.1:3000",
+    baseURL: process.env.P10_WEB_BASE_URL ?? "http://127.0.0.1:3101",
     trace: "retain-on-failure",
     video: "retain-on-failure",
   },

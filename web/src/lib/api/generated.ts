@@ -579,7 +579,7 @@ export interface components {
             /** Format: uri-reference */
             instance?: string;
             /** @enum {string} */
-            code: "invalid_request" | "not_found" | "session_busy" | "invalid_session_phase" | "schema_validation_failed" | "upstream_unavailable" | "context_expired" | "run_timeout" | "run_interrupted" | "generation_failed" | "events_expired" | "internal_error" | "auth_disabled" | "auth_invalid_credentials" | "auth_email_exists" | "auth_weak_password" | "auth_session_expired" | "auth_unavailable";
+            code: "invalid_request" | "not_found" | "session_busy" | "invalid_session_phase" | "schema_validation_failed" | "upstream_unavailable" | "context_expired" | "run_timeout" | "run_interrupted" | "run_active" | "run_cancelled" | "generation_failed" | "events_expired" | "internal_error" | "daily_budget_exceeded" | "feedback_unavailable" | "invalid_retry_target" | "requirement_not_ready" | "requirement_review_conflict" | "requirement_revision_conflict" | "requirement_state_unsupported" | "model_authentication_failed" | "model_quota_exhausted" | "model_rate_limited" | "model_timeout" | "auth_disabled" | "auth_invalid_credentials" | "auth_email_exists" | "auth_weak_password" | "auth_session_expired" | "auth_unavailable";
             request_id: string;
         } & {
             [key: string]: unknown;

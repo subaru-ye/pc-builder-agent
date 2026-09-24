@@ -70,7 +70,7 @@ func main() {
 	}
 	service.ReclaimStaleRuns(rootCtx)
 
-	publicWebBaseURL := envOr("PUBLIC_WEB_BASE_URL", "http://localhost:3000")
+	publicWebBaseURL := envOr("PUBLIC_WEB_BASE_URL", "http://localhost:3101")
 	shareTokens, err := sharing.NewTokenCodec(os.Getenv("SHARE_TOKEN_SECRET"))
 	if err != nil {
 		log.Fatal(err)

@@ -14,7 +14,7 @@ go run ./cmd/api                 # 终端 2:产品 API,http://localhost:8082
 go run ./cmd/modelcheck -role screening  # 显式上游检查;普通启动/测试不调用模型
 uv run --project scripts/data pcdata source check  # 静态来源检查;默认不联网
 uv run --project scripts/data pcdata price health  # 价格快照与动态年龄
-cd web && pnpm dev               # 终端 3:产品 Web,http://localhost:3000
+cd web && pnpm dev               # 终端 3:产品 Web,http://localhost:3101
 go build ./... && go vet ./...
 ```
 

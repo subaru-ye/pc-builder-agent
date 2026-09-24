@@ -54,11 +54,9 @@ export function RequirementReviewPanel({ session, busy, error, onConfirm, onBack
   const freeDetails = Object.entries(spec.requirement_details ?? {}).filter(([key]) => key.startsWith("free."));
 
   return <div className="px-4 py-5 sm:px-6">
+    {/* 标题由外层对话框 DialogTitle 提供,面板不再重复渲染一级标题。 */}
     <header>
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-base font-semibold">核定当前需求</h2>
-        {confirmation.status === "modified" && <span className="flex items-center gap-1 text-xs status-review"><AlertTriangle size={14} />已修改</span>}
-      </div>
+      {confirmation.status === "modified" && <p className="flex items-center gap-1 text-xs status-review"><AlertTriangle size={14} />已修改</p>}
       <p className="mt-1 text-sm text-[var(--ink-muted)]">以下是本次配置将使用的全部有效要求（含系统默认）。确认后开始生成主机配置。</p>
     </header>
 

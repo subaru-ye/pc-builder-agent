@@ -14,7 +14,7 @@ function requirementField(build: BuildView, key: string): unknown {
 import type { BuildDiff, BuildView, Session } from "../src/lib/api/types";
 
 const controlURL = process.env.P10_CONTROL_URL ?? "http://127.0.0.1:18083";
-const webURL = process.env.P10_WEB_BASE_URL ?? "http://127.0.0.1:3000";
+const webURL = process.env.P10_WEB_BASE_URL ?? "http://127.0.0.1:3101";
 const smokeOnly = process.env.P10_SMOKE === "1";
 
 type MetricEvent = { component: string; name: string; fields?: Record<string, unknown> };

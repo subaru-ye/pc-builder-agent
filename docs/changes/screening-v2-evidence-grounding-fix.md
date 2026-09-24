@@ -1,6 +1,7 @@
 ---
-status: in-progress
+status: done
 created: 2026-09-24
+completed: 2026-09-24
 ---
 
 # Change: Screening v2 证据落库质量修复
@@ -42,3 +43,13 @@ created: 2026-09-24
 - `go vet ./... && go test ./...`。
 - 评估 `-mode check` 零网络通过（数据集/判卷身份未动）。
 - 冻结提交后一次 dev+cal Pass³（首跑存证，不挑选重复），报告验收三项。
+
+## 验收运行记录（2026-09-24，首跑存证，无挑选重复）
+
+- **候选 6c533be（首轮）**：`artifacts/reqv2/screening-fix-live-devcal-r3-20260924`，130 调用。task_success 6/7 达标、veto 0，但暴露同族新形态——模型把型号并入 owned_parts 时多发无证据 `remove existing_parts`（关键字段错写 ×2）。该首跑如实保留，催生二次补充红线（见上）。
+- **候选 f7290a5（最终，冻结二跑）**：`artifacts/reqv2/screening-fix2-live-devcal-r3-20260924`，dev+cal repeats=3，max-calls=400 实际 129 次调用（单轮 ≤1，一次 guard 格式纠偏重调），provider 129/129，p95 4524ms，known tokens 542,316。**16/16 冻结门槛全部通过**：
+  - conversations task_success **7/7（1.000）** ≥ 6/7 验收线（cv-fps-progressive、cv-composite-9000-start、cv-owned-model-flow 三项历史失败 case 全部 3/3 通过）；
+  - **key_field_wrong_write_total = 0**；
+  - **veto_total = 0**；
+  - extraction 26/26、turn signals 75/75、final_state 15/15、确定性层 34/34 全绿。
+- holdout 未运行（按本 change 边界，dev+cal only）；已暴露 holdout 案例的修正版转回归集与新增盲测仍为评估设施侧后续项。Requirement v2 是否重新进入完整发布认证（含锁定 holdout），由产品侧在后续产品 change 修复完成后另行决定。

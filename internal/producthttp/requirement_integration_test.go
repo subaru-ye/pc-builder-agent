@@ -3,13 +3,17 @@ package producthttp
 // 离线端到端验证：真实 PostgreSQL、产品 service、HTTP、规则/价格核算和 presenter。
 // 只有 Screening 提取与 Builder 选件使用明确标注的录制/人工 oracle，不访问模型。
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"iter"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -662,7 +666,10 @@ func TestRequirementStateBrowserServer(t *testing.T) {
 	if addr == "" {
 		t.Skip("未启用浏览器离线验证服务器")
 	}
-	api, _, _ := requirementIntegrationAPI(t)
+	// 浏览器入口必须与产品确认路径同接线:确认冻结的 Builder 载荷是
+	// PlanningInput,只有 planning 网关按该形状消费并经 planning.Runner 生成;
+	// 旧的裸 RequirementSpec 网关在确认→生成处必然失败(upstream 503)。
+	api, _, _ := requirementIntegrationAPI(t, true)
 	server := &http.Server{Addr: addr, ReadHeaderTimeout: 5 * time.Second}
 	mux := http.NewServeMux()
 	mux.Handle("/", api.Handler())
@@ -677,6 +684,157 @@ func TestRequirementStateBrowserServer(t *testing.T) {
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		t.Fatal(err)
 	}
+}
+
+// TestBrowserHarnessConfirmBuildsAndPersistsVersion 是浏览器入口接线的聚焦
+// 回归:与 TestRequirementStateBrowserServer 相同的 requirementIntegrationAPI
+// 构造(planning 网关),纯 HTTP 走完 建会话→对话收集→确认→生成→读回,
+// 并经 API 与数据库双重核对版本确实保存。确认前 non-planning 接线在此处
+// 得到 503,防止回归。
+func TestBrowserHarnessConfirmBuildsAndPersistsVersion(t *testing.T) {
+	api, _, st := requirementIntegrationAPI(t, true)
+	server := httptest.NewServer(api.Handler())
+	defer server.Close()
+	ctx := context.Background()
+	client := &http.Client{Timeout: 10 * time.Second}
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.Jar = jar
+	base := server.URL
+	call := func(method, path string, body any, out any) int {
+		t.Helper()
+		var reader io.Reader
+		if body != nil {
+			raw, err := json.Marshal(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			reader = bytes.NewReader(raw)
+		}
+		req, err := http.NewRequestWithContext(ctx, method, base+path, reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Idempotency-Key", uuid.NewString())
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		if out != nil {
+			if err := json.NewDecoder(resp.Body).Decode(out); err != nil && !errors.Is(err, io.EOF) {
+				t.Fatalf("%s %s: decode %d: %v", method, path, resp.StatusCode, err)
+			}
+		} else {
+			_, _ = io.Copy(io.Discard, resp.Body)
+		}
+		return resp.StatusCode
+	}
+
+	var created struct {
+		ID string `json:"id"`
+	}
+	if code := call(http.MethodPost, "/api/v1/sessions", nil, &created); code != http.StatusOK && code != http.StatusCreated {
+		t.Fatalf("create session: %d", code)
+	}
+	var started struct {
+		ID string `json:"id"`
+	}
+	text := "预算8000，玩游戏，要安静一点，尽量用N卡，帮朋友装机，2K分辨率，配件全部新买"
+	if code := call(http.MethodPost, "/api/v1/sessions/"+created.ID+"/messages", map[string]any{"schema_version": 1, "text": text}, &started); code/100 != 2 {
+		t.Fatalf("send message: %d", code)
+	}
+	// UI 合同:轮询会话直到 run 结束且 readiness 可确认,从服务端真值取
+	// revision 与 review_hash,不自行拼接。
+	var session struct {
+		ActiveRun        *json.RawMessage `json:"active_run"`
+		VersionCount     int              `json:"version_count"`
+		RequirementState struct {
+			Revision int `json:"revision"`
+		} `json:"requirement_state"`
+		RequirementReadiness struct {
+			ConfirmationEligible bool `json:"confirmation_eligible"`
+		} `json:"requirement_readiness"`
+		ReviewHash string `json:"review_hash"`
+	}
+	eligible := func() bool {
+		if call(http.MethodGet, "/api/v1/sessions/"+created.ID, nil, &session) != http.StatusOK {
+			return false
+		}
+		return session.ActiveRun == nil && session.RequirementReadiness.ConfirmationEligible && session.ReviewHash != ""
+	}
+	waitFor(t, eligible, "session never became confirmation-eligible")
+	revision := session.RequirementState.Revision
+	reviewHash := session.ReviewHash
+	var confirmed struct {
+		ID string `json:"id"`
+	}
+	if code := call(http.MethodPost, "/api/v1/sessions/"+created.ID+"/requirement/confirm", map[string]any{
+		"schema_version": 2, "expected_revision": revision, "expected_review_hash": reviewHash,
+	}, &confirmed); code/100 != 2 {
+		t.Fatalf("confirm: %d", code)
+	}
+	var run struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+		Error  *struct {
+			Detail string `json:"detail"`
+		} `json:"error"`
+	}
+	succeeded := func() bool {
+		if call(http.MethodGet, "/api/v1/runs/"+confirmed.ID, nil, &run) != http.StatusOK {
+			return false
+		}
+		return run.Status == "succeeded" || run.Status == "failed"
+	}
+	waitFor(t, succeeded, "build run never settled")
+	if run.Status != "succeeded" {
+		detail := ""
+		if run.Error != nil {
+			detail = run.Error.Detail
+		}
+		t.Fatalf("browser confirm→build failed: %s %s", run.Status, detail)
+	}
+	// API 核对:版本已保存并可作为当前配置读回。
+	waitFor(t, func() bool {
+		if call(http.MethodGet, "/api/v1/sessions/"+created.ID, nil, &session) != http.StatusOK {
+			return false
+		}
+		return session.VersionCount >= 1
+	}, "version count never reached 1")
+	var build struct {
+		Parts []struct {
+			Category string `json:"category"`
+		} `json:"parts"`
+		Requirement struct {
+			BudgetCNY any `json:"budget_cny"`
+		} `json:"requirement"`
+	}
+	if code := call(http.MethodGet, "/api/v1/sessions/"+created.ID+"/builds/1", nil, &build); code != http.StatusOK {
+		t.Fatalf("read back build v1: %d", code)
+	}
+	if len(build.Parts) != 8 {
+		t.Fatalf("expected 8 parts in saved build, got %d", len(build.Parts))
+	}
+	// 数据库核对:版本确实持久化,而非仅读模型缓存。
+	if _, err := st.BuildByVersion(ctx, created.ID, 1); err != nil {
+		t.Fatalf("build v1 not persisted: %v", err)
+	}
+}
+
+func waitFor(t *testing.T, predicate func() bool, message string) {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		if predicate() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal(message)
 }
 
 // confirmRequest 像 UI 客户端一样从服务端核定预览取 revision 与 review_hash,

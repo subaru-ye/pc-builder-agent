@@ -73,7 +73,7 @@ answer 只回答用户当前问题，可为空：不重复已保存信息，不�
 字段与值（必须采用以下点路径）：
 budget_cny 正整数预算金额；budget_flex 非负比例，仅明确预算弹性才给，严格不超设0；budget_basis new_purchase|full_build，仅当用户明确说明金额覆盖口径（“不含已有件价值”“整机总价”“这九千要包括手上显卡的价值”）才设置；“帮我配台全新的主机，配件都新买”只 set existing_parts=[]，绝不设 budget_basis——全新/都新买/打算购买/缺什么配件都不是口径表达。
 use_case.type：general是普通办公、文档表格、上网影音；gaming是玩游戏；productivity专指专业剪辑、渲染、建模等计算工作负载。“帮我配台电脑”这类泛购买表达不含用途信息，不得猜测任何值。use_case.titles 字符串数组，提到具体游戏名时必须逐个收录（“玩DOTA2和LOL”→["DOTA2","LOL"]，同时 set use_case.type=gaming）；use_case.resolution 1080p|2K|4K，只取明确的显示器/游戏输出目标，“剪4K视频”的4K是素材参数（存free.*）；use_case.performance_goal balanced|fps_first|quality_first：用户表达帧率诉求（“希望帧率高一点”“帧率越高越好”）即 fps_first，不生成具体FPS；画质优先才 quality_first；use_case.fps_target 正整数，用户给出明确帧率数字（“帧数至少144”）时设置，此时不再设 performance_goal。
-existing_parts 本次确实已有且可沿用的主机品类数组(cpu/gpu/motherboard/memory/ssd/psu/case/cooler)，显示器不属于主机品类，“全部新买”是 set []，本轮原话没有全部新买或无已有件的明确表达时禁止输出空数组（程序会拒收无证据的空已有件）；configuration_scope 是系统注入字段，任何情况下都不得出现在你的输出中；owned_parts 是数组字段，确认已有关系且用户给出准确型号后一次提交合并后的完整数组（如[{"category":"gpu","model":"4070 Super"}]），禁止 owned_parts.gpu.model 或 owned_parts.gpu 点路径（误用时程序会按形状纠偏，但不要依赖），不猜SKU；quantity 仅在用户明确表达数量（多根内存、两块硬盘）时携带，单件省略；型号更正替换原件；确认已有但未提供准确型号时只 set existing_parts 品类数组（型号留空待追问），绝不提交 owned_parts——数组项没有 model 就是非法输出。用户某件不再复用时从existing_parts数组移除该品类；撤销全部已有件时remove existing_parts。
+existing_parts 本次确实已有且可沿用的主机品类数组(cpu/gpu/motherboard/memory/ssd/psu/case/cooler)，显示器不属于主机品类，“全部新买”是 set []，本轮原话没有全部新买或无已有件的明确表达时禁止输出空数组（程序会拒收无证据的空已有件）；configuration_scope 是系统注入字段，任何情况下都不得出现在你的输出中；owned_parts 是数组字段，确认已有关系且用户给出准确型号后一次提交合并后的完整数组（如[{"category":"gpu","model":"4070 Super"}]），禁止 owned_parts.gpu.model 或 owned_parts.gpu 点路径（误用时程序会按形状纠偏，但不要依赖），不猜SKU；existing_parts（品类）与 owned_parts（准确型号）并存且各自独立记录，把型号提交进 owned_parts 不代表撤销已有件，remove existing_parts 仅用于用户明确表达不再保留旧件（如“旧件都不要了”）；quantity 仅在用户明确表达数量（多根内存、两块硬盘）时携带，单件省略；型号更正替换原件；确认已有但未提供准确型号时只 set existing_parts 品类数组（型号留空待追问），绝不提交 owned_parts——数组项没有 model 就是非法输出。用户某件不再复用时从existing_parts数组移除该品类；撤销全部已有件时remove existing_parts。
 brand_pref.cpu any|amd|intel；brand_pref.gpu any|amd|nvidia；未提品牌不能填any。noise_pref silent|normal|any(“都行/无所谓”且无其他取向词才是any；“声音无所谓，正常就行”有明确取向词，取 normal)；size_pref 只能取 atx|matx|itx|any（没有"small"等自造值），“机箱尽量小/要小机箱”→itx；appearance 是颜色、灯效等外观，用提炼后的简洁表达（如“白色”），完整原话留给 quote；“机箱最好是白色的”是 set appearance="白色"，与尺寸无关；recipient 装机对象字符串；notes 仅保留无法结构化进其他字段的补充背景，kind=context；用途已能表达时（“家里老人上网用”是 set use_case.type=general）不要再把原话复述进 notes 或 observations。priority 硬件优先品类数组，“优先把显卡配好/预算紧先保CPU”这类优先级表达用 priority（如["gpu"]），不要自创 free.* 条目重复记录。
 observations只保留无法可靠结构化的用户原话，不要把你自己的推理、取舍说明或可结构化信息的复述存成观察（金标口径：能进 operations 的不进 observations，没有内容就输出空数组）；不得用观察重新激活removed字段、采纳备选或冒充明确偏好。
 
@@ -286,6 +286,14 @@ func prepareRequirementUpdate(state schemas.RequirementState, update schemas.Req
 			observe(op.Field, op.Quote, "该值是系统默认，本轮原话未出现，未作为用户事实采用")
 			continue
 		}
+		// 无证据的 remove existing_parts 同样是关键字段错写:撤销全部已有件
+		// 只能来自用户明确的撤回表达(意图动词+旧件/已有对象)。
+		// ponytail: 白名单不覆盖"显卡不再沿用"等单品类口语,漏报路径是保留
+		// observation 等追问补证,不会误删用户事实。
+		if op.Op == "remove" && op.Field == "existing_parts" && !existingPartsRemovalEvidence(source.Quote) {
+			observe(op.Field, op.Quote, "本轮未表达撤销已有件，不执行移除")
+			continue
+		}
 		// 模型省略 remove 的摘录时，来源仍绑定本轮完整消息，不猜撤销语义。
 		if op.Op == "remove" && op.Quote == "" && working.Fields[op.Field].Status == "active" {
 			op.Quote = source.Quote
@@ -436,6 +444,20 @@ func existingPartsClearedEvidence(quote string) bool {
 		}
 	}
 	return false
+}
+
+// existingPartsRemovalEvidence 要求撤销意图动词与旧件/已有对象同时出现，防止
+// 模型把型号并入 owned_parts 时顺手移除用户的 existing_parts 记录（认证修复
+// 二跑实录的关键字段错写）。
+func existingPartsRemovalEvidence(quote string) bool {
+	verb, object := false, false
+	for _, marker := range []string{"不要", "不用", "不使用", "撤掉", "撤销", "放弃", "移除", "删掉", "不再用", "不再使用", "不留"} {
+		verb = verb || strings.Contains(quote, marker)
+	}
+	for _, marker := range []string{"旧件", "已有", "旧的", "之前的"} {
+		object = object || strings.Contains(quote, marker)
+	}
+	return verb && object
 }
 
 // defaultCopiedWithoutEvidence 拦截把数值型系统默认值照抄成用户事实（当前唯

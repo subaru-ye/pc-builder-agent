@@ -23,6 +23,8 @@ created: 2026-09-24
 - **prompt**：①evidence 判定顺序——本轮原话自己给出完整值一律 stated，`accepted_proposal` 仅用于采纳上一轮实际存在的建议，误标会被拒收且不会改判；②`effective_defaults` 是程序已应用的默认值，禁止照抄进 operations；③空 `existing_parts` 必须有本轮全部新买/无已有件原话，点路径误用说明程序会形状纠偏但不要依赖。
 - **守卫**：①`normalizeOwnedModelPath` 扩展归一单段 `owned_parts.<category>`（对象/字符串值，类目与路径一致、quote 逐字），型号 grounding 仍由 reducer 校验；②空 `existing_parts=[]` 无"全新/新买/没有已有"等证据时降级 observation（关键词白名单，ponytail：口语变体漏报走追问补证不误写）；③数值型系统默认拷贝（当前唯一为 budget_flex 0.1）且原话无该值字面量时降级 observation（枚举默认 any 等是合法语义映射，不做字面量检查；ponytail："一成"类换算不在字面量内，漏报为可撤销 prefer 事实，无 veto）。
 
+**二次补充（冻结 6c533be 首跑后新增，同根因族）**：修复首跑中模型在把型号并入 `owned_parts` 的同时多发无证据的 `remove existing_parts`（`cv-owned-model-flow` r2/r3，关键字段错写 ×2）——守卫新增撤销证据红线（意图动词+旧件/已有对象同时出现才执行移除，否则降级 observation），prompt 明确 existing_parts 与 owned_parts 并存、提交型号不代表撤销已有件。首跑（130 调用，task_success 6/7 达标、veto 0）存证于 `artifacts/reqv2/screening-fix-live-devcal-r3-20260924`。
+
 **不放松授权合同**：`verifyAcceptedProposals` 原样；无提案/拒绝/询问边界仍按原合同拒收，不恢复任何 stated 数字降级路径。
 
 ## Out

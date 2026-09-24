@@ -107,3 +107,27 @@ func TestPrepareNormalizesOwnedCategoryDotPathShapes(t *testing.T) {
 		t.Fatalf("类目不符必须拒绝: %+v", out.Operations)
 	}
 }
+
+// ⑤ 修复二跑实录：模型把型号并入 owned_parts 的同时顺手 remove
+// existing_parts——无撤销表达的关键字移除必须降级为观察。
+func TestPrepareRemoveExistingPartsRequiresRemovalEvidence(t *testing.T) {
+	state := schemas.NewRequirementState()
+	state.Fields["existing_parts"] = schemas.RequirementField{Status: "active", Value: json.RawMessage(`["gpu"]`), Strength: "must", Scope: "session"}
+	out := prepareRequirementUpdate(state, schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{
+		{Op: "set", Field: "owned_parts", Value: json.RawMessage(`[{"category":"gpu","model":"4070 Super"}]`), Evidence: "stated", Quote: "显卡是4070 Super"},
+		{Op: "remove", Field: "existing_parts", Quote: "显卡是4070 Super"},
+	}}, guardSource("显卡是4070 Super"))
+	if len(out.Operations) != 1 || out.Operations[0].Op != "set" || out.Operations[0].Field != "owned_parts" {
+		t.Fatalf("型号写入应保留、无证据移除必须降级: %+v", out.Operations)
+	}
+	if len(out.Observations) != 1 || !strings.Contains(out.Observations[0].Reason, "撤销已有件") {
+		t.Fatalf("移除原文必须保留为观察: %+v", out.Observations)
+	}
+	// 正例：用户明确表达不再保留旧件。
+	out = prepareRequirementUpdate(state, schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{
+		{Op: "remove", Field: "existing_parts", Quote: "旧件都不要了"},
+	}}, guardSource("旧件都不要了，全部换成新的"))
+	if len(out.Operations) != 1 || out.Operations[0].Op != "remove" {
+		t.Fatalf("明确撤回表达应执行移除: %+v", out.Operations)
+	}
+}

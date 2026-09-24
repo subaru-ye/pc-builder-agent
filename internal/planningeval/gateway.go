@@ -34,6 +34,10 @@ type Models struct {
 	MaxCalls           int
 	Intent             decision.IntentClassifier
 	MaxIntentCalls     int
+	// AblateStateView 是评估入口的单因素消融开关：把模型可见的结构化
+	// RequirementState prompt view 替换为空骨架。guard/reducer 仍消费真实
+	// 状态；只改提示词输入，不改产品判定。开启的运行只作诊断。
+	AblateStateView bool
 	// Explicitly recorded CNY price rates per million tokens; zero means the
 	// rate was not supplied and no cash estimate is reported.
 	IntentInputPricePerMTok  float64
@@ -161,6 +165,44 @@ func (g *gateway) journal(value any) error {
 	}
 	return nil
 }
+
+// ablatedStateViewModel 是消融中间件：在请求送达 provider 前把提示词中的
+// 结构化 RequirementState 视图精确替换为空骨架，并落盘改写后请求的哈希。
+// 替换按完整视图字符串匹配，空状态（视图已是骨架）时不包一层、不改写。
+type ablatedStateViewModel struct {
+	inner            model.LLM
+	oldView, newView string
+	journal          func(any) error
+}
+
+func (m *ablatedStateViewModel) Name() string { return m.inner.Name() }
+
+func (m *ablatedStateViewModel) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
+	return func(yield func(*model.LLMResponse, error) bool) {
+		rewritten := 0
+		for _, content := range req.Contents {
+			for _, part := range content.Parts {
+				if part != nil && strings.Contains(part.Text, m.oldView) {
+					part.Text = strings.ReplaceAll(part.Text, m.oldView, m.newView)
+					rewritten++
+				}
+			}
+		}
+		if m.journal != nil {
+			raw, _ := json.Marshal(req)
+			if err := m.journal(map[string]any{"event": "ablation_state_view_rewrite", "rewritten_parts": rewritten, "sent_request_sha256": Hash(raw)}); err != nil {
+				yield(nil, err)
+				return
+			}
+		}
+		for resp, err := range m.inner.GenerateContent(ctx, req, stream) {
+			if !yield(resp, err) {
+				return
+			}
+		}
+	}
+}
+
 func (g *gateway) ContextAvailable(context.Context, string, string) (bool, error) { return true, nil }
 func (g *gateway) Screen(ctx context.Context, owner, id string, input product.ScreenInput) (product.ScreenResult, error) {
 	g.mu.Lock()
@@ -180,6 +222,13 @@ func (g *gateway) Screen(ctx context.Context, owner, id string, input product.Sc
 	live := g.models.Screening
 	if len(step.Screen) > 0 {
 		live = nil
+	}
+	if live != nil && g.models.AblateStateView && input.RequirementState != nil {
+		oldView := string(schemas.RequirementStatePromptView(*input.RequirementState))
+		newView := string(schemas.RequirementStatePromptView(schemas.NewRequirementState()))
+		if oldView != newView {
+			live = &ablatedStateViewModel{inner: live, oldView: oldView, newView: newView, journal: g.models.Journal}
+		}
 	}
 	m := &tracedModel{g: g, role: "screening", live: live, outputs: screenOutputs}
 	a, err := pipeline.NewProductScreening(m)

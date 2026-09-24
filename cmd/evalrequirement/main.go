@@ -33,6 +33,7 @@ func main() {
 	skipModelLayers := flag.Bool("skip-model-layers", false, "live run without screening model: deterministic layers + DB layers only, model layers recorded as skipped")
 	runDir := flag.String("run", "", "run directory to replay")
 	regradeOpt := flag.Bool("regrade", false, "explicitly re-grade a run produced by an older grader version")
+	ablateStateView := flag.Bool("ablate-state-view", false, "diagnostic ablation: rewrite the model-visible structured RequirementState prompt view to an empty skeleton at the eval gateway (guard/reducer keep the real state); never candidate evidence")
 	baselineDir := flag.String("baseline", "", "baseline run directory (compare)")
 	candidateDir := flag.String("candidate", "", "candidate run directory (compare)")
 	flag.Parse()
@@ -275,6 +276,13 @@ func main() {
 		"binary_sha256": binaryHash(),
 		"note":          "prompt SHA256 per request is recorded in events.jsonl model_request events",
 	}
+	if *ablateStateView {
+		plan["ablation"] = map[string]any{
+			"factor": "requirement_state_prompt_view",
+			"method": "eval-gateway rewrite of the model-visible structured RequirementState view to an empty skeleton; guard/reducer keep the real state",
+			"scope":  "diagnostic only; not candidate evidence",
+		}
+	}
 	if err := writeJSON(filepath.Join(*out, "plan.json"), plan); err != nil {
 		fail(err)
 	}
@@ -292,7 +300,7 @@ func main() {
 	}
 	report, runErr := planningeval.RunRequirementV2(ctx, data, planningeval.ReqV2RunOptions{
 		DSN: os.Getenv("PLANNING_EVAL_DSN"), Splits: selected, Repeats: *repeats,
-		Screening: screening, MaxCalls: *maxCalls, Journal: journal,
+		Screening: screening, MaxCalls: *maxCalls, Journal: journal, AblateStateView: *ablateStateView,
 	})
 	results, _ := os.OpenFile(filepath.Join(*out, "results.jsonl"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	for _, c := range report.Cases {

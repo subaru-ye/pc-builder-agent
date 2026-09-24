@@ -78,6 +78,9 @@ type ReqV2RunOptions struct {
 	Screening model.LLM // nil → extraction/conversations 记为 skipped
 	MaxCalls  int
 	Journal   func(any) error
+	// AblateStateView 开启评估入口单因素消融（模型可见状态视图→空骨架）。
+	// 消融运行只作诊断，不产生可发布候选。
+	AblateStateView bool
 }
 
 type ReqV2CaseObservation struct {
@@ -342,6 +345,10 @@ func RunRequirementV2(ctx context.Context, dataset *ReqV2Dataset, opts ReqV2RunO
 	}
 	if opts.Screening == nil {
 		report.Limitations = append(report.Limitations, "未配置 Screening 模型：extraction/conversations 层跳过。")
+	}
+	if opts.AblateStateView {
+		report.Limitations = append(report.Limitations,
+			"ablation 诊断运行：模型可见的结构化 RequirementState prompt view 已在评估入口替换为空骨架（guard/reducer 仍用真实状态）；结果不作为候选证据。")
 	}
 
 	type pending struct {
@@ -1002,7 +1009,7 @@ func (r *recordingEventSink) presentationAction(runID string) string {
 }
 
 func newDriver(ctx context.Context, st *store.Store, opts ReqV2RunOptions, screening model.LLM, holdBuilder bool) (*v2Driver, error) {
-	g := &gateway{store: st, models: Models{Screening: screening, MaxCalls: opts.MaxCalls, Journal: opts.Journal, BuilderHold: holdBuilder}}
+	g := &gateway{store: st, models: Models{Screening: screening, MaxCalls: opts.MaxCalls, Journal: opts.Journal, BuilderHold: holdBuilder, AblateStateView: opts.AblateStateView}}
 	sink := newRecordingEventSink()
 	svc, err := product.NewService(ctx, st, g, sink)
 	if err != nil {

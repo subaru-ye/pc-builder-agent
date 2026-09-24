@@ -43,7 +43,7 @@ const requirementStateInstruction = `你负责本轮需求语义解析与回答�
 用户提供的选配相关参考信息也必须保留，不因未购买、未核验、型号不明而丢弃。报价参考用独立free.*、kind=context记录商品/品类、原金额和用户说明的购买状态，不能写成budget_cny、已有件、必须采购或已核验价格；未决定采用的具体型号用alternative。暂时无法整理的参考信息用observations保留完整相关原文。每个参考独立记录并沿用稳定编号，其他预算/用途变化不能删除它；用户撤销时按同一编号remove，不从旧消息恢复。
 同一句可包含多个独立更新，必须逐项落入operations，不能只在answer中提及。预算金额、购买计划和金额覆盖范围是不同信息：已有配件、缺其他配件或打算购买都不是费用口径，不能据此填写budget_basis。“手上有显卡，准备买其余配件，预算九千”仅记录金额和已有件，口径未知；“这九千不计算手上的显卡价值”才记录new_purchase；“九千要包括手上显卡的价值”记录full_build。明确称金额为新增采购费用时，同一原文同时支持budget_cny和budget_basis=new_purchase两项操作；明确包含已有件价值时记录full_build。是否有已有件、是否给出准确型号均不改变已表达的金额口径，不得因此省略口径。
 装机对象独立记录：仅在明确的赠送/代装表达（“给我弟弟装”“给朋友配”“为父母装一台”）时 set recipient为用户说的对象；“家里老人上网用”是用途描述不是代装表达，不设 recipient；没有说明对象时不补默认“自己”。
-执行上下文中的“最近一条助手回复”仅帮助理解“好的”“可以”等指代，不是用户事实，不得恢复旧值。型号、兼容性、报价和预算内如何选件不在你的职责内，不猜测、不比较具体配件。
+执行上下文中的“最近一条助手回复”仅帮助理解“好的”“可以”等指代，不是用户事实，不得恢复旧值。确定性参考中的 effective_defaults（system_default）是程序已应用的默认值，不是用户事实：禁止照抄进 operations，除非本轮用户原话明确出现该值。型号、兼容性、报价和预算内如何选件不在你的职责内，不猜测、不比较具体配件。
 未预设要求逐项保存到 free.<稳定英文编号> 字段，value 为中文要求全文，后续修改沿用同一编号，撤销用 remove；不能将多个独立条件挤进 notes。同一语义的后续更正必须复用已有free.*编号；多个字段或notes已重复记录同一信息时，同轮更新权威条目并remove被替代的重复条目。
 kind 与 strength 独立且 kind 只允许 fact、context、constraint 三个值（没有"preference"这类值，偏好程度用 strength=prefer 表达）：fact 表示用途、工作负载、已有件、装机对象等事实；constraint 表示要求配置满足的条件（含外观、预算、口径等结构化字段，如 set appearance="白色" kind=constraint、set budget_basis kind=constraint）；context 只允许用于 notes、recipient 和 free.* 条目，结构化字段（appearance、budget_basis、noise_pref 等）绝不能用 context，否则会被拒绝。自由文本必须条件逐项使用 free.<稳定编号> kind=constraint strength=must。混合说明拆成独立条目。
 每项 evidence 必填：stated 表示本轮明确表达，允许忠实语义归类和数值换算；inferred 表示模型推断或默认，不能作为用户要求；uncertain 表示字段有歧义（仅可用于conflict）；accepted_proposal 表示用户明确接受上一轮助手建议的具体值。无法安全结构化时输出 observations:[{"field":"size_pref","quote":"方便我搬来搬去","reason":"尚未指定板型，保留便携诉求"}]，field可省略。不要把小巧猜成ITX、已有AMD型号猜成品牌偏好、素材分辨率猜成显示目标。未知不等于冲突：尚未提供值时保留unknown，不输出set null或conflict；只有确有相互矛盾的表达或当前有效值正在被不明确地纠正时用conflict。
@@ -55,7 +55,7 @@ kind 与 strength 独立且 kind 只允许 fact、context、constraint 三个值
 - conflict：同轮相互矛盾、无法判断最终选择时用此操作，evidence=uncertain，value 可省略。多人给出不一致要求（“我爸说预算8000，我妈说不能超过6000”）或同句前后矛盾都属此类；禁止替用户选更严的一方或自创折中。明确的后来更正直接 set，不制造冲突。
 - restore：用户明确恢复被临时例外的原要求（“还是按原来的7500来”“恢复原来的要求”），value省略；不要把恢复表达成新的 set。
 - scope=temporary：“这次先用”“这次可以例外”等明确临时放宽/覆盖；保留原值，直到用户明确恢复。
-- 用户明确接受“未解决建议”中同字段同值的建议时（如对“按7500元的预算继续可以吗？”只回答“可以”“就按这个来”），输出 set 且 evidence=accepted_proposal，quote 逐字摘录用户接受的原话；程序会做服务器端核验。用户复述了具体数值（“可以，就按7500来”）时 evidence=stated——用户亲口给出的值就是明确表达，不是对建议的裸接受。
+- 用户明确接受“未解决建议”中同字段同值的建议时（如对“按7500元的预算继续可以吗？”只回答“可以”“就按这个来”），输出 set 且 evidence=accepted_proposal，quote 逐字摘录用户接受的原话；程序会做服务器端核验。用户复述了具体数值（“可以，就按7500来”）时 evidence=stated——用户亲口给出的值就是明确表达，不是对建议的裸接受。判定顺序：先看本轮原话是否自己给出了完整值，“那就7500吧”“就按1080p来”都是用户亲口的值，一律 evidence=stated，哪怕上一轮助手提过同样的值；只有采纳上一轮助手的建议且该建议确实存在时才用 accepted_proposal。上一轮没有相应建议却标 accepted_proposal，程序会按合同拒收（值不保存、只留观察），不会自动改判 stated。
 - 用户明确要求本次一并购买或配置显示器、键盘、鼠标时，不写任何对应字段，把原话放入顶层 observations 数组（元素只有 field/quote/reason 三个键，field 可省略）：{"quote":"要带显示器","reason":"unsupported_capability:monitor"}（keyboard、mouse 同理）；operations 里不得出现 op=observation 之类的伪操作。“我有显示器”“1080p显示器够用”等已有背景陈述不是购买请求，按普通信息处理，不确定时保留普通 observation。reason 必须逐字是 unsupported_capability:monitor、unsupported_capability:keyboard 或 unsupported_capability:mouse 之一（每个能力一条观察，禁止合并成 monitor/keyboard/mouse 或逗号列表）。用户明确放弃某项时输出 {"op":"remove","field":"unsupported.monitor","quote":"显示器先不要了"} 这类撤销操作。
 - “预算7500”是 set budget_cny=7500；“预算不要超过7500”是 set budget_cny=7500 且 set budget_flex=0（严格不超）。
 
@@ -73,7 +73,7 @@ answer 只回答用户当前问题，可为空：不重复已保存信息，不�
 字段与值（必须采用以下点路径）：
 budget_cny 正整数预算金额；budget_flex 非负比例，仅明确预算弹性才给，严格不超设0；budget_basis new_purchase|full_build，仅当用户明确说明金额覆盖口径（“不含已有件价值”“整机总价”“这九千要包括手上显卡的价值”）才设置；“帮我配台全新的主机，配件都新买”只 set existing_parts=[]，绝不设 budget_basis——全新/都新买/打算购买/缺什么配件都不是口径表达。
 use_case.type：general是普通办公、文档表格、上网影音；gaming是玩游戏；productivity专指专业剪辑、渲染、建模等计算工作负载。“帮我配台电脑”这类泛购买表达不含用途信息，不得猜测任何值。use_case.titles 字符串数组，提到具体游戏名时必须逐个收录（“玩DOTA2和LOL”→["DOTA2","LOL"]，同时 set use_case.type=gaming）；use_case.resolution 1080p|2K|4K，只取明确的显示器/游戏输出目标，“剪4K视频”的4K是素材参数（存free.*）；use_case.performance_goal balanced|fps_first|quality_first：用户表达帧率诉求（“希望帧率高一点”“帧率越高越好”）即 fps_first，不生成具体FPS；画质优先才 quality_first；use_case.fps_target 正整数，用户给出明确帧率数字（“帧数至少144”）时设置，此时不再设 performance_goal。
-existing_parts 本次确实已有且可沿用的主机品类数组(cpu/gpu/motherboard/memory/ssd/psu/case/cooler)，显示器不属于主机品类，“全部新买”是 set []；configuration_scope 是系统注入字段，任何情况下都不得出现在你的输出中；owned_parts 是数组字段，确认已有关系且用户给出准确型号后一次提交合并后的完整数组（如[{"category":"gpu","model":"4070 Super"}]），禁止 owned_parts.gpu.model 点路径，不猜SKU；quantity 仅在用户明确表达数量（多根内存、两块硬盘）时携带，单件省略；型号更正替换原件；确认已有但未提供准确型号时只 set existing_parts 品类数组（型号留空待追问），绝不提交 owned_parts——数组项没有 model 就是非法输出。用户某件不再复用时从existing_parts数组移除该品类；撤销全部已有件时remove existing_parts。
+existing_parts 本次确实已有且可沿用的主机品类数组(cpu/gpu/motherboard/memory/ssd/psu/case/cooler)，显示器不属于主机品类，“全部新买”是 set []，本轮原话没有全部新买或无已有件的明确表达时禁止输出空数组（程序会拒收无证据的空已有件）；configuration_scope 是系统注入字段，任何情况下都不得出现在你的输出中；owned_parts 是数组字段，确认已有关系且用户给出准确型号后一次提交合并后的完整数组（如[{"category":"gpu","model":"4070 Super"}]），禁止 owned_parts.gpu.model 或 owned_parts.gpu 点路径（误用时程序会按形状纠偏，但不要依赖），不猜SKU；quantity 仅在用户明确表达数量（多根内存、两块硬盘）时携带，单件省略；型号更正替换原件；确认已有但未提供准确型号时只 set existing_parts 品类数组（型号留空待追问），绝不提交 owned_parts——数组项没有 model 就是非法输出。用户某件不再复用时从existing_parts数组移除该品类；撤销全部已有件时remove existing_parts。
 brand_pref.cpu any|amd|intel；brand_pref.gpu any|amd|nvidia；未提品牌不能填any。noise_pref silent|normal|any(“都行/无所谓”且无其他取向词才是any；“声音无所谓，正常就行”有明确取向词，取 normal)；size_pref 只能取 atx|matx|itx|any（没有"small"等自造值），“机箱尽量小/要小机箱”→itx；appearance 是颜色、灯效等外观，用提炼后的简洁表达（如“白色”），完整原话留给 quote；“机箱最好是白色的”是 set appearance="白色"，与尺寸无关；recipient 装机对象字符串；notes 仅保留无法结构化进其他字段的补充背景，kind=context；用途已能表达时（“家里老人上网用”是 set use_case.type=general）不要再把原话复述进 notes 或 observations。priority 硬件优先品类数组，“优先把显卡配好/预算紧先保CPU”这类优先级表达用 priority（如["gpu"]），不要自创 free.* 条目重复记录。
 observations只保留无法可靠结构化的用户原话，不要把你自己的推理、取舍说明或可结构化信息的复述存成观察（金标口径：能进 operations 的不进 observations，没有内容就输出空数组）；不得用观察重新激活removed字段、采纳备选或冒充明确偏好。
 
@@ -267,10 +267,24 @@ func prepareRequirementUpdate(state schemas.RequirementState, update schemas.Req
 			op.Quote = source.Quote
 		}
 		// 形状纠偏:确定性参考的追问字段是 owned_parts.<category>.model,
-		// 模型会模仿该形状;规范化为 owned_parts 数组合并操作,值仍来自本轮原话。
+		// 模型会模仿该形状(含单段 owned_parts.<category> 携带对象/字符串);
+		// 规范化为 owned_parts 数组合并操作,值仍来自本轮原话。
 		if normalized, ok := normalizeOwnedModelPath(working, op, source); ok {
 			update.Operations[i] = normalized
 			op = normalized
+		}
+		// 证据红线(按授权合同降级为观察,不触发纠偏重试):
+		// 空 existing_parts 必须有本轮"全新购买/无已有件"的明确表达——
+		// 泛购买语句("帮我配台电脑")不是采购范围证据。
+		if op.Op == "set" && op.Field == "existing_parts" && isEmptyJSONArray(op.Value) && !existingPartsClearedEvidence(source.Quote) {
+			observe(op.Field, op.Quote, "本轮未表达全部新买或无已有件，不写入空已有件")
+			continue
+		}
+		// 数值型系统默认(如 budget_flex 0.1)已由程序应用,照抄默认不是用户
+		// 事实;仅当本轮原话出现该值字面量时才接受写入。
+		if op.Op == "set" && defaultCopiedWithoutEvidence(working, op, source.Quote) {
+			observe(op.Field, op.Quote, "该值是系统默认，本轮原话未出现，未作为用户事实采用")
+			continue
 		}
 		// 模型省略 remove 的摘录时，来源仍绑定本轮完整消息，不猜撤销语义。
 		if op.Op == "remove" && op.Quote == "" && working.Fields[op.Field].Status == "active" {
@@ -326,20 +340,17 @@ func prepareRequirementUpdate(state schemas.RequirementState, update schemas.Req
 	return out
 }
 
-// normalizeOwnedModelPath 把 set owned_parts.<category>.model="M" 规范化为
-// owned_parts 数组的合并操作(保留既有其它品类,替换同类目型号)。
-// 值只能是本轮 quote 中的准确型号;不生成、不猜测任何事实。
+// normalizeOwnedModelPath 把 owned_parts.<category>.model="M" 与单段
+// owned_parts.<category>（值为 {"category","model"} 对象或型号字符串）统一
+// 规范化为 owned_parts 数组的合并操作(保留既有其它品类,替换同类目型号)。
+// 值只能来自本轮 quote;不生成、不猜测任何事实;型号 grounding 由 reducer 校验。
 func normalizeOwnedModelPath(state schemas.RequirementState, op schemas.RequirementOperation, source schemas.RequirementSource) (schemas.RequirementOperation, bool) {
 	rest, ok := strings.CutPrefix(op.Field, "owned_parts.")
-	if !ok || !strings.HasSuffix(rest, ".model") || op.Op != "set" {
+	if !ok || op.Op != "set" {
 		return op, false
 	}
-	category := strings.TrimSuffix(rest, ".model")
-	if !containsCategory(category) || len(op.Value) == 0 || op.Value[0] != '"' {
-		return op, false
-	}
-	var model string
-	if json.Unmarshal(op.Value, &model) != nil || strings.TrimSpace(model) == "" {
+	category, model, ok := ownedPathTarget(rest, op.Value)
+	if !ok {
 		return op, false
 	}
 	quote := op.Quote
@@ -375,6 +386,83 @@ func normalizeOwnedModelPath(state schemas.RequirementState, op schemas.Requirem
 	}
 	return schemas.RequirementOperation{Op: "set", Field: "owned_parts", Value: value,
 		Strength: op.Strength, Scope: op.Scope, Quote: quote, Kind: kind, Evidence: op.Evidence}, true
+}
+
+// ownedPathTarget 归一两类点路径形状为 (category, model):
+//   - "<category>.model"：值为型号字符串（追问字段形状）;
+//   - "<category>"：值为型号字符串或 {"category","model"} 对象
+//     （对象 category 与路径不一致时拒绝,不静默改写）。
+func ownedPathTarget(rest string, value json.RawMessage) (string, string, bool) {
+	if category, suffix, hasDot := strings.Cut(rest, "."); hasDot && suffix == "model" && !strings.Contains(category, ".") {
+		var model string
+		if containsCategory(category) && len(value) > 0 && value[0] == '"' && json.Unmarshal(value, &model) == nil && strings.TrimSpace(model) != "" {
+			return category, model, true
+		}
+		return "", "", false
+	}
+	if !containsCategory(rest) {
+		return "", "", false
+	}
+	if len(value) > 0 && value[0] == '"' {
+		var model string
+		if json.Unmarshal(value, &model) != nil || strings.TrimSpace(model) == "" {
+			return "", "", false
+		}
+		return rest, model, true
+	}
+	var part schemas.OwnedPart
+	if json.Unmarshal(value, &part) != nil || strings.TrimSpace(part.Model) == "" {
+		return "", "", false
+	}
+	if part.Category != "" && string(part.Category) != rest {
+		return "", "", false
+	}
+	return rest, part.Model, true
+}
+
+// isEmptyJSONArray 判断值是否为空 JSON 数组（existing_parts=[] 的"全部新买"语义）。
+func isEmptyJSONArray(value json.RawMessage) bool {
+	var items []any
+	return len(value) > 0 && json.Unmarshal(value, &items) == nil && len(items) == 0
+}
+
+// existingPartsClearedEvidence 是保守的中文证据启发式：空已有件只能来自用户
+// 明确表达全新购买或没有可沿用旧件。ponytail: 白名单不覆盖口语变体（如"一件
+// 不留"），漏报路径是保留 observation 等追问补证，不会误写用户事实。
+func existingPartsClearedEvidence(quote string) bool {
+	for _, marker := range []string{"全新", "新买", "全部新的", "都是新的", "全是新的", "没有已有", "没有旧", "无已有", "不用旧", "不使用旧", "不要旧"} {
+		if strings.Contains(quote, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// defaultCopiedWithoutEvidence 拦截把数值型系统默认值照抄成用户事实（当前唯
+// 一数值默认是 budget_flex 0.1）。仅约束 JSON 数值默认；枚举默认（any 等）是
+// 合法语义映射，不做字面量检查。ponytail: 口语数值表达（如"一成"）不在字面
+// 量检查内，漏报降级为一条可撤销的 prefer 事实，不触发 veto。
+func defaultCopiedWithoutEvidence(state schemas.RequirementState, op schemas.RequirementOperation, quote string) bool {
+	if op.Evidence != "stated" {
+		return false
+	}
+	readiness, err := schemas.EvaluateRequirementReadiness(state)
+	if err != nil {
+		return false
+	}
+	for _, def := range readiness.EffectiveDefaults {
+		if def.Field != op.Field || len(def.Value) == 0 {
+			continue
+		}
+		if c := def.Value[0]; c != '-' && (c < '0' || c > '9') {
+			continue // 仅数值默认参与字面量核对
+		}
+		if !sameJSONValue(def.Value, op.Value) {
+			continue
+		}
+		return !strings.Contains(quote, strings.TrimSpace(string(def.Value)))
+	}
+	return false
 }
 
 // sameJSONValue 语义比较两个 JSON 值(键序无关)。

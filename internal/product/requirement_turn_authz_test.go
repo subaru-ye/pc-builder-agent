@@ -284,6 +284,35 @@ func TestNeutralUtteranceIsNotConsent(t *testing.T) {
 	}
 }
 
+// 认证批次 B 实录边界(B r3 cv-fps-progressive):上一轮没有任何建议时,模型
+// 把"那就7500吧"误标 accepted_proposal——verifyAcceptedProposals 必须拒收
+// (值不保存、只留观察),不得改判 stated、不得写入 active。
+func TestVerifyAcceptedProposalWithoutAnyProposalIsDropped(t *testing.T) {
+	source := schemas.RequirementSource{Kind: "chat", MessageID: "m", Quote: "那就7500吧"}
+	turn := &pipeline.RequirementTurnResult{Operations: []schemas.RequirementOperation{
+		{Op: "set", Field: "budget_cny", Value: json.RawMessage("7500"), Evidence: "accepted_proposal", Quote: "那就7500吧"},
+	}}
+	if accepted := verifyAcceptedProposals(turn, nil, source); len(accepted) != 0 {
+		t.Fatalf("无提案时不得采纳: %+v", accepted)
+	}
+	if len(turn.Operations) != 0 {
+		t.Fatalf("误标操作必须移除: %+v", turn.Operations)
+	}
+	if len(turn.Observations) != 1 || !strings.Contains(turn.Observations[0].Quote, "7500") {
+		t.Fatalf("原文必须保留为观察: %+v", turn.Observations)
+	}
+	// 同一原话以正确标签 stated 表达时,数字 grounding 由既有 reducer 校验,
+	// 允许写入——证明拒收只针对误用标签,不针对该句式本身。
+	stated := &pipeline.RequirementTurnResult{Operations: []schemas.RequirementOperation{
+		{Op: "set", Field: "budget_cny", Value: json.RawMessage("7500"), Evidence: "stated", Quote: "那就7500吧"},
+	}}
+	if accepted := verifyAcceptedProposals(stated, nil, source); len(stated.Operations) != 1 {
+		t.Fatalf("stated 标签不走提案核验,应原样保留: %+v", stated.Operations)
+	} else if len(accepted) != 0 {
+		t.Fatalf("stated 不产生提案采纳记录: %+v", accepted)
+	}
+}
+
 // 服务级反例:用户在问行情,模型却贴 accepted_proposal 标签——完整服务路径
 // 不得写入 active,也不得降级 stated。
 func TestServiceQuestionTurnNeverAdoptsProposal(t *testing.T) {

@@ -15,6 +15,8 @@ created: 2026-09-22
 4. `requirement-confirmation-builder-gate-v2`
 5. `requirement-workspace-sidebar-v2`
 
+2026-09-24：Spec 5 桌面核心流程已由用户人工验收并记录范围调整；移动/平板、IME 与完整无障碍扫描未被记为通过。离线 requirements 浏览器 harness 的历史 503 已由独立的测试设施提交 `c12b246` 修复，桌面核心链路通过；正式认证仍须按本 change 对最终候选重新取证。
+
 ## Outcome
 
 对一个锁定的 Requirement v2 候选进行独立发布认证，产出可复现的 `go/no-go` 报告。本 change 不顺手修改业务代码、prompt、fixture、grader 或门槛；发现失败时回到对应产品 change 修复，形成新的候选后重新开始认证。
@@ -38,6 +40,7 @@ created: 2026-09-22
 - 不接入 Jev 或评估显示器/外设。
 - 不把 LLM Judge 诊断分作为发布门槛。
 - 不把小样本差异描述为普遍模型排名。
+- `/eval` 工作台只用于只读阅证；冻结 CLI 产物与 grader/gates 是唯一判卷来源，工作台显示不得改分或替代原始证据。
 
 ## Candidate freeze
 
@@ -51,6 +54,8 @@ created: 2026-09-22
 - Go/Node/browser 版本和运行环境。
 
 认证要求 clean candidate commit；本地评估产物可以 gitignored，但必须回链该 commit。若 dirty，仅允许评估工具生成的明确非源码产物，否则认证无效。
+
+已有 `docs/eval/requirement-v2/预认证-20260924.md` 是旧代码身份 `6537156` 的 development/calibration 首跑（repeats=1），可作运行可用性与失败线索，**不得提升为最终候选的 holdout、Pass^3 或 GO 证据**。测试设施修复和文档收口提交后，先锁定新的 clean commit；产品行为若未变化，仍须在最终报告中分别列出旧预认证与新候选的身份，按预注册计划完成正式运行。
 
 ## Execution plan
 
@@ -76,6 +81,7 @@ created: 2026-09-22
 - development 只用于确认运行可用，不参与最终选择。
 - 对 calibration 上已经选定的唯一候选做固定重复，确认没有明显环境异常。
 - 对锁定 holdout 运行一次候选批次；关键边界每题至少三次，按 Pass^3 判定。
+- holdout 在候选、预算和判卷身份锁定前不得运行或为调 prompt/规则预览金标；运行后不得以修复同一候选并重跑来挑选较好结果。
 - 保存每次首跑，不允许重跑后只选成功结果。
 
 ### 4. End-to-end product path
@@ -90,6 +96,8 @@ created: 2026-09-22
 - 修改后旧配置、版本和 diff。
 
 既检查轨迹，也直接读取最终数据库/API 状态；不能只依据页面文案或 Agent 宣称。
+
+离线浏览器 harness 已改用 planning 网关，认证时仍需在**最终候选**上重跑浏览器→API→数据库的成功路径，并覆盖失败/重试和旧配置呈现；不能仅以测试设施修复时的单条桌面通过替代本节。桌面 1440px 核心流程为发布阻断项；768/375 视口及触控按 Spec 5 的范围调整做诊断并如实列限制，不把未运行写为通过。桌面键盘、焦点和确认路径仍需实际检查。
 
 ### 5. Model swap
 
@@ -156,6 +164,8 @@ ui_accessibility
 
 成功率提高但调用、token 或延迟显著恶化时，报告必须明确成本收益，不用单项机制指标代替最终用户任务成功。
 
+配对 baseline compare 只使用相同 manifest、grader 和独立 case 口径；历史产物身份不兼容时，按评估设施的显式零模型 regrade 留 provenance，仍不把跨合同 verdict 变化宣称为产品改进。样本或不一致对不足时仅描述观察，不给胜出结论。
+
 ## Human review
 
 发布结论前人工抽查：
@@ -166,7 +176,7 @@ ui_accessibility
 - 混合修改＋开始请求。
 - 多轮问题回答是否先于追问。
 - UI 是否展示 system default、unknown、conflict 和 stale build。
-- 三档视口与键盘路径。
+- 桌面 1440px 与键盘路径；768/375 视口、触控和 IME 作为诊断覆盖，记录已执行范围与限制，不冒充桌面验收。
 
 自由文本只按预先定义 rubric 诊断，不因为更长、更热情或更像预期措辞而加分。
 
@@ -206,6 +216,7 @@ artifacts/requirement-v2-certification-<date>/
 - 没有未解释的数据、grader 或环境异常。
 - 人工抽查未发现系统性误判。
 - 文档、OpenAPI 和实际 UI/行为一致。
+- 桌面浏览器核心任务、键盘与确认路径无阻断缺陷；移动/平板和 IME 的诊断结果及未测项均在限制中公开，不因非目标视口的纯视觉问题单独否决候选。
 
 ### NO-GO
 
@@ -228,7 +239,7 @@ NO-GO 后不得在本 change 内修改产品；应新开或恢复对应产品 ch
 ## Verification
 
 - `go test ./... && go vet ./...`。
-- Web typecheck、lint、unit 和规定 Playwright 视口。
+- Web typecheck、lint、unit 和桌面 Playwright 核心路径；768/375 视口及 IME 按诊断范围留证。
 - evaluation check/replay/compare。
 - 显式、预算有界的 live Pass^3。
 - 真实临时数据库的确认/Builder 快照工作流。
@@ -245,4 +256,3 @@ NO-GO 后不得在本 change 内修改产品；应新开或恢复对应产品 ch
 - [ ] 人工抽查完成。
 - [ ] 报告给出明确 GO/NO-GO。
 - [ ] 未在认证阶段修改业务代码、prompt、fixture、grader 或 gates。
-

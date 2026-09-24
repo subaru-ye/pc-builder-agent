@@ -1,6 +1,7 @@
 ---
-status: proposed
+status: done
 created: 2026-09-22
+completed: 2026-09-24
 ---
 
 # Change: Requirement workspace sidebar v2
@@ -248,12 +249,13 @@ Spec 4 已提供三轴、`review_spec/review_hash` 与确认入口，但当前 S
 
 ## Verification
 
+验收范围调整（2026-09-24，人工验收前）：本轮以桌面 Web 核心流程为交付范围。375/768 视口、触控、中文输入法与完整 axe 扫描保留为后续诊断与优化，不把未运行项目记为通过；Spec 6 仍需如实记录这些覆盖缺口。视觉信息层次和 AI 回复措辞的精修为已知优化项，除非造成错误承诺、误导确认或任务失败，否则不作为本 change 的阻断项。
+
 - Vitest/Testing Library 覆盖所有字段状态、CTA 状态、Tab disabled、409、running edit 和 stale build。
-- Playwright 覆盖：新会话渐进收集、手动填写、核定、生成、修改后旧配置、running edit、failed retry；使用现有 mock 或离线 requirements harness 的脚本化 Screening/Builder，不调用真实模型。
-- 375/768/1440 三档视口。
-- 键盘可完成 Tab、字段编辑、保存、核定和返回；axe 无 serious/critical。
-- 中文输入法、reduced motion、断网、degraded、build failure 均有明确行为。
-- `pnpm typecheck && pnpm lint && pnpm exec vitest run`，以及 `pnpm test:e2e` / 离线 harness 下的 `pnpm test:e2e:requirements`；live E2E 和 holdout 留给发布认证。
+- Playwright 以 1440px 桌面覆盖新会话渐进收集、手动填写、核定、生成、修改后旧配置与 running edit；失败重试及浏览器→API→数据库完整链路由 Spec 6 对最终候选继续验证。mock/离线 harness 不调用真实模型。
+- 375/768 视口与触控为诊断覆盖，未完成时如实列限制，不作为本 change 人工验收通过项。
+- 桌面键盘与焦点路径、axe、中文输入法、reduced motion、断网、degraded 和 build failure 的剩余场景进入 Spec 6 诊断/认证，不以未运行结果充作通过。
+- 本 change 已运行的 typecheck、lint、vitest 与桌面聚焦 Playwright 结果见下方记录；全量 `pnpm test:e2e` / `pnpm test:e2e:requirements`、live E2E 和 holdout 留给 Spec 6 按最终候选重验。
 - API 生成类型无漂移；前端源码中不存在最低矩阵和 10% 预算计算的复制实现。
 - 零模型 `ui-contract` 回归无 veto；它验证后端读取合同，不能代替真实浏览器的视觉、焦点和交互验收。
 
@@ -291,9 +293,11 @@ Spec 4 已提供三轴、`review_spec/review_hash` 与确认入口，但当前 S
 - `web/package.json` 的 `start` 脚本补 `--port 3101`，本地生产模式启动与 dev/Playwright/harness 地址一致。
 - 验证：`pnpm typecheck`、`pnpm exec vitest run` 79/79、`playwright test e2e/requirement-workspace.spec.ts --project=desktop` 4/4（含请求级 revision 断言，修正前接线确认失败）。Go 侧本轮无改动。
 
-### 未解决项：离线 requirements harness 确认→生成 503（先于返工存在）
+### 历史阻塞：离线 requirements harness 确认→生成 503（已于 2026-09-24 修复）
 
 main 上已提交的 `TestRequirementStateBrowserServer`（internal/producthttp/requirement_integration_test.go）以非 planning 接线启动：`requirementReplayGateway.Remote` 按裸 RequirementSpec 解码，而产品 API 的 Builder 载荷是 PlanningInput 形状，任何确认→生成在该 harness 下确定性 503（`upstream_unavailable`）。已用进程内等价复现定位（同一 `requirementIntegrationAPI(t)` 构造 + gaming 流程确认即复现）；planning 模式进程内集成测试（`TestRequirementStatePersistentWorkflow`、`TestVideoRequirementConfirmationReplay`）通过，说明是 harness 接线缺口而非产品路径缺陷。修复方向（如浏览器服务器改用 planning 网关或让裸网关接受 PlanningInput）与完整 `pnpm test:e2e:requirements` 重跑另行安排，不随本返工关闭。
+
+后续独立测试设施修复 `c12b246` 将浏览器入口接至既有 planning 网关，新增 HTTP→API→数据库持久化回归；PG 聚焦测试通过，隔离端口桌面 requirements 浏览器核心链路通过（零真实模型）。上段及前述“未解决”是各轮返工**当时**的状态，不再是当前阻塞；三视口全套仍未运行，不记为通过。
 
 第一轮返工未运行/延期的验证（不得记为通过）：
 
@@ -316,12 +320,14 @@ main 上已提交的 `TestRequirementStateBrowserServer`（internal/producthttp/
 
 ## Completion checklist
 
-- [ ] 右栏共享双 Tab，需求默认、配置按版本启用。
-- [ ] 所有字段状态和 system defaults 诚实展示。
-- [ ] 保存、核定、生成动作边界清晰。
-- [ ] 失败重试使用后端给出的目标 run ID；重新核定差异由后端只读字段提供，前端不猜。
-- [ ] Next.js 不包含业务判定或 hash 比较。
-- [ ] 设计系统四份相关文档已同步，无相互矛盾旧规则。
-- [ ] 桌面、移动端、键盘、IME 和无障碍验收通过。
-- [ ] UI contract evaluation 无 veto。
-- [ ] 未实现显示器、键鼠或 Jev。
+- [x] 右栏共享双 Tab，需求默认、配置按版本启用。
+- [x] 所有字段状态和 system defaults 诚实展示。
+- [x] 保存、核定、生成动作边界清晰。
+- [x] 失败重试使用后端给出的目标 run ID；重新核定差异由后端只读字段提供，前端不猜。
+- [x] Next.js 不包含业务判定或 hash 比较。
+- [x] 设计系统四份相关文档已同步，无相互矛盾旧规则。
+- [x] 桌面核心流程经用户人工验收（2026-09-24）；移动/平板、IME 与完整无障碍扫描按上述范围调整延期，不宣称通过。
+- [x] UI contract 零模型评估 3/3、veto 0（Spec 6 预认证）；浏览器 harness 桌面核心链路随后由独立修复跑通。
+- [x] 未实现显示器、键鼠或 Jev。
+
+验收结论：用户认为桌面功能整体可接受；显示清晰度与 AI 交互生硬列为后续优化，不改写本次冻结评估门槛或已观察到的模型失败。正式发布判断仍由 Spec 6 独立给出。

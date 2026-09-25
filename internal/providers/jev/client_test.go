@@ -2,6 +2,7 @@ package jev
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -186,5 +187,53 @@ func TestQuestionHashStable(t *testing.T) {
 	again := QuestionHash()
 	if again != QuestionHash() {
 		t.Fatal("question hash is not deterministic")
+	}
+}
+
+func fastlaneResponse(choice string, probs map[string]float64, confidence float64) string {
+	encoded, _ := json.Marshal(map[string]float64(probs))
+	return fmt.Sprintf(`{"model":"jev-1.13.0","answers":{"budget_fastlane":{"type":"choice","choice":%q,"probabilities":%s,"confidence":%.2f}},"usage":{"input_tokens":120,"output_tokens":8}}`,
+		choice, encoded, confidence)
+}
+
+func TestAskFastlaneQuestion(t *testing.T) {
+	probs := map[string]float64{"determine": 0.88, "ask": 0.05, "quote_reference": 0.03, "reject": 0.02, "uncertain": 0.02}
+	var seenState string
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		seenState = string(raw)
+		fmt.Fprint(w, fastlaneResponse("determine", probs, 0.9))
+	})
+	state, err := json.Marshal(map[string]any{"current_turn": "预算改成7500", "candidate_field": "budget_cny", "candidate_value": 7500})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := c.Ask(context.Background(), state, Question{
+		ID: "budget_fastlane", Instructions: "判断", Options: map[string]string{"determine": "x", "ask": "x", "quote_reference": "x", "reject": "x", "uncertain": "x"},
+	})
+	if err != nil {
+		t.Fatalf("Ask: %v", err)
+	}
+	if res.Choice != "determine" || res.SelectedProbability != 0.88 || res.InputTokens != 120 {
+		t.Fatalf("unexpected result %+v", res)
+	}
+	if !strings.Contains(seenState, `"current_turn":"预算改成7500"`) || !strings.Contains(seenState, "budget_fastlane") {
+		t.Fatalf("wire payload unexpected: %s", seenState)
+	}
+}
+
+func TestAskFastlaneQuestionRejectsForeignOption(t *testing.T) {
+	probs := map[string]float64{"collect": 1.0}
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, fastlaneResponse("collect", probs, 1))
+	})
+	res, err := c.Ask(context.Background(), []byte(`{"current_turn":"x"}`), Question{
+		ID: "budget_fastlane", Instructions: "判断", Options: map[string]string{"determine": "x", "ask": "x"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "unknown option") {
+		t.Fatalf("want unknown option error, got %v %+v", err, res)
+	}
+	if jevClass := Class(err); jevClass != ClassContract {
+		t.Fatalf("class = %s", jevClass)
 	}
 }

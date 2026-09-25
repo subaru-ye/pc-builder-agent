@@ -95,6 +95,8 @@ live 基线（以下全部取自冻结 report.json，`gate_passed=false，候选
 
 ## 已知边界
 
+- `fastlane-budget-v1/` 子目录属于 Jev v2 快走可行性实验（`docs/changes/jev-v2-fastlane-feasibility.md`）的 Set B 独立标注表，**不在本数据集 manifest 冻结范围内**；freeze-manifest 不会枚举它，修改它需按该 change 的标注复核表重新冻结运行。
+
 - V5（Builder 输入 hash ≠ 核定快照）只有 grader 金丝雀覆盖：v2 驱动器用 scripted-error builder 观察 admission，不产生成功 build；产品侧 V5 证据待确认门禁 change 后补。
 - V8/V9 的产品侧检测是中文关键词启发式，命中需人工复核原文。
 - 追问检测（forbidden_questions）按字段标签关键字匹配，等价于 v1 S3 的保守启发式。

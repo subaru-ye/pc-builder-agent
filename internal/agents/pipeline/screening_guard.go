@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"math"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -268,26 +270,103 @@ func groundedBudget(budget int, sources []string) bool {
 		}
 	}
 	for _, source := range sources {
-		for _, pattern := range []*regexp.Regexp{budgetAmount, moneyAmount} {
-			for _, match := range pattern.FindAllStringSubmatch(source, -1) {
-				number := strings.NewReplacer(",", "", "，", "").Replace(match[1])
-				value, err := strconv.ParseFloat(number, 64)
-				if err != nil {
-					value = chineseBudgetNumber(number)
-				}
-				switch strings.ToLower(match[2]) {
-				case "千", "k":
-					value *= 1000
-				case "万":
-					value *= 10000
-				}
-				if value == float64(budget) {
-					return true
-				}
+		for _, value := range budgetAmountsIn(source) {
+			if value == float64(budget) {
+				return true
 			}
 		}
 	}
 	return false
+}
+
+// budgetAmountsIn 从单条文本提取全部可解析的预算表达金额（含千/万/k 换算）。
+func budgetAmountsIn(text string) []float64 {
+	var values []float64
+	for _, match := range budgetAmountMatches(text) {
+		if value, ok := budgetMatchValue(match); ok {
+			values = append(values, value)
+		}
+	}
+	return values
+}
+
+// budgetMention 是评估侧专用的宽口径"金额提及"：任意位置的数字/中文数字
+// 金额（含千/万/k 单位）。宽候选由快走实验的分类层把关；产品 guard 的
+// groundedBudget 仍只用窄模式（budgetAmount/moneyAmount），行为不变。
+var budgetMention = regexp.MustCompile(`(?i)(?:^|[^0-9.])` + budgetNumberPattern)
+
+// BudgetAmountToken 是一条预算表达的逐字片段与换算后金额。
+type BudgetAmountToken struct {
+	Text  string
+	Value int
+}
+
+// FindBudgetAmountTokens 返回文本中全部预算表达的逐字片段与整数值（不可
+// 化为整数的表达跳过）：窄口径预算表达优先，另含宽口径金额提及。快走实验
+// 用它把候选金额绑回原话逐字子串；产品 guard 行为不变。
+func FindBudgetAmountTokens(text string) []BudgetAmountToken {
+	seen := map[string]bool{}
+	var tokens []BudgetAmountToken
+	appendToken := func(text string, value float64) {
+		if value <= 0 || value != math.Trunc(value) || seen[text] {
+			return
+		}
+		seen[text] = true
+		tokens = append(tokens, BudgetAmountToken{Text: text, Value: int(value)})
+	}
+	for _, match := range budgetAmountMatches(text) {
+		if value, ok := budgetMatchValue(match); ok {
+			appendToken(match[0], value)
+		}
+	}
+	for _, match := range budgetMention.FindAllStringSubmatch(text, -1) {
+		if value, ok := budgetMatchValue(match); ok {
+			appendToken(match[1]+match[2], value)
+		}
+	}
+	return tokens
+}
+
+func budgetAmountMatches(text string) [][]string {
+	var matches [][]string
+	for _, pattern := range []*regexp.Regexp{budgetAmount, moneyAmount} {
+		matches = append(matches, pattern.FindAllStringSubmatch(text, -1)...)
+	}
+	return matches
+}
+
+func budgetMatchValue(match []string) (float64, bool) {
+	if len(match) < 3 {
+		return 0, false
+	}
+	number := strings.NewReplacer(",", "", "，", "").Replace(match[1])
+	value, err := strconv.ParseFloat(number, 64)
+	if err != nil {
+		value = chineseBudgetNumber(number)
+	}
+	switch strings.ToLower(match[2]) {
+	case "千", "k":
+		value *= 1000
+	case "万":
+		value *= 10000
+	}
+	return value, true
+}
+
+// ExtractBudgetCandidates 是既有预算表达识别的评估侧导出：返回文本中全部
+// 候选预算金额（可化为整数的，去重升序）。产品 guard 行为不变；快走可行性
+// 实验以此为唯一候选来源，不引入第二套金额解析。
+func ExtractBudgetCandidates(text string) []int {
+	seen := map[int]bool{}
+	var out []int
+	for _, token := range FindBudgetAmountTokens(text) {
+		if !seen[token.Value] {
+			seen[token.Value] = true
+			out = append(out, token.Value)
+		}
+	}
+	sort.Ints(out)
+	return out
 }
 
 func chineseBudgetNumber(text string) float64 {

@@ -158,14 +158,14 @@ type intentState struct {
 }
 
 type choiceQuestion struct {
-	Type         string                             `json:"type"`
-	Instructions string                             `json:"instructions"`
-	Criteria     map[decision.Intent]string         `json:"criteria"`
+	Type         string            `json:"type"`
+	Instructions string            `json:"instructions"`
+	Criteria     map[string]string `json:"criteria"`
 }
 
 type wireRequest struct {
 	Model     string                    `json:"model"`
-	State     intentState               `json:"state"`
+	State     json.RawMessage           `json:"state"`
 	Questions map[string]choiceQuestion `json:"questions"`
 }
 
@@ -187,32 +187,51 @@ type wireResponse struct {
 	Usage   usage                   `json:"usage"`
 }
 
-// Classify asks the single bounded intent question. The returned error is
-// always a classified *Error; no client-side retry happens.
-func (c *Client) Classify(ctx context.Context, in decision.IntentInput) (decision.IntentResult, error) {
-	res := decision.IntentResult{RequestedModel: c.cfg.Model, Probabilities: map[decision.Intent]float64{}}
+// ChoiceResult 是一次通用 Choice 调用的已校验观测。
+type ChoiceResult struct {
+	Choice              string
+	Probabilities       map[string]float64
+	Confidence          float64
+	SelectedProbability float64
+	ResponseModel       string
+	InputTokens         int
+	OutputTokens        int
+	Duration            time.Duration
+}
+
+// Question 是参数化的单 Choice 问题定义；Options 参与响应校验，并整体
+// 进入调用方自己的问题哈希。
+type Question struct {
+	ID           string
+	Instructions string
+	Options      map[string]string
+}
+
+// Ask 执行一次通用单 Choice 决策调用。state 必须是已按领域契约裁剪过的
+// JSON 对象（本包不理解其内部结构）；返回的 error 恒为分类后的 *Error，
+// 不做客户端重试。
+func (c *Client) Ask(ctx context.Context, state json.RawMessage, q Question) (ChoiceResult, error) {
+	if q.ID == "" {
+		return ChoiceResult{}, classifyErr(ClassContract, 0, fmt.Errorf("question id required"))
+	}
+	if len(q.Options) == 0 || q.Instructions == "" {
+		return ChoiceResult{}, classifyErr(ClassContract, 0, fmt.Errorf("question instructions and options required"))
+	}
+	if len(json.RawMessage(state)) == 0 {
+		return ChoiceResult{}, classifyErr(ClassContract, 0, fmt.Errorf("state required"))
+	}
+	res := ChoiceResult{}
 	start := time.Now()
 	if c.cfg.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, c.cfg.Timeout)
 		defer cancel()
 	}
-	state := intentState{
-		CurrentTurn:      in.CurrentTurn,
-		RequirementState: in.RequirementState,
-		HasBuild:         in.HasBuild,
-		CanPlan:          in.CanPlan,
-		BuildVersion:     in.BuildVersion,
-		LastAssistant:    in.LastAssistant,
-	}
-	if len(state.RequirementState) == 0 {
-		state.RequirementState = nil
-	}
 	body, err := json.Marshal(wireRequest{
 		Model: c.cfg.Model,
 		State: state,
-		Questions: map[string]choiceQuestion{questionID: {
-			Type: "choice", Instructions: QuestionInstructions, Criteria: QuestionCriteria(),
+		Questions: map[string]choiceQuestion{q.ID: {
+			Type: "choice", Instructions: q.Instructions, Criteria: q.Options,
 		}},
 	})
 	if err != nil {
@@ -253,13 +272,55 @@ func (c *Client) Classify(ctx context.Context, in decision.IntentInput) (decisio
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		return res, classifyErr(ClassDecode, httpRes.StatusCode, err)
 	}
-	result, err := validate(decoded, c.cfg.Model)
+	result, err := validateChoice(decoded, c.cfg.Model, q)
 	if err != nil {
 		return res, classifyErr(ClassContract, httpRes.StatusCode, err)
 	}
 	result.Duration = res.Duration
-	result.RequestedModel = c.cfg.Model
 	return result, nil
+}
+
+// Classify asks the single bounded intent question. The returned error is
+// always a classified *Error; no client-side retry happens.
+func (c *Client) Classify(ctx context.Context, in decision.IntentInput) (decision.IntentResult, error) {
+	res := decision.IntentResult{RequestedModel: c.cfg.Model, Probabilities: map[decision.Intent]float64{}}
+	requirementState := in.RequirementState
+	if len(requirementState) == 0 {
+		requirementState = nil
+	}
+	state, err := json.Marshal(intentState{
+		CurrentTurn:      in.CurrentTurn,
+		RequirementState: requirementState,
+		HasBuild:         in.HasBuild,
+		CanPlan:          in.CanPlan,
+		BuildVersion:     in.BuildVersion,
+		LastAssistant:    in.LastAssistant,
+	})
+	if err != nil {
+		return res, classifyErr(ClassContract, 0, err)
+	}
+	question := intentQuestion()
+	choice, err := c.Ask(ctx, state, question)
+	if err != nil {
+		return res, err
+	}
+	res.Duration = choice.Duration
+	res.ResponseModel = choice.ResponseModel
+	res.InputTokens, res.OutputTokens = choice.InputTokens, choice.OutputTokens
+	res.Confidence, res.SelectedProbability = choice.Confidence, choice.SelectedProbability
+	res.Intent = decision.Intent(choice.Choice)
+	for raw, p := range choice.Probabilities {
+		res.Probabilities[decision.Intent(raw)] = p
+	}
+	return res, nil
+}
+
+func intentQuestion() Question {
+	options := map[string]string{}
+	for intent, text := range QuestionCriteria() {
+		options[string(intent)] = text
+	}
+	return Question{ID: questionID, Instructions: QuestionInstructions, Options: options}
 }
 
 func transportClass(err error) (string, error) {
@@ -280,6 +341,26 @@ func classifyErr(class string, status int, err error) error {
 // finite probabilities in [0,1], distribution sum, confidence and usage.
 func validate(decoded wireResponse, requestedModel string) (decision.IntentResult, error) {
 	res := decision.IntentResult{RequestedModel: requestedModel, Probabilities: map[decision.Intent]float64{}}
+	choice, err := validateChoice(decoded, requestedModel, intentQuestion())
+	if err != nil {
+		return res, err
+	}
+	res.ResponseModel = choice.ResponseModel
+	res.InputTokens, res.OutputTokens = choice.InputTokens, choice.OutputTokens
+	res.Intent = decision.Intent(choice.Choice)
+	for raw, p := range choice.Probabilities {
+		res.Probabilities[decision.Intent(raw)] = p
+	}
+	res.SelectedProbability = choice.SelectedProbability
+	res.Confidence = choice.Confidence
+	return res, nil
+}
+
+// validateChoice enforces the response contract against the asked question:
+// answer type, selected option, finite probabilities in [0,1], distribution
+// sum, confidence and usage.
+func validateChoice(decoded wireResponse, requestedModel string, q Question) (ChoiceResult, error) {
+	res := ChoiceResult{Probabilities: map[string]float64{}}
 	if decoded.Model == "" {
 		return res, fmt.Errorf("response model id missing")
 	}
@@ -288,43 +369,38 @@ func validate(decoded wireResponse, requestedModel string) (decision.IntentResul
 		return res, fmt.Errorf("usage fields missing or negative")
 	}
 	res.InputTokens, res.OutputTokens = *decoded.Usage.InputTokens, *decoded.Usage.OutputTokens
-	answer, ok := decoded.Answers[questionID]
+	answer, ok := decoded.Answers[q.ID]
 	if !ok {
-		return res, fmt.Errorf("answer %q missing", questionID)
+		return res, fmt.Errorf("answer %q missing", q.ID)
 	}
 	if answer.Type != "choice" {
 		return res, fmt.Errorf("answer type %q is not choice", answer.Type)
 	}
-	selected := decision.Intent(answer.Choice)
-	switch selected {
-	case decision.IntentCollect, decision.IntentConfirm, decision.IntentPlan, decision.IntentAmbiguous:
-	default:
+	if _, known := q.Options[answer.Choice]; !known {
 		return res, fmt.Errorf("unknown option %q", answer.Choice)
 	}
-	if len(answer.Probabilities) != len(QuestionCriteria()) {
-		return res, fmt.Errorf("probabilities must cover exactly the %d options, got %d", len(QuestionCriteria()), len(answer.Probabilities))
+	if len(answer.Probabilities) != len(q.Options) {
+		return res, fmt.Errorf("probabilities must cover exactly the %d options, got %d", len(q.Options), len(answer.Probabilities))
 	}
 	sum := 0.0
 	for raw, p := range answer.Probabilities {
-		intent := decision.Intent(raw)
-		if _, known := QuestionCriteria()[intent]; !known {
+		if _, known := q.Options[raw]; !known {
 			return res, fmt.Errorf("unknown probability option %q", raw)
 		}
 		if math.IsNaN(p) || math.IsInf(p, 0) || p < 0 || p > 1 {
 			return res, fmt.Errorf("probability %q=%v outside [0,1]", raw, p)
 		}
 		sum += p
-		res.Probabilities[intent] = p
+		res.Probabilities[raw] = p
 	}
 	if math.Abs(sum-1) > SumTolerance {
 		return res, fmt.Errorf("probability sum %v outside tolerance %v", sum, SumTolerance)
 	}
-	selectedProbability := answer.Probabilities[string(selected)]
 	if math.IsNaN(answer.Confidence) || math.IsInf(answer.Confidence, 0) || answer.Confidence < 0 || answer.Confidence > 1 {
 		return res, fmt.Errorf("confidence %v outside [0,1]", answer.Confidence)
 	}
-	res.Intent = selected
-	res.SelectedProbability = selectedProbability
+	res.Choice = answer.Choice
+	res.SelectedProbability = answer.Probabilities[answer.Choice]
 	res.Confidence = answer.Confidence
 	return res, nil
 }

@@ -1,0 +1,242 @@
+[
+  {
+    "id": "sb-cal-det-001",
+    "partition": "cal",
+    "category": "determine",
+    "text": "预算改成7500",
+    "prior_budget_active": false,
+    "expected_fast": true,
+    "expected_value": 7500,
+    "rationale": "典型单字段预算更新；用户措辞明确（改成）。"
+  },
+  {
+    "id": "sb-cal-det-002",
+    "partition": "cal",
+    "category": "determine",
+    "text": "预算改为 7,500 元",
+    "prior_budget_active": false,
+    "expected_fast": true,
+    "expected_value": 7500,
+    "rationale": "千分位与空格变体；金额解析已覆盖。"
+  },
+  {
+    "id": "sb-cal-det-003",
+    "partition": "cal",
+    "category": "determine",
+    "text": "预算八千",
+    "prior_budget_active": false,
+    "expected_fast": true,
+    "expected_value": 8000,
+    "rationale": "中文数字变体；chineseBudgetNumber 已覆盖。"
+  },
+  {
+    "id": "sb-cal-det-004",
+    "partition": "cal",
+    "category": "determine",
+    "text": "那就7500吧",
+    "prior_budget_active": false,
+    "expected_fast": true,
+    "expected_value": 7500,
+    "rationale": "无预算词缀的采纳句式（裸数字+吧）；对应语料 cv-fps#2。"
+  },
+  {
+    "id": "sb-cal-ask-001",
+    "partition": "cal",
+    "category": "ask",
+    "text": "7500够吗",
+    "prior_budget_active": false,
+    "expected_fast": false,
+    "rationale": "询问，不是设定；对应语料负例。"
+  },
+  {
+    "id": "sb-cal-ask-002",
+    "partition": "cal",
+    "category": "ask",
+    "text": "7500怎么样，够用吗",
+    "prior_budget_active": false,
+    "expected_fast": false,
+    "rationale": "征求意见。"
+  },
+  {
+    "id": "sb-cal-ref-001",
+    "partition": "cal",
+    "category": "reference",
+    "text": "看到7500的报价",
+    "prior_budget_active": false,
+    "expected_fast": false,
+    "rationale": "引用报价，不是预算设定；任务书指定的关键负例。"
+  },
+  {
+    "id": "sb-cal-ref-002",
+    "partition": "cal",
+    "category": "reference",
+    "text": "别人家7500就能配下来",
+    "prior_budget_active": false,
+    "expected_fast": false,
+    "rationale": "引用他人价格信息。"
+  },
+  {
+    "id": "sb-cal-rej-001",
+    "partition": "cal",
+    "category": "reject",
+    "text": "7500不行，太贵了",
+    "prior_budget_active": false,
+    "expected_fast": false,
+    "rationale": "明确拒绝该金额。"
+  },
+  {
+    "id": "sb-cal-withdraw-001",
+    "partition": "cal",
+    "category": "withdraw",
+    "text": "预算先不算了",
+    "prior_budget_active": true,
+    "prior_budget_value": 7000,
+    "expected_fast": false,
+    "rationale": "撤回预算；且无候选金额。"
+  },
+  {
+    "id": "sb-cal-compound-001",
+    "partition": "cal",
+    "category": "compound",
+    "text": "预算7500吧，机箱要小的",
+    "prior_budget_active": false,
+    "expected_fast": false,
+    "rationale": "复合消息（预算+机箱）；按任务书一律回退。"
+  },
+  {
+    "id": "sb-cal-multi-001",
+    "partition": "cal",
+    "category": "multi_value",
+    "text": "7500或者8000都行",
+    "prior_budget_active": false,
+    "expected_fast": false,
+    "rationale": "两个候选值；确定性提取即拒绝。"
+  },
+  {
+    "id": "sb-rep-det-001",
+    "partition": "report",
+    "category": "determine",
+    "text": "预算上调到9000",
+    "prior_budget_active": true,
+    "prior_budget_value": 7500,
+    "expected_fast": true,
+    "expected_value": 9000,
+    "rationale": "已确立预算的上调。"
+  },
+  {
+    "id": "sb-rep-det-002",
+    "partition": "report",
+    "category": "determine",
+    "text": "预算降到6000",
+    "prior_budget_active": true,
+    "prior_budget_value": 7500,
+    "expected_fast": true,
+    "expected_value": 6000,
+    "rationale": "下调也是确定，不是拒绝。"
+  },
+  {
+    "id": "sb-rep-det-003",
+    "partition": "report",
+    "category": "determine",
+    "text": "就7500吧",
+    "prior_budget_active": false,
+    "expected_fast": true,
+    "expected_value": 7500,
+    "rationale": "采纳句式（就…吧）。"
+  },
+  {
+    "id": "sb-rep-det-004",
+    "partition": "report",
+    "category": "determine",
+    "text": "预算定为八千五",
+    "prior_budget_active": false,
+    "expected_fast": true,
+    "expected_value": 8500,
+    "rationale": "中文数字变体；chineseBudgetNumber 已覆盖（万级存在既有解析缺口，不在本表承诺范围）。"
+  },
+  {
+    "id": "sb-rep-ask-001",
+    "partition": "report",
+    "category": "ask",
+    "text": "你觉得7500合适吗",
+    "prior_budget_active": false,
+    "expected_fast": false,
+    "rationale": "征求意见；合适吗在词表内（纯规则也应回退）。"
+  },
+  {
+    "id": "sb-rep-ask-002",
+    "partition": "report",
+    "category": "ask",
+    "text": "预算7500能配出什么效果",
+    "prior_budget_active": false,
+    "expected_fast": false,
+    "rationale": "带预算词缀的能力询问——纯规则 C3/C4/C5/C9 全不命中会误快走；期望 Jev 否决（增量样本）。"
+  },
+  {
+    "id": "sb-rep-ask-003",
+    "partition": "report",
+    "category": "ask",
+    "text": "预算7500只是随便问问",
+    "prior_budget_active": false,
+    "expected_fast": false,
+    "rationale": "显式声明非设定；词表无此标记，期望 Jev 否决（增量样本）。"
+  },
+  {
+    "id": "sb-rep-ref-001",
+    "partition": "report",
+    "category": "reference",
+    "text": "之前那个7500的配置单还能用吗",
+    "prior_budget_active": false,
+    "expected_fast": false,
+    "rationale": "引用既有配置单；问号也在（纯规则 C3 命中）。"
+  },
+  {
+    "id": "sb-rep-ref-002",
+    "partition": "report",
+    "category": "reference",
+    "text": "这预算7500是含电源的吧",
+    "prior_budget_active": false,
+    "expected_fast": false,
+    "rationale": "询问口径（含→C7 命中，纯规则回退）。"
+  },
+  {
+    "id": "sb-rep-rej-001",
+    "partition": "report",
+    "category": "reject",
+    "text": "预算还是不定了",
+    "prior_budget_active": true,
+    "prior_budget_value": 7000,
+    "expected_fast": false,
+    "rationale": "拒绝/撤回（不定→C4 命中）。"
+  },
+  {
+    "id": "sb-rep-withdraw-001",
+    "partition": "report",
+    "category": "withdraw",
+    "text": "先不限定预算了",
+    "prior_budget_active": true,
+    "prior_budget_value": 7000,
+    "expected_fast": false,
+    "rationale": "撤回（不限定→C4 命中）。"
+  },
+  {
+    "id": "sb-rep-compound-001",
+    "partition": "report",
+    "category": "compound",
+    "text": "预算改成7000，另外加个机械硬盘",
+    "prior_budget_active": true,
+    "prior_budget_value": 6000,
+    "expected_fast": false,
+    "rationale": "复合（预算+硬盘→C8 命中）。"
+  },
+  {
+    "id": "sb-rep-novalue-001",
+    "partition": "report",
+    "category": "no_value",
+    "text": "预算拉满吧",
+    "prior_budget_active": true,
+    "prior_budget_value": 7000,
+    "expected_fast": false,
+    "rationale": "无候选金额（C1 拒绝）；Jev 不应被调用。"
+  }
+]

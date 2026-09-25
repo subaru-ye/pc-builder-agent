@@ -11,6 +11,7 @@
 | [评估设施](../tech/评估设施.md) | Runner 机制、变更回归、本机工作台、对照实验纪律与反馈回流的单一入口 |
 | [当前 178 行目录基线](planning-v2/current-178-20260917.md) | 快照 11 构成、ITX SFX 电源规则、办公核显场景、模型能力问题登记及复现 |
 | [planning 离线回归说明](planning-v2/README.md) | 旧 12 个场景、42 个步骤与运行机制；人工响应和真实录制分开，不代表真实模型通过率 |
+| [Builder v2 专项评估](../changes/builder-v2-eval.md) | 给 Builder 一份已核定的 v2 需求（冻结 EffectiveConstraints）的 Builder-only 机制评估；fixture `testdata/builder-v2-20260925/`，第一期 10/10 零模型基线见运行记录 |
 | [评估集 v1.5（历史执行器）](versions/v1.5.md) | 50 场景，新增 10 段多轮对话；固定模型历史基线 150/150、Pass³ 50/50，历史失败保留 |
 | [解释质量诊断](judge/README.md) | 固定样本、可定位引用、空解释与未人工校准状态；不改变硬门禁 |
 | [评估集 v1.4](versions/v1.4.md) | 40 题；预算内交付或有证据的合理非交付，分别统计 |

@@ -427,6 +427,9 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 		}
 		check("cpu_target", ok, detail)
 	}
+	if e.FrozenConstraints != nil {
+		gradeFrozenConstraints(r, e.FrozenConstraints, check)
+	}
 	// A delivered result must be server linked, not merely model 'ready'.
 	if r.Result != nil && r.Result.Outcome == "ready" {
 		check("server_delivery", r.Result.Delivery != nil && r.Result.Delivery.Status == "delivered" && r.Result.BuildVersion > 0, r.Result.Delivery)

@@ -360,6 +360,7 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 		report.Cases = append(report.Cases, cr)
 	}
 	countUsage(&report)
+	AttachToolContract(&report)
 	report.Intent = buildIntentReport(suite, &report, models)
 	report.DurationMS = time.Since(start).Milliseconds()
 	return report, nil

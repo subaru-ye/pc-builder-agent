@@ -108,6 +108,21 @@ type Expect struct {
 	RetainedReferences     [][]string                            `json:"retained_references,omitempty"`
 	CandidateSpecs         map[string]map[string]json.RawMessage `json:"candidate_specs,omitempty"`
 	SearchCandidates       map[string]bool                       `json:"search_candidates,omitempty"`
+	// FrozenConstraints 断言 Builder 实际收到的冻结载荷携带核定的 v2 有效选型
+	// 约束（确认事务冻结的 effective_constraints）。Builder v2 专用；v1 冻结
+	// 套件不设置该字段。
+	FrozenConstraints *FrozenConstraintsGold `json:"frozen_constraints,omitempty"`
+}
+
+// FrozenConstraintsGold 是冻结 EffectiveConstraints 的金标：Spec 用点路径断言
+// 规范化 review_spec 的字段值（与 requirement.go 的线上格式一致），Defaults
+// 断言被展开系统默认的字段来源。该合同由确认事务冻结，评估器只读不造。
+type FrozenConstraintsGold struct {
+	Spec map[string]json.RawMessage `json:"spec,omitempty"`
+	// Defaults 要求列出的默认项；Value 为空时只断言字段出现且来源匹配。
+	Defaults []ReqV2DefaultGold `json:"defaults,omitempty"`
+	// AbsentDefaults 要求不得出现在 Defaults 里的字段（用户显式设定时默认不展开）。
+	AbsentDefaults []string `json:"absent_defaults,omitempty"`
 }
 type Trace struct {
 	Role           string          `json:"role"`
@@ -194,6 +209,17 @@ type Report struct {
 	DurationMS          int64          `json:"duration_ms"`
 	Limitations         []string       `json:"limitations"`
 	Intent              *IntentReport  `json:"intent,omitempty"`
+	// ToolContract 是 builder 工具合同指纹（system instruction + tools 声明的
+	// 规范化哈希）。用于区分 planning_action 合同版本；零请求时为 nil。
+	ToolContract *ToolContractIdentity `json:"tool_contract,omitempty"`
+}
+
+// ToolContractIdentity 记录一次运行实际下发的 builder 工具合同：提示词与
+// 工具声明整体规范化后哈希。合同改动（如具名工具、错误结构）会改变该指纹，
+// 前后批次的对比必须以指纹一致为前提。
+type ToolContractIdentity struct {
+	SHA256 string `json:"sha256"`
+	Model  string `json:"model,omitempty"`
 }
 
 // IntentReport aggregates the optional Jev observations. Confidence and the

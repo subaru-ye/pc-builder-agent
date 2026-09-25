@@ -1,0 +1,126 @@
+# Change Spec：Builder v2 专项评估（builder-v2-eval）
+
+日期：2026-09-25　分支：`codex/builder-v2-eval`（基于 b745554）　状态：第一阶段（仅建设与验证，不接真实模型）
+
+## 1. 背景与目标
+
+Requirement v2 把 Builder 的输入收敛为确认事务冻结的 `PlanningInput.effective_constraints`
+（`internal/schemas/planning.go`：`Spec`=核定预览展开默认后的规范化 RequirementSpec v2，
+`Defaults`=被展开默认的来源清单）。现有 planning-v2 评估（current-178 mechanisms 及 r1-r15
+批次）以"对话全程"为单位混测 Screening 与 Builder；Requirement v2 数据集（reqv2-grader-v4）
+则明确把 Builder 输出质量划出范围（见 `requirement_v2_run.go` limitations）。
+
+目标：建立**"给 Builder 一份已核定的 v2 需求，看它如何选件"**的专项评估——
+
+1. 复用 planningeval 既有执行链：product.Service 真实确认事务（冻结 EffectiveConstraints、
+   review_hash 校验、base_draft 组装）→ `planning.Runner`（真实检索/evaluate/校验/持久化）→
+   正式版本事务。**不建第二套 runner**。
+2. 判卷以确定性规则为准：预算硬上限（must 预算 ×(1+弹性)，弹性缺省 0.1、显式 0 按陈述执行，
+   与 `budgetCeiling`/核定预览同源）、已有件品类核账（new_purchase 口径）、兼容性
+   validation=pass 才可 ready、unknown/无解如实保留、正式版本持久化。
+3. 属性断言而非 SKU 锁定：预算算术、spec 值断言（`selected_specs`）、允许集合
+   （`selected_option`）——允许多个同样合格的 SKU，不把旧预设配置当唯一答案。
+4. 评估器记录工具合同指纹（builder 请求的 system instruction + tools 声明规范化哈希），
+   可区分 planning_action 合同版本；本阶段不为设想中的新工具预写适配。
+
+## 2. 范围
+
+**本轮做**：
+
+- 新 fixture `internal/planningeval/testdata/builder-v2-20260925/`（suite.json + provenance.json），
+  商品目录、价格与 current-178 mechanisms 套件字节一致（126 active，快照 11）。
+- 10 个迁移 case（BV2-101…110），来源为旧 Builder 用例，逐题登记旧题来源、语义变化与
+  不能直接迁移的原因（见 §4 与 provenance.json）。旧用例只算回归来源，不冒充新盲测。
+- planningeval 判卷增量（均为加法，不动 v1 冻结套件与 Requirement v2 冻结 gates/grader）：
+  - `Expect.FrozenConstraints`：断言 Builder 实际收到的冻结载荷携带核定 v2 合同
+    （spec 逐字段 dot-path 断言 + Defaults 来源断言）。
+  - `Report.ToolContract`：builder system instruction + tools 声明的规范化哈希与模型名。
+- 零模型机制 replay（一次性 pgvector 容器、独立临时库与产物目录）+ 聚焦 Go 回归
+  （`go test ./internal/planningeval ./cmd/evalplanning` + 新增单测）。
+
+**本轮不做**：不调用真实 Screening/Builder；不运行或预览 holdout；不改 Requirement v2 的
+冻结 gates/grader；不做浏览器全套；不修改生产工具合同或 Builder prompt；不宣布完整产品 GO。
+
+## 3. 执行与判卷设计
+
+执行形态与 v1 套件同构（同一 `Suite`/`Case`/`Step`/`Run`），差异仅在 case 语义与判卷字段：
+
+- 每个 case 以一条 scripted screening 种子轮（适配器输入，非金标）把已核定的 v2 需求写入
+  RequirementState，再走**真实确认事务**：`RequirementReviewSpec` 生成核定预览与
+  EffectiveDefaults → `PlanningBuilderInput` 冻结完整载荷（含 base_draft/previous_proposal）→
+  `gateway.Remote` → `planning.Runner`。种子轮是唯一 scripted 环节；冻结、检索、evaluate、
+  校验、门反馈、持久化全部为生产代码。
+- Builder oracle 响应只提供"模型作出这些决定后系统是否正确执行"的机制回归；零模型。
+- 判卷断言（复用 v1 既有检查 + 新增 FrozenConstraints）：
+
+| 能力区 | 断言 |
+| --- | --- |
+| 预算硬上限与默认弹性 | `budget_ceiling`（确定性上限=budget×(1+flex)）；FrozenConstraints 断言冻结 spec 的 budget_cny/budget_flex 与 Defaults 来源（缺省 0.1 列 system_default；显式 0 不列默认） |
+| 已有件保留 | `purchase_budget`+tight ceiling（新增采购口径）；FrozenConstraints 断言 owned_parts 冻结；无匹配已有件 → outcome 非 ready、versions=0 |
+| 兼容性 | `validation=pass` 才可 ready；ITX+SFX 电源规则路径（FORM_FACTOR_SUPPORT 失败反馈 → 换 SFX → pass）；真实冲突 → validation=fail、versions=0、不得 ready |
+| 缺规格/无可行解的诚实处理 | unknown 候选不被默认值替代（COOLER_THERMAL_CAPACITY unknown → 换完整字段候选）；无解 → proposal/clarify + issues 标注预算/牺牲，不得伪造 ready |
+| 正式版本持久化 | `server_delivery`、`version_count`、`immutable_version:*`、`formal_parent_link`、retry 幂等（`idempotent_run`）、refresh 零执行 |
+
+## 4. 用例迁移表（摘要；全文见 fixture provenance.json）
+
+| 新 ID | 覆盖 | 旧题来源 | 语义变化 / 不能直接迁移的原因 |
+| --- | --- | --- | --- |
+| BV2-101 | 预算硬上限+默认弹性 | C123-006 step1（current-178 mechanisms） | 多轮收集折叠为一次核定 seed；上限断言改按冻结合同口径 4000×1.1=4400（旧题断言 4000 是更严格的产品语义，登记差异）；核显路径属性断言 has_igpu |
+| BV2-102 | 严格预算（弹性 0） | L1-013（legacy-builder v1.5，15K 弹性 0.15）+ review_budget_consistency 显式 0 口径 | v1 spec 的弹性语义升格为 v2 冻结字段；15K 目录场景缩到 5K 以贴合 126 件目录 |
+| BV2-103 | 已有件精确匹配·新增采购计价 | L4-206（legacy v1.5） | 已有 CPU 改为目录内可精确匹配的 4600G（唯一确定性匹配，允许断言 ID）；v2 品类核账由服务端确定性执行 |
+| BV2-104 | 已有件无匹配·保留 vs 改购 | C123-003 step1 + L4-204 | 旧题多轮对话（先检索方向再澄清）折叠为单轮 Builder 决策；G.Skill 32GB 在快照 11 无精确匹配语义不变 |
+| BV2-105 | ITX+SFX 电源规则 | C123-005（原 mechanisms c5） | 旧录制 oracle 超预算（9276+699+79>9900 上限），v2 fixture 重写为预算内 oracle；断言改属性口径（form_factor） |
+| BV2-106 | 声称 ready 但真实冲突 | P2-011（proposal-review-20260915） | SKU 换为快照 11 内 AM4 CPU + AM5 板组合；"插槽"冲突语义不变 |
+| BV2-107 | 缺规格 unknown 如实保留+换完整候选 | C123-007（原 mechanisms c7） | 旧题以 base_draft 前提构造（cooling_capacity unknown 保留）；v2 简化为新装单轮，保留"unknown 不被默认值替代"机制点 |
+| BV2-108 | 无可行解·诚实非交付 | C123-006 step3（降 3000 超支）+ L4-215 | 旧题为续聊步；v2 单轮 2500 元整机预算（核显整机目录下限 3110.3，无条件可行解）；期望 proposal+预算 issue，不锁具体措辞 |
+| BV2-109 | 正式版本持久化·幂等 | P2-005 + C123-001 step1 | P2-005 的 proposal 自动交付路径改为显式 confirm；新增 refresh/retry 幂等断言 |
+| BV2-110 | 改单继承 base_draft·退库件替换 | C123-002（current-178 mechanisms） | previous_build fixture 原样复用；requirement 补 use_case.titles/existing_parts（v2 readiness 必填，旧题编写于 readiness v2 之前）；执行从旧 r6-era"聊天授权直通 plan"改为**显式 confirm**（现行产品语义：聊天不能替代确认 API 启动 Builder，V4）；上限断言 7700 |
+
+未迁移（登记，不作新盲测）：B2-001/002/003（需求收集与比较收口属 Screening 层语义，
+超出 Builder 评估范围）；C123-001 step3 升级收益证据（changed_cpu）依赖多轮对话轨迹；
+P2-006/007/010（外部注册、询价不联网、备选不执行属会话语义）；L1-006 thermal 录制
+（"不重写历史录制"政策）；L2-10x 锁定品类改单（旧 spec 锁定语义与 v2 冻结语义差异较大，
+留待下阶段单列）。
+
+## 4.1 第一期实施结果（2026-09-25）
+
+- 零模型 replay **10/10**（`artifacts/builder-v2-20260925-mech-r1`，169 项断言全过，frozen_constraints 30 项；
+  actual_model_requests=0、external=0、tokens/cost=null）。工具合同指纹 `11c6a31c…` 已入报告。
+- fixture 构造确认三条产品语义并据此修订：seed 用 v2 一轮合同（turn_signals/quote 逐字/空已有件证据词）；
+  聊天不直接启动 Builder（BV2-110 改显式 confirm）；交付核验与预算门回环消耗 oracle 轮次（106/108 用重复 final 吸收）。
+- 已知既有失败（基线同现，非本期引入）：`TestHistoricalBaseAndBatchProductFlow` 在容器 DSN 下因 readiness v2
+  与旧 current-123 fixture 脱节失败（productivity 缺 titles），主树 b745554 对照证实。
+- 运行记录：`docs/eval/运行记录.md` 2026-09-25 条目。
+
+## 5. 产物与可复现性
+
+- `run.py --suite internal/planningeval/testdata/builder-v2-20260925/suite.json --out artifacts/builder-v2-20260925-mech-r1`：
+  一次性容器（`peval_` 前缀独立库）、零模型、零联网；输出 report/suite/provenance/manifest
+  （Git HEAD、代码/迁移哈希、镜像 ID）。
+- 报告记录：工具合同指纹（prompt+schema）、目录 sha256、代码版本、逐 case 调用轨迹
+  （trace 含完整请求/响应）、质量（逐断言）、耗时；成本/token 离线为 null（不伪装零成本）。
+- provenance.json 记录 suite_sha256、来源套件 sha、逐题迁移登记。
+
+## 6. 下一阶段（Pass³，另行授权，本阶段不执行）
+
+1. **样本**：BV2-101…110 全量 + 从未迁移池新写 2-3 个 Builder-only 盲测（无旧 oracle 来源，
+   由核定需求直接构造；进 calibration/holdout 分层，参照 ReqV2 的 split 纪律）。
+2. **调用预算**：每 case Builder 24 轮上限内实际调用约 3-8 次；10 case 一次完整批次按
+   planning-v2 实测约 60-100 次 provider 请求（screening 0 次——不经过 Screening）；
+   建议上限 150 次共享预算 + `MODEL_MAX_RETRIES=0` + 单批不重跑政策。
+3. **人工配置质量复核**：对每个 ready 交付逐件复核"目录内是否存在同等价位的更合规候选"
+   （参照 delivery_quality.py 硬门口径扩展 v2 版：事实正确、预算内、兼容 0 错、无缺价、
+   FrozenConstraints 到位）；人工复核结果与确定性判卷分列，不混入机制分。
+4. **端到端接入**：BV2 fixture 的 seed ops 可直接作为 ReqV2 conversations 层的 scripted
+   screening 输出复用，从而把"自然语言 → Screening 提取 → 确认冻结 → Builder 选件"接成
+   一条链；接入点在套件层（conversation case 复用 seed），不改生产合同。
+5. **工具合同前后对比**：具名工具/错误合同改动合入后，用同一 fixture、同一预算重跑，
+   以 `Report.ToolContract` 区分两轮，配对对比逐 case 断言（沿用 regrade/compare 口径）。
+
+## 7. 风险
+
+- seed 种子轮是 scripted 适配器输入：冻结合同的质量取决于 seed 与核定预览的真实投影一致；
+  已用 `RequirementReviewSpec`（生产同源函数）生成核定预览，规避自拼 spec。
+- message 触发 plan 的路径（BV2-110）依赖"执行授权"语义，属产品行为而非评估器构造；
+  若产品语义再收紧需同步 seed 文本。
+- 目录为 126 件隔离目录，不代表市场覆盖率；预算算术断言只在快照 11 价格下成立。

@@ -264,23 +264,22 @@ func TestOwnershipTradeoffIgnoresReplyWordingAndReadyClaim(t *testing.T) {
 	}
 }
 
-// SSD 按品类内数量核账（存储可互换）：数量一致则豁免并保留透明 note，
-// 数量不一致时超额部分计价，不得整品类免计价。
-func TestSSDOwnershipAccountingFollowsQuantity(t *testing.T) {
+// SSD 豁免需要型号对应（v3.1 收紧：仅数量一致不再豁免）加数量合计一致。
+// 同型号且数量一致 → 豁免；同型号数量不一致 → 计价（超额是采购）。
+func TestSSDOwnershipAccountingFollowsCorrespondence(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
-		ownedQty  int
 		selectQty int
 		wantOwned bool
 	}{
-		{"quantity-match-exempts", 1, 1, true},
-		{"quantity-mismatch-prices", 1, 2, false},
+		{"same-model-quantity-match-exempts", 1, true},
+		{"same-model-quantity-mismatch-prices", 2, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			input, record, catalog := completeRecording(t)
 			input.State.Fields["owned_parts"] = schemas.RequirementField{
 				Status: "active", Kind: "fact", Strength: "must",
-				Value: json.RawMessage(fmt.Sprintf(`[{"category":"ssd","model":"某旧SSD","quantity":%d}]`, tc.ownedQty)),
+				Value: json.RawMessage(`[{"category":"ssd","model":"P3 Plus 1TB NVMe M.2","quantity":1}]`),
 			}
 			var draft map[string]any
 			if err := json.Unmarshal(record.Draft, &draft); err != nil {
@@ -308,12 +307,6 @@ func TestSSDOwnershipAccountingFollowsQuantity(t *testing.T) {
 			if owned != tc.wantOwned {
 				t.Fatalf("ssd owned exemption = %v, want %v (quote=%+v)", owned, tc.wantOwned, got.Quote)
 			}
-			if tc.wantOwned {
-				// 数量豁免保留透明 note：说明沿用了用户的旧 SSD。
-				if len(got.Delivery.Notes) == 0 || !strings.Contains(got.Delivery.Notes[0], "某旧SSD") {
-					t.Fatalf("quantity-exempt ssd must keep the transparency note: %+v", got.Delivery)
-				}
-			}
 		})
 	}
 }
@@ -340,5 +333,145 @@ func TestUserIssuesKeepChineseDetailButDropInternalRuleCodes(t *testing.T) {
 	}
 	if !slices.ContainsFunc(got.Issues, func(s string) bool { return strings.Contains(s, "整机无显示输出") }) {
 		t.Fatalf("chinese detail lost: %v", got.Issues)
+	}
+}
+
+// 边界①（BV2-104 同类）：用户已有 SSD A，draft 选中不同型号 SSD B——数量
+// 相同也不得把 B 免计为已有件；实际选中件与已有件不对应即计价并升级为取舍。
+func TestSSDDifferentModelMustBePricedEvenWithSameQuantity(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"ssd","model":"某旧SSD","quantity":1}]`),
+	}
+	record.Outcome = "proposal"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range got.Quote.Lines {
+		if strings.Contains(line.SKU, "ssd") && line.Owned {
+			t.Fatalf("different-model ssd must not be exempted as owned: %+v", got.Quote.Lines)
+		}
+	}
+	if got.Outcome != "clarify" || !strings.Contains(strings.Join(got.Issues, "; "), "计价取舍") {
+		t.Fatalf("ssd keep-vs-buy tradeoff must clarify: outcome=%s issues=%v", got.Outcome, got.Issues)
+	}
+}
+
+// 边界②：目录存在用户已有型号 A，但 draft 选同品类 B——没有明确的改购授权
+// （状态合同只能通过移除已有件表达授权），不得直接交付 ready。
+func TestCatalogMatchedOwnedReplacedByDifferentSKUForcesTradeoff(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"memory","model":"G.Skill Ripjaws V 32GB (2x16GB) DDR4-3200 CL16","quantity":1}]`),
+	}
+	memOther := store.Candidate{
+		SKU: "mem-other", Category: schemas.CategoryMemory, Brand: "Corsair",
+		Model: "Vengeance LPX 32GB (2x16GB) DDR4-3200 CL16", PriceCNY: strPtr("1759.00"),
+	}
+	for _, c := range catalog.Candidates {
+		if c.SKU == "mem-gskill-ripjawsv-32-3200" {
+			memOther.Specs = c.Specs // 复制内存规格，保证校验可完整执行
+		}
+	}
+	catalog.Candidates = append(catalog.Candidates, memOther)
+	var draft map[string]any
+	if err := json.Unmarshal(record.Draft, &draft); err != nil {
+		t.Fatal(err)
+	}
+	draft["selection"].(map[string]any)["memory"] = "mem-other"
+	raw, _ := json.Marshal(draft)
+	record.Draft = raw
+	record.Outcome = "proposal"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome != "clarify" || !strings.Contains(strings.Join(got.Issues, "; "), "计价取舍") {
+		t.Fatalf("unauthorized replacement of catalog-matched owned part must clarify: outcome=%s issues=%v", got.Outcome, got.Issues)
+	}
+}
+
+// 数量变化：同一型号但数量不一致（1 有 2 选）时，超额部分是采购，不豁免。
+func TestSSDSameModelQuantityMismatchMustNotExempt(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"ssd","model":"P3 Plus 1TB NVMe M.2","quantity":1}]`),
+	}
+	var draft map[string]any
+	if err := json.Unmarshal(record.Draft, &draft); err != nil {
+		t.Fatal(err)
+	}
+	draft["selection"].(map[string]any)["ssd"] = []map[string]any{{"sku": "ssd-crucial-p3plus-1tb", "quantity": 2}}
+	raw, _ := json.Marshal(draft)
+	record.Draft = raw
+	record.Outcome = "proposal"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range got.Quote.Lines {
+		if strings.Contains(line.SKU, "ssd") && line.Owned {
+			t.Fatalf("quantity mismatch must not exempt the ssd line: %+v", got.Quote.Lines)
+		}
+	}
+}
+
+// 授权改单：用户已明确移除旧件（owned_parts 不再含该品类）后选新件，属已
+// 授权路径——计价交付，不触发取舍 clarify。
+func TestAuthorizedReplacementAfterOwnedRemovalDelivers(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"cpu","model":"AMD Ryzen 5 5600","quantity":1}]`),
+	}
+	memOther := store.Candidate{
+		SKU: "mem-other", Category: schemas.CategoryMemory, Brand: "Corsair",
+		Model: "Vengeance LPX 32GB (2x16GB) DDR4-3200 CL16", PriceCNY: strPtr("1759.00"),
+	}
+	for _, c := range catalog.Candidates {
+		if c.SKU == "mem-gskill-ripjawsv-32-3200" {
+			memOther.Specs = c.Specs // 复制内存规格，保证校验可完整执行
+		}
+	}
+	catalog.Candidates = append(catalog.Candidates, memOther)
+	var draft map[string]any
+	if err := json.Unmarshal(record.Draft, &draft); err != nil {
+		t.Fatal(err)
+	}
+	draft["selection"].(map[string]any)["memory"] = "mem-other"
+	raw, _ := json.Marshal(draft)
+	record.Draft = raw
+	record.Outcome = "proposal"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome == "clarify" {
+		t.Fatalf("authorized replacement after owned removal must not clarify: %+v", got)
+	}
+	for _, line := range got.Quote.Lines {
+		if strings.Contains(line.SKU, "mem-other") && line.Owned {
+			t.Fatalf("newly bought memory must be priced: %+v", got.Quote.Lines)
+		}
 	}
 }

@@ -193,3 +193,21 @@ clarify 纪律先取证取舍，而是静默以 mem-corsair-lpx-32-3600（32GB D
 - 回归：`go test ./...`（40 包）、`go vet ./...` 全绿；builder-v2 机制套件零模型 replay **10/10**（`artifacts/builder-v2-20260925-mech-r2-postfix-20260926`）。
 - 单题 live（用户授权口径）：派生单题套件（provenance 记录来源与理由），plan.json 先于任何 provider 请求落盘（evalplanning 已改为所有 live 模式先写 plan），**6 次 Builder 调用 ≤15**，1/1 通过——模型自行 clarify 点名 G.Skill 内存与沿用/改购取舍，采购合计 5706（含被选中内存，不再豁免）。
 - 纪律偏差披露：首次 live 尝试（4 次调用，1/1）产物目录被本方清理命令误删，已按 plan-first 修复后重跑；损失仅影响首跑存证，不影响结论。
+
+## 8. 零模型定向收口 v3.1（2026-09-26，同一分支，基于 e311147）
+
+**范围**：修复两类已有件边界，全程零模型（先写失败测试，再实现最小确定性修复）；不改冻结评估金标、不改旧基线、不加回复关键词、不跑 Pass³/新 live。
+
+**文档核查（SSD 互换决策）**：产品文档（DESIGN/PRD/系统架构/openapi）无"SSD 只按数量视为可互换"的要求；数量规则的唯一出处是代码注释"防多盘误豁免"——其意图是防超豁免，不是授权"仅凭数量把不同型号 SSD 免计价"。收口保留数量一致性约束（多盘保护不回退），叠加型号对应，采购价误导风险（选中 B 被免计而实际购入 B）被消除，故不需要停下保留旧行为。
+
+**边界修复**：
+1. SSD 型号对应：已有 SSD A、draft 选中不同型号 SSD B（即使数量相同）不再按品类数量豁免——豁免要求"每个选中 SSD SKU 与某已有件型号匹配"且"选中数量合计=已有数量合计"；数量不一致（同型号 1 有 2 选）同样计价。
+2. 目录匹配已有件被同品类替换：owned 型号 A 在目录有精确匹配、draft 选不同型号 B 且状态无改购授权（状态合同只能以移除已有件表达授权）→ 无条件 clarify，不得 ready。统一规则：豁免与取舍都以"实际选中件是否对应已有件"判定（零匹配、目录匹配两种形态合并为同一条对应性检查）。
+
+**红-first 证据**：TestSSDDifferentModelMustBePricedEvenWithSameQuantity、TestCatalogMatchedOwnedReplacedByDifferentSKUForcesTradeoff 在修复前红（B 被豁免/直接 ready），修复后绿。
+
+**语义变更（旧测试修订）**：e311147 的 `TestSSDOwnershipAccountingFollowsQuantity` 编码了已废除的"仅数量豁免"语义，重写为 `TestSSDOwnershipAccountingFollowsCorrespondence`（同型号数量一致豁免/数量不一致计价）；delivery note 条件统一为"品类未被选中才出 note"（被选中的不对应品类由 clarify 点名，note 不再对 SSD 例外）。
+
+**回归**：BV2-104 冻结 live 回放绿；机制套件零模型 replay 10/10（`artifacts/builder-v2-20260925-mech-r2-postfix-v31-20260926`）；`go test ./...`（40 包）/`go vet ./...` 全绿。新增覆盖：不同型号同数量计价+clarify、目录匹配被替换 clarify、同型号数量不一致计价、移除旧件后授权改单计价交付。
+
+**剩余风险**：①用户已有旧 SSD（目录必无精确匹配）且 draft 需填 SSD 槽时，现在会稳定产生计价取舍 clarify——这是 BV2-104 类风险的诚实代价，但 UX 上更啰嗦；消除它需要状态合同新增"用户已授权新购 SSD"的结构化表达（后续 change）。②多 SSD 部分对应（已有 A、选中 A+B）时按品类整体计价（保守多计），quote 行级豁免留待需要时再做。

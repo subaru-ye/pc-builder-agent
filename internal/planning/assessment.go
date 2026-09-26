@@ -141,12 +141,10 @@ func (x *execution) deliveryIssues() (issues, notes []string) {
 				matched = true
 			}
 		}
-		if !matched {
-			// 非 SSD 且品类被选中 → finalize 的计价取舍 clarify 处理，此处
-			// 不再宣称"已按已有件核账"；SSD 数量豁免与未选中品类保留 note。
-			if p.Category != schemas.CategorySSD && selected[p.Category] {
-				continue
-			}
+		if !matched && !selected[p.Category] {
+			// 仅"品类未被选中（真正沿用用户已有件）"的零匹配已有件出 note；
+			// 被选中的品类由 finalize 的计价取舍 clarify 点名，此处不再宣称
+			// "按已有件核账、不计入采购合计"。
 			unmatched = append(unmatched, categoryLabel(p.Category)+"："+p.Model)
 		}
 	}
@@ -163,32 +161,57 @@ func (x *execution) deliveryIssues() (issues, notes []string) {
 // 该条件是结构化的：不依赖模型自述措辞，也适用于模型直接宣称的 ready。
 // （取代 r11 起按"替身/沿用用户"窄措辞收敛的 placeholderDelivery——BV2-104
 // 现场证明"继续沿用"等变体绕过措辞检测。）
+// ownershipTradeoffPending 检测"已有件保留 vs 改购"需要用户取舍的交付形态：
+// 品类被 draft 选中，但选中的 SKU 与用户已有件不对应（型号不匹配，或 SSD
+// 数量不一致）。此时保留（换用/沿用已有件，该品类不计采购）还是改购（选中
+// 件计入采购）是计价取舍，必须 clarify 并说明，等待用户确认——状态合同
+// 无法表达"保留旧件同时改购新件"的授权，只能由用户确认或先行移除已有件。
 func (x *execution) ownershipTradeoffPending(draft schemas.BuildDraft) []schemas.OwnedPart {
-	selected := map[schemas.Category]bool{}
+	selected := map[schemas.Category][]Candidate{}
 	for _, id := range draft.Selection.SKUs() {
 		for _, c := range x.candidates {
 			if c.ID == id {
-				selected[c.Category] = true
+				selected[c.Category] = append(selected[c.Category], c)
 			}
 		}
 	}
 	var pending []schemas.OwnedPart
 	for _, p := range x.accountingSpec().OwnedParts {
-		// SSD 按品类内数量核账（存储可互换、型号核验无意义），不在此列。
-		if p.Category == schemas.CategorySSD {
-			continue
+		chosen := selected[p.Category]
+		if len(chosen) == 0 {
+			continue // 品类未被选中：真正沿用用户已有件，无取舍。
 		}
-		matched := false
-		for _, c := range x.candidates {
+		corresponds := false
+		for _, c := range chosen {
 			if matchesOwnedPart(c, p) {
-				matched = true
+				corresponds = true
 			}
 		}
-		if !matched && selected[p.Category] {
+		if p.Category == schemas.CategorySSD && corresponds && !x.ssdQuantityConsistent(draft) {
+			// 型号对应但数量不一致：超额部分是采购，保留几件、买几件需确认。
+			pending = append(pending, p)
+			continue
+		}
+		if !corresponds {
 			pending = append(pending, p)
 		}
 	}
 	return pending
+}
+
+// ssdQuantityConsistent 报告选中 SSD 数量合计是否与该品类已有件数量合计一致。
+func (x *execution) ssdQuantityConsistent(draft schemas.BuildDraft) bool {
+	selected := 0
+	for _, s := range draft.Selection.SSDs {
+		selected += s.Quantity
+	}
+	total := 0
+	for _, p := range x.accountingSpec().OwnedParts {
+		if p.Category == schemas.CategorySSD {
+			total += max(1, p.Quantity)
+		}
+	}
+	return selected == total
 }
 
 // ownershipTradeoffIssue 生成计价取舍 clarify 的问题文本，逐件给出品类与
@@ -202,34 +225,32 @@ func ownershipTradeoffIssue(pending []schemas.OwnedPart) string {
 		"）：保留已有件（该品类不计入采购合计）还是改购新件（计入采购合计），是计价取舍，需用户确认后继续。"
 }
 
-// verifiedOwnership 已有件核账：非 SSD 品类只有在 draft 选中的候选与用户
-// 型号精确匹配（matchesOwnedPart 品牌全名）时才视为核验、该品类不计采购价；
-// 仅同品类选中不再构成核验——型号/数量未核实时把选中 SKU 当已有件免计价，
-// 正是 BV2-104"账实不一致"的会计根因。SSD 以品类内总数量一致防多盘误豁免
-// （存储可互换，型号匹配无意义）。零匹配且品类被选中的已有件走 finalize 的
-// 计价取舍 clarify，不由本函数静默豁免。
+// verifiedOwnership 已有件核账：豁免以"实际选中件与已有件对应"为唯一依据。
+// 非 SSD 品类要求 draft 选中的候选与用户型号精确匹配（matchesOwnedPart 品牌
+// 全名）；SSD 额外要求数量合计一致——型号不同即新购件（即使数量相同）、数量
+// 不一致即有超额采购，都不得整品类免计价，这正是 BV2-104"账实不一致"与
+// 其 SSD 变体的会计根因。不对应的品类走 finalize 的计价取舍 clarify。
 func (x *execution) verifiedOwnership(draft schemas.BuildDraft) schemas.RequirementSpec {
 	spec := x.accountingSpec()
 	owned := spec.OwnedParts
 	spec.OwnedParts = nil
-	for _, p := range owned {
-		if p.Category == schemas.CategorySSD {
-			total := 0
-			for _, s := range draft.Selection.SSDs {
-				total += s.Quantity
+	selected := map[schemas.Category][]Candidate{}
+	for _, id := range draft.Selection.SKUs() {
+		for _, c := range x.candidates {
+			if c.ID == id {
+				selected[c.Category] = append(selected[c.Category], c)
 			}
-			if total == max(1, p.Quantity) {
-				spec.OwnedParts = append(spec.OwnedParts, p)
-			}
-			continue
 		}
+	}
+	for _, p := range owned {
 		verified := false
-		for _, id := range draft.Selection.SKUs() {
-			for _, c := range x.candidates {
-				if c.ID == id && matchesOwnedPart(c, p) {
-					verified = true
-				}
+		for _, c := range selected[p.Category] {
+			if matchesOwnedPart(c, p) {
+				verified = true
 			}
+		}
+		if verified && p.Category == schemas.CategorySSD && !x.ssdQuantityConsistent(draft) {
+			verified = false
 		}
 		if verified {
 			spec.OwnedParts = append(spec.OwnedParts, p)

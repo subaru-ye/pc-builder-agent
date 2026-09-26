@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/subaru-ye/pc-builder-agent/internal/planning"
 )
 
 // dotPathValue 在解码后的 JSON 对象里按点路径取值；数组下标支持数字段。
@@ -123,7 +125,11 @@ func AttachToolContract(report *Report) {
 				if err != nil {
 					continue
 				}
-				report.ToolContract = &ToolContractIdentity{SHA256: Hash(raw), Model: req.Model}
+				report.ToolContract = &ToolContractIdentity{
+					SHA256:        Hash(raw),
+					Model:         req.Model,
+					ErrorContract: planning.ToolErrorContractVersion,
+				}
 				return
 			}
 		}

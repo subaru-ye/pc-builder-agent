@@ -1,7 +1,7 @@
 {
- "version": "builder-v2-mechanisms-20260925-r2",
- "live": false,
- "provenance": "Builder v2 专项评估：给 Builder 一份已核定的 v2 需求（确认事务冻结 EffectiveConstraints），考察其选件机制。目录与 current-178 mechanisms（快照11，126 active）字节一致。旧用例只算回归来源，不冒充新盲测；硬约束由确定性规则判，允许多个同样合格的 SKU。逐题来源与语义变化见 provenance.json 与 docs/changes/builder-v2-eval.md。",
+ "version": "builder-v2-live-diag-20260925-r1",
+ "live": true,
+ "provenance": "Builder v2 live 诊断套件：由冻结离线 fixture（r2）派生——剥离全部 builder oracle，保留 scripted 种子轮（核定需求的适配器输入，零 provider 调用）。Builder 真实执行，每 case 一次、不重跑追分；结果为诊断与用量观测，不是通过率宣称。逐题金标来源见离线套件 provenance。",
  "catalog": {
   "date": "2026-09-17",
   "candidates": [
@@ -5813,47 +5813,7 @@
         }
        ]
       }
-     },
-     "builder_oracle": [
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-101-1",
-          "name": "planning_action",
-          "args": {
-           "action": "search_local_batch",
-           "payload": "{\"queries\": [{\"category\": \"cpu\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"motherboard\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"memory\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"ssd\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"psu\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"case\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"cooler\", \"order_by\": \"price_asc\", \"limit\": 8}]}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-101-2",
-          "name": "planning_action",
-          "args": {
-           "action": "evaluate",
-           "payload": "{\"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-4600g\", \"gpu\": null, \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-crucial-ballistix-16-3200\", \"ssd\": [{\"sku\": \"ssd-crucial-bx500-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"核显办公方案\", \"gpu\": \"核显办公方案\", \"motherboard\": \"核显办公方案\", \"memory\": \"核显办公方案\", \"ssd\": \"核显办公方案\", \"psu\": \"核显办公方案\", \"case\": \"核显办公方案\", \"cooler\": \"核显办公方案\"}}}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "text": "{\"outcome\": \"ready\", \"reply\": \"已在4000元预算内配好核显办公主机，总价3134.8元。\", \"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-4600g\", \"gpu\": null, \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-crucial-ballistix-16-3200\", \"ssd\": [{\"sku\": \"ssd-crucial-bx500-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"预算内且校验通过的确定性选型\", \"gpu\": \"预算内且校验通过的确定性选型\", \"motherboard\": \"预算内且校验通过的确定性选型\", \"memory\": \"预算内且校验通过的确定性选型\", \"ssd\": \"预算内且校验通过的确定性选型\", \"psu\": \"预算内且校验通过的确定性选型\", \"case\": \"预算内且校验通过的确定性选型\", \"cooler\": \"预算内且校验通过的确定性选型\"}}, \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"总价3134.80元在预算上限内\", \"evidence\": [\"local:cpu-r5-4600g\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-crucial-ballistix-16-3200\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:ssd-crucial-bx500-1tb\"]}, {\"field\": \"use_case.type\", \"status\": \"met\", \"explanation\": \"按核定用途选型\", \"evidence\": [\"local:cpu-r5-4600g\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-crucial-ballistix-16-3200\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:ssd-crucial-bx500-1tb\"]}], \"issues\": [], \"assumptions\": []}"
-        }
-       ]
-      }
-     ]
+     }
     }
    ]
   },
@@ -5942,32 +5902,7 @@
         "budget_flex"
        ]
       }
-     },
-     "builder_oracle": [
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-102-1",
-          "name": "planning_action",
-          "args": {
-           "action": "evaluate",
-           "payload": "{\"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-4600g\", \"gpu\": null, \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-crucial-ballistix-16-3200\", \"ssd\": [{\"sku\": \"ssd-crucial-bx500-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"严格预算内核显办公\", \"gpu\": \"严格预算内核显办公\", \"motherboard\": \"严格预算内核显办公\", \"memory\": \"严格预算内核显办公\", \"ssd\": \"严格预算内核显办公\", \"psu\": \"严格预算内核显办公\", \"case\": \"严格预算内核显办公\", \"cooler\": \"严格预算内核显办公\"}}}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "text": "{\"outcome\": \"ready\", \"reply\": \"已在5000元严格预算内配好办公主机，总价3134.8元。\", \"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-4600g\", \"gpu\": null, \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-crucial-ballistix-16-3200\", \"ssd\": [{\"sku\": \"ssd-crucial-bx500-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"预算内且校验通过的确定性选型\", \"gpu\": \"预算内且校验通过的确定性选型\", \"motherboard\": \"预算内且校验通过的确定性选型\", \"memory\": \"预算内且校验通过的确定性选型\", \"ssd\": \"预算内且校验通过的确定性选型\", \"psu\": \"预算内且校验通过的确定性选型\", \"case\": \"预算内且校验通过的确定性选型\", \"cooler\": \"预算内且校验通过的确定性选型\"}}, \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"总价3134.80元在预算上限内\", \"evidence\": [\"local:cpu-r5-4600g\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-crucial-ballistix-16-3200\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:ssd-crucial-bx500-1tb\"]}, {\"field\": \"use_case.type\", \"status\": \"met\", \"explanation\": \"按核定用途选型\", \"evidence\": [\"local:cpu-r5-4600g\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-crucial-ballistix-16-3200\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:ssd-crucial-bx500-1tb\"]}], \"issues\": [], \"assumptions\": []}"
-        }
-       ]
-      }
-     ]
+     }
     }
    ]
   },
@@ -6082,32 +6017,7 @@
         ]
        }
       }
-     },
-     "builder_oracle": [
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-103-1",
-          "name": "planning_action",
-          "args": {
-           "action": "evaluate",
-           "payload": "{\"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-4600g\", \"gpu\": null, \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-crucial-ballistix-16-3200\", \"ssd\": [{\"sku\": \"ssd-crucial-bx500-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"已有CPU按品类核账不计采购价\", \"gpu\": \"已有CPU按品类核账不计采购价\", \"motherboard\": \"已有CPU按品类核账不计采购价\", \"memory\": \"已有CPU按品类核账不计采购价\", \"ssd\": \"已有CPU按品类核账不计采购价\", \"psu\": \"已有CPU按品类核账不计采购价\", \"case\": \"已有CPU按品类核账不计采购价\", \"cooler\": \"已有CPU按品类核账不计采购价\"}}}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "text": "{\"outcome\": \"ready\", \"reply\": \"沿用你已有的4600G，新增采购总价2477元，在4000元预算内。\", \"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-4600g\", \"gpu\": null, \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-crucial-ballistix-16-3200\", \"ssd\": [{\"sku\": \"ssd-crucial-bx500-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"预算内且校验通过的确定性选型\", \"gpu\": \"预算内且校验通过的确定性选型\", \"motherboard\": \"预算内且校验通过的确定性选型\", \"memory\": \"预算内且校验通过的确定性选型\", \"ssd\": \"预算内且校验通过的确定性选型\", \"psu\": \"预算内且校验通过的确定性选型\", \"case\": \"预算内且校验通过的确定性选型\", \"cooler\": \"预算内且校验通过的确定性选型\"}}, \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"总价2477.00元在预算上限内\", \"evidence\": [\"local:cpu-r5-4600g\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-crucial-ballistix-16-3200\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:ssd-crucial-bx500-1tb\"]}, {\"field\": \"use_case.type\", \"status\": \"met\", \"explanation\": \"按核定用途选型\", \"evidence\": [\"local:cpu-r5-4600g\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-crucial-ballistix-16-3200\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:ssd-crucial-bx500-1tb\"]}], \"issues\": [], \"assumptions\": []}"
-        }
-       ]
-      }
-     ]
+     }
     }
    ]
   },
@@ -6240,32 +6150,7 @@
         ]
        }
       }
-     },
-     "builder_oracle": [
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-104-1",
-          "name": "planning_action",
-          "args": {
-           "action": "search_local",
-           "payload": "{\"query\": \"G.Skill Ripjaws V 32GB DDR4-3200\", \"category\": \"memory\"}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "text": "{\"outcome\": \"clarify\", \"reply\": \"你已有的G.Skill Ripjaws V 32GB内存在目录中没有精确匹配型号。可以选择保留这块内存（按品类核账、不计入采购合计），或改购一条新内存；确认后我再继续选配。\", \"draft\": null, \"assessments\": [{\"field\": \"owned_parts\", \"status\": \"unknown\", \"explanation\": \"已有件目录无精确匹配，保留或改购需用户决定\", \"evidence\": [\"local:fixture\"]}], \"issues\": [\"已有内存G.Skill Ripjaws V 32GB在目录无精确匹配，需用户确认保留（按品类核账不计价）或改购新件\"], \"assumptions\": []}"
-        }
-       ]
-      }
-     ]
+     }
     }
    ]
   },
@@ -6361,62 +6246,7 @@
         "use_case.type": "general"
        }
       }
-     },
-     "builder_oracle": [
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-105-1",
-          "name": "planning_action",
-          "args": {
-           "action": "search_local_batch",
-           "payload": "{\"queries\": [{\"category\": \"cpu\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"motherboard\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"memory\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"ssd\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"psu\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"case\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"cooler\", \"order_by\": \"price_asc\", \"limit\": 8}]}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-105-2",
-          "name": "planning_action",
-          "args": {
-           "action": "evaluate",
-           "payload": "{\"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-7600\", \"gpu\": null, \"motherboard\": \"mb-msi-b650i-edge\", \"memory\": \"mem-kingston-beast-16-5200\", \"ssd\": [{\"sku\": \"ssd-zhitai-ti600-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-coolermaster-nr200p\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"先试ATX电源，待核验机箱兼容\", \"gpu\": \"先试ATX电源，待核验机箱兼容\", \"motherboard\": \"先试ATX电源，待核验机箱兼容\", \"memory\": \"先试ATX电源，待核验机箱兼容\", \"ssd\": \"先试ATX电源，待核验机箱兼容\", \"psu\": \"先试ATX电源，待核验机箱兼容\", \"case\": \"先试ATX电源，待核验机箱兼容\", \"cooler\": \"先试ATX电源，待核验机箱兼容\"}}}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-105-3",
-          "name": "planning_action",
-          "args": {
-           "action": "evaluate",
-           "payload": "{\"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-7600\", \"gpu\": null, \"motherboard\": \"mb-msi-b650i-edge\", \"memory\": \"mem-kingston-beast-16-5200\", \"ssd\": [{\"sku\": \"ssd-zhitai-ti600-1tb\", \"quantity\": 1}], \"psu\": \"psu-cm-v850sfx-gold-white\", \"case\": \"case-coolermaster-nr200p\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"ITX机箱限SFX/SFX-L电源，换SFX电源后通过\", \"gpu\": \"ITX机箱限SFX/SFX-L电源，换SFX电源后通过\", \"motherboard\": \"ITX机箱限SFX/SFX-L电源，换SFX电源后通过\", \"memory\": \"ITX机箱限SFX/SFX-L电源，换SFX电源后通过\", \"ssd\": \"ITX机箱限SFX/SFX-L电源，换SFX电源后通过\", \"psu\": \"ITX机箱限SFX/SFX-L电源，换SFX电源后通过\", \"case\": \"ITX机箱限SFX/SFX-L电源，换SFX电源后通过\", \"cooler\": \"ITX机箱限SFX/SFX-L电源，换SFX电源后通过\"}}}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "text": "{\"outcome\": \"ready\", \"reply\": \"已配好ITX办公主机：B650I主板+核显CPU，机箱用SFX电源满足限长，总价7977.7元。\", \"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-7600\", \"gpu\": null, \"motherboard\": \"mb-msi-b650i-edge\", \"memory\": \"mem-kingston-beast-16-5200\", \"ssd\": [{\"sku\": \"ssd-zhitai-ti600-1tb\", \"quantity\": 1}], \"psu\": \"psu-cm-v850sfx-gold-white\", \"case\": \"case-coolermaster-nr200p\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"预算内且校验通过的确定性选型\", \"gpu\": \"预算内且校验通过的确定性选型\", \"motherboard\": \"预算内且校验通过的确定性选型\", \"memory\": \"预算内且校验通过的确定性选型\", \"ssd\": \"预算内且校验通过的确定性选型\", \"psu\": \"预算内且校验通过的确定性选型\", \"case\": \"预算内且校验通过的确定性选型\", \"cooler\": \"预算内且校验通过的确定性选型\"}}, \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"总价7977.70元在预算上限内\", \"evidence\": [\"local:cpu-r5-7600\", \"local:mb-msi-b650i-edge\", \"local:mem-kingston-beast-16-5200\", \"local:psu-cm-v850sfx-gold-white\", \"local:case-coolermaster-nr200p\", \"local:cooler-deepcool-ag400\", \"local:ssd-zhitai-ti600-1tb\"]}, {\"field\": \"use_case.type\", \"status\": \"met\", \"explanation\": \"按核定用途选型\", \"evidence\": [\"local:cpu-r5-7600\", \"local:mb-msi-b650i-edge\", \"local:mem-kingston-beast-16-5200\", \"local:psu-cm-v850sfx-gold-white\", \"local:case-coolermaster-nr200p\", \"local:cooler-deepcool-ag400\", \"local:ssd-zhitai-ti600-1tb\"]}, {\"field\": \"size_pref\", \"status\": \"met\", \"explanation\": \"机箱与主板均为ITX板型，满足必须ITX\", \"evidence\": [\"local:case-coolermaster-nr200p\", \"local:mb-msi-b650i-edge\"]}], \"issues\": [], \"assumptions\": []}"
-        }
-       ]
-      }
-     ]
+     }
     }
    ]
   },
@@ -6548,63 +6378,7 @@
         ]
        }
       }
-     },
-     "builder_oracle": [
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-106-1",
-          "name": "planning_action",
-          "args": {
-           "action": "search_local_batch",
-           "payload": "{\"queries\": [{\"category\": \"cpu\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"gpu\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"motherboard\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"memory\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"ssd\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"psu\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"case\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"cooler\", \"order_by\": \"price_asc\", \"limit\": 8}]}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-106-2",
-          "name": "planning_action",
-          "args": {
-           "action": "evaluate",
-           "payload": "{\"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-msi-3060-ventus2x\", \"motherboard\": \"mb-msi-b650m-mortar-wifi\", \"memory\": \"mem-kingston-beast-16-5200\", \"ssd\": [{\"sku\": \"ssd-zhitai-ti600-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"沿用已有CPU与内存，待核验平台兼容\", \"gpu\": \"沿用已有CPU与内存，待核验平台兼容\", \"motherboard\": \"沿用已有CPU与内存，待核验平台兼容\", \"memory\": \"沿用已有CPU与内存，待核验平台兼容\", \"ssd\": \"沿用已有CPU与内存，待核验平台兼容\", \"psu\": \"沿用已有CPU与内存，待核验平台兼容\", \"case\": \"沿用已有CPU与内存，待核验平台兼容\", \"cooler\": \"沿用已有CPU与内存，待核验平台兼容\"}}}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "text": "{\"outcome\": \"proposal\", \"reply\": \"你要求沿用的CPU（AM4）与内存（DDR5）在当前目录没有任何主板能同时兼容，见待解决问题。\", \"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-msi-3060-ventus2x\", \"motherboard\": \"mb-msi-b650m-mortar-wifi\", \"memory\": \"mem-kingston-beast-16-5200\", \"ssd\": [{\"sku\": \"ssd-zhitai-ti600-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"存在待解决问题，交付标注方案\", \"gpu\": \"存在待解决问题，交付标注方案\", \"motherboard\": \"存在待解决问题，交付标注方案\", \"memory\": \"存在待解决问题，交付标注方案\", \"ssd\": \"存在待解决问题，交付标注方案\", \"psu\": \"存在待解决问题，交付标注方案\", \"case\": \"存在待解决问题，交付标注方案\", \"cooler\": \"存在待解决问题，交付标注方案\"}}, \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"总价与预算上限的关系见问题标注\", \"evidence\": [\"local:cpu-r5-5600\", \"local:gpu-msi-3060-ventus2x\", \"local:mb-msi-b650m-mortar-wifi\", \"local:mem-kingston-beast-16-5200\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:ssd-zhitai-ti600-1tb\"]}], \"issues\": [\"已有CPU（AM4插槽）与已有内存（DDR5）无法通过任何目录内主板同时兼容，需用户决定更换哪一件\"], \"assumptions\": []}"
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "text": "{\"outcome\": \"proposal\", \"reply\": \"已复核：AM4 CPU 与 DDR5 内存的组合在目录内无兼容主板，保留标注方案交用户取舍。\", \"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-msi-3060-ventus2x\", \"motherboard\": \"mb-msi-b650m-mortar-wifi\", \"memory\": \"mem-kingston-beast-16-5200\", \"ssd\": [{\"sku\": \"ssd-zhitai-ti600-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"存在待解决问题，交付标注方案\", \"gpu\": \"存在待解决问题，交付标注方案\", \"motherboard\": \"存在待解决问题，交付标注方案\", \"memory\": \"存在待解决问题，交付标注方案\", \"ssd\": \"存在待解决问题，交付标注方案\", \"psu\": \"存在待解决问题，交付标注方案\", \"case\": \"存在待解决问题，交付标注方案\", \"cooler\": \"存在待解决问题，交付标注方案\"}}, \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"总价与预算上限的关系见问题标注\", \"evidence\": [\"local:cpu-r5-5600\", \"local:gpu-msi-3060-ventus2x\", \"local:mb-msi-b650m-mortar-wifi\", \"local:mem-kingston-beast-16-5200\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:ssd-zhitai-ti600-1tb\"]}], \"issues\": [\"已有CPU（AM4插槽）与已有内存（DDR5）无法通过任何目录内主板同时兼容，需用户决定更换哪一件\"], \"assumptions\": []}"
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "text": "{\"outcome\": \"proposal\", \"reply\": \"已复核：AM4 CPU 与 DDR5 内存的组合在目录内无兼容主板，保留标注方案交用户取舍。\", \"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-msi-3060-ventus2x\", \"motherboard\": \"mb-msi-b650m-mortar-wifi\", \"memory\": \"mem-kingston-beast-16-5200\", \"ssd\": [{\"sku\": \"ssd-zhitai-ti600-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"存在待解决问题，交付标注方案\", \"gpu\": \"存在待解决问题，交付标注方案\", \"motherboard\": \"存在待解决问题，交付标注方案\", \"memory\": \"存在待解决问题，交付标注方案\", \"ssd\": \"存在待解决问题，交付标注方案\", \"psu\": \"存在待解决问题，交付标注方案\", \"case\": \"存在待解决问题，交付标注方案\", \"cooler\": \"存在待解决问题，交付标注方案\"}}, \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"总价与预算上限的关系见问题标注\", \"evidence\": [\"local:cpu-r5-5600\", \"local:gpu-msi-3060-ventus2x\", \"local:mb-msi-b650m-mortar-wifi\", \"local:mem-kingston-beast-16-5200\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:ssd-zhitai-ti600-1tb\"]}], \"issues\": [\"已有CPU（AM4插槽）与已有内存（DDR5）无法通过任何目录内主板同时兼容，需用户决定更换哪一件\"], \"assumptions\": []}"
-        }
-       ]
-      }
-     ]
+     }
     }
    ]
   },
@@ -6680,62 +6454,7 @@
         "use_case.type": "general"
        }
       }
-     },
-     "builder_oracle": [
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-107-1",
-          "name": "planning_action",
-          "args": {
-           "action": "search_local_batch",
-           "payload": "{\"queries\": [{\"category\": \"cpu\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"motherboard\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"memory\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"ssd\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"psu\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"case\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"cooler\", \"order_by\": \"price_asc\", \"limit\": 8}]}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-107-2",
-          "name": "planning_action",
-          "args": {
-           "action": "evaluate",
-           "payload": "{\"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-4600g\", \"gpu\": null, \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-corsair-lpx-32-3600\", \"ssd\": [{\"sku\": \"ssd-zhitai-ti600-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-coolermaster-hyper212-black\"}, \"rationale\": {\"cpu\": \"先试Hyper 212，待核验散热能力字段\", \"gpu\": \"先试Hyper 212，待核验散热能力字段\", \"motherboard\": \"先试Hyper 212，待核验散热能力字段\", \"memory\": \"先试Hyper 212，待核验散热能力字段\", \"ssd\": \"先试Hyper 212，待核验散热能力字段\", \"psu\": \"先试Hyper 212，待核验散热能力字段\", \"case\": \"先试Hyper 212，待核验散热能力字段\", \"cooler\": \"先试Hyper 212，待核验散热能力字段\"}}}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-107-3",
-          "name": "planning_action",
-          "args": {
-           "action": "evaluate",
-           "payload": "{\"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-4600g\", \"gpu\": null, \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-corsair-lpx-32-3600\", \"ssd\": [{\"sku\": \"ssd-zhitai-ti600-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"Hyper 212缺解热容量字段，换字段完整的AG400\", \"gpu\": \"Hyper 212缺解热容量字段，换字段完整的AG400\", \"motherboard\": \"Hyper 212缺解热容量字段，换字段完整的AG400\", \"memory\": \"Hyper 212缺解热容量字段，换字段完整的AG400\", \"ssd\": \"Hyper 212缺解热容量字段，换字段完整的AG400\", \"psu\": \"Hyper 212缺解热容量字段，换字段完整的AG400\", \"case\": \"Hyper 212缺解热容量字段，换字段完整的AG400\", \"cooler\": \"Hyper 212缺解热容量字段，换字段完整的AG400\"}}}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "text": "{\"outcome\": \"ready\", \"reply\": \"已配好办公主机；散热器换为字段完整且220W解热能力的AG400，总价4454.8元。\", \"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-4600g\", \"gpu\": null, \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-corsair-lpx-32-3600\", \"ssd\": [{\"sku\": \"ssd-zhitai-ti600-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"预算内且校验通过的确定性选型\", \"gpu\": \"预算内且校验通过的确定性选型\", \"motherboard\": \"预算内且校验通过的确定性选型\", \"memory\": \"预算内且校验通过的确定性选型\", \"ssd\": \"预算内且校验通过的确定性选型\", \"psu\": \"预算内且校验通过的确定性选型\", \"case\": \"预算内且校验通过的确定性选型\", \"cooler\": \"预算内且校验通过的确定性选型\"}}, \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"总价4454.80元在预算上限内\", \"evidence\": [\"local:cpu-r5-4600g\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-corsair-lpx-32-3600\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:ssd-zhitai-ti600-1tb\"]}, {\"field\": \"use_case.type\", \"status\": \"met\", \"explanation\": \"按核定用途选型\", \"evidence\": [\"local:cpu-r5-4600g\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-corsair-lpx-32-3600\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:ssd-zhitai-ti600-1tb\"]}], \"issues\": [], \"assumptions\": []}"
-        }
-       ]
-      }
-     ]
+     }
     }
    ]
   },
@@ -6814,79 +6533,7 @@
         "use_case.type": "general"
        }
       }
-     },
-     "builder_oracle": [
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-108-1",
-          "name": "planning_action",
-          "args": {
-           "action": "search_local_batch",
-           "payload": "{\"queries\": [{\"category\": \"cpu\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"gpu\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"motherboard\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"memory\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"ssd\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"psu\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"case\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"cooler\", \"order_by\": \"price_asc\", \"limit\": 8}]}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-108-2",
-          "name": "planning_action",
-          "args": {
-           "action": "evaluate",
-           "payload": "{\"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-4500\", \"gpu\": \"gpu-msi-3060-ventus2x\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-crucial-ballistix-16-3200\", \"ssd\": [{\"sku\": \"ssd-crucial-bx500-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-coolermaster-hyper212-black\"}, \"rationale\": {\"cpu\": \"目录最低价独显组合\", \"gpu\": \"目录最低价独显组合\", \"motherboard\": \"目录最低价独显组合\", \"memory\": \"目录最低价独显组合\", \"ssd\": \"目录最低价独显组合\", \"psu\": \"目录最低价独显组合\", \"case\": \"目录最低价独显组合\", \"cooler\": \"目录最低价独显组合\"}}}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "text": "{\"outcome\": \"proposal\", \"reply\": \"按目录最低价的独显整机组合，总价5677.5元已超出2500元预算且各品类均为目录最低价，无法在预算内闭环；方案与待解决问题见标注。\", \"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-4500\", \"gpu\": \"gpu-msi-3060-ventus2x\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-crucial-ballistix-16-3200\", \"ssd\": [{\"sku\": \"ssd-crucial-bx500-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-coolermaster-hyper212-black\"}, \"rationale\": {\"cpu\": \"存在待解决问题，交付标注方案\", \"gpu\": \"存在待解决问题，交付标注方案\", \"motherboard\": \"存在待解决问题，交付标注方案\", \"memory\": \"存在待解决问题，交付标注方案\", \"ssd\": \"存在待解决问题，交付标注方案\", \"psu\": \"存在待解决问题，交付标注方案\", \"case\": \"存在待解决问题，交付标注方案\", \"cooler\": \"存在待解决问题，交付标注方案\"}}, \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"unmet\", \"explanation\": \"总价与预算上限的关系见问题标注\", \"evidence\": [\"local:cpu-r5-4500\", \"local:gpu-msi-3060-ventus2x\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-crucial-ballistix-16-3200\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-coolermaster-hyper212-black\", \"local:ssd-crucial-bx500-1tb\"]}], \"issues\": [\"总价超出2500元预算硬上限，各品类已为目录最低价，无法自行压回；需用户调整预算或取消独显要求\"], \"assumptions\": []}"
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "text": "{\"outcome\": \"proposal\", \"reply\": \"已复核预算自纠反馈：各品类已为目录最低价，无更低有报价候选可换，保留标注方案。\", \"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-4500\", \"gpu\": \"gpu-msi-3060-ventus2x\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-crucial-ballistix-16-3200\", \"ssd\": [{\"sku\": \"ssd-crucial-bx500-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-coolermaster-hyper212-black\"}, \"rationale\": {\"cpu\": \"存在待解决问题，交付标注方案\", \"gpu\": \"存在待解决问题，交付标注方案\", \"motherboard\": \"存在待解决问题，交付标注方案\", \"memory\": \"存在待解决问题，交付标注方案\", \"ssd\": \"存在待解决问题，交付标注方案\", \"psu\": \"存在待解决问题，交付标注方案\", \"case\": \"存在待解决问题，交付标注方案\", \"cooler\": \"存在待解决问题，交付标注方案\"}}, \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"unmet\", \"explanation\": \"总价与预算上限的关系见问题标注\", \"evidence\": [\"local:cpu-r5-4500\", \"local:gpu-msi-3060-ventus2x\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-crucial-ballistix-16-3200\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-coolermaster-hyper212-black\", \"local:ssd-crucial-bx500-1tb\"]}], \"issues\": [\"总价超出2500元预算硬上限，各品类已为目录最低价，无法自行压回；需用户调整预算或取消独显要求\"], \"assumptions\": []}"
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "text": "{\"outcome\": \"proposal\", \"reply\": \"已复核预算自纠反馈：各品类已为目录最低价，无更低有报价候选可换，保留标注方案。\", \"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-4500\", \"gpu\": \"gpu-msi-3060-ventus2x\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-crucial-ballistix-16-3200\", \"ssd\": [{\"sku\": \"ssd-crucial-bx500-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-coolermaster-hyper212-black\"}, \"rationale\": {\"cpu\": \"存在待解决问题，交付标注方案\", \"gpu\": \"存在待解决问题，交付标注方案\", \"motherboard\": \"存在待解决问题，交付标注方案\", \"memory\": \"存在待解决问题，交付标注方案\", \"ssd\": \"存在待解决问题，交付标注方案\", \"psu\": \"存在待解决问题，交付标注方案\", \"case\": \"存在待解决问题，交付标注方案\", \"cooler\": \"存在待解决问题，交付标注方案\"}}, \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"unmet\", \"explanation\": \"总价与预算上限的关系见问题标注\", \"evidence\": [\"local:cpu-r5-4500\", \"local:gpu-msi-3060-ventus2x\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-crucial-ballistix-16-3200\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-coolermaster-hyper212-black\", \"local:ssd-crucial-bx500-1tb\"]}], \"issues\": [\"总价超出2500元预算硬上限，各品类已为目录最低价，无法自行压回；需用户调整预算或取消独显要求\"], \"assumptions\": []}"
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "text": "{\"outcome\": \"proposal\", \"reply\": \"已复核预算自纠反馈：各品类已为目录最低价，无更低有报价候选可换，保留标注方案。\", \"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-4500\", \"gpu\": \"gpu-msi-3060-ventus2x\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-crucial-ballistix-16-3200\", \"ssd\": [{\"sku\": \"ssd-crucial-bx500-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-coolermaster-hyper212-black\"}, \"rationale\": {\"cpu\": \"存在待解决问题，交付标注方案\", \"gpu\": \"存在待解决问题，交付标注方案\", \"motherboard\": \"存在待解决问题，交付标注方案\", \"memory\": \"存在待解决问题，交付标注方案\", \"ssd\": \"存在待解决问题，交付标注方案\", \"psu\": \"存在待解决问题，交付标注方案\", \"case\": \"存在待解决问题，交付标注方案\", \"cooler\": \"存在待解决问题，交付标注方案\"}}, \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"unmet\", \"explanation\": \"总价与预算上限的关系见问题标注\", \"evidence\": [\"local:cpu-r5-4500\", \"local:gpu-msi-3060-ventus2x\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-crucial-ballistix-16-3200\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-coolermaster-hyper212-black\", \"local:ssd-crucial-bx500-1tb\"]}], \"issues\": [\"总价超出2500元预算硬上限，各品类已为目录最低价，无法自行压回；需用户调整预算或取消独显要求\"], \"assumptions\": []}"
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "text": "{\"outcome\": \"proposal\", \"reply\": \"已复核预算自纠反馈：各品类已为目录最低价，无更低有报价候选可换，保留标注方案。\", \"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-4500\", \"gpu\": \"gpu-msi-3060-ventus2x\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-crucial-ballistix-16-3200\", \"ssd\": [{\"sku\": \"ssd-crucial-bx500-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-coolermaster-hyper212-black\"}, \"rationale\": {\"cpu\": \"存在待解决问题，交付标注方案\", \"gpu\": \"存在待解决问题，交付标注方案\", \"motherboard\": \"存在待解决问题，交付标注方案\", \"memory\": \"存在待解决问题，交付标注方案\", \"ssd\": \"存在待解决问题，交付标注方案\", \"psu\": \"存在待解决问题，交付标注方案\", \"case\": \"存在待解决问题，交付标注方案\", \"cooler\": \"存在待解决问题，交付标注方案\"}}, \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"unmet\", \"explanation\": \"总价与预算上限的关系见问题标注\", \"evidence\": [\"local:cpu-r5-4500\", \"local:gpu-msi-3060-ventus2x\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-crucial-ballistix-16-3200\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-coolermaster-hyper212-black\", \"local:ssd-crucial-bx500-1tb\"]}], \"issues\": [\"总价超出2500元预算硬上限，各品类已为目录最低价，无法自行压回；需用户调整预算或取消独显要求\"], \"assumptions\": []}"
-        }
-       ]
-      }
-     ]
+     }
     }
    ]
   },
@@ -6962,32 +6609,7 @@
        "evaluate"
       ],
       "budget_ceiling_cny": "4400"
-     },
-     "builder_oracle": [
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-109-1",
-          "name": "planning_action",
-          "args": {
-           "action": "evaluate",
-           "payload": "{\"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-4600g\", \"gpu\": null, \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-crucial-ballistix-16-3200\", \"ssd\": [{\"sku\": \"ssd-crucial-bx500-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"核显办公方案\", \"gpu\": \"核显办公方案\", \"motherboard\": \"核显办公方案\", \"memory\": \"核显办公方案\", \"ssd\": \"核显办公方案\", \"psu\": \"核显办公方案\", \"case\": \"核显办公方案\", \"cooler\": \"核显办公方案\"}}}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "text": "{\"outcome\": \"ready\", \"reply\": \"已在4000元预算内配好办公主机。\", \"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-4600g\", \"gpu\": null, \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-crucial-ballistix-16-3200\", \"ssd\": [{\"sku\": \"ssd-crucial-bx500-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"预算内且校验通过的确定性选型\", \"gpu\": \"预算内且校验通过的确定性选型\", \"motherboard\": \"预算内且校验通过的确定性选型\", \"memory\": \"预算内且校验通过的确定性选型\", \"ssd\": \"预算内且校验通过的确定性选型\", \"psu\": \"预算内且校验通过的确定性选型\", \"case\": \"预算内且校验通过的确定性选型\", \"cooler\": \"预算内且校验通过的确定性选型\"}}, \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"总价3134.80元在预算上限内\", \"evidence\": [\"local:cpu-r5-4600g\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-crucial-ballistix-16-3200\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:ssd-crucial-bx500-1tb\"]}, {\"field\": \"use_case.type\", \"status\": \"met\", \"explanation\": \"按核定用途选型\", \"evidence\": [\"local:cpu-r5-4600g\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-crucial-ballistix-16-3200\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:ssd-crucial-bx500-1tb\"]}], \"issues\": [], \"assumptions\": []}"
-        }
-       ]
-      }
-     ]
+     }
     },
     {
      "kind": "refresh",
@@ -8377,55 +7999,7 @@
         }
        ]
       }
-     },
-     "builder_oracle": [
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-110-1",
-          "name": "planning_action",
-          "args": {
-           "action": "search_local_batch",
-           "payload": "{\"queries\": [{\"category\": \"cpu\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"gpu\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"motherboard\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"memory\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"ssd\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"psu\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"case\", \"order_by\": \"price_asc\", \"limit\": 8}, {\"category\": \"cooler\", \"order_by\": \"price_asc\", \"limit\": 8}]}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "functionCall": {
-          "id": "bv2-110-2",
-          "name": "planning_action",
-          "args": {
-           "action": "evaluate",
-           "payload": "{\"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-msi-3060-ventus2x\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-corsair-lpx-32-3600\", \"ssd\": [{\"sku\": \"ssd-crucial-bx500-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"退库件替换为当前有报价件，内存容量保持32GB\", \"gpu\": \"退库件替换为当前有报价件，内存容量保持32GB\", \"motherboard\": \"退库件替换为当前有报价件，内存容量保持32GB\", \"memory\": \"退库件替换为当前有报价件，内存容量保持32GB\", \"ssd\": \"退库件替换为当前有报价件，内存容量保持32GB\", \"psu\": \"退库件替换为当前有报价件，内存容量保持32GB\", \"case\": \"退库件替换为当前有报价件，内存容量保持32GB\", \"cooler\": \"退库件替换为当前有报价件，内存容量保持32GB\"}}}"
-          }
-         }
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "text": "{\"outcome\": \"ready\", \"reply\": \"已把退库配件换成当前有报价的候选，保持32GB内存容量，总价7304元在预算内。\", \"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-msi-3060-ventus2x\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-corsair-lpx-32-3600\", \"ssd\": [{\"sku\": \"ssd-crucial-bx500-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"预算内且校验通过的确定性选型\", \"gpu\": \"预算内且校验通过的确定性选型\", \"motherboard\": \"预算内且校验通过的确定性选型\", \"memory\": \"预算内且校验通过的确定性选型\", \"ssd\": \"预算内且校验通过的确定性选型\", \"psu\": \"预算内且校验通过的确定性选型\", \"case\": \"预算内且校验通过的确定性选型\", \"cooler\": \"预算内且校验通过的确定性选型\"}}, \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"总价7304.00元在预算上限内\", \"evidence\": [\"local:cpu-r5-5600\", \"local:gpu-msi-3060-ventus2x\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-corsair-lpx-32-3600\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:ssd-crucial-bx500-1tb\"]}, {\"field\": \"use_case.type\", \"status\": \"met\", \"explanation\": \"按核定用途选型\", \"evidence\": [\"local:cpu-r5-5600\", \"local:gpu-msi-3060-ventus2x\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-corsair-lpx-32-3600\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:ssd-crucial-bx500-1tb\"]}], \"issues\": [], \"assumptions\": []}"
-        }
-       ]
-      },
-      {
-       "role": "model",
-       "parts": [
-        {
-         "text": "{\"outcome\": \"ready\", \"reply\": \"已把退库配件换成当前有报价的候选，保持32GB内存容量，总价7304元在预算内。\", \"draft\": {\"schema_version\": 1, \"requirement_ref\": \"current\", \"build_ref\": \"proposal\", \"selection\": {\"cpu\": \"cpu-r5-5600\", \"gpu\": \"gpu-msi-3060-ventus2x\", \"motherboard\": \"mb-msi-b550m-pro-vdh-wifi\", \"memory\": \"mem-corsair-lpx-32-3600\", \"ssd\": [{\"sku\": \"ssd-crucial-bx500-1tb\", \"quantity\": 1}], \"psu\": \"psu-msi-mag-a650bn\", \"case\": \"case-asus-prime-ap201\", \"cooler\": \"cooler-deepcool-ag400\"}, \"rationale\": {\"cpu\": \"预算内且校验通过的确定性选型\", \"gpu\": \"预算内且校验通过的确定性选型\", \"motherboard\": \"预算内且校验通过的确定性选型\", \"memory\": \"预算内且校验通过的确定性选型\", \"ssd\": \"预算内且校验通过的确定性选型\", \"psu\": \"预算内且校验通过的确定性选型\", \"case\": \"预算内且校验通过的确定性选型\", \"cooler\": \"预算内且校验通过的确定性选型\"}}, \"assessments\": [{\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"总价7304.00元在预算上限内\", \"evidence\": [\"local:cpu-r5-5600\", \"local:gpu-msi-3060-ventus2x\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-corsair-lpx-32-3600\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:ssd-crucial-bx500-1tb\"]}, {\"field\": \"use_case.type\", \"status\": \"met\", \"explanation\": \"按核定用途选型\", \"evidence\": [\"local:cpu-r5-5600\", \"local:gpu-msi-3060-ventus2x\", \"local:mb-msi-b550m-pro-vdh-wifi\", \"local:mem-corsair-lpx-32-3600\", \"local:psu-msi-mag-a650bn\", \"local:case-asus-prime-ap201\", \"local:cooler-deepcool-ag400\", \"local:ssd-crucial-bx500-1tb\"]}], \"issues\": [], \"assumptions\": []}"
-        }
-       ]
-      }
-     ]
+     }
     },
     {
      "kind": "refresh",
@@ -8436,5 +8010,6 @@
     }
    ]
   }
- ]
+ ],
+ "builder_v2": true
 }

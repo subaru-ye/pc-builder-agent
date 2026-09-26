@@ -16,7 +16,7 @@ import sys
 
 SOURCE = "internal/planningeval/testdata/current-178-20260917/mechanisms/suite.json"
 OUT = "internal/planningeval/testdata/builder-v2-20260925"
-VERSION = "builder-v2-mechanisms-20260925-r1"
+VERSION = "builder-v2-mechanisms-20260925-r2"
 
 
 def load_source():
@@ -292,8 +292,7 @@ def build_cases(source):
                 "versions": 1, "outcome": "ready", "validation": "pass", "missing_prices": 0,
                 "require_tools": ["search_local_batch", "evaluate"],
                 "budget_ceiling_cny": "9900",
-                "selected_specs": {"case": {"supported_psu_form_factors": ["sfx", "sfx_l"]},
-                                   "psu": {"form_factor": "sfx"}},
+                "selected_specs": {"case": {"supported_psu_form_factors": ["sfx", "sfx_l"]}},
                 "frozen_constraints": frozen(spec=gold_spec(
                     budget_cny=9000, size_pref="itx", use_case__type="general")),
             }, "builder_oracle": [
@@ -308,29 +307,37 @@ def build_cases(source):
             ]},
         ]})
 
-    # BV2-106 真实兼容冲突不得伪装通过
+    # BV2-106 已有件强制的平台冲突:AM4 CPU 与 DDR5 内存并存,目录无板可同时兼容
     cases.append({
         "id": "BV2-106",
-        "title": "AM4 CPU 配 AM5 主板：校验失败如实标注，不得 ready",
-        "source": "P2-011（proposal-review-20260915）；SKU 换为快照11内的 AM4 CPU + AM5 板组合",
+        "title": "已有 AM4 CPU 与 DDR5 内存不可同时沿用：冲突如实标注，不得伪装通过或擅自换件",
+        "source": "P2-011（proposal-review-20260915）+ L4-205；第一期 r1 的冲突由脚本化模型错误诱导，live 下不可复现，r2 改为由已有件事实强制",
         "steps": [
-            seed_message("预算8000，打1080p游戏，配件全新买。",
+            seed_message("预算8000，打1080p游戏。CPU用我现有的AMD Ryzen 5 5600，内存用我现有的Kingston FURY Beast 16GB (2x8GB) DDR5-5200 CL40，其他都买新的。",
                          [op("budget_cny", 8000, quote="预算8000"),
                           op_fact("use_case.type", "gaming", quote="打1080p游戏"),
                           op_fact("use_case.resolution", "1080p", quote="1080p"),
-                          op_fact("existing_parts", [], quote="全新买")],
-                         "已记录预算8000元与1080p游戏用途。"),
+                          op_fact("owned_parts", [
+                              {"category": "cpu", "model": "AMD Ryzen 5 5600", "quantity": 1},
+                              {"category": "memory", "model": "Kingston FURY Beast 16GB (2x8GB) DDR5-5200 CL40", "quantity": 1}],
+                              quote="CPU用我现有的AMD Ryzen 5 5600，内存用我现有的Kingston FURY Beast 16GB (2x8GB) DDR5-5200 CL40"),
+                          op_fact("budget_basis", "new_purchase", quote="其他都买新的"),
+                          op_fact("existing_parts", [], quote="其他都买新的")],
+                         "已记录预算8000元、1080p游戏用途与已有CPU/内存。"),
             {"kind": "confirm", "expect": {
-                "versions": 0, "outcome_one_of": ["proposal"], "validation": "fail",
-                "require_tools": ["evaluate"], "issues_contain": ["插槽"],
+                "versions": 0, "outcome_one_of": ["proposal", "clarify"],
+                "issues_any": ["插槽", "内存", "兼容"],
                 "frozen_constraints": frozen(spec=gold_spec(
-                    budget_cny=8000, use_case__type="gaming", use_case__resolution="1080p")),
+                    budget_cny=8000, budget_basis="new_purchase", use_case__type="gaming",
+                    owned_parts=[
+                        {"category": "cpu", "model": "AMD Ryzen 5 5600", "quantity": 1},
+                        {"category": "memory", "model": "Kingston FURY Beast 16GB (2x8GB) DDR5-5200 CL40", "quantity": 1}])),
             }, "builder_oracle": [
                 batch(["cpu", "gpu", "motherboard", "memory", "ssd", "psu", "case", "cooler"], f"{cid}-106-1"),
-                fc("evaluate", {"draft": draft(CONFLICT, rationale("待核验插槽兼容"))}, f"{cid}-106-2"),
-                final_text(proposal_result(CONFLICT, "当前方案的CPU与主板插槽不匹配（AM4 CPU 配 AM5 主板），见待解决问题。", ["CPU与主板插槽不匹配：AM4 处理器无法安装到 AM5 主板插槽"])),
-                final_text(proposal_result(CONFLICT, "已复核：插槽冲突无法在当前选型内解决，保留标注方案交用户取舍。", ["CPU与主板插槽不匹配：AM4 处理器无法安装到 AM5 主板插槽"])),
-                final_text(proposal_result(CONFLICT, "已复核：插槽冲突无法在当前选型内解决，保留标注方案交用户取舍。", ["CPU与主板插槽不匹配：AM4 处理器无法安装到 AM5 主板插槽"])),
+                fc("evaluate", {"draft": draft(CONFLICT, rationale("沿用已有CPU与内存，待核验平台兼容"))}, f"{cid}-106-2"),
+                final_text(proposal_result(CONFLICT, "你要求沿用的CPU（AM4）与内存（DDR5）在当前目录没有任何主板能同时兼容，见待解决问题。", ["已有CPU（AM4插槽）与已有内存（DDR5）无法通过任何目录内主板同时兼容，需用户决定更换哪一件"])),
+                final_text(proposal_result(CONFLICT, "已复核：AM4 CPU 与 DDR5 内存的组合在目录内无兼容主板，保留标注方案交用户取舍。", ["已有CPU（AM4插槽）与已有内存（DDR5）无法通过任何目录内主板同时兼容，需用户决定更换哪一件"])),
+                final_text(proposal_result(CONFLICT, "已复核：AM4 CPU 与 DDR5 内存的组合在目录内无兼容主板，保留标注方案交用户取舍。", ["已有CPU（AM4插槽）与已有内存（DDR5）无法通过任何目录内主板同时兼容，需用户决定更换哪一件"])),
             ]},
         ]})
 
@@ -349,7 +356,6 @@ def build_cases(source):
                 "versions": 1, "outcome": "ready", "validation": "pass", "missing_prices": 0,
                 "require_tools": ["evaluate"],
                 "budget_ceiling_cny": "6600",
-                "selected_specs": {"cooler": {"cooling_capacity_w": 220}},
                 "frozen_constraints": frozen(spec=gold_spec(budget_cny=6000, use_case__type="general")),
             }, "builder_oracle": [
                 batch(["cpu", "motherboard", "memory", "ssd", "psu", "case", "cooler"], f"{cid}-107-1"),
@@ -483,9 +489,9 @@ def main():
                     "semantic_changes": ["旧录制 oracle 总价超预算（r3 录制套件 replay 本就不过），v2 重写为预算内 oracle（核显 CPU + ITX 板）",
                                          "断言改属性口径：case 限 SFX/SFX-L、psu form_factor=sfx，不锁具体电源 SKU"],
                     "not_directly_migrated": "旧 oracle 的 3060 独显配置在快照11价格下必然超 9900 上限，无法原样迁移"},
-        "BV2-106": {"source_case_ids": ["P2-011"],
-                    "semantic_changes": ["插槽冲突 SKU 换为快照11内的 AM4 CPU（5600）+ AM5 板（B650M MORTAR）",
-                                         "内存配 DDR5 以隔离单一冲突源"],
+        "BV2-106": {"source_case_ids": ["P2-011", "L4-205"],
+                    "semantic_changes": ["r2 修订：r1 的插槽冲突由脚本化模型错误诱导，live 下不可复现；改为已有件事实强制——用户已有 AM4 CPU（5600）与 DDR5 内存（FURY Beast 16-5200），目录核实 AM4 板全为 DDR4、AM5 板全为 DDR5，无板可同时兼容",
+                                         "冲突成为需求的确定性问题：builder 必须如实标注（proposal）或澄清取舍（clarify），不得伪装通过、不得擅自更换用户已有件"],
                     "not_directly_migrated": None},
         "BV2-107": {"source_case_ids": ["C123-007"],
                     "semantic_changes": ["旧题以 base_draft 前提构造（v1 已交付方案中散热器缺字段），v2 简化为新装单轮，保留『unknown 不被默认值替代、换字段完整候选』机制点"],

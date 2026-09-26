@@ -48,8 +48,8 @@ type ReqV2TurnObservation struct {
 	PresentationAction string `json:"presentation_action,omitempty"`
 	// BuilderStartedViaChat：本轮为聊天消息却启动了 Builder；聊天文字不能
 	// 替代 confirm API，ContinueScreeningRun 的自动 confirmed 不是用户核定。
-	BuilderStartedViaChat bool   `json:"builder_started_via_chat"`
-	BuildersActive        int    `json:"builders_active"`
+	BuilderStartedViaChat bool `json:"builder_started_via_chat"`
+	BuildersActive        int  `json:"builders_active"`
 	// AdmissionReason 是稳定原因码:ok | readiness_incomplete | no_confirmation |
 	// builder_running | stale_revision。confirm 轮来自 API 真实拒绝原因。
 	AdmissionReason          string `json:"admission_reason,omitempty"`

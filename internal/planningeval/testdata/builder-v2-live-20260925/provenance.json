@@ -1,11 +1,12 @@
 {
- "suite_sha256": "2ac8c3668cc1627eb6b9e9bbdca2ec37342c0804f7a287f61944d66d043f9ad6",
- "source_suite": {
-  "path": "internal/planningeval/testdata/current-178-20260917/mechanisms/suite.json",
-  "sha256": "20ffe45204d7427848036af07244602928b0fc9b1e51ce887a79c142960064d0"
+ "suite_sha256": "9ba7205ab3bf69ad1cd0f491ba36ba3fc769ea04e19b38890fa58f23d48945b4",
+ "derived_from": {
+  "path": "internal/planningeval/testdata/builder-v2-20260925/suite.json",
+  "sha256": "2ac8c3668cc1627eb6b9e9bbdca2ec37342c0804f7a287f61944d66d043f9ad6",
+  "revision": "r2"
  },
- "catalog_note": "catalog 与 current-178 mechanisms 逐字一致（快照11，126 active_core，全部有价）",
- "grader_note": "硬约束确定性判：预算硬上限=budget×(1+flex)（must，缺省0.1，显式0按陈述）；已有件品类核账；validation=pass 才可 ready；unknown/无解如实保留；正式版本持久化。旧用例只算回归来源，不冒充新盲测。",
+ "derivation": "剥离 builder_oracle；live=true；builder_v2=true；种子轮逐字保留（ scripted screening 适配器输入）",
+ "grading_note": "硬约束确定性判：预算硬上限=budget×(1+flex)（must，缺省0.1，显式0按陈述）；已有件品类核账；validation=pass 才可 ready；unknown/无解如实保留；正式版本持久化。旧用例只算回归来源，不冒充新盲测。",
  "cases": {
   "BV2-101": {
    "source_case_ids": [

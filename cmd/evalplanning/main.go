@@ -148,6 +148,10 @@ func main() {
 			fail(err)
 		}
 		models.Intent = intent
+		if suite.BuilderV2 {
+			// Builder v2：Screening 保持离线；种子轮是核定需求的适配器输入。
+			models.Screening = nil
+		}
 	}
 	if jevRequested {
 		plan["jev"] = jevPlan

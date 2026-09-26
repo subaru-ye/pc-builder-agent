@@ -11,7 +11,10 @@ import (
 )
 
 type Suite struct {
-	Live       bool              `json:"live,omitempty"`
+	Live bool `json:"live,omitempty"`
+	// BuilderV2 标记 Builder v2 专项评估的 live 形态：Screening 离线（种子轮
+	// 为核定需求的 scripted 适配器输入），Builder 真实执行，调用预算共享。
+	BuilderV2  bool              `json:"builder_v2,omitempty"`
 	Version    string            `json:"version"`
 	Provenance string            `json:"provenance"`
 	Catalog    CatalogFixture    `json:"catalog"`
@@ -216,10 +219,15 @@ type Report struct {
 
 // ToolContractIdentity 记录一次运行实际下发的 builder 工具合同：提示词与
 // 工具声明整体规范化后哈希。合同改动（如具名工具、错误结构）会改变该指纹，
-// 前后批次的对比必须以指纹一致为前提。
+// 前后批次的对比必须以指纹一致为前提。注意：指纹只覆盖提示词与声明；仅改
+// 参数校验或错误返回时指纹可能不变——因此同时记录错误合同版本，配对报告
+// 还须引用 manifest 的 Git HEAD 与二进制/源码哈希作为代码版本。
 type ToolContractIdentity struct {
 	SHA256 string `json:"sha256"`
 	Model  string `json:"model,omitempty"`
+	// ErrorContract 是 planning 侧工具错误/响应合同的显式版本号（常量，
+	// 合同改动时人工递增）；与 SHA256 互补。
+	ErrorContract string `json:"error_contract,omitempty"`
 }
 
 // IntentReport aggregates the optional Jev observations. Confidence and the

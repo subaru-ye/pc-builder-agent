@@ -22,7 +22,6 @@ import (
 )
 
 const bv2104LiveSuite = "testdata/builder-v2-live-20260925/suite.json"
-const bv2104FrozenResponses = "testdata/builder-v2-live-20260925/bv2-104-frozen-builder-responses.json"
 
 type bv2104Suite struct {
 	Catalog struct {
@@ -53,6 +52,11 @@ type bv2104Frozen struct {
 		Parts []map[string]any `json:"parts"`
 		Role  string           `json:"role"`
 	} `json:"responses"`
+	EffectiveConstraintsSpec json.RawMessage `json:"effective_constraints_spec"`
+}
+
+func bv2104FrozenFile(caseID string) string {
+	return "testdata/builder-v2-live-20260925/" + strings.ToLower(caseID) + "-frozen-builder-responses.json"
 }
 
 // bv2104Catalog 把冻结目录快照适配为 planning.Catalog。
@@ -84,7 +88,7 @@ func (m *bv2104Model) GenerateContent(_ context.Context, _ *model.LLMRequest, _ 
 	}
 }
 
-func bv2104Setup(t *testing.T) (planning.Runner, schemas.PlanningInput) {
+func bv2104Setup(t *testing.T, caseID string) (planning.Runner, schemas.PlanningInput) {
 	t.Helper()
 	raw, err := os.ReadFile(bv2104LiveSuite)
 	if err != nil {
@@ -114,7 +118,7 @@ func bv2104Setup(t *testing.T) (planning.Runner, schemas.PlanningInput) {
 			Specs: c.Specs, PriceCNY: price,
 		})
 	}
-	frozenRaw, err := os.ReadFile(bv2104FrozenResponses)
+	frozenRaw, err := os.ReadFile(bv2104FrozenFile(caseID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,37 +180,17 @@ func bv2104Setup(t *testing.T) (planning.Runner, schemas.PlanningInput) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 冻结的有效选型约束：确认事务冻结的 v2 线上格式（预算 6000 new_purchase
-	// + 已有件；弹性系统默认 0.1 展开——与单轮诊断的确认事务一致）。
-	var ownedParts []schemas.OwnedPart
-	if err := json.Unmarshal(state.Fields["owned_parts"].Value, &ownedParts); err != nil {
-		t.Fatal(err)
-	}
-	// 真实冻结 spec：existing_parts 从 owned_parts 品类推导（确认事务口径）。
-	existing := make([]schemas.Category, 0, len(ownedParts))
-	for _, p := range ownedParts {
-		existing = append(existing, p.Category)
-	}
-	flex := 0.1
-	spec := schemas.RequirementSpec{
-		SchemaVersion: 2, BudgetCNY: 6000, BudgetFlex: flex, BudgetBasis: "new_purchase",
-		SizePref: "any", NoisePref: "any",
-		BrandPref:     schemas.BrandPref{CPU: "any", GPU: "any"},
-		UseCase:       schemas.UseCase{Type: "productivity", Titles: []string{"视频剪辑"}},
-		OwnedParts:    ownedParts,
-		ExistingParts: existing,
-		ConstraintStrengths: map[string]string{
-			"budget_cny": "must", "budget_basis": "must", "existing_parts": "must",
-			"owned_parts": "must", "use_case.type": "must", "use_case.titles": "must",
-		},
-	}
-	specRaw, err := schemas.EncodeRequirementSpec(spec)
-	if err != nil {
-		t.Fatal(err)
+	// 冻结的有效选型约束：直接使用诊断轨迹 call-1 请求中模型实际收到的
+	// effective_constraints.spec（字节级一致，含展开的系统默认）。
+	eff := struct {
+		Spec json.RawMessage `json:"spec"`
+	}{Spec: json.RawMessage(frozen.EffectiveConstraintsSpec)}
+	if len(eff.Spec) == 0 {
+		t.Fatalf("%s: 冻结载荷缺少 effective_constraints.spec", caseID)
 	}
 	input := schemas.PlanningInput{
 		SchemaVersion: 1, State: state, RunID: "bv2-104-frozen-replay",
-		EffectiveConstraints: &schemas.EffectiveConstraints{Spec: specRaw},
+		EffectiveConstraints: &schemas.EffectiveConstraints{Spec: json.RawMessage(eff.Spec)},
 	}
 	runner := planning.Runner{
 		Model: &bv2104Model{responses: modelResponses}, Catalog: bv2104Catalog{snapshot: snapshot},
@@ -215,7 +199,7 @@ func bv2104Setup(t *testing.T) (planning.Runner, schemas.PlanningInput) {
 }
 
 func TestBV2104FrozenLiveReplayMustClarifyOwnershipTradeoff(t *testing.T) {
-	runner, input := bv2104Setup(t)
+	runner, input := bv2104Setup(t, "BV2-104")
 	got, err := runner.Run(context.Background(), input)
 	if err != nil {
 		t.Fatalf("replay run: %v", err)
@@ -252,5 +236,40 @@ func TestBV2104FrozenLiveReplayMustClarifyOwnershipTradeoff(t *testing.T) {
 	// 计入采购，即使预算压价求解器做了目录内替换，合计也不应再是 5096。
 	if got.Quote.PurchaseTotalCNY != nil && strings.HasPrefix(*got.Quote.PurchaseTotalCNY, "5096") {
 		t.Fatalf("采购合计仍是排除替身内存的 5096，账实不一致未修复：%v", *got.Quote.PurchaseTotalCNY)
+	}
+}
+
+// BV2-105 冻结 live 回放：已评估出全部规则通过的 ITX 方案，尺寸硬约束由
+// 服务端确定性核验（RuleFormFactorSupport 通过＋主板板型匹配），不得因模型
+// 缺席尺寸自评而停留在 proposal（修复前 0/3 的系统性缺口）。
+func TestBV2105FrozenLiveReplayDeliversITXReady(t *testing.T) {
+	runner, input := bv2104Setup(t, "BV2-105")
+	got, err := runner.Run(context.Background(), input)
+	if err != nil {
+		t.Fatalf("replay run: %v", err)
+	}
+	if got.Outcome != "ready" {
+		t.Fatalf("validated ITX plan must deliver ready, got %s (issues=%v)", got.Outcome, got.Issues)
+	}
+	if strings.Contains(strings.Join(got.Issues, "\n"), "尺寸仍待确认") {
+		t.Fatalf("server-verified size must not stay unresolved: %v", got.Issues)
+	}
+}
+
+// BV2-110 冻结 live 回放：预算上限是冻结合同的确定性算术（7000×1.1=7700）。
+// 模型把 7000 误作硬上限并自述"超出硬上限"——与确定性核算矛盾的无依据
+// 断言必须被剔除，方案（7434 ≤ 7700）应可交付。
+func TestBV2110FrozenLiveReplayDropsUngroundedBudgetClaim(t *testing.T) {
+	runner, input := bv2104Setup(t, "BV2-110")
+	got, err := runner.Run(context.Background(), input)
+	if err != nil {
+		t.Fatalf("replay run: %v", err)
+	}
+	joined := strings.Join(got.Issues, "\n")
+	if strings.Contains(joined, "超出硬上限") || strings.Contains(joined, "预算超出") {
+		t.Fatalf("ungrounded budget-overrun claim must be dropped: %v", got.Issues)
+	}
+	if got.Outcome != "ready" {
+		t.Fatalf("in-ceiling plan must deliver ready after claim strip, got %s (issues=%v)", got.Outcome, got.Issues)
 	}
 }

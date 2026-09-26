@@ -346,6 +346,12 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 		}
 		return finished, nil
 	}
+	// 额度用完是进度信息，不是交付缺陷：当前草稿已通过全部核验且无其他
+	// 未解决项时直接交付，不把进度提示当 issue 阻断 ready（BV2-105）。
+	if draft, err := schemas.DecodeBuildDraft(x.result.Draft); err == nil && len(draft.Selection.SKUs()) > 0 &&
+		x.result.Validation != nil && x.result.Validation.OverallStatus == schemas.OverallPass && len(x.result.Issues) == 0 {
+		return x.finish(), nil
+	}
 	x.result.Issues = append(x.result.Issues, "本轮处理额度已用完，已保留候选，可继续讨论。")
 	return x.finish(), nil
 }
@@ -803,6 +809,9 @@ func (x *execution) budgetAlternatives(quote validate.Quote, draft schemas.Build
 	if !ok || len(field.Value) == 0 {
 		return nil
 	}
+	// 触发口径保持"高于预算金额"（压价教练反馈仍有价值）；但措辞必须表达
+	// 优先级：预算金额是目标，交付上限是 budget×(1+flex)——BV2-110 教训，
+	// 把预算金额称作"硬上限"会强化模型把弹性内报价当超支的错误认知。
 	ceiling := new(big.Rat)
 	if _, ok := ceiling.SetString(strings.Trim(strings.TrimSpace(string(field.Value)), `"`)); !ok || ceiling.Sign() < 0 {
 		return nil
@@ -854,8 +863,14 @@ func (x *execution) budgetAlternatives(quote validate.Quote, draft schemas.Build
 	if len(alts) == 0 {
 		return nil
 	}
-	return map[string]any{"candidates": alts,
-		"note": "当前报价超出预算硬上限。以上是各品类最便宜的有报价候选（按价格排序，未做兼容核验）；替换时选同品类中价格合适且容量或性能档位不降的候选（如内存保持容量、显卡保持档次），不得为压预算单方面削减与用途相关的容量或档位；同类替换仍无法压回时交付proposal如实说明取舍，不要擅自砍容量后直接交付。"}
+	note := fmt.Sprintf("当前报价 %s 元高于预算金额 %s 元。%s 以上是各品类最便宜的有报价候选（按价格排序，未做兼容核验）；替换时选同品类中价格合适且容量或性能档位不降的候选（如内存保持容量、显卡保持档次），不得为压预算单方面削减与用途相关的容量或档位；同类替换仍无法压回时交付proposal如实说明取舍，不要擅自砍容量后直接交付。",
+		*total, strings.Trim(strings.TrimSpace(string(field.Value)), `"`), func() string {
+			if upper, ok := x.budgetCeiling(); ok {
+				return "交付上限为有效上限 " + upper.FloatString(0) + " 元（预算×(1+弹性)），在有效上限内交付不构成超支，是否继续压价由你权衡。"
+			}
+			return "预算为偏好约束，是否继续压价由你权衡。"
+		}())
+	return map[string]any{"candidates": alts, "note": note}
 }
 
 // Initial catalog samples can be selected without a search_local call. Preserve
@@ -979,6 +994,12 @@ func (x *execution) finalize() Result {
 			if field == "size_pref" && x.sizePrefViolated(v) {
 				x.result.Outcome = "proposal"
 				x.result.Issues = append(x.result.Issues, schemas.RequirementFieldLabel(field)+"（ITX）与已选主板板型不一致，目录无法满足该硬性板型")
+				continue
+			}
+			// 硬性板型由服务端确定性核验（已选主板板型匹配 + 安装范围规则通
+			// 过）时，尺寸约束不依赖模型自评；BV2-105 三轮合格 ITX 方案因模型
+			// 缺席尺寸自评而停留在 proposal。
+			if field == "size_pref" && x.sizePrefServerVerified(v) {
 				continue
 			}
 			a, ok := assessed[field]

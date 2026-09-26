@@ -19,6 +19,10 @@ func matchesOwnedPart(c Candidate, p schemas.OwnedPart) bool {
 // user-visible copy; the Chinese detail stays, the code prefix is dropped.
 var internalIssueCode = regexp.MustCompile(`^[A-Z][A-Z_]{3,}[：:]`)
 
+// budgetOverrunClaim 匹配模型自述的"超预算/超硬上限"断言；服务端预算上限
+// 是冻结约束的确定性算术，与之矛盾的模型断言按无依据剔除。
+var budgetOverrunClaim = regexp.MustCompile(`超出硬上限|超过硬上限|超出预算|超过预算|预算超出`)
+
 func stripInternalIssueCodes(issues []string) []string {
 	for i, s := range issues {
 		if loc := internalIssueCode.FindStringIndex(s); loc != nil {
@@ -113,9 +117,26 @@ func (x *execution) deliveryIssues() (issues, notes []string) {
 	if quote.MissingCount > 0 {
 		issues = append(issues, "部分配件价格未知，合计尚不完整")
 	}
+	serverOverBudget := false
 	if upper, ok := x.budgetCeiling(); ok {
 		if total, ok := new(big.Rat).SetString(quote.TotalCNY); ok && total.Cmp(upper) > 0 {
 			issues = append(issues, "候选价格超过已表达的预算范围，需继续调整或讨论取舍")
+			serverOverBudget = true
+		}
+	}
+	// 预算上限是冻结合同的确定性算术（budget×(1+flex)）：上限内时模型自述的
+	// "超出预算/硬上限"与权威核算矛盾，按无依据断言剔除（BV2-110：把 7000
+	// 预算误作硬上限，忽略 flex 展开的 7700 有效上限）。
+	if !serverOverBudget {
+		if _, ok := x.budgetCeiling(); ok {
+			filtered := make([]string, 0, len(x.result.Issues))
+			for _, issue := range x.result.Issues {
+				if budgetOverrunClaim.MatchString(issue) {
+					continue
+				}
+				filtered = append(filtered, issue)
+			}
+			x.result.Issues = filtered
 		}
 	}
 	// Extra attributes with missing evidence remain visible on the candidate.

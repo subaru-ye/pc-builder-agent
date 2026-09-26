@@ -277,6 +277,29 @@ func (x *execution) sizePrefViolated(v schemas.RequirementField) bool {
 	return false
 }
 
+// sizePrefServerVerified 报告硬性板型已由服务端确定性核验：偏好 ITX、已选
+// 主板板型匹配（sizePrefViolated 为 false）且安装范围规则（FORM_FACTOR_
+// SUPPORT）通过。此时尺寸硬约束不依赖模型自评（BV2-105 三轮合格 ITX 方案
+// 因模型缺席尺寸自评而停留在 proposal）。
+func (x *execution) sizePrefServerVerified(v schemas.RequirementField) bool {
+	if x.sizePrefViolated(v) {
+		return false
+	}
+	want := strings.Trim(strings.TrimSpace(string(v.Value)), `"`)
+	if !strings.EqualFold(want, string(schemas.SizePrefITX)) {
+		return false
+	}
+	if x.result.Validation == nil {
+		return false
+	}
+	for _, c := range x.result.Validation.Checks {
+		if c.RuleID == schemas.RuleFormFactorSupport && c.Outcome == schemas.OutcomePass {
+			return true
+		}
+	}
+	return false
+}
+
 // noBudgetGateFeedback 权威状态中没有用户表达的预算金额时，交付配置是把关键
 // 取舍（花多少钱）替用户做掉；此时应检索比较后以 collect 收口列出待确认项。
 func (x *execution) noBudgetGateFeedback(outcome string) string {

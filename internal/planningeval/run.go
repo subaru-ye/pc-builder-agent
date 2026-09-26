@@ -404,7 +404,7 @@ func countUsage(report *Report) {
 				} else {
 					report.BuilderCalls++
 				}
-				if report.Mode == "live_models_offline_tools" && !t.ProviderCalled {
+				if report.Mode != "offline_oracle" && !t.ProviderCalled {
 					continue // A request blocked before sending has no provider usage.
 				}
 				if t.Tokens == nil {

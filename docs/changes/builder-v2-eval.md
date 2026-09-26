@@ -82,7 +82,7 @@ P2-006/007/010（外部注册、询价不联网、备选不执行属会话语义
 （"不重写历史录制"政策）；L2-10x 锁定品类改单（旧 spec 锁定语义与 v2 冻结语义差异较大，
 留待下阶段单列）。
 
-## 4.1 第一期实施结果（2026-09-25）
+## 4.1 第一期实施结果（2026-09-25，r1 套件已被 r2 取代，见 §4.2）
 
 - 零模型 replay **10/10**（`artifacts/builder-v2-20260925-mech-r1`，169 项断言全过，frozen_constraints 30 项；
   actual_model_requests=0、external=0、tokens/cost=null）。工具合同指纹 `11c6a31c…` 已入报告。
@@ -91,6 +91,48 @@ P2-006/007/010（外部注册、询价不联网、备选不执行属会话语义
 - 已知既有失败（基线同现，非本期引入）：`TestHistoricalBaseAndBatchProductFlow` 在容器 DSN 下因 readiness v2
   与旧 current-123 fixture 脱节失败（productivity 缺 titles），主树 b745554 对照证实。
 - 运行记录：`docs/eval/运行记录.md` 2026-09-25 条目。
+
+## 4.2 金标人工抽查与基线冻结（2026-09-26）
+
+**抽查方法**：以目录快照逐字数据复核全部 10 题的 v2 金标（预算上限口径、已有件匹配唯一性、
+无可行解下限、draft 总价算术、断言可判定性）；重点复核预算上限、已有件与"无解"三类。
+
+| 复核项 | 结论 |
+| --- | --- |
+| 预算上限口径 | 冻结合同硬上限=budget×(1+弹性)；弹性缺省 0.1（BV2-101/103/105/107/109/110 断言 ×1.1 上限）、显式 0 按陈述执行（BV2-102 断言精确 5000）；与 `budgetCeiling`/核定预览同源（生产一致性单测覆盖） |
+| 已有件匹配 | "AMD Ryzen 5 4600G"/"AMD Ryzen 5 5600" 在目录各唯一匹配（matchesOwnedPart 品牌全名）；G.Skill Ripjaws V 32GB DDR4-3200 零匹配（BV2-104 语义成立） |
+| BV2-108 无解 | 核显整机目录下限 3060.3 元（4600G+各品类最低价）> 2750 上限（2500×1.1），独显路径 5677.5 元——无条件可行解成立 |
+| BV2-110 前置 | 四件退库 SKU（sapphire-6600/ripjawsv-32-3200/p3plus/montech-air-903）确认不在 178 目录；替换后总价 7304 ≤ 7700 |
+| 断言可判定性 | 修订两处会误伤同等合格候选的 SKU 级断言：BV2-105 去掉 psu.form_factor 等值（SFX-L loki 同样合格）、BV2-107 去掉 cooling_capacity_w=220 等值（validation 解热能力门即真属性） |
+| **BV2-106 重写（r2）** | r1 的插槽冲突由脚本化模型错误诱导，live 下不可复现；r2 改为**已有件事实强制冲突**——用户已有 AM4 CPU（5600）与 DDR5 内存（FURY Beast 16-5200），目录核实 AM4 板全为 DDR4、AM5 板全为 DDR5，无板可同时兼容；冲突成为需求的确定性问题 |
+
+**修订与重放**：套件升版 `builder-v2-mechanisms-20260925-r2`（sha256 `2ac8c3668cc1…`），零模型 replay 复验 **10/10**（`artifacts/builder-v2-20260925-mech-r2`）。
+
+**冻结声明**（旧工具合同基线，配对优化的对照锚点）：
+
+| 维度 | 值 |
+| --- | --- |
+| 离线 fixture | `builder-v2-mechanisms-20260925-r2`，sha256 `2ac8c3668cc1…`（replay 10/10） |
+| live 诊断套件 | `builder-v2-live-diag-20260925-r1`，sha256 `9ba7205ab3bf…`（由 r2 派生，剥离 oracle） |
+| 判卷 | planningeval Grade + FrozenConstraints 金标（本分支提交时点的 grade.go/builder_v2.go） |
+| 工具合同 | 提示词+声明指纹 `11c6a31c…`；错误合同版本 `planning-tool-errors-v1`（`planning.ToolErrorContractVersion`） |
+| 代码版本 | 分支 `codex/builder-v2-eval` 提交 `4039ff8`（manifest 另录 HEAD、二进制与逐源码哈希） |
+| 模型 | deepseek-v4-flash-0731 @ ws-5z8rvj9oxtusr5m0（pin `baseline-builder-v2-diag-ws5z8rvj9oxtusr5m0-20260925.json`，max_retries=0、无模型链、reasoning=none） |
+
+**单轮真实诊断（2026-09-26，10 题各一次，`artifacts/builder-v2-20260925-live-diag-r1`）**：
+金标 9/10、调用 50/200、builder 协议 50 次、工具 95 次、external=0；token 1,550,515
+（入 1,491,917/出 58,598）；单调用延迟 p50 12.6s / max 31.0s；批时长 11.5 分钟；费用按
+r17/r18 账单反解混合价 1.33 元/1M 估算 ≈ **2.06 元**（方向性估算，非账单锚点读数）。
+逐题：101/102/103/105/106/107/108/109/110 全过；**BV2-104 行为失败**（真实缺口，登记如下）。
+本轮为诊断口径：不宣称通过率，单次尝试不计入任何门槛。
+
+**登记的模型行为缺口（BV2-104，一次尝试）**：已有 G.Skill 32GB 目录无精确匹配时，模型未按
+clarify 纪律先取证取舍，而是静默以 mem-corsair-lpx-32-3600（32GB DDR4，规格最接近的目录件）
+占住 memory 槽交付 **ready**——reply 宣称"已有内存继续沿用"，但 draft 实际放入 1759 元新购 SKU
+且被品类核账排除（采购合计 5096 元），账实不一致。服务端占位交付检测（placeholderDelivery）
+依赖"替身/沿用用户"窄措辞特征，"继续沿用"变体未被覆盖（r11 登记过的 ponytail 局限现场复现）。
+处置：本阶段只登记不改——修复属下一阶段产品改动（候选方向：已有件占位声明结构化、或 ready
+前对未匹配已有件的确定性拦截），修复后以同一冻结基线做配对对比。
 
 ## 5. 产物与可复现性
 
@@ -103,19 +145,26 @@ P2-006/007/010（外部注册、询价不联网、备选不执行属会话语义
 
 ## 6. 下一阶段（Pass³，另行授权，本阶段不执行）
 
-1. **样本**：BV2-101…110 全量 + 从未迁移池新写 2-3 个 Builder-only 盲测（无旧 oracle 来源，
-   由核定需求直接构造；进 calibration/holdout 分层，参照 ReqV2 的 split 纪律）。
-2. **调用预算**：每 case Builder 24 轮上限内实际调用约 3-8 次；10 case 一次完整批次按
-   planning-v2 实测约 60-100 次 provider 请求（screening 0 次——不经过 Screening）；
-   建议上限 150 次共享预算 + `MODEL_MAX_RETRIES=0` + 单批不重跑政策。
+1. **样本与定位**：BV2-101…110 全量重跑 + 新增 2-3 题只补边界（如已有件占位声明的变体、
+   严格弹性+改单组合）。**定位声明**：在 10+3 题规模上只能观测边界行为与回归方向，
+   不能宣称有代表性的盲测质量结论；代表性盲测需要独立建样（≥30 case）另立项。
+2. **调用预算（由单轮实测修订，替代原 150 次估计）**：单轮实测 50 次 provider 请求
+   （10 case，1.55M token，≈2.06 元，11.5 分钟）。Pass³=3 轮 ≈150 次基础量，叠加单 case
+   方差（本轮单题最高 ~10 次）与失败长尾，**建议共享上限 240 次**（约 7.4M token、
+   ≈10 元、~35 分钟）；超过上限的尝试不发送给提供方，失败与未完成场景保留在分母。
+   `MODEL_MAX_RETRIES=0`、单批不重跑政策不变。
 3. **人工配置质量复核**：对每个 ready 交付逐件复核"目录内是否存在同等价位的更合规候选"
    （参照 delivery_quality.py 硬门口径扩展 v2 版：事实正确、预算内、兼容 0 错、无缺价、
    FrozenConstraints 到位）；人工复核结果与确定性判卷分列，不混入机制分。
 4. **端到端接入**：BV2 fixture 的 seed ops 可直接作为 ReqV2 conversations 层的 scripted
    screening 输出复用，从而把"自然语言 → Screening 提取 → 确认冻结 → Builder 选件"接成
    一条链；接入点在套件层（conversation case 复用 seed），不改生产合同。
-5. **工具合同前后对比**：具名工具/错误合同改动合入后，用同一 fixture、同一预算重跑，
-   以 `Report.ToolContract` 区分两轮，配对对比逐 case 断言（沿用 regrade/compare 口径）。
+5. **工具合同前后对比（基线冻结后进行）**：模型、目录、题目、判卷四不变，仅合同变。
+   配对报告必须显式记录：①`Report.ToolContract` 指纹（提示词+声明）；②**错误合同版本**
+   `ToolErrorContractVersion`（指纹只覆盖提示词与声明——仅改参数校验或错误返回时指纹
+   不变，该版本号是唯一的合同变更信号，合同改动时人工递增）；③**代码版本**——manifest
+   的 Git HEAD、二进制与逐源码哈希。三者任一不同的批次不构成同前提配对。逐 case 断言
+   沿用 regrade/compare 口径。
 
 ## 7. 风险
 

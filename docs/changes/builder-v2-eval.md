@@ -211,3 +211,13 @@ clarify 纪律先取证取舍，而是静默以 mem-corsair-lpx-32-3600（32GB D
 **回归**：BV2-104 冻结 live 回放绿；机制套件零模型 replay 10/10（`artifacts/builder-v2-20260925-mech-r2-postfix-v31-20260926`）；`go test ./...`（40 包）/`go vet ./...` 全绿。新增覆盖：不同型号同数量计价+clarify、目录匹配被替换 clarify、同型号数量不一致计价、移除旧件后授权改单计价交付。
 
 **剩余风险**：①用户已有旧 SSD（目录必无精确匹配）且 draft 需填 SSD 槽时，现在会稳定产生计价取舍 clarify——这是 BV2-104 类风险的诚实代价，但 UX 上更啰嗦；消除它需要状态合同新增"用户已授权新购 SSD"的结构化表达（后续 change）。②多 SSD 部分对应（已有 A、选中 A+B）时按品类整体计价（保守多计），quote 行级豁免留待需要时再做。
+
+## 9. 多 SSD 部分对应收口 v3.2（2026-09-26，同一分支，基于 df9fc18，零模型）
+
+**勘误（先于修复）**：v3.1 报告"多 SSD 部分对应按品类整体计价（保守多计）"与代码实际行为不符——实测（红例）已有 A+B、选中 A+C 时，对应件 A 进入 OwnedParts，`WithOwnership` 按品类豁免使 **A 与新购 C 双双免计**，比报告表述更危险。红例：`TestSSDPartialCorrespondencePricesWholeCategory` 修复前红（ssd-a、ssd-c 均 Owned=true）。
+
+**修复（最小确定性，仍零模型）**：SSD 豁免改为品类级整体对应判定 `ssdSelectionCorresponds`——每个选中 SKU 对应某已有件型号，且各对应已有件的选中数量合计等于其已有数量；整体对应才可整品类豁免，部分对应（A+C vs A+B）整品类计价并 clarify，不得把对应件单独放入 OwnedParts。`ownershipTradeoffPending` 的 SSD 分支同步改为品类级（不对应时该品类全部已有件列入取舍）。
+
+**正例覆盖**：`TestSSDFullCorrespondenceExemptsWholeCategory`（已有 A+B 与选中 A+B 完全对应 → 整品类豁免、无 clarify）。
+
+**回归**：BV2-104 冻结 live 回放绿；机制套件零模型 replay 10/10（`artifacts/builder-v2-20260925-mech-r2-postfix-v32-20260926`）；`go test ./...`（40 包）/`go vet ./...` 全绿。不改金标、不跑 live、不推送。

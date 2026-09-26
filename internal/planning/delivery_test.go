@@ -475,3 +475,102 @@ func TestAuthorizedReplacementAfterOwnedRemovalDelivers(t *testing.T) {
 		}
 	}
 }
+
+// 多 SSD 部分对应（已有 A+B 各 1，选中 A+C 各 1，总数量相同）：WithOwnership
+// 按品类豁免，只把对应件 A 放入 OwnedParts 会让 C 一并免费——部分对应必须
+// 整品类计价并 clarify，最终不得 ready。
+func TestSSDPartialCorrespondencePricesWholeCategory(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"ssd","model":"SSD Model A","quantity":1},{"category":"ssd","model":"SSD Model B","quantity":1}]`),
+	}
+	var specs *store.Candidate
+	for _, c := range catalog.Candidates {
+		if c.SKU == "ssd-crucial-p3plus-1tb" {
+			cc := c
+			specs = &cc
+		}
+	}
+	catalog.Candidates = append(catalog.Candidates,
+		store.Candidate{SKU: "ssd-a", Category: schemas.CategorySSD, Brand: "TestA", Model: "SSD Model A", Specs: specs.Specs, PriceCNY: strPtr("400.00")},
+		store.Candidate{SKU: "ssd-c", Category: schemas.CategorySSD, Brand: "TestC", Model: "SSD Model C", Specs: specs.Specs, PriceCNY: strPtr("450.00")},
+	)
+	var draft map[string]any
+	if err := json.Unmarshal(record.Draft, &draft); err != nil {
+		t.Fatal(err)
+	}
+	draft["selection"].(map[string]any)["ssd"] = []map[string]any{
+		{"sku": "ssd-a", "quantity": 1},
+		{"sku": "ssd-c", "quantity": 1},
+	}
+	raw, _ := json.Marshal(draft)
+	record.Draft = raw
+	record.Outcome = "proposal"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome != "clarify" {
+		t.Fatalf("partial ssd correspondence must clarify: outcome=%s", got.Outcome)
+	}
+	for _, line := range got.Quote.Lines {
+		if !strings.Contains(line.SKU, "ssd") {
+			continue
+		}
+		if line.Owned {
+			t.Fatalf("partial correspondence must price the whole category, but %s stayed owned: %+v", line.SKU, got.Quote.Lines)
+		}
+	}
+}
+
+// 正例：已有 A+B 与选中 A+B 完全对应（型号与各自数量）→ 整品类豁免，无取舍。
+func TestSSDFullCorrespondenceExemptsWholeCategory(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"ssd","model":"SSD Model A","quantity":1},{"category":"ssd","model":"SSD Model B","quantity":1}]`),
+	}
+	var specs *store.Candidate
+	for _, c := range catalog.Candidates {
+		if c.SKU == "ssd-crucial-p3plus-1tb" {
+			cc := c
+			specs = &cc
+		}
+	}
+	catalog.Candidates = append(catalog.Candidates,
+		store.Candidate{SKU: "ssd-a", Category: schemas.CategorySSD, Brand: "TestA", Model: "SSD Model A", Specs: specs.Specs, PriceCNY: strPtr("400.00")},
+		store.Candidate{SKU: "ssd-b", Category: schemas.CategorySSD, Brand: "TestB", Model: "SSD Model B", Specs: specs.Specs, PriceCNY: strPtr("420.00")},
+	)
+	var draft map[string]any
+	if err := json.Unmarshal(record.Draft, &draft); err != nil {
+		t.Fatal(err)
+	}
+	draft["selection"].(map[string]any)["ssd"] = []map[string]any{
+		{"sku": "ssd-a", "quantity": 1},
+		{"sku": "ssd-b", "quantity": 1},
+	}
+	raw, _ := json.Marshal(draft)
+	record.Draft = raw
+	record.Outcome = "proposal"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome == "clarify" {
+		t.Fatalf("full ssd correspondence must not clarify: %+v", got)
+	}
+	for _, line := range got.Quote.Lines {
+		if strings.Contains(line.SKU, "ssd") && !line.Owned {
+			t.Fatalf("fully corresponding ssd selection must stay exempt: %+v", got.Quote.Lines)
+		}
+	}
+}

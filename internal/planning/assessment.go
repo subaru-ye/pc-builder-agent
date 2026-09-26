@@ -175,8 +175,21 @@ func (x *execution) ownershipTradeoffPending(draft schemas.BuildDraft) []schemas
 			}
 		}
 	}
+	owned := x.accountingSpec().OwnedParts
 	var pending []schemas.OwnedPart
-	for _, p := range x.accountingSpec().OwnedParts {
+	// SSD 按品类整体判断（WithOwnership 按品类豁免，部分对应必须整品类
+	// 计价——不能只豁免对应件让不对应件搭车免费）。
+	if len(selected[schemas.CategorySSD]) > 0 && !x.ssdSelectionCorresponds(draft, owned) {
+		for _, p := range owned {
+			if p.Category == schemas.CategorySSD {
+				pending = append(pending, p)
+			}
+		}
+	}
+	for _, p := range owned {
+		if p.Category == schemas.CategorySSD {
+			continue
+		}
 		chosen := selected[p.Category]
 		if len(chosen) == 0 {
 			continue // 品类未被选中：真正沿用用户已有件，无取舍。
@@ -187,11 +200,6 @@ func (x *execution) ownershipTradeoffPending(draft schemas.BuildDraft) []schemas
 				corresponds = true
 			}
 		}
-		if p.Category == schemas.CategorySSD && corresponds && !x.ssdQuantityConsistent(draft) {
-			// 型号对应但数量不一致：超额部分是采购，保留几件、买几件需确认。
-			pending = append(pending, p)
-			continue
-		}
 		if !corresponds {
 			pending = append(pending, p)
 		}
@@ -199,19 +207,41 @@ func (x *execution) ownershipTradeoffPending(draft schemas.BuildDraft) []schemas
 	return pending
 }
 
-// ssdQuantityConsistent 报告选中 SSD 数量合计是否与该品类已有件数量合计一致。
-func (x *execution) ssdQuantityConsistent(draft schemas.BuildDraft) bool {
-	selected := 0
-	for _, s := range draft.Selection.SSDs {
-		selected += s.Quantity
+// ssdSelectionCorresponds 报告 SSD 选中（型号+各自数量）是否与该品类已有件
+// 整体对应：每个选中 SKU 都对应某已有件型号，且各对应已有件的选中数量合计
+// 等于其已有数量（多盘保护保留）。
+func (x *execution) ssdSelectionCorresponds(draft schemas.BuildDraft, owned []schemas.OwnedPart) bool {
+	byID := map[string]Candidate{}
+	for _, c := range x.candidates {
+		byID[c.ID] = c
 	}
-	total := 0
-	for _, p := range x.accountingSpec().OwnedParts {
-		if p.Category == schemas.CategorySSD {
-			total += max(1, p.Quantity)
+	used := map[int]int{}
+	for _, s := range draft.Selection.SSDs {
+		c, ok := byID[s.SKU]
+		if !ok {
+			return false
+		}
+		matched := -1
+		for i, p := range owned {
+			if p.Category == schemas.CategorySSD && matchesOwnedPart(c, p) {
+				matched = i
+				break
+			}
+		}
+		if matched < 0 {
+			return false
+		}
+		used[matched] += s.Quantity
+	}
+	for i, p := range owned {
+		if p.Category != schemas.CategorySSD {
+			continue
+		}
+		if used[i] != max(1, p.Quantity) {
+			return false
 		}
 	}
-	return selected == total
+	return true
 }
 
 // ownershipTradeoffIssue 生成计价取舍 clarify 的问题文本，逐件给出品类与
@@ -243,14 +273,20 @@ func (x *execution) verifiedOwnership(draft schemas.BuildDraft) schemas.Requirem
 		}
 	}
 	for _, p := range owned {
+		if p.Category == schemas.CategorySSD {
+			// WithOwnership 按品类豁免：只有 SSD 选中（型号+各自数量）与已有
+			// 件整体对应时才可整品类豁免；部分对应（已有 A+B、选中 A+C）必须
+			// 整品类计价，不得把对应件单独放入 OwnedParts 让其余搭车免费。
+			if x.ssdSelectionCorresponds(draft, owned) {
+				spec.OwnedParts = append(spec.OwnedParts, p)
+			}
+			continue
+		}
 		verified := false
 		for _, c := range selected[p.Category] {
 			if matchesOwnedPart(c, p) {
 				verified = true
 			}
-		}
-		if verified && p.Category == schemas.CategorySSD && !x.ssdQuantityConsistent(draft) {
-			verified = false
 		}
 		if verified {
 			spec.OwnedParts = append(spec.OwnedParts, p)

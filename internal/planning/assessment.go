@@ -121,37 +121,49 @@ func (x *execution) deliveryIssues() (issues, notes []string) {
 	// Extra attributes with missing evidence remain visible on the candidate.
 	// Only actual compatibility/price gaps and unresolved user conditions affect
 	// delivery; an unrelated unknown attribute must not become a new hard gate.
+	// 零匹配已有件仅在 draft 未选该品类（真正沿用用户已有件）时才出 note；
+	// 已被选中的品类走 finalize 的计价取舍 clarify，不再宣称"已核账"。
+	selected := map[schemas.Category]bool{}
+	if draft, err := schemas.DecodeBuildDraft(x.result.Draft); err == nil {
+		for _, id := range draft.Selection.SKUs() {
+			for _, c := range x.candidates {
+				if c.ID == id {
+					selected[c.Category] = true
+				}
+			}
+		}
+	}
 	unmatched := []string{}
 	for _, p := range spec.OwnedParts {
 		matched := false
-		for _, c := range x.result.Candidates {
+		for _, c := range x.candidates {
 			if matchesOwnedPart(c, p) {
 				matched = true
 			}
 		}
 		if !matched {
-			unmatched = append(unmatched, p.Model)
+			// 非 SSD 且品类被选中 → finalize 的计价取舍 clarify 处理，此处
+			// 不再宣称"已按已有件核账"；SSD 数量豁免与未选中品类保留 note。
+			if p.Category != schemas.CategorySSD && selected[p.Category] {
+				continue
+			}
+			unmatched = append(unmatched, categoryLabel(p.Category)+"："+p.Model)
 		}
 	}
 	if len(unmatched) > 0 {
-		notes = append(notes, "已有配件未匹配到目录准确型号（"+strings.Join(unmatched, "、")+"）；相应品类已按用户已有件核账，不计入采购合计。")
+		notes = append(notes, "已有配件未匹配到目录准确型号（"+strings.Join(unmatched, "、")+"）；相应品类按用户已有件使用，不计入采购合计。")
 	}
 	return issues, notes
 }
 
-// placeholderDelivery 检测"已有件占位交付"：已有件在目录无精确型号匹配、
-// draft 仍以其他候选占住该品类，且模型自述把替身说成用户已有件。保留已有件
-// 还是改购新件是用户的计价取舍，模型必须 clarify 而非以占位配置交付。
-// ponytail: "用户已表态沿用"无法程序判定，只能以模型自述中的替身措辞窄特征
-// 收敛已知的占位交付形态；升级路径是模型结构化声明替身意图字段。
-func (x *execution) placeholderDelivery() bool {
-	if x.result.Validation == nil || len(x.result.Draft) == 0 {
-		return false
-	}
-	draft, err := schemas.DecodeBuildDraft(x.result.Draft)
-	if err != nil {
-		return false
-	}
+// ownershipTradeoffPending 检测"已有件保留 vs 改购"需要用户取舍的交付形态：
+// 用户已有件在目录无精确型号匹配，draft 仍以其他候选占住该品类。此时选中
+// SKU 与用户已有件的型号/数量未核实，不得仅凭同品类把选中 SKU 当作已有件
+// 免计价；保留还是改购是计价取舍，必须 clarify 并说明取舍，等待用户确认。
+// 该条件是结构化的：不依赖模型自述措辞，也适用于模型直接宣称的 ready。
+// （取代 r11 起按"替身/沿用用户"窄措辞收敛的 placeholderDelivery——BV2-104
+// 现场证明"继续沿用"等变体绕过措辞检测。）
+func (x *execution) ownershipTradeoffPending(draft schemas.BuildDraft) []schemas.OwnedPart {
 	selected := map[schemas.Category]bool{}
 	for _, id := range draft.Selection.SKUs() {
 		for _, c := range x.candidates {
@@ -160,8 +172,9 @@ func (x *execution) placeholderDelivery() bool {
 			}
 		}
 	}
-	unmatched := false
+	var pending []schemas.OwnedPart
 	for _, p := range x.accountingSpec().OwnedParts {
+		// SSD 按品类内数量核账（存储可互换、型号核验无意义），不在此列。
 		if p.Category == schemas.CategorySSD {
 			continue
 		}
@@ -172,31 +185,33 @@ func (x *execution) placeholderDelivery() bool {
 			}
 		}
 		if !matched && selected[p.Category] {
-			unmatched = true
+			pending = append(pending, p)
 		}
 	}
-	if !unmatched {
-		return false
-	}
-	text := x.result.Reply + strings.Join(x.result.Issues, "")
-	return strings.Contains(text, "替身") || strings.Contains(text, "沿用用户")
+	return pending
 }
 
-// verifiedOwnership 已有件按品类核账：用户明确断言的 owned_part 在 draft
-// 对应品类恰好选了一件即视为核验，替身候选不计采购价；SSD 以品类内总数量
-// 一致防多盘误豁免。目录精确匹配与否只影响 note，不影响核账。
+// ownershipTradeoffIssue 生成计价取舍 clarify 的问题文本，逐件给出品类与
+// 用户型号，说明两条路径的计价差异。
+func ownershipTradeoffIssue(pending []schemas.OwnedPart) string {
+	parts := make([]string, 0, len(pending))
+	for _, p := range pending {
+		parts = append(parts, categoryLabel(p.Category)+"："+p.Model)
+	}
+	return "已有配件在目录无精确型号匹配（" + strings.Join(parts, "、") +
+		"）：保留已有件（该品类不计入采购合计）还是改购新件（计入采购合计），是计价取舍，需用户确认后继续。"
+}
+
+// verifiedOwnership 已有件核账：非 SSD 品类只有在 draft 选中的候选与用户
+// 型号精确匹配（matchesOwnedPart 品牌全名）时才视为核验、该品类不计采购价；
+// 仅同品类选中不再构成核验——型号/数量未核实时把选中 SKU 当已有件免计价，
+// 正是 BV2-104"账实不一致"的会计根因。SSD 以品类内总数量一致防多盘误豁免
+// （存储可互换，型号匹配无意义）。零匹配且品类被选中的已有件走 finalize 的
+// 计价取舍 clarify，不由本函数静默豁免。
 func (x *execution) verifiedOwnership(draft schemas.BuildDraft) schemas.RequirementSpec {
 	spec := x.accountingSpec()
 	owned := spec.OwnedParts
 	spec.OwnedParts = nil
-	selected := map[schemas.Category]bool{}
-	for _, id := range draft.Selection.SKUs() {
-		for _, c := range x.candidates {
-			if c.ID == id {
-				selected[c.Category] = true
-			}
-		}
-	}
 	for _, p := range owned {
 		if p.Category == schemas.CategorySSD {
 			total := 0
@@ -208,7 +223,15 @@ func (x *execution) verifiedOwnership(draft schemas.BuildDraft) schemas.Requirem
 			}
 			continue
 		}
-		if selected[p.Category] {
+		verified := false
+		for _, id := range draft.Selection.SKUs() {
+			for _, c := range x.candidates {
+				if c.ID == id && matchesOwnedPart(c, p) {
+					verified = true
+				}
+			}
+		}
+		if verified {
 			spec.OwnedParts = append(spec.OwnedParts, p)
 		}
 	}

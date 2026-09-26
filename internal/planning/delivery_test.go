@@ -208,13 +208,16 @@ func TestUnfinishedDeliveryRetainsExternalAlternatives(t *testing.T) {
 	}
 }
 
-func TestUnmatchedOwnedPartsBecomeNonBlockingNotes(t *testing.T) {
+// 已有件零匹配且品类被选中：保留 vs 改购是计价取舍，必须 clarify 并点名
+// 用户型号（v2 合同；旧断言"降级为非阻塞 note 仍可交付"正是 BV2-104 账实
+// 不一致的根因语义，已修订）。
+func TestUnmatchedOwnedSelectedForcesTradeoffClarify(t *testing.T) {
 	input, record, catalog := completeRecording(t)
 	input.State.Fields["owned_parts"] = schemas.RequirementField{
 		Status: "active",
 		Value:  json.RawMessage(`[{"category":"cooler","model":"旧风冷A"},{"category":"psu","model":"旧电源B"}]`),
 	}
-	record.Outcome = "proposal"
+	record.Outcome = "ready" // 模型直接宣称 ready 也必须被结构化检查拦截。
 	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
 		raw, _ := json.Marshal(record)
 		return genai.NewContentFromText(string(raw), genai.RoleModel)
@@ -223,13 +226,95 @@ func TestUnmatchedOwnedPartsBecomeNonBlockingNotes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Delivery.Notes) != 1 || !strings.Contains(got.Delivery.Notes[0], "旧风冷A、旧电源B") {
-		t.Fatalf("want one aggregated ownership note: %+v", got.Delivery)
+	if got.Outcome != "clarify" {
+		t.Fatalf("zero-match owned parts in selected categories must clarify: %+v", got)
 	}
-	for _, s := range got.Issues {
-		if strings.Contains(s, "旧风冷A") || strings.Contains(s, "旧电源B") {
-			t.Fatalf("ownership mismatch downgraded delivery: %v", got.Issues)
+	joined := strings.Join(got.Issues, "; ")
+	for _, want := range []string{"计价取舍", "散热器：旧风冷A", "电源：旧电源B"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("clarify issue must name the tradeoff (%q): %v", want, got.Issues)
 		}
+	}
+}
+
+// 措辞独立性：BV2-104 的真实措辞（"继续沿用"，无"替身/沿用用户"）且模型
+// 直接宣称 ready，也必须被结构化检查拦截强转 clarify。
+func TestOwnershipTradeoffIgnoresReplyWordingAndReadyClaim(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"memory","model":"G.Skill Ripjaws V 32GB DDR4-3200","quantity":1}]`),
+	}
+	record.Outcome = "ready"
+	record.Reply = "已为您完成方案，已有的 32GB DDR4 内存继续沿用，新增采购合计约 4xxx 元。"
+	record.Issues = nil
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome != "clarify" {
+		t.Fatalf("ready claim with 继续沿用 wording must still clarify: %+v", got)
+	}
+	if !strings.Contains(strings.Join(got.Issues, "; "), "计价取舍") {
+		t.Fatalf("tradeoff issue missing: %v", got.Issues)
+	}
+}
+
+// SSD 按品类内数量核账（存储可互换）：数量一致则豁免并保留透明 note，
+// 数量不一致时超额部分计价，不得整品类免计价。
+func TestSSDOwnershipAccountingFollowsQuantity(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		ownedQty  int
+		selectQty int
+		wantOwned bool
+	}{
+		{"quantity-match-exempts", 1, 1, true},
+		{"quantity-mismatch-prices", 1, 2, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input, record, catalog := completeRecording(t)
+			input.State.Fields["owned_parts"] = schemas.RequirementField{
+				Status: "active", Kind: "fact", Strength: "must",
+				Value: json.RawMessage(fmt.Sprintf(`[{"category":"ssd","model":"某旧SSD","quantity":%d}]`, tc.ownedQty)),
+			}
+			var draft map[string]any
+			if err := json.Unmarshal(record.Draft, &draft); err != nil {
+				t.Fatal(err)
+			}
+			sel := draft["selection"].(map[string]any)
+			sel["ssd"] = []map[string]any{{"sku": "ssd-crucial-p3plus-1tb", "quantity": tc.selectQty}}
+			raw, _ := json.Marshal(draft)
+			record.Draft = raw
+			record.Outcome = "proposal"
+			m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+				raw, _ := json.Marshal(record)
+				return genai.NewContentFromText(string(raw), genai.RoleModel)
+			}}
+			got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			owned := false
+			for _, line := range got.Quote.Lines {
+				if strings.Contains(line.SKU, "ssd") {
+					owned = line.Owned
+				}
+			}
+			if owned != tc.wantOwned {
+				t.Fatalf("ssd owned exemption = %v, want %v (quote=%+v)", owned, tc.wantOwned, got.Quote)
+			}
+			if tc.wantOwned {
+				// 数量豁免保留透明 note：说明沿用了用户的旧 SSD。
+				if len(got.Delivery.Notes) == 0 || !strings.Contains(got.Delivery.Notes[0], "某旧SSD") {
+					t.Fatalf("quantity-exempt ssd must keep the transparency note: %+v", got.Delivery)
+				}
+			}
+		})
 	}
 }
 

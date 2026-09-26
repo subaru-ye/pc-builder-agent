@@ -897,10 +897,17 @@ func (x *execution) finish() Result {
 // （applyBudgetFix）在预算回环耗尽后的目录内确定性替换，其每笔替换以独立
 // issue 留痕于 Issues。
 func (x *execution) finalize() Result {
-	// 已有件占位交付不是可交付方案：保留还是改购是用户计价取舍，强转 clarify。
-	if x.result.Outcome == "proposal" && x.placeholderDelivery() {
-		x.result.Outcome = "clarify"
-		x.result.Issues = append(x.result.Issues, "已有件在目录无精确型号匹配：保留已有件（按品类核账、不计入采购合计）还是改购新件，是计价取舍，需用户确认后继续。")
+	// 已有件保留 vs 改购是用户计价取舍：选中件与已有件型号/数量未核实时，
+	// 不得仅凭同品类把选中 SKU 当已有件免计价后交付。结构化检测不依赖模型
+	// 自述措辞，也拦截模型直接宣称的 ready（BV2-104：proposal+措辞绕过 →
+	// ready 交付账实不一致）。
+	if (x.result.Outcome == "proposal" || x.result.Outcome == "ready") && len(x.result.Draft) > 0 {
+		if draft, err := schemas.DecodeBuildDraft(x.result.Draft); err == nil {
+			if pending := x.ownershipTradeoffPending(draft); len(pending) > 0 {
+				x.result.Outcome = "clarify"
+				x.result.Issues = append(x.result.Issues, ownershipTradeoffIssue(pending))
+			}
+		}
 	}
 	wasReady := x.result.Outcome == "ready" || x.result.Outcome == "proposal"
 	if wasReady {

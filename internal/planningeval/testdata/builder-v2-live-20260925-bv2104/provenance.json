@@ -1,0 +1,12 @@
+{
+ "suite_sha256": "b36538f71fe8202d701090bbede01bb07001a3f640f42c3515810c670b4e495e",
+ "derived_from": {
+  "source_suite": "internal/planningeval/testdata/builder-v2-live-20260925/suite.json",
+  "source_suite_sha256": "9ba7205ab3bf69ad1cd0f491ba36ba3fc769ea04e19b38890fa58f23d48945b4",
+  "source_provenance": "builder-v2 live 诊断轮（35444c9 基线冻结，10 题各一次，BV2-104 失败）",
+  "reason": "BV2-104 单题修复验证：只跑该题，一次新产物，上限 15 次 provider 请求（用户授权口径）"
+ },
+ "case_ids": [
+  "BV2-104"
+ ]
+}

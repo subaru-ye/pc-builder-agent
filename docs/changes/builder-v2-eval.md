@@ -173,3 +173,23 @@ clarify 纪律先取证取舍，而是静默以 mem-corsair-lpx-32-3600（32GB D
 - message 触发 plan 的路径（BV2-110）依赖"执行授权"语义，属产品行为而非评估器构造；
   若产品语义再收紧需同步 seed 文本。
 - 目录为 126 件隔离目录，不代表市场覆盖率；预算算术断言只在快照 11 价格下成立。
+
+## 7. BV2-104 产品修复（2026-09-26，分支 fix/bv2-104-owned-standin，基于 35444c9）
+
+**根因（三层叠加，全部确定性代码层）**：
+1. `verifiedOwnership`（assessment.go）按**品类**核账：draft 在已有件品类选了任意候选即视为"核验"，整品类被 `WithOwnership` 剔出采购合计——用户型号未核实的新购替身（BV2-104 的 Corsair 32GB，1759 元）被免计价，采购合计 5096 元账实不一致。
+2. `finalize` 的占位交付检测只在模型 outcome=="proposal" 时运行，且依赖"替身/沿用用户"窄措辞；BV2-104 真实措辞是"继续沿用"（issues 为空）→ 未强转 clarify；模型直接宣称 ready 时该检查完全绕过。
+3. 未匹配已有件的交付 note 文案宣称"相应品类已按用户已有件核账，不计入采购合计"——把未核实的假设写成了事实陈述。
+
+**修复（正确层，无回复关键词依赖）**：
+1. 非 SSD 已有件只有在 draft 选中候选与用户型号**精确匹配**（matchesOwnedPart 品牌全名）时才豁免计价；同品类选中不再构成核验。SSD 保留数量核账（存储可互换）。
+2. 占位检测替换为结构化 `ownershipTradeoffPending`：已有件目录零匹配且 draft 选中该品类 → 无条件 clarify（不论模型自述措辞、不论模型宣称 proposal 还是 ready），issue 逐件点名品类与用户型号并说明计价取舍。
+3. 交付 note 收窄为 truthful 场景：SSD 数量豁免与未选中品类；被选中的零匹配非 SSD 品类由 clarify 点名，不再宣称"已核账"。
+
+**测试与证据**：
+- 冻结 live 输出零模型回放（`internal/planningeval/builder_v2_bv2104_replay_test.go`，脚本=testdata 提取的诊断轮 5 次真实响应）：修复前 **红**（outcome=ready、采购合计 5096、issues 空——逐字复现基线失败）；修复后 **绿**（clarify＋计价取舍 issue＋内存行不计 owned）。修复后采购合计 6855 超 6600 上限，触发预算压价回环属诚实会计，脚本以固执重申最终 proposal 建模，finalize 仍收口 clarify。
+- 旧测试语义修订（均有理由）：①`accounting_recording_test` wrong_owned_model：ready+品类豁免+note → clarify（旧断言即账实不一致语义）；②`TestUnmatchedOwnedPartsBecomeNonBlockingNotes` → `TestUnmatchedOwnedSelectedForcesTradeoffClarify`（ready 宣称也拦截）；③`TestBudgetSolverTruthAuditAgainstFrozenCatalog` B2-002 段：4667≤6000 期望建立在品类豁免把 5700X3D 升级件当已有件上，修订为按新购计价 6815＞6000（升级不是豁免）。
+- 新增覆盖：措辞独立（"继续沿用"+ready 宣称仍 clarify）；SSD 数量核账（1:1 豁免+note，1:2 计价）；未选中零匹配已有件不触发 clarify；精确匹配/授权改单路径不变（`TestPlaceholderDeliveryKeepsUpgradeDelivery`、BV2-110 退库件确认缺席于 owned_parts）。
+- 回归：`go test ./...`（40 包）、`go vet ./...` 全绿；builder-v2 机制套件零模型 replay **10/10**（`artifacts/builder-v2-20260925-mech-r2-postfix-20260926`）。
+- 单题 live（用户授权口径）：派生单题套件（provenance 记录来源与理由），plan.json 先于任何 provider 请求落盘（evalplanning 已改为所有 live 模式先写 plan），**6 次 Builder 调用 ≤15**，1/1 通过——模型自行 clarify 点名 G.Skill 内存与沿用/改购取舍，采购合计 5706（含被选中内存，不再豁免）。
+- 纪律偏差披露：首次 live 尝试（4 次调用，1/1）产物目录被本方清理命令误删，已按 plan-first 修复后重跑；损失仅影响首跑存证，不影响结论。

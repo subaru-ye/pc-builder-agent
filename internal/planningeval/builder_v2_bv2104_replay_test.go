@@ -1,10 +1,11 @@
 package planningeval
 
-// BV2-104 冻结 live 输出的零模型回放（等价服务级回归）：以诊断轮记录的 5 次
-// 真实 Builder 响应为脚本，在冻结目录快照上重放，验证服务端确定性合同——
-// 已有件无精确匹配且 draft 仍占该品类时，无论模型自述措辞或宣称的 outcome
+// BV2-104 冻结 live 输出的零模型回放（等价服务级回归）：脚本取自修复后 Pass³
+// r1（候选 1c38099）冻结轨迹的 4 次真实 Builder 响应（provenance 已如实登记，
+// b262d4d 曾误标为诊断轮来源），在冻结目录快照上重放，验证服务端确定性合同
+// ——已有件无精确匹配且 draft 仍占该品类时，无论模型自述措辞或宣称的 outcome
 // 是 proposal 还是 ready，都必须以"计价取舍"clarify 收口，不得以占位配置
-// 交付 ready（修复前该序列交付 ready，账实不一致）。
+// 交付 ready。修复前红-first 证据另见诊断轨迹回放（下方诊断序列测试）。
 import (
 	"context"
 	"encoding/json"
@@ -59,6 +60,11 @@ func bv2104FrozenFile(caseID string) string {
 	return "testdata/builder-v2-live-20260925/" + strings.ToLower(caseID) + "-frozen-builder-responses.json"
 }
 
+func bv2104Setup(t *testing.T, caseID string) (planning.Runner, schemas.PlanningInput) {
+	t.Helper()
+	return bv2104SetupFile(t, bv2104FrozenFile(caseID), caseID)
+}
+
 // bv2104Catalog 把冻结目录快照适配为 planning.Catalog。
 type bv2104Catalog struct{ snapshot store.CatalogSnapshot }
 
@@ -88,7 +94,7 @@ func (m *bv2104Model) GenerateContent(_ context.Context, _ *model.LLMRequest, _ 
 	}
 }
 
-func bv2104Setup(t *testing.T, caseID string) (planning.Runner, schemas.PlanningInput) {
+func bv2104SetupFile(t *testing.T, frozenFile, caseID string) (planning.Runner, schemas.PlanningInput) {
 	t.Helper()
 	raw, err := os.ReadFile(bv2104LiveSuite)
 	if err != nil {
@@ -118,7 +124,7 @@ func bv2104Setup(t *testing.T, caseID string) (planning.Runner, schemas.Planning
 			Specs: c.Specs, PriceCNY: price,
 		})
 	}
-	frozenRaw, err := os.ReadFile(bv2104FrozenFile(caseID))
+	frozenRaw, err := os.ReadFile(frozenFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,6 +210,13 @@ func TestBV2104FrozenLiveReplayMustClarifyOwnershipTradeoff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("replay run: %v", err)
 	}
+	assertOwnershipTradeoffClarify(t, got)
+}
+
+// assertOwnershipTradeoffClarify 断言 BV2-104 服务端确定性合同：占位配置不得
+// 交付、取舍说明点名品类与型号、替身内存计入采购（5096 是修复前误导合计）。
+func assertOwnershipTradeoffClarify(t *testing.T, got planning.Result) {
+	t.Helper()
 	// 合同 1：不得以占位配置交付正式版本（修复前该序列交付 ready）。
 	if got.Outcome == "ready" || got.Outcome == "proposal" {
 		t.Fatalf("占位交付未被拦截：outcome=%s reply=%.200s issues=%v", got.Outcome, got.Reply, got.Issues)
@@ -237,6 +250,20 @@ func TestBV2104FrozenLiveReplayMustClarifyOwnershipTradeoff(t *testing.T) {
 	if got.Quote.PurchaseTotalCNY != nil && strings.HasPrefix(*got.Quote.PurchaseTotalCNY, "5096") {
 		t.Fatalf("采购合计仍是排除替身内存的 5096，账实不一致未修复：%v", *got.Quote.PurchaseTotalCNY)
 	}
+}
+
+// BV2-104 诊断轨迹（历史）回放：b262d4d 曾把主冻结文件原地替换为修复后
+// pass3-r1 轨迹且来源标注未更新，修复前"红-first"序列只存于 git 历史；此处
+// 恢复该序列（bv2-104-diag-frozen-builder-responses.json，live-diag-r1 逐字
+// 提取）为常驻回归——修复前的替身交付序列在当前代码上必须被计价取舍 clarify
+// 拦截，历史证据保持可执行。
+func TestBV2104DiagnosticFrozenReplayMustClarifyOwnershipTradeoff(t *testing.T) {
+	runner, input := bv2104SetupFile(t, "testdata/builder-v2-live-20260925/bv2-104-diag-frozen-builder-responses.json", "BV2-104")
+	got, err := runner.Run(context.Background(), input)
+	if err != nil {
+		t.Fatalf("replay run: %v", err)
+	}
+	assertOwnershipTradeoffClarify(t, got)
 }
 
 // BV2-105 冻结 live 回放：已评估出全部规则通过的 ITX 方案，尺寸硬约束由

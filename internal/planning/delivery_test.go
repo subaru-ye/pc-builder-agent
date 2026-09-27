@@ -574,3 +574,62 @@ func TestSSDFullCorrespondenceExemptsWholeCategory(t *testing.T) {
 		}
 	}
 }
+
+// 聚焦反例（BV2-110 无依据断言剔除的边界）：整行关键词剔除只允许发生在
+// 服务端核验过完整合计之后。合计缺价时算术未核验，"可能超出预算"未被权威
+// 核算矛盾，必须保留——静默删除会掩盖缺价件推高合计的方向性提示。
+func TestBudgetClaimDropRequiresVerifiedCompleteQuote(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	record.Issues = []string{"整机合计可能超出预算，若超出需用户确认降档或加预算"}
+	for n := range catalog.Candidates {
+		if catalog.Candidates[n].Category == schemas.CategoryGPU {
+			catalog.Candidates[n].PriceCNY = nil
+		}
+	}
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Quote == nil || got.Quote.MissingCount == 0 {
+		t.Fatalf("fixture must produce a missing price: %+v", got.Quote)
+	}
+	if !strings.Contains(strings.Join(got.Issues, "\n"), "可能超出预算") {
+		t.Fatalf("合计未核验时不得剔除模型预算提示: %v", got.Issues)
+	}
+}
+
+// 聚焦反例（掩盖取舍）：合计已核验且在有效上限内时，含"超出硬上限"的无依据
+// 行按整行剔除；被删行同时承载预算取舍时，服务端必须以 note 如实复述真实
+// 事实（报价高于陈述金额、上限内交付不构成超支），不得静默抹掉预算张力。
+func TestInCeilingClaimDropRestatesBudgetTensionAsNote(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	budget := input.State.Fields["budget_cny"]
+	budget.Value = json.RawMessage(`4500`)
+	input.State.Fields["budget_cny"] = budget
+	record.Issues = []string{"整机总价4579.90元超出硬上限，如需压回4500以内可降内存档位，请您确认取舍"}
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(got.Issues, "\n"), "超出硬上限") {
+		t.Fatalf("in-ceiling 无依据断言必须剔除: %v", got.Issues)
+	}
+	if got.Outcome != "ready" {
+		t.Fatalf("上限内方案必须交付 ready，got %s (issues=%v)", got.Outcome, got.Issues)
+	}
+	if got.Delivery == nil {
+		t.Fatal("delivery missing")
+	}
+	notes := strings.Join(got.Delivery.Notes, "\n")
+	if !strings.Contains(notes, "4579.90") || !strings.Contains(notes, "4500") || !strings.Contains(notes, "4950") {
+		t.Fatalf("剔除断言后必须以 note 复述真实预算张力: %v", got.Delivery.Notes)
+	}
+}

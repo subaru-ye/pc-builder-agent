@@ -1,9 +1,9 @@
 {
  "provenance": {
-  "source": "artifacts/builder-v2-20260925-live-diag-r1/report.json BV2-104 confirm-step trace (provider_called=true)",
-  "extracted": "2026-09-26",
+  "source": "artifacts/builder-v2-20260925-pass3-r1-20260926/report.json BV2-104 confirm-step trace（修复后 live，候选 1c38099）",
+  "extracted": "2026-09-27",
   "model": "deepseek-v4-flash-0731@ws-5z8rvj9oxtusr5m0",
-  "note": "BV2-104 冻结 Builder 模型输出（5 次真实 provider 响应，含最终 proposal JSON）。用于零模型回放回归：服务端确定性修复前，该序列产出 ready（账实不一致）；修复后必须 clarify。只读回放，不是新盲测。；effective_constraints_spec 提取自同轨迹 call-1 请求（模型实际收到的冻结载荷）"
+  "note": "BV2-104 修复后回归脚本（4 次真实 provider 响应，取自 Pass³ r1 冻结轨迹）：在当前代码上该序列以计价取舍 clarify 收口，替身内存计价。只验证修复后合同，不充当修复前证据；修复前红-first 序列见 bv2-104-diag-frozen-builder-responses.json（live-diag-r1 历史轨迹）。effective_constraints_spec 提取自同一 step 的 planning_input.effective_constraints.spec。"
  },
  "responses": [
   {

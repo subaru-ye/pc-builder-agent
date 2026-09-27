@@ -124,19 +124,33 @@ func (x *execution) deliveryIssues() (issues, notes []string) {
 			serverOverBudget = true
 		}
 	}
-	// 预算上限是冻结合同的确定性算术（budget×(1+flex)）：上限内时模型自述的
-	// "超出预算/硬上限"与权威核算矛盾，按无依据断言剔除（BV2-110：把 7000
-	// 预算误作硬上限，忽略 flex 展开的 7700 有效上限）。
+	// 预算上限是冻结合同的确定性算术（budget×(1+flex)）：完整合计已核验且在
+	// 上限内时，模型自述的"超出预算/硬上限"与权威核算矛盾，按无依据断言剔除
+	// （BV2-110：把 7000 预算误作硬上限，忽略 flex 展开的 7700 有效上限）。
+	// 合计缺价或不可解析时不剔除——服务端没有核验过算术，"可能超出"未被
+	// 矛盾，静默删除会掩盖方向性提示。剔除按整行进行，行内其余取舍内容随之
+	// 消失：此时服务端以 note 如实复述"报价高于陈述金额、但上限内"，不静默
+	// 抹掉预算张力；行内非预算取舍仍依赖模型 reply 原文。
+	// ponytail: 整行关键词剔除是启发式，按语义拆分"断言/取舍"留待有真实
+	// 混合行证据时再做。
 	if !serverOverBudget {
-		if _, ok := x.budgetCeiling(); ok {
-			filtered := make([]string, 0, len(x.result.Issues))
-			for _, issue := range x.result.Issues {
-				if budgetOverrunClaim.MatchString(issue) {
-					continue
+		if upper, ok := x.budgetCeiling(); ok {
+			if total, parsed := new(big.Rat).SetString(quote.TotalCNY); parsed && quote.MissingCount == 0 {
+				filtered := make([]string, 0, len(x.result.Issues))
+				dropped := false
+				for _, issue := range x.result.Issues {
+					if budgetOverrunClaim.MatchString(issue) {
+						dropped = true
+						continue
+					}
+					filtered = append(filtered, issue)
 				}
-				filtered = append(filtered, issue)
+				x.result.Issues = filtered
+				if amount := new(big.Rat).SetInt64(int64(spec.BudgetCNY)); dropped && total.Cmp(amount) > 0 {
+					notes = append(notes, fmt.Sprintf("报价 %s 元高于预算金额 %d 元，在有效上限 %s 元（预算×(1+弹性)）内交付，不构成超支；是否接受或继续压价由用户决定。",
+						total.FloatString(2), spec.BudgetCNY, upper.FloatString(0)))
+				}
 			}
-			x.result.Issues = filtered
 		}
 	}
 	// Extra attributes with missing evidence remain visible on the candidate.

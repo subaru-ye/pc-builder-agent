@@ -238,3 +238,18 @@ clarify 纪律先取证取舍，而是静默以 mem-corsair-lpx-32-3600（32GB D
 - BV2-106：r3 实为模型构建了**兼容**组合但未授权替换已有 CPU，被所有权取舍 clarify 正确拦截（fail-safe）；冲突不存在故无冲突表述可给，r1/r2 冲突原因本就来自确定性规则。零代码改动。
 
 **Pass³ v2**：折叠 **7/10**（BV2-101/105/108 各败 1 轮 `tool_required:search_local_batch`，逐轮 9/8/10，r3 全绿）；上一轮全部方案质量/账实缺口清零；owned 行 8 行全部对应（零违例）。调用 163/240、tokens 4.53M、≈40.5 分钟、估算 ≈6.02 元。残余为工具纪律波动（模型行为稳定性），修正需变更工具合同并重新冻结，另立 change。**只说明本专项题结果，不宣称完整产品 GO。**报告：`artifacts/builder-v2-20260925-pass3v2-report-20260927.md`。
+
+## 12. Pass³ v2 零模型审阅与证据收口（2026-09-27，分支 fix/bv2-104-owned-standin）
+
+六个收口项，全程零模型（只跑确定性回放与产物核对）；不改 Pass³/Pass³ v2 金标与冻结产物，不跑 live，不推送。
+
+1. **批量检索强制断言定性**：`require_tools:["search_local_batch"]`（BV2-101/105/108/110）沿袭 current-178 mechanisms（C123-001/005/006）的评估机制断言；产品文档（自主规划流程 §4）只约束额度并描述工具可用，**未强制批量检索——它不是产品合同**（BV2-104 也只要求 `search_local`）。残余失败应读作"未满足评估侧检索方式预期"，不是产品规则违反。断言取舍留给工具合同专项 change。
+2. **预算 issue 整行剔除的聚焦反例与修复**（b262d4d 引入的 `budgetOverrunClaim` 整行剔除有两处已证实风险）：①服务端未核验完整合计（缺价/不可解析）时也剔除——"可能超出"并未被权威核算矛盾，改为仅在 MissingCount==0 且合计可解析时剔除；②整行删除会带走行内真实取舍——剔除发生且报价高于陈述金额时，服务端以 `Delivery.Notes` 如实复述"报价 X 元高于预算金额 Y 元、在有效上限 Z 元内交付"（notes 不阻断 ready，BV2-110 合同不变）。聚焦反例红-first 均红、修复后绿：`TestBudgetClaimDropRequiresVerifiedCompleteQuote`、`TestInCeilingClaimDropRestatesBudgetTensionAsNote`。整行启发式的剩余边界（混合行内非预算取舍仍依赖 reply 原文）已在代码注释登记 ponytail 上限。
+3. **BV2-108 失败轮次勘误**：实际 **r2**（r2 败 BV2-105/108 两题、r3 10/10），pass3v2 报告逐轮表误写为 r3；逐轮 9/8/10、折叠 7/10、"r3 全绿"均不受影响。已在报告披露节勘误。
+4. **中断批次核算**：三轮产物取证（文件创建/修改时间线、events.jsonl O_EXCL 完整性、manifest exit_code=1 系"未全过退出"语义）显示三轮连续无缝、零错误零重试——**盘上无中断批次**；163 次调用与 4,527,490 tokens 逐轮核对一致。campaign 内唯一已登记中断尝试仍是 §7 BV2-104 单题首跑（4 次调用）。若操作会话另有中断批次，调用数无盘上证据可考，建议以提供方账单核对。
+5. **BV2-104 冻结响应来源更正与历史恢复**：b262d4d 曾把主冻结文件原地替换为**修复后 pass3-r1 轨迹**（4 响应逐字节比对一致、spec 同源）而 provenance 仍标 live-diag-r1，来源失实。已更正元数据；真正的 live-diag-r1 诊断序列（修复前红-first 证据：ready＋5096）恢复为 `bv2-104-diag-frozen-builder-responses.json`（spec 提取自诊断报告 planning_input），新增常驻回放 `TestBV2104DiagnosticFrozenReplayMustClarifyOwnershipTradeoff`，与修复后轨迹回放均绿。git 历史与 pass3v2 冻结产物未动。
+6. **工具反馈合同补登**：b262d4d 的 budgetAlternatives 措辞变更属反馈合同变更但漏递增版本号（pass3v2 三批 error_contract 均记 v1）。已补登 `ToolErrorContractVersion` v1→**v2**（runner.go；指纹 `11c6a31c…` 不变）。跨 v1/v2 批次不构成同前提配对（§6.5）。
+
+**回归**：`go test ./internal/planning/ ./internal/planningeval/` 全绿（含新增 2 反例＋1 历史轨迹回放）；builder-v2 机制套件零模型 replay **10/10**（`artifacts/builder-v2-20260925-mech-r2-postfix-v35-evidence-close-20260927`）；全量 `go test ./...` 与 `go vet ./...` 全绿（与 b262d4d 同口径，DSN 依赖测试无库时跳过）。补充登记：容器隔离库下 `TestHistoricalBaseAndBatchProductFlow` 失败（上游 Screening 503＋缺核定预览哈希），与 §4.1 登记的既有失败同测试同根因（环境依赖，非行为回归），v1 current-178 mechanisms 套件 replay 同因不可执行（503 upstream_unavailable）；本节改动相对 b262d4d 对其用例无行为差（报价完整时剔除条件不变、notes 通道不被判卷断言）。
+
+**下一步判断——需要工具合同专项 change**，范围不限于提示词：①批量检索断言的取舍（评估侧预期 vs 产品合同，决定保留/改写/降为参考）；②反馈合同 v2 落地后的配对重测（模型、目录、题目、判卷四不变，仅合同变）；③按 §6.5 重新冻结（指纹不变、版本号与代码哈希变更，人工递增已补）。专项 change 完成前，v1 基线批次与 v2 批次不可混比较。

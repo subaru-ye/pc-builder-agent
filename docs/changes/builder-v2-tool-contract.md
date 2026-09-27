@@ -147,3 +147,8 @@ grade.go）——观察项不产生 check、不影响 pass/classification；聚�
 - **维度**：账实安全 7 行 Owned 零违例、采购合计一致；批量检索观察 108 三轮 0/3/4 次均通过、110 r2 0 次通过——使用与通过无稳定相关。
 - **用量**：tokens 4,744,199、34.5 分钟、估算 ≈6.31 元（1.33 元/1M 推导）。三轮 manifest head `2f790d2`、指纹/合同版本一致。
 - **定位**：只说明本专项题结果，不宣称完整产品 GO。报告：`artifacts/builder-v2-20260925-pass3v4-report-20260927.md`。
+
+## 13. 合并前收口：BV2-105 r1 扣具 unknown 归因（2026-09-27，逐事件核对）
+
+Pass³ v4 唯一失败（BV2-105 r1）归因自原始事件流判定，不按"模型波动"笼统定责：
+①模型**确曾尝试** `search_web` 核验 AG400 的 AM5 扣具，工具返回 `"unavailable": "资料服务暂时不可用"`（该轮证据服务上游不可用）——直接触发是**证据服务不可用**；②目录中 cooler-deepcool-ag400 仅 `{type,height_mm,cooling_capacity_w}`，无插座/扣具字段——**结构性前提是目录缺数据**；③模型未伪造核验，把扣具确认列入 issues 并自报 ready，服务端按"issues>0 不得 ready"合同降级 proposal——**停在 proposal 是安全行为**。需注意：r2/r3 同配置 ready 是模型未提出扣具问题（零 search_web、零 issues），扣具 unknown 三轮均未实际解决；该边界（散热器扣具无目录字段、无规则覆盖）服务端无法闭环，属目录数据/规则缺口，登记为后续工作，非本轮回归。证据：`builder-v2-20260925-pass3v4-r1-20260927/events.jsonl`（search_web 调用与 unavailable 响应、最终 JSON issues）；r2/r3 对照（零 search_web、零 issues、同 cooler）。产物哈希索引见 `docs/eval/builder-v2-artifacts-index.md`。

@@ -139,3 +139,11 @@ grade.go）——观察项不产生 check、不影响 pass/classification；聚�
 **红例/正例**：`TestDeclaredPSUBayEnforcedOnNonITXOnlyCase`（修复前红：通吃机箱声明 SFX 仓选 ATX 电源被 pass）→ 修复后 fail；`TestDeclaredPSUBayPassesWithSFXOnNonITXOnlyCase`（同机箱选 SFX 电源保持 pass）；`TestLargerCaseDoesNotInferPSUClearance`（未声明电源仓的大机箱不做推断，语义保留）。
 
 **回归**：`go test ./...`＋`go vet` 全绿；机制套件零模型 replay 10/10（`artifacts/builder-v2-20260925-mech-r2-postfix-v40-psubay-20260927`）。工具指纹/反馈合同不变。修复提交后按同前提跑完整 Pass³ v4（§12）。
+
+## 12. Pass³ v4（2026-09-27，候选 2f790d2，同前提复评）
+
+- **执行**：3 轮 × 10 题一次完成（55/60/59，174/240，零重试，plan-first）；与 v3 同模型/目录/题目/判卷/指纹/反馈合同——同前提配对。
+- **结果**：逐轮 9/10/10，折叠 **9/10**。唯一失败 BV2-105 r1：真 ITX 合法组合（nr200p+SFX+b650i-edge）validation 12/12 通过（含新电源仓检查），`model_outcome=ready` 因散热器 AM5 扣具 unknown（联网不可用未确认）被合同降为 proposal——诚实非交付，属 unknown 收敛的模型行为波动，与两处确定性修复无关；v3 两缺口（104 null 槽位、105 通吃机箱误放行）未复现。
+- **维度**：账实安全 7 行 Owned 零违例、采购合计一致；批量检索观察 108 三轮 0/3/4 次均通过、110 r2 0 次通过——使用与通过无稳定相关。
+- **用量**：tokens 4,744,199、34.5 分钟、估算 ≈6.31 元（1.33 元/1M 推导）。三轮 manifest head `2f790d2`、指纹/合同版本一致。
+- **定位**：只说明本专项题结果，不宣称完整产品 GO。报告：`artifacts/builder-v2-20260925-pass3v4-report-20260927.md`。

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -26,7 +27,10 @@ import (
 // v2（2026-09-27）：budgetAlternatives 反馈如实区分预算金额与有效上限
 // （BV2-110 误读根因，b262d4d 改动时漏递增，此处补登）；详见
 // docs/changes/builder-v2-eval.md §12。
-const ToolErrorContractVersion = "planning-tool-errors-v2"
+// v3（2026-09-27）：参数合同收紧——payload 语法错误带定位、逐 action 未知
+// 字段/必填字段校验、显式越界 limit/offset/非法 category 报错（不再静默
+// 改写）、未知 action 列合法集；详见 docs/changes/builder-tool-param-contract.md。
+const ToolErrorContractVersion = "planning-tool-errors-v3"
 
 const instruction = `你是装机顾问，可以自主调用工具检索、比较、选配和修正。选型约束(预算与弹性、configuration_scope、用途与性能取向、尺寸/静音/品牌等有效条件)以 input.effective_constraints.spec 为唯一权威——它是用户核定确认时冻结的完整有效需求(已展开系统默认,defaults 标注来源);requirement_state 只用于用户事实与来源溯源,其中 unknown 的字段(如 performance_goal)不代表约束未定,也不得从 state 重新推导或覆盖冻结值。没有 effective_constraints 的历史载荷才按旧语义把该状态当作权威需求。来源、撤销、临时例外和备选必须尊重；不得用历史消息恢复旧要求。free.* 是与常用字段同等有效的用户要求。fact/context 是场景，constraint 是配置条件。用户的 must 不能偷偷改成 prefer。
 request是本轮已授权执行的用户原话，base_draft是本会话已有正式配置，previous_proposal是上次选配进展。base_candidates是原配置配件在本轮目录中的规格与报价，unresolved_base_ids才是当前未找到的原件编号；initial_candidates只是部分样本，未出现在样本中不代表目录无型号或无报价。升级/改单时基于它们检索和比较，不要再次索要已有型号或重复确认执行方向。用户让你自行选更好的处理器时，根据用途、原CPU、剩余整机预算和兼容性自主检索候选；不要把找型号退回给用户。“其他配件尽量不动”是软偏好，先尝试兼容升级，确需联动再说明原因；预算充足不代表允许超出既定预算。正式配置中的配件不代表用户已购，不擅自设为已有件。纯讨论备选不能覆盖当前要求。
@@ -362,6 +366,32 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 func (x *execution) call(ctx context.Context, args map[string]any) map[string]any {
 	action, _ := args["action"].(string)
 	payload, _ := args["payload"].(string)
+	// 参数合同 v3：先验语法（带定位）、未知 action（列合法集）、逐 action
+	// 未知字段（列允许集），再进入执行；显式非法值（limit/offset 越界、
+	// 非法 category）报错指出字段/允许范围/重试方式，不再静默改写。缺席
+	// 字段走文档化默认（limit=16、offset=0、order_by=relevance）。
+	known, knownAction := paramActions[action]
+	if !knownAction {
+		names := make([]string, 0, len(paramActions))
+		for name := range paramActions {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		return map[string]any{"error": fmt.Sprintf("未知工具操作 %q；合法 action：%s。请修正 action 后整体重试。", action, strings.Join(names, ", "))}
+	}
+	var rawFields map[string]json.RawMessage
+	dec := json.NewDecoder(strings.NewReader(payload))
+	if err := dec.Decode(&rawFields); err != nil {
+		if syntax, ok := err.(*json.SyntaxError); ok {
+			return map[string]any{"error": fmt.Sprintf("payload JSON 语法错误（偏移 %d 附近）：%s；请修正 payload JSON 后整体重试。", syntax.Offset, syntax.Error())}
+		}
+		return map[string]any{"error": fmt.Sprintf("payload 缺失或不是 JSON 对象字符串（%s）；payload 须为 JSON 对象字符串，请整体重试。", err)}
+	}
+	for key := range rawFields {
+		if !slices.Contains(known, key) {
+			return map[string]any{"error": fmt.Sprintf("payload 含未知字段 %q；%s 允许的字段：%s。请移除或更正后整体重试。", key, action, strings.Join(known, ", "))}
+		}
+	}
 	var p struct {
 		Query    string              `json:"query"`
 		Category string              `json:"category"`
@@ -380,7 +410,7 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 	switch action {
 	case "search_local_batch":
 		if len(p.Queries) == 0 || len(p.Queries) > 8 {
-			return map[string]any{"error": "queries须含1至8个本地查询"}
+			return map[string]any{"error": "queries 须含 1 至 8 个本地查询（格式 queries:[{query,category,order_by,offset,limit},...]）；请按范围修正后整体重试。"}
 		}
 		for _, query := range p.Queries {
 			if query == nil {
@@ -405,6 +435,9 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		}
 		return map[string]any{"results": results, "executed_queries": len(results), "pending_queries": p.Queries[len(results):]}
 	case "read_evidence":
+		if p.ID == "" {
+			return map[string]any{"error": "payload.id 缺失：read_evidence 须为 {\"id\":\"来源编号\"}（如 local:候选编号 或 source-N）；请补齐后重试。"}
+		}
 		if strings.HasPrefix(p.ID, "local:") {
 			for _, candidate := range x.candidates {
 				if candidate.External || p.ID != "local:"+candidate.ID {
@@ -432,7 +465,16 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 			p.OrderBy = "relevance"
 		}
 		if p.OrderBy != "relevance" && p.OrderBy != "price_asc" && p.OrderBy != "price_desc" {
-			return map[string]any{"error": "order_by仅允许relevance、price_asc或price_desc"}
+			return map[string]any{"error": "order_by 仅允许 relevance、price_asc 或 price_desc；请修正后整体重试。"}
+		}
+		if p.Category != "" && !slices.Contains(schemas.AllCategories, schemas.Category(p.Category)) {
+			return map[string]any{"error": fmt.Sprintf("category %q 不是合法品类；合法品类：%s。请修正后整体重试（省略 category 表示全品类）。", p.Category, strings.Join(categoryNames(), ", "))}
+		}
+		if _, explicit := rawFields["limit"]; explicit && (p.Limit <= 0 || p.Limit > 24) {
+			return map[string]any{"error": fmt.Sprintf("limit 显式值 %d 越界：允许 1 至 24（缺席时默认 16）；请修正后整体重试。", p.Limit)}
+		}
+		if _, explicit := rawFields["offset"]; explicit && p.Offset < 0 {
+			return map[string]any{"error": fmt.Sprintf("offset 显式值 %d 非法：必须 ≥ 0（缺席时默认 0）；请修正后整体重试。", p.Offset)}
 		}
 		if p.OrderBy == "price_asc" {
 			if x.priceAsc == nil {
@@ -514,7 +556,8 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 			}
 			return found[i].ID < found[j].ID
 		})
-		if p.Limit <= 0 || p.Limit > 24 {
+		// 显式越界值已在参数校验层报错；此处只剩缺席默认（limit=16）。
+		if p.Limit <= 0 {
 			p.Limit = 16
 		}
 		if p.Offset < 0 {
@@ -609,6 +652,9 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		}
 		return map[string]any{"candidates": rows, "truncated": found.Truncated}
 	case "search_web":
+		if p.Query == "" {
+			return map[string]any{"error": "payload.query 缺失：search_web 须为 {\"query\":\"检索词\"}；请补齐后重试。"}
+		}
 		if x.result.SearchCalls >= 3 || x.runner.Web == nil {
 			return map[string]any{"unavailable": "外部搜索当前不可用，可继续基于已有资料讨论"}
 		}
@@ -619,6 +665,9 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		}
 		return x.addEvidence(rows)
 	case "read_page":
+		if p.URL == "" {
+			return map[string]any{"error": "payload.url 缺失：read_page 须为 {\"url\":\"https://...\"}（method 可选）；请补齐后重试。"}
+		}
 		if x.result.PageCalls >= 6 || x.runner.Web == nil {
 			return map[string]any{"unavailable": "本轮网页读取额度已用完"}
 		}
@@ -648,10 +697,41 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		}
 		return map[string]any{"error": "候选注册后未找到"}
 	case "evaluate":
+		if len(p.Draft) == 0 || string(p.Draft) == "null" {
+			return map[string]any{"error": "payload.draft 缺失：evaluate 须为 {\"draft\":{\"schema_version\":1,\"requirement_ref\":\"current\",\"build_ref\":...,\"selection\":{...七类必选 SKU...}}}；请把 draft 包裹在 payload 内后整体重试，七类必选槽位不得为 null。"}
+		}
 		return x.evaluate(ctx, p.Draft)
 	default:
-		return map[string]any{"error": "未知工具操作"}
+		names := make([]string, 0, len(paramActions))
+		for name := range paramActions {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		return map[string]any{"error": fmt.Sprintf("未知工具操作 %q；合法 action：%s。请修正 action 后整体重试。", action, strings.Join(names, ", "))}
 	}
+}
+
+// paramActions 是各 action 的合法 payload 字段集（合同 v3）。缺席字段走文档化
+// 默认；未知字段与显式越界值报错（指出字段/允许集/重试方式），不静默改写。
+var paramActions = map[string][]string{
+	"search_local":       {"query", "category", "order_by", "offset", "limit"},
+	"search_local_batch": {"queries"},
+	"evaluate":           {"draft"},
+	"read_evidence":      {"id", "query", "offset", "limit"},
+	"search_semantic":    {"query", "category"},
+	"search_web":         {"query"},
+	"read_page":          {"url", "query", "offset", "limit", "method"},
+	"register_candidate": {"id", "category", "brand", "model", "specs", "price_cny", "evidence", "field_evidence", "field_quotes", "unknown", "attributes", "merchant", "currency", "price_observed_at", "external"},
+}
+
+// categoryNames 返回合法品类名的排序清单（用于错误提示）。
+func categoryNames() []string {
+	names := make([]string, 0, len(schemas.AllCategories))
+	for _, c := range schemas.AllCategories {
+		names = append(names, string(c))
+	}
+	sort.Strings(names)
+	return names
 }
 
 func (x *execution) addEvidence(rows []Evidence) map[string]any {

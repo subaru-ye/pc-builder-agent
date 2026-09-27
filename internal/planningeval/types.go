@@ -99,6 +99,10 @@ type Expect struct {
 	Validation             string                                `json:"validation,omitempty"`
 	IssuesContain          []string                              `json:"issues_contain,omitempty"`
 	RequireTools           []string                              `json:"require_tools,omitempty"`
+	// ObserveTools 是观察性工具指标（grading-v2 起）：只记录模型是否使用与
+	// 调用次数，不构成通过/失败条件——工具选择属模型行为观察，不为分数
+	// 强迫调用。与 RequireTools（硬性）互斥使用。
+	ObserveTools           []string                              `json:"observe_tools,omitempty"`
 	ForbidTools            []string                              `json:"forbid_tools,omitempty"`
 	BuilderCalls           *int                                  `json:"builder_calls,omitempty"`
 	ReplyForbidden         []string                              `json:"reply_forbidden,omitempty"`
@@ -144,6 +148,13 @@ type Check struct {
 	Pass   bool   `json:"pass"`
 	Detail string `json:"detail,omitempty"`
 }
+
+// ToolObservation 记录一个观察性工具在本步的使用情况：calls 为模型发出的
+// planning_action 调用次数（0 = 未使用）。仅记录，不判定。
+type ToolObservation struct {
+	Tool  string `json:"tool"`
+	Calls int    `json:"calls"`
+}
 type StepRecord struct {
 	Kind  string                   `json:"kind"`
 	Text  string                   `json:"text,omitempty"`
@@ -159,6 +170,9 @@ type StepRecord struct {
 	Reply           string                 `json:"reply"`
 	Trace           []Trace                `json:"trace"`
 	Checks          []Check                `json:"checks"`
+	// ToolObservations 是观察性工具指标（Expect.ObserveTools）：不进入 Checks、
+	// 不影响 pass/classification，只记录模型是否使用与调用次数。
+	ToolObservations []ToolObservation     `json:"tool_observations,omitempty"`
 	DurationMS      int64                  `json:"duration_ms"`
 	Error           string                 `json:"error,omitempty"`
 	Classification  string                 `json:"classification"`

@@ -203,3 +203,71 @@ func TestPreferenceMemorySupersedeValidation(t *testing.T) {
 		t.Fatalf("过滤后应只剩稳定偏好,易失证据不得作为建议复用: %+v", suggestions)
 	}
 }
+
+func TestActivePreferenceMemoryByIdentityAndOwnerList(t *testing.T) {
+	s := setupStore(t)
+	ctx := context.Background()
+
+	first, err := s.CreatePreferenceMemory(ctx, preferenceFixture("owner-a", schemas.PreferenceSubjectSelf, "brand_pref.gpu", `"nvidia"`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := s.CreatePreferenceMemory(ctx, preferenceFixture("owner-a", "friend:xw", "noise_pref", `"silent"`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreatePreferenceMemory(ctx, preferenceFixture("owner-b", schemas.PreferenceSubjectSelf, "noise_pref", `"quiet"`)); err != nil {
+		t.Fatal(err)
+	}
+
+	byIdentity, err := s.ActivePreferenceMemoryByIdentity(ctx, "owner-a", schemas.PreferenceSubjectSelf, "brand_pref.gpu")
+	if err != nil || byIdentity.ID != first.ID {
+		t.Fatalf("身份查询应命中: %+v err=%v", byIdentity, err)
+	}
+	if _, err := s.ActivePreferenceMemoryByIdentity(ctx, "owner-a", schemas.PreferenceSubjectSelf, "noise_pref"); !errors.Is(err, ErrPreferenceMemoryNotFound) {
+		t.Fatalf("身份未命中应 not found: %v", err)
+	}
+
+	list, err := s.ActivePreferenceMemoriesByOwner(ctx, "owner-a")
+	if err != nil || len(list) != 2 || list[0].ID != second.ID || list[1].ID != first.ID {
+		t.Fatalf("owner 列表应含全部 subject 且按 subject,field 排序: %+v err=%v", list, err)
+	}
+	if other, err := s.ActivePreferenceMemoriesByOwner(ctx, "owner-b"); err != nil || len(other) != 1 {
+		t.Fatalf("owner 隔离: %+v err=%v", other, err)
+	}
+
+	// supersede 后身份查询只认 active。
+	if _, err := s.SupersedePreferenceMemory(ctx, "owner-a", first.ID,
+		preferenceFixture("owner-a", schemas.PreferenceSubjectSelf, "brand_pref.gpu", `"amd"`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ActivePreferenceMemoryByIdentity(ctx, "owner-a", schemas.PreferenceSubjectSelf, "brand_pref.gpu"); err != nil {
+		t.Fatalf("supersede 后身份查询应命中新记录: %v", err)
+	}
+}
+
+func TestWebMessageByIDScopedToSession(t *testing.T) {
+	s := setupStore(t)
+	ctx := context.Background()
+
+	if _, err := s.CreateWebSession(ctx, "sess-1", "owner-a", "11111111-1111-1111-1111-111111111111"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateWebSession(ctx, "sess-2", "owner-a", "11111111-1111-1111-1111-111111111112"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx,
+		`INSERT INTO web_messages (id, session_id, role, content) VALUES ($1, $2, 'user', $3)`,
+		"11111111-1111-1111-1111-111111111111", "sess-1", "预算8000，显卡要N卡"); err != nil {
+		t.Fatal(err)
+	}
+
+	message, err := s.WebMessageByID(ctx, "sess-1", "11111111-1111-1111-1111-111111111111")
+	if err != nil || message.Content != "预算8000，显卡要N卡" || message.Role != "user" {
+		t.Fatalf("应按会话+ID 命中: %+v err=%v", message, err)
+	}
+	// 跨会话引用一律不存在,防止用别处消息伪造来源。
+	if _, err := s.WebMessageByID(ctx, "sess-2", "11111111-1111-1111-1111-111111111111"); !errors.Is(err, ErrWebMessageNotFound) {
+		t.Fatalf("跨会话引用应 not found: %v", err)
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
@@ -24,6 +25,9 @@ var (
 	ErrPreferenceMemoryNotActive = errors.New("偏好记忆已失效,不能再次变更")
 	// ErrPreferenceUnchanged 表示重申了相同偏好值:不构成改主意,不产生 supersede 链。
 	ErrPreferenceUnchanged = errors.New("偏好值未变化")
+	// ErrPreferenceIdentityConflict 表示并发写入命中了"同一身份至多一条 active"
+	// 唯一索引:调用方应重读身份后按不变/覆盖语义重试。
+	ErrPreferenceIdentityConflict = errors.New("偏好记忆并发写入冲突")
 )
 
 // preferenceRecallLimit 是召回的保守上限;注入预算(条数/字符)待接入合同定型后再定。
@@ -78,6 +82,13 @@ func preferenceSourceJSON(source schemas.PreferenceSource) ([]byte, error) {
 	return raw, nil
 }
 
+// isPreferenceUniqueViolation 识别 one_active 部分唯一索引(23505):
+// 只区分并发冲突,不掩盖其他约束失败。
+func isPreferenceUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
 // CreatePreferenceMemory 写入一条新偏好。调用方必须先取得用户明确表达
 // (stated)或明确接受(accepted_proposal)的证据,并核对原始会话 scope;
 // schemas 校验只能拒绝不受支持的证据标签,无法验证传入来源是否真实。
@@ -99,6 +110,9 @@ func (s *Store) CreatePreferenceMemory(ctx context.Context, m schemas.Preference
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING `+preferenceMemoryColumns,
 		m.OwnerID, m.Subject, m.Field, []byte(m.Value), m.Strength, m.Evidence, m.Volatile, observedAt, source))
+	if isPreferenceUniqueViolation(err) {
+		return schemas.PreferenceMemory{}, ErrPreferenceIdentityConflict
+	}
 	if err != nil {
 		return schemas.PreferenceMemory{}, fmt.Errorf("store: 写入偏好记忆: %w", err)
 	}
@@ -169,6 +183,9 @@ func (s *Store) SupersedePreferenceMemory(ctx context.Context, ownerID, prevID s
 		RETURNING `+preferenceMemoryColumns,
 		next.OwnerID, next.Subject, next.Field, []byte(next.Value), next.Strength, next.Evidence,
 		next.Volatile, observedAt, prevID, source))
+	if isPreferenceUniqueViolation(err) {
+		return schemas.PreferenceMemory{}, ErrPreferenceIdentityConflict
+	}
 	if err != nil {
 		return schemas.PreferenceMemory{}, fmt.Errorf("store: 写入新偏好: %w", err)
 	}
@@ -226,6 +243,48 @@ func (s *Store) ActivePreferenceMemories(ctx context.Context, ownerID, subject s
 		LIMIT $4`, ownerID, subject, schemas.PreferenceStatusActive, preferenceRecallLimit)
 	if err != nil {
 		return nil, fmt.Errorf("store: 召回偏好记忆: %w", err)
+	}
+	defer rows.Close()
+	var memories []schemas.PreferenceMemory
+	for rows.Next() {
+		m, err := scanPreferenceMemory(rows)
+		if err != nil {
+			return nil, fmt.Errorf("store: 读取偏好记忆: %w", err)
+		}
+		memories = append(memories, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store: 遍历偏好记忆: %w", err)
+	}
+	return memories, nil
+}
+
+// ActivePreferenceMemoryByIdentity 精确读取某 (owner, subject, field) 的 active
+// 偏好,供"保存/改正"流程判定 create 还是 supersede。
+func (s *Store) ActivePreferenceMemoryByIdentity(ctx context.Context, ownerID, subject, field string) (schemas.PreferenceMemory, error) {
+	m, err := scanPreferenceMemory(s.pool.QueryRow(ctx, `
+		SELECT `+preferenceMemoryColumns+` FROM owner_preference_memories
+		WHERE owner_id = $1 AND subject = $2 AND field = $3 AND status = $4`,
+		ownerID, subject, field, schemas.PreferenceStatusActive))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return schemas.PreferenceMemory{}, ErrPreferenceMemoryNotFound
+	}
+	if err != nil {
+		return schemas.PreferenceMemory{}, fmt.Errorf("store: 查询偏好记忆: %w", err)
+	}
+	return m, nil
+}
+
+// ActivePreferenceMemoriesByOwner 返回 owner 全部 subject 的 active 偏好,
+// 供用户管理视图(查看/改正/删除)使用;召回注入仍必须走按 subject 的显式查询。
+func (s *Store) ActivePreferenceMemoriesByOwner(ctx context.Context, ownerID string) ([]schemas.PreferenceMemory, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT `+preferenceMemoryColumns+` FROM owner_preference_memories
+		WHERE owner_id = $1 AND status = $2
+		ORDER BY subject, field, id
+		LIMIT $3`, ownerID, schemas.PreferenceStatusActive, preferenceRecallLimit)
+	if err != nil {
+		return nil, fmt.Errorf("store: 列出偏好记忆: %w", err)
 	}
 	defer rows.Close()
 	var memories []schemas.PreferenceMemory

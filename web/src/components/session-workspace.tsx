@@ -10,6 +10,7 @@ import { AppHeader } from "./app-header";
 import { BuildInspector } from "./build-inspector";
 import { Composer } from "./composer";
 import { ProposalInspector } from "./proposal-inspector";
+import { PreferencesPanel } from "./preferences-panel";
 import { RequirementFullEditor } from "./requirement-full-editor";
 import { RequirementReviewPanel } from "./requirement-review-panel";
 import { RequirementStatusPane, RequirementSummary } from "./requirement-status";
@@ -280,9 +281,12 @@ export function SessionWorkspace({ sessionID }: { sessionID: string }) {
   // busy 只锁定网络提交瞬间,不包含 run 活动状态;再次确认启动由
   // PrimaryAction 的 running 分支与后端 admission(ErrSessionBusy)双重禁止。
   const requirementBusy = confirm.isPending || send.isPending;
-  const requirementPane = data.requirement_state
-    ? <RequirementStatusPane session={data} busy={requirementBusy} onUpdate={updateRequirement} onSource={showSource} onOpenReview={openReview} onOpenEditor={() => { setReviewOpen(false); setEditorOpen(true); }} />
-    : <p className="p-6 text-sm text-[var(--ink-muted)]">继续在对话中补充预算和用途，需求整理好后可以在这里核对。</p>;
+  const requirementPane = <>
+    {data.requirement_state
+      ? <RequirementStatusPane session={data} busy={requirementBusy} onUpdate={updateRequirement} onSource={showSource} onOpenReview={openReview} onOpenEditor={() => { setReviewOpen(false); setEditorOpen(true); }} />
+      : <p className="p-6 text-sm text-[var(--ink-muted)]">继续在对话中补充预算和用途，需求整理好后可以在这里核对。</p>}
+    <PreferencesPanel session={data} />
+  </>;
   const sharedInspector = <SharedInspector
     tab={workspaceTab} onTab={(next) => { setWorkspaceTab(next); if (next === "build") setReviewHint(false); }}
     buildEnabled={buildReady}

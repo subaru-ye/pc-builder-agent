@@ -342,6 +342,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{session_id}/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["SessionID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 把当前会话的一个需求字段保存为跨会话偏好
+         * @description 用户显式保存：值、强度与来源一律取自服务端需求状态，请求体只提供字段与归属对象。 服务端核验会话归属、原始用户消息与原文引用，拒绝临时例外、不确定/推断证据与面板编辑来源。 同字段同值重复保存幂等返回 unchanged；值变化构成改主意，返回 superseded。偏好只是待确认建议，不是自动生效约束。
+         */
+        post: operations["saveSessionPreference"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 列出当前身份的全部 active 跨会话偏好
+         * @description 含登录账号认领的匿名 owner；本人(self)在前。仅返回 active 记录，不含已删除或已被取代的墓碑。
+         */
+        get: operations["listPreferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/preferences/{preference_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * 删除一条跨会话偏好
+         * @description 物理删除（含改主意 supersede 链的墓碑）；跨身份未命中统一 404。
+         */
+        delete: operations["deletePreference"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/events": {
         parameters: {
             query?: never;
@@ -579,7 +641,7 @@ export interface components {
             /** Format: uri-reference */
             instance?: string;
             /** @enum {string} */
-            code: "invalid_request" | "not_found" | "session_busy" | "invalid_session_phase" | "schema_validation_failed" | "upstream_unavailable" | "context_expired" | "run_timeout" | "run_interrupted" | "run_active" | "run_cancelled" | "generation_failed" | "events_expired" | "internal_error" | "daily_budget_exceeded" | "feedback_unavailable" | "invalid_retry_target" | "requirement_not_ready" | "requirement_review_conflict" | "requirement_revision_conflict" | "requirement_state_unsupported" | "model_authentication_failed" | "model_quota_exhausted" | "model_rate_limited" | "model_timeout" | "auth_disabled" | "auth_invalid_credentials" | "auth_email_exists" | "auth_weak_password" | "auth_session_expired" | "auth_unavailable";
+            code: "invalid_request" | "not_found" | "session_busy" | "invalid_session_phase" | "schema_validation_failed" | "upstream_unavailable" | "context_expired" | "run_timeout" | "run_interrupted" | "run_active" | "run_cancelled" | "generation_failed" | "events_expired" | "internal_error" | "daily_budget_exceeded" | "feedback_unavailable" | "invalid_retry_target" | "requirement_not_ready" | "requirement_review_conflict" | "requirement_revision_conflict" | "requirement_state_unsupported" | "model_authentication_failed" | "model_quota_exhausted" | "model_rate_limited" | "model_timeout" | "preference_unavailable" | "preference_not_savable" | "preference_invalid" | "auth_disabled" | "auth_invalid_credentials" | "auth_email_exists" | "auth_weak_password" | "auth_session_expired" | "auth_unavailable";
             request_id: string;
         } & {
             [key: string]: unknown;
@@ -771,6 +833,55 @@ export interface components {
             schema_version: 1;
             feedback: components["schemas"]["Feedback"] | null;
         };
+        PreferenceSaveInput: {
+            /** @constant */
+            schema_version: 1;
+            /** @description 已知需求字段或 free.* 条目；值与来源由服务端从会话需求状态提取，请求不可传入 */
+            field: string;
+            /** @description self 表示本人，其余为具名代配对象标签，由用户显式选择 */
+            subject: string;
+        };
+        PreferenceSource: {
+            /** @enum {string} */
+            kind: "chat";
+            session_id: string;
+            message_id: string;
+            /** @description 字段对应的用户原话（消息原文子串） */
+            quote: string;
+        };
+        Preference: {
+            /** Format: uuid */
+            id: string;
+            subject: string;
+            field: string;
+            /** @description 偏好值，任意 JSON */
+            value: unknown;
+            /** @enum {string} */
+            strength: "prefer" | "must";
+            /** @enum {string} */
+            evidence: "stated" | "accepted_proposal";
+            /** @description 易失事实必须带 observed_at，召回按新鲜度过滤 */
+            volatile: boolean;
+            /** Format: date */
+            observed_at?: string;
+            source: components["schemas"]["PreferenceSource"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PreferenceSaveResponse: {
+            /** @constant */
+            schema_version: 1;
+            preference: components["schemas"]["Preference"];
+            /** @enum {string} */
+            action: "created" | "superseded" | "unchanged";
+        };
+        PreferenceListResponse: {
+            /** @constant */
+            schema_version: 1;
+            preferences: components["schemas"]["Preference"][];
+        };
         Run: {
             /** @constant */
             schema_version: 1;
@@ -801,7 +912,7 @@ export interface components {
             /** @enum {string} */
             kind?: "fact" | "context" | "constraint";
             /** @enum {string} */
-            evidence?: "stated" | "uncertain";
+            evidence?: "stated" | "accepted_proposal" | "uncertain";
             /** @enum {string} */
             strength?: "must" | "prefer";
             /** @enum {string} */
@@ -1982,6 +2093,77 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["FeedbackResponse"];
                 };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    saveSessionPreference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["SessionID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreferenceSaveInput"];
+            };
+        };
+        responses: {
+            /** @description 保存结果（action = created | superseded | unchanged） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceSaveResponse"];
+                };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    listPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 偏好列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceListResponse"];
+                };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    deletePreference: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                preference_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已删除 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             "4XX": components["responses"]["Problem"];
         };

@@ -16,6 +16,8 @@ import type {
   AuthState,
   Feedback,
   FeedbackReason,
+  Preference,
+  PreferenceSaveAction,
 } from "./types";
 
 const client = createClient<paths>({ baseUrl: "", credentials: "include" });
@@ -171,6 +173,21 @@ export const api = {
   async revokeShareByToken(token: string, key: string): Promise<void> {
     const result = await client.DELETE("/api/v1/shares/{token}", {
       params: { path: { token }, header: { "Idempotency-Key": key } },
+    });
+    if (!result.response.ok) unwrap(result as never);
+  },
+  async savePreference(sessionID: string, field: string, subject: string): Promise<{ preference: Preference; action: PreferenceSaveAction }> {
+    return unwrap(await client.POST("/api/v1/sessions/{session_id}/preferences", {
+      params: { path: { session_id: sessionID } },
+      body: { schema_version: 1, field, subject },
+    }));
+  },
+  async listPreferences(): Promise<Preference[]> {
+    return unwrap(await client.GET("/api/v1/preferences")).preferences;
+  },
+  async deletePreference(preferenceID: string, key: string): Promise<void> {
+    const result = await client.DELETE("/api/v1/preferences/{preference_id}", {
+      params: { path: { preference_id: preferenceID }, header: { "Idempotency-Key": key } },
     });
     if (!result.response.ok) unwrap(result as never);
   },

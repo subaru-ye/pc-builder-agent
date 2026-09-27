@@ -124,13 +124,12 @@ func TestLiveOwnedPurchaseDeliveryUsesTheVerifiedBudgetBasis(t *testing.T) {
 					t.Fatalf("valid purchase quote rejected: outcome=%s quote=%+v issues=%v", got.Outcome, got.Quote, got.Issues)
 				}
 			} else if mode == "wrong_owned_model" {
-				// 已有件按品类核账：用户型号不在目录时替身候选不计采购价，
-				// 降级为非阻塞 note，不再把会计缺口当交付问题。
-				if got.Outcome != "ready" || got.Quote.PurchaseTotalCNY == nil || *got.Quote.PurchaseTotalCNY != purchase || got.Quote.PurchaseMissingCount != 0 {
-					t.Fatalf("category-level ownership accounting failed: outcome=%s quote=%+v", got.Outcome, got.Quote)
-				}
-				if len(got.Delivery.Notes) != 1 || !strings.Contains(got.Delivery.Notes[0], "different memory") {
-					t.Fatalf("missing ownership note: %+v", got.Delivery)
+				// BV2-104 修复后的 v2 合同：已有件零匹配且品类被选中时，选中
+				// SKU 与用户已有件未核实，不得按品类豁免免计价后 ready；保留
+				// 还是改购是计价取舍，必须 clarify（旧断言 ready+豁免+非阻塞
+				// note 正是账实不一致的根因语义，已修订）。
+				if got.Outcome != "clarify" || !strings.Contains(strings.Join(got.Issues, "; "), "计价取舍") {
+					t.Fatalf("zero-match owned part with selected category must clarify: outcome=%s issues=%v", got.Outcome, got.Issues)
 				}
 			} else if got.Outcome != "proposal" || len(got.Issues) == 0 {
 				t.Fatalf("unverified price/ownership or overbudget accepted: %+v", got)

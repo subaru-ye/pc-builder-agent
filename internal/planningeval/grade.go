@@ -224,6 +224,17 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 		requested := contains(actions, a) || a == "search_local" && batchExecuted
 		check("tool_required:"+a, requested && executed, actions)
 	}
+	// 观察性工具指标（grading-v2）：只记录是否使用与调用次数，不构成通过/
+	// 失败条件——工具选择属模型行为观察，不为分数强迫调用。
+	if len(e.ObserveTools) > 0 {
+		counts := map[string]int{}
+		for _, a := range actions {
+			counts[a]++
+		}
+		for _, a := range e.ObserveTools {
+			r.ToolObservations = append(r.ToolObservations, ToolObservation{Tool: a, Calls: counts[a]})
+		}
+	}
 	for _, a := range e.ForbidTools {
 		attempted := contains(actions, a) || a == "search_local" && contains(actions, "search_local_batch")
 		check("tool_forbidden:"+a, !attempted, actions)
@@ -426,6 +437,9 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 			}
 		}
 		check("cpu_target", ok, detail)
+	}
+	if e.FrozenConstraints != nil {
+		gradeFrozenConstraints(r, e.FrozenConstraints, check)
 	}
 	// A delivered result must be server linked, not merely model 'ready'.
 	if r.Result != nil && r.Result.Outcome == "ready" {

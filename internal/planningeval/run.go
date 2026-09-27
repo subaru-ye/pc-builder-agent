@@ -50,8 +50,16 @@ func Load(raw []byte) (Suite, error) {
 			}
 		}
 		for _, step := range c.Steps {
-			if s.Live && (len(step.Screen) != 0 || len(step.Builder) != 0) {
+			// Builder v2 live：种子轮保留 scripted screening（适配器输入，不花
+			// 真实调用），但绝不允许携带 builder oracle——Builder 必须真实执行。
+			if s.BuilderV2 && len(step.Builder) != 0 {
+				return s, fmt.Errorf("builder-v2 suite must not contain builder oracles")
+			}
+			if s.Live && !s.BuilderV2 && (len(step.Screen) != 0 || len(step.Builder) != 0) {
 				return s, fmt.Errorf("live suite must not contain model oracles")
+			}
+			if s.BuilderV2 && !s.Live {
+				return s, fmt.Errorf("builder-v2 suites are live suites; set live=true")
 			}
 			switch step.Kind {
 			case "message":
@@ -165,7 +173,21 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 		report.Limitations = []string{"Real fixed chat models, fixture-only web; embedding disabled.", "Graded against predeclared live expectations, not oracle outputs.", "Cash cost is unknown; actual provider token usage is retained.", "No UI or production capacity claim."}
 	}
 	liveRequested := models.Screening != nil || models.Builder != nil
-	if suite.Live != liveRequested || (suite.Live && (models.Screening == nil || models.Builder == nil || models.MaxCalls <= 0)) {
+	if suite.BuilderV2 {
+		// Builder v2：Screening 必须离线（种子轮是核定需求的适配器输入），
+		// Builder 必须真实；调用预算跨 case 共享。
+		if models.Screening != nil {
+			return report, fmt.Errorf("builder-v2 runs keep screening offline; seeds are scripted adapter inputs")
+		}
+		if models.Builder == nil || models.MaxCalls <= 0 {
+			return report, fmt.Errorf("builder-v2 runs require a real builder model and a positive shared call limit")
+		}
+		report.Mode = "live_builder_offline_seeds"
+		report.Limitations = []string{
+			"Builder-only 诊断口径：需求以 scripted 种子轮写入并经真实确认事务冻结，Screening 零 provider 调用。",
+			"固定目录与离线工具（网页/语义检索 fail-closed）；结论是诊断与用量观测，不是通过率宣称。",
+		}
+	} else if suite.Live != liveRequested || (suite.Live && (models.Screening == nil || models.Builder == nil || models.MaxCalls <= 0)) {
 		return report, fmt.Errorf("live suite requires both real models and a positive shared call limit; replay requires offline suite")
 	}
 	if models.Intent != nil {
@@ -360,6 +382,7 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 		report.Cases = append(report.Cases, cr)
 	}
 	countUsage(&report)
+	AttachToolContract(&report)
 	report.Intent = buildIntentReport(suite, &report, models)
 	report.DurationMS = time.Since(start).Milliseconds()
 	return report, nil
@@ -381,7 +404,7 @@ func countUsage(report *Report) {
 				} else {
 					report.BuilderCalls++
 				}
-				if report.Mode == "live_models_offline_tools" && !t.ProviderCalled {
+				if report.Mode != "offline_oracle" && !t.ProviderCalled {
 					continue // A request blocked before sending has no provider usage.
 				}
 				if t.Tokens == nil {

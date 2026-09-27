@@ -18,6 +18,16 @@ import (
 	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
+// ToolErrorContractVersion 是 planning_action 工具错误/响应合同的显式版本号：
+// 纯元数据，不参与任何执行分支。凡参数校验规则、错误文案结构或响应附带的
+// 反馈字段（如 budget_alternatives/keyword_hits）发生变化时人工递增——
+// ToolContract 的提示词+声明指纹不覆盖这些改动，评估配对报告以本版本号
+// 与 manifest 的代码哈希共同锁定对比前提。
+// v2（2026-09-27）：budgetAlternatives 反馈如实区分预算金额与有效上限
+// （BV2-110 误读根因，b262d4d 改动时漏递增，此处补登）；详见
+// docs/changes/builder-v2-eval.md §12。
+const ToolErrorContractVersion = "planning-tool-errors-v2"
+
 const instruction = `你是装机顾问，可以自主调用工具检索、比较、选配和修正。选型约束(预算与弹性、configuration_scope、用途与性能取向、尺寸/静音/品牌等有效条件)以 input.effective_constraints.spec 为唯一权威——它是用户核定确认时冻结的完整有效需求(已展开系统默认,defaults 标注来源);requirement_state 只用于用户事实与来源溯源,其中 unknown 的字段(如 performance_goal)不代表约束未定,也不得从 state 重新推导或覆盖冻结值。没有 effective_constraints 的历史载荷才按旧语义把该状态当作权威需求。来源、撤销、临时例外和备选必须尊重；不得用历史消息恢复旧要求。free.* 是与常用字段同等有效的用户要求。fact/context 是场景，constraint 是配置条件。用户的 must 不能偷偷改成 prefer。
 request是本轮已授权执行的用户原话，base_draft是本会话已有正式配置，previous_proposal是上次选配进展。base_candidates是原配置配件在本轮目录中的规格与报价，unresolved_base_ids才是当前未找到的原件编号；initial_candidates只是部分样本，未出现在样本中不代表目录无型号或无报价。升级/改单时基于它们检索和比较，不要再次索要已有型号或重复确认执行方向。用户让你自行选更好的处理器时，根据用途、原CPU、剩余整机预算和兼容性自主检索候选；不要把找型号退回给用户。“其他配件尽量不动”是软偏好，先尝试兼容升级，确需联动再说明原因；预算充足不代表允许超出既定预算。正式配置中的配件不代表用户已购，不擅自设为已有件。纯讨论备选不能覆盖当前要求。
 不要要求用户命中固定词语或填齐固定字段。缺少信息时判断是否真的影响下一步；可给方向、候选或提出必要问题。用户已明确表示未定、稍后补充或还没定的信息（如预算）不再追问，也不作为停在clarify的理由，按现有信息推进检索和方案。不要声称目录无结果等于市场无解。价格、规格及兼容性来自工具，不凭记忆编造；缺数据可以继续检索和出待解决方案。程序没有默认预算下限、加价授权或游戏必须独显要求。比较方案可以讨论不满足要求的替代项，但必须标明偏差，不能作为用户已接受的方案。硬性要求（如板型、接口）在当前平台无候选时，先检索连带换CPU/主板的平台联动能否在预算内满足，可行则交付proposal并说明偏差与联动原因，不把平台切换当必须追问的用户取舍。
@@ -338,6 +348,12 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 			continue
 		}
 		return finished, nil
+	}
+	// 额度用完是进度信息，不是交付缺陷：当前草稿已通过全部核验且无其他
+	// 未解决项时直接交付，不把进度提示当 issue 阻断 ready（BV2-105）。
+	if draft, err := schemas.DecodeBuildDraft(x.result.Draft); err == nil && len(draft.Selection.SKUs()) > 0 &&
+		x.result.Validation != nil && x.result.Validation.OverallStatus == schemas.OverallPass && len(x.result.Issues) == 0 {
+		return x.finish(), nil
 	}
 	x.result.Issues = append(x.result.Issues, "本轮处理额度已用完，已保留候选，可继续讨论。")
 	return x.finish(), nil
@@ -796,6 +812,9 @@ func (x *execution) budgetAlternatives(quote validate.Quote, draft schemas.Build
 	if !ok || len(field.Value) == 0 {
 		return nil
 	}
+	// 触发口径保持"高于预算金额"（压价教练反馈仍有价值）；但措辞必须表达
+	// 优先级：预算金额是目标，交付上限是 budget×(1+flex)——BV2-110 教训，
+	// 把预算金额称作"硬上限"会强化模型把弹性内报价当超支的错误认知。
 	ceiling := new(big.Rat)
 	if _, ok := ceiling.SetString(strings.Trim(strings.TrimSpace(string(field.Value)), `"`)); !ok || ceiling.Sign() < 0 {
 		return nil
@@ -847,8 +866,14 @@ func (x *execution) budgetAlternatives(quote validate.Quote, draft schemas.Build
 	if len(alts) == 0 {
 		return nil
 	}
-	return map[string]any{"candidates": alts,
-		"note": "当前报价超出预算硬上限。以上是各品类最便宜的有报价候选（按价格排序，未做兼容核验）；替换时选同品类中价格合适且容量或性能档位不降的候选（如内存保持容量、显卡保持档次），不得为压预算单方面削减与用途相关的容量或档位；同类替换仍无法压回时交付proposal如实说明取舍，不要擅自砍容量后直接交付。"}
+	note := fmt.Sprintf("当前报价 %s 元高于预算金额 %s 元。%s 以上是各品类最便宜的有报价候选（按价格排序，未做兼容核验）；替换时选同品类中价格合适且容量或性能档位不降的候选（如内存保持容量、显卡保持档次），不得为压预算单方面削减与用途相关的容量或档位；同类替换仍无法压回时交付proposal如实说明取舍，不要擅自砍容量后直接交付。",
+		*total, strings.Trim(strings.TrimSpace(string(field.Value)), `"`), func() string {
+			if upper, ok := x.budgetCeiling(); ok {
+				return "交付上限为有效上限 " + upper.FloatString(0) + " 元（预算×(1+弹性)），在有效上限内交付不构成超支，是否继续压价由你权衡。"
+			}
+			return "预算为偏好约束，是否继续压价由你权衡。"
+		}())
+	return map[string]any{"candidates": alts, "note": note}
 }
 
 // Initial catalog samples can be selected without a search_local call. Preserve
@@ -890,10 +915,28 @@ func (x *execution) finish() Result {
 // （applyBudgetFix）在预算回环耗尽后的目录内确定性替换，其每笔替换以独立
 // issue 留痕于 Issues。
 func (x *execution) finalize() Result {
-	// 已有件占位交付不是可交付方案：保留还是改购是用户计价取舍，强转 clarify。
-	if x.result.Outcome == "proposal" && x.placeholderDelivery() {
-		x.result.Outcome = "clarify"
-		x.result.Issues = append(x.result.Issues, "已有件在目录无精确型号匹配：保留已有件（按品类核账、不计入采购合计）还是改购新件，是计价取舍，需用户确认后继续。")
+	// 已有件保留 vs 改购是用户计价取舍：选中件与已有件型号/数量未核实时，
+	// 不得仅凭同品类把选中 SKU 当已有件免计价后交付。结构化检测不依赖模型
+	// 自述措辞，也拦截模型直接宣称的 ready（BV2-104：proposal+措辞绕过 →
+	// ready 交付账实不一致）。
+	if (x.result.Outcome == "proposal" || x.result.Outcome == "ready") && len(x.result.Draft) > 0 {
+		draft, err := schemas.DecodeBuildDraft(x.result.Draft)
+		if err == nil {
+			if pending := x.ownershipTradeoffPending(draft); len(pending) > 0 {
+				x.result.Outcome = "clarify"
+				x.result.Issues = append(x.result.Issues, ownershipTradeoffIssue(pending))
+			}
+		} else {
+			// Draft 违反 selection 契约（如七类必选给 null）时核账无从执行，
+			// 不能当作"无取舍"放行：零匹配已有件仍在场时，沿用/改购取舍未
+			// 经确认，必须 clarify 并逐件点名（BV2-104 Pass³v3 r3：null 内存
+			// 使 evaluate 与 finalize 的解码双双失败，缺口被静默跳过）。
+			if pending := x.unmatchedOwnedParts(); len(pending) > 0 {
+				x.result.Outcome = "clarify"
+				x.result.Issues = append(x.result.Issues, ownershipTradeoffIssue(pending))
+				x.result.Issues = append(x.result.Issues, "方案配置未通过结构校验（"+err.Error()+"），需修正后重新核验。")
+			}
+		}
 	}
 	wasReady := x.result.Outcome == "ready" || x.result.Outcome == "proposal"
 	if wasReady {
@@ -965,6 +1008,21 @@ func (x *execution) finalize() Result {
 			if field == "size_pref" && x.sizePrefViolated(v) {
 				x.result.Outcome = "proposal"
 				x.result.Issues = append(x.result.Issues, schemas.RequirementFieldLabel(field)+"（ITX）与已选主板板型不一致，目录无法满足该硬性板型")
+				continue
+			}
+			// 硬性板型由服务端确定性核验（已选主板板型匹配 + 安装范围规则通
+			// 过 + 机箱为数据可验的 ITX 机箱）时，尺寸约束不依赖模型自评；
+			// BV2-105 三轮合格 ITX 方案因模型缺席尺寸自评而停留在 proposal。
+			if field == "size_pref" && x.sizePrefServerVerified(v) {
+				continue
+			}
+			// 机箱不是数据可验的 ITX 小机箱（如 matx,itx 通吃机箱）时，模型
+			// 的"满足 ITX"自评与可核数据矛盾或无从核验，不得据此 ready；
+			// 停在 proposal 并点名需用户或更具体数据确认（BV2-105 Pass³v3 r3：
+			// AP201+ATX 电源被判满足 ITX 并交付）。
+			if field == "size_pref" && x.itxCaseUnverified(v) {
+				x.result.Outcome = "proposal"
+				x.result.Issues = append(x.result.Issues, schemas.RequirementFieldLabel(field)+"（ITX）缺少可核验的小机箱数据：已选机箱未声明仅支持 ITX 板型或 SFX/SFX-L 电源仓，需更换数据可验的 ITX 机箱或与用户确认")
 				continue
 			}
 			a, ok := assessed[field]

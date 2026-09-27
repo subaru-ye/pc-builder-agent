@@ -1,0 +1,28 @@
+{
+ "models": {
+  "builder": {
+   "base_host": "ws-5z8rvj9oxtusr5m0.cn-beijing.maas.aliyuncs.com",
+   "dimensions": 0,
+   "max_retries": 0,
+   "model": "deepseek-v4-flash-0731",
+   "model_chain": [],
+   "provider": "bailian",
+   "reasoning_effort": "none",
+   "role": "builder",
+   "session_cache": true,
+   "timeout": "3m0s"
+  },
+  "screening": {
+   "base_host": "ws-5z8rvj9oxtusr5m0.cn-beijing.maas.aliyuncs.com",
+   "dimensions": 0,
+   "max_retries": 0,
+   "model": "deepseek-v4-flash-0731",
+   "model_chain": [],
+   "provider": "bailian",
+   "reasoning_effort": "none",
+   "role": "screening",
+   "session_cache": true,
+   "timeout": "1m0s"
+  }
+ }
+}

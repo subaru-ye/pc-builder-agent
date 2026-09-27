@@ -53,6 +53,7 @@ func TestRegradeFixture(t *testing.T) {
 		}
 		for si := range steps {
 			steps[si].Checks = nil
+			steps[si].ToolObservations = nil
 			var prev *StepRecord
 			if si > 0 {
 				prev = &steps[si-1]

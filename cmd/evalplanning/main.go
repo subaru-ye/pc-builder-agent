@@ -135,6 +135,13 @@ func main() {
 		if jevRequested {
 			plan["jev"] = jevPlan
 		}
+		if *mode != "plan-live" {
+			// 所有 live 模式都在任何 provider 请求之前落盘 plan（模型 pin 脱敏
+			// 配置、共享调用上限、套件/目录哈希），中断可审计。
+			if err = writeJSONOut(*out, "plan.json", plan, 0600); err != nil {
+				fail(err)
+			}
+		}
 		if *mode == "plan-live" {
 			if err = writeJSONOut(*out, "plan.json", plan, 0600); err != nil {
 				fail(err)
@@ -148,6 +155,10 @@ func main() {
 			fail(err)
 		}
 		models.Intent = intent
+		if suite.BuilderV2 {
+			// Builder v2：Screening 保持离线；种子轮是核定需求的适配器输入。
+			models.Screening = nil
+		}
 	}
 	if jevRequested {
 		plan["jev"] = jevPlan

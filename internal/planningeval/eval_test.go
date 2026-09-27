@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/agents/validate"
@@ -287,5 +288,37 @@ func TestBatchGradingRequiresExecutionAndStillHonorsForbiddenLocalSearch(t *test
 				t.Fatal("batch evaded forbidden local search")
 			}
 		}
+	}
+}
+
+// grading-v2：observe_tools 只记录模型是否使用与调用次数，不产生 check、
+// 不影响 pass/classification；同批次的 require_tools 硬性断言不受影响。
+func TestObserveToolsRecordWithoutGating(t *testing.T) {
+	trace := func(calls ...string) []Trace {
+		tr := []Trace{}
+		for _, a := range calls {
+			tr = append(tr, Trace{Role: "builder", Response: &genai.Content{Parts: []*genai.Part{
+				{FunctionCall: &genai.FunctionCall{ID: a, Name: "planning_action", Args: map[string]any{"action": a}}},
+			}}})
+		}
+		return tr
+	}
+	r := StepRecord{Trace: trace("search_local", "search_local", "evaluate")}
+	Grade(&r, Expect{ObserveTools: []string{"search_local_batch"}, RequireTools: []string{"evaluate"}}, nil)
+	if len(r.ToolObservations) != 1 || r.ToolObservations[0].Tool != "search_local_batch" || r.ToolObservations[0].Calls != 0 {
+		t.Fatalf("未使用的观察工具也必须记 0 次: %+v", r.ToolObservations)
+	}
+	for _, c := range r.Checks {
+		if strings.HasPrefix(c.Name, "tool_observed:") {
+			t.Fatalf("观察指标不得产生 check: %+v", c)
+		}
+	}
+	r = StepRecord{Trace: trace("search_local_batch", "search_local_batch", "evaluate")}
+	Grade(&r, Expect{ObserveTools: []string{"search_local_batch"}}, nil)
+	if len(r.ToolObservations) != 1 || r.ToolObservations[0].Calls != 2 {
+		t.Fatalf("调用次数计数错误: %+v", r.ToolObservations)
+	}
+	if r.Classification != "continued_collection" {
+		t.Fatalf("观察指标不得影响分类: %s", r.Classification)
 	}
 }

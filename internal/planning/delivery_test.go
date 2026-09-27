@@ -208,13 +208,16 @@ func TestUnfinishedDeliveryRetainsExternalAlternatives(t *testing.T) {
 	}
 }
 
-func TestUnmatchedOwnedPartsBecomeNonBlockingNotes(t *testing.T) {
+// 已有件零匹配且品类被选中：保留 vs 改购是计价取舍，必须 clarify 并点名
+// 用户型号（v2 合同；旧断言"降级为非阻塞 note 仍可交付"正是 BV2-104 账实
+// 不一致的根因语义，已修订）。
+func TestUnmatchedOwnedSelectedForcesTradeoffClarify(t *testing.T) {
 	input, record, catalog := completeRecording(t)
 	input.State.Fields["owned_parts"] = schemas.RequirementField{
 		Status: "active",
 		Value:  json.RawMessage(`[{"category":"cooler","model":"旧风冷A"},{"category":"psu","model":"旧电源B"}]`),
 	}
-	record.Outcome = "proposal"
+	record.Outcome = "ready" // 模型直接宣称 ready 也必须被结构化检查拦截。
 	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
 		raw, _ := json.Marshal(record)
 		return genai.NewContentFromText(string(raw), genai.RoleModel)
@@ -223,13 +226,88 @@ func TestUnmatchedOwnedPartsBecomeNonBlockingNotes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Delivery.Notes) != 1 || !strings.Contains(got.Delivery.Notes[0], "旧风冷A、旧电源B") {
-		t.Fatalf("want one aggregated ownership note: %+v", got.Delivery)
+	if got.Outcome != "clarify" {
+		t.Fatalf("zero-match owned parts in selected categories must clarify: %+v", got)
 	}
-	for _, s := range got.Issues {
-		if strings.Contains(s, "旧风冷A") || strings.Contains(s, "旧电源B") {
-			t.Fatalf("ownership mismatch downgraded delivery: %v", got.Issues)
+	joined := strings.Join(got.Issues, "; ")
+	for _, want := range []string{"计价取舍", "散热器：旧风冷A", "电源：旧电源B"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("clarify issue must name the tradeoff (%q): %v", want, got.Issues)
 		}
+	}
+}
+
+// 措辞独立性：BV2-104 的真实措辞（"继续沿用"，无"替身/沿用用户"）且模型
+// 直接宣称 ready，也必须被结构化检查拦截强转 clarify。
+func TestOwnershipTradeoffIgnoresReplyWordingAndReadyClaim(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"memory","model":"G.Skill Ripjaws V 32GB DDR4-3200","quantity":1}]`),
+	}
+	record.Outcome = "ready"
+	record.Reply = "已为您完成方案，已有的 32GB DDR4 内存继续沿用，新增采购合计约 4xxx 元。"
+	record.Issues = nil
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome != "clarify" {
+		t.Fatalf("ready claim with 继续沿用 wording must still clarify: %+v", got)
+	}
+	if !strings.Contains(strings.Join(got.Issues, "; "), "计价取舍") {
+		t.Fatalf("tradeoff issue missing: %v", got.Issues)
+	}
+}
+
+// SSD 豁免需要型号对应（v3.1 收紧：仅数量一致不再豁免）加数量合计一致。
+// 同型号且数量一致 → 豁免；同型号数量不一致 → 计价（超额是采购）。
+func TestSSDOwnershipAccountingFollowsCorrespondence(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		selectQty int
+		wantOwned bool
+	}{
+		{"same-model-quantity-match-exempts", 1, true},
+		{"same-model-quantity-mismatch-prices", 2, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input, record, catalog := completeRecording(t)
+			input.State.Fields["owned_parts"] = schemas.RequirementField{
+				Status: "active", Kind: "fact", Strength: "must",
+				Value: json.RawMessage(`[{"category":"ssd","model":"P3 Plus 1TB NVMe M.2","quantity":1}]`),
+			}
+			var draft map[string]any
+			if err := json.Unmarshal(record.Draft, &draft); err != nil {
+				t.Fatal(err)
+			}
+			sel := draft["selection"].(map[string]any)
+			sel["ssd"] = []map[string]any{{"sku": "ssd-crucial-p3plus-1tb", "quantity": tc.selectQty}}
+			raw, _ := json.Marshal(draft)
+			record.Draft = raw
+			record.Outcome = "proposal"
+			m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+				raw, _ := json.Marshal(record)
+				return genai.NewContentFromText(string(raw), genai.RoleModel)
+			}}
+			got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			owned := false
+			for _, line := range got.Quote.Lines {
+				if strings.Contains(line.SKU, "ssd") {
+					owned = line.Owned
+				}
+			}
+			if owned != tc.wantOwned {
+				t.Fatalf("ssd owned exemption = %v, want %v (quote=%+v)", owned, tc.wantOwned, got.Quote)
+			}
+		})
 	}
 }
 
@@ -255,5 +333,458 @@ func TestUserIssuesKeepChineseDetailButDropInternalRuleCodes(t *testing.T) {
 	}
 	if !slices.ContainsFunc(got.Issues, func(s string) bool { return strings.Contains(s, "整机无显示输出") }) {
 		t.Fatalf("chinese detail lost: %v", got.Issues)
+	}
+}
+
+// 边界①（BV2-104 同类）：用户已有 SSD A，draft 选中不同型号 SSD B——数量
+// 相同也不得把 B 免计为已有件；实际选中件与已有件不对应即计价并升级为取舍。
+func TestSSDDifferentModelMustBePricedEvenWithSameQuantity(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"ssd","model":"某旧SSD","quantity":1}]`),
+	}
+	record.Outcome = "proposal"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range got.Quote.Lines {
+		if strings.Contains(line.SKU, "ssd") && line.Owned {
+			t.Fatalf("different-model ssd must not be exempted as owned: %+v", got.Quote.Lines)
+		}
+	}
+	if got.Outcome != "clarify" || !strings.Contains(strings.Join(got.Issues, "; "), "计价取舍") {
+		t.Fatalf("ssd keep-vs-buy tradeoff must clarify: outcome=%s issues=%v", got.Outcome, got.Issues)
+	}
+}
+
+// 边界②：目录存在用户已有型号 A，但 draft 选同品类 B——没有明确的改购授权
+// （状态合同只能通过移除已有件表达授权），不得直接交付 ready。
+func TestCatalogMatchedOwnedReplacedByDifferentSKUForcesTradeoff(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"memory","model":"G.Skill Ripjaws V 32GB (2x16GB) DDR4-3200 CL16","quantity":1}]`),
+	}
+	memOther := store.Candidate{
+		SKU: "mem-other", Category: schemas.CategoryMemory, Brand: "Corsair",
+		Model: "Vengeance LPX 32GB (2x16GB) DDR4-3200 CL16", PriceCNY: strPtr("1759.00"),
+	}
+	for _, c := range catalog.Candidates {
+		if c.SKU == "mem-gskill-ripjawsv-32-3200" {
+			memOther.Specs = c.Specs // 复制内存规格，保证校验可完整执行
+		}
+	}
+	catalog.Candidates = append(catalog.Candidates, memOther)
+	var draft map[string]any
+	if err := json.Unmarshal(record.Draft, &draft); err != nil {
+		t.Fatal(err)
+	}
+	draft["selection"].(map[string]any)["memory"] = "mem-other"
+	raw, _ := json.Marshal(draft)
+	record.Draft = raw
+	record.Outcome = "proposal"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome != "clarify" || !strings.Contains(strings.Join(got.Issues, "; "), "计价取舍") {
+		t.Fatalf("unauthorized replacement of catalog-matched owned part must clarify: outcome=%s issues=%v", got.Outcome, got.Issues)
+	}
+}
+
+// 数量变化：同一型号但数量不一致（1 有 2 选）时，超额部分是采购，不豁免。
+func TestSSDSameModelQuantityMismatchMustNotExempt(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"ssd","model":"P3 Plus 1TB NVMe M.2","quantity":1}]`),
+	}
+	var draft map[string]any
+	if err := json.Unmarshal(record.Draft, &draft); err != nil {
+		t.Fatal(err)
+	}
+	draft["selection"].(map[string]any)["ssd"] = []map[string]any{{"sku": "ssd-crucial-p3plus-1tb", "quantity": 2}}
+	raw, _ := json.Marshal(draft)
+	record.Draft = raw
+	record.Outcome = "proposal"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range got.Quote.Lines {
+		if strings.Contains(line.SKU, "ssd") && line.Owned {
+			t.Fatalf("quantity mismatch must not exempt the ssd line: %+v", got.Quote.Lines)
+		}
+	}
+}
+
+// 授权改单：用户已明确移除旧件（owned_parts 不再含该品类）后选新件，属已
+// 授权路径——计价交付，不触发取舍 clarify。
+func TestAuthorizedReplacementAfterOwnedRemovalDelivers(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"cpu","model":"AMD Ryzen 5 5600","quantity":1}]`),
+	}
+	memOther := store.Candidate{
+		SKU: "mem-other", Category: schemas.CategoryMemory, Brand: "Corsair",
+		Model: "Vengeance LPX 32GB (2x16GB) DDR4-3200 CL16", PriceCNY: strPtr("1759.00"),
+	}
+	for _, c := range catalog.Candidates {
+		if c.SKU == "mem-gskill-ripjawsv-32-3200" {
+			memOther.Specs = c.Specs // 复制内存规格，保证校验可完整执行
+		}
+	}
+	catalog.Candidates = append(catalog.Candidates, memOther)
+	var draft map[string]any
+	if err := json.Unmarshal(record.Draft, &draft); err != nil {
+		t.Fatal(err)
+	}
+	draft["selection"].(map[string]any)["memory"] = "mem-other"
+	raw, _ := json.Marshal(draft)
+	record.Draft = raw
+	record.Outcome = "proposal"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome == "clarify" {
+		t.Fatalf("authorized replacement after owned removal must not clarify: %+v", got)
+	}
+	for _, line := range got.Quote.Lines {
+		if strings.Contains(line.SKU, "mem-other") && line.Owned {
+			t.Fatalf("newly bought memory must be priced: %+v", got.Quote.Lines)
+		}
+	}
+}
+
+// 多 SSD 部分对应（已有 A+B 各 1，选中 A+C 各 1，总数量相同）：WithOwnership
+// 按品类豁免，只把对应件 A 放入 OwnedParts 会让 C 一并免费——部分对应必须
+// 整品类计价并 clarify，最终不得 ready。
+func TestSSDPartialCorrespondencePricesWholeCategory(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"ssd","model":"SSD Model A","quantity":1},{"category":"ssd","model":"SSD Model B","quantity":1}]`),
+	}
+	var specs *store.Candidate
+	for _, c := range catalog.Candidates {
+		if c.SKU == "ssd-crucial-p3plus-1tb" {
+			cc := c
+			specs = &cc
+		}
+	}
+	catalog.Candidates = append(catalog.Candidates,
+		store.Candidate{SKU: "ssd-a", Category: schemas.CategorySSD, Brand: "TestA", Model: "SSD Model A", Specs: specs.Specs, PriceCNY: strPtr("400.00")},
+		store.Candidate{SKU: "ssd-c", Category: schemas.CategorySSD, Brand: "TestC", Model: "SSD Model C", Specs: specs.Specs, PriceCNY: strPtr("450.00")},
+	)
+	var draft map[string]any
+	if err := json.Unmarshal(record.Draft, &draft); err != nil {
+		t.Fatal(err)
+	}
+	draft["selection"].(map[string]any)["ssd"] = []map[string]any{
+		{"sku": "ssd-a", "quantity": 1},
+		{"sku": "ssd-c", "quantity": 1},
+	}
+	raw, _ := json.Marshal(draft)
+	record.Draft = raw
+	record.Outcome = "proposal"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome != "clarify" {
+		t.Fatalf("partial ssd correspondence must clarify: outcome=%s", got.Outcome)
+	}
+	for _, line := range got.Quote.Lines {
+		if !strings.Contains(line.SKU, "ssd") {
+			continue
+		}
+		if line.Owned {
+			t.Fatalf("partial correspondence must price the whole category, but %s stayed owned: %+v", line.SKU, got.Quote.Lines)
+		}
+	}
+}
+
+// 正例：已有 A+B 与选中 A+B 完全对应（型号与各自数量）→ 整品类豁免，无取舍。
+func TestSSDFullCorrespondenceExemptsWholeCategory(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"ssd","model":"SSD Model A","quantity":1},{"category":"ssd","model":"SSD Model B","quantity":1}]`),
+	}
+	var specs *store.Candidate
+	for _, c := range catalog.Candidates {
+		if c.SKU == "ssd-crucial-p3plus-1tb" {
+			cc := c
+			specs = &cc
+		}
+	}
+	catalog.Candidates = append(catalog.Candidates,
+		store.Candidate{SKU: "ssd-a", Category: schemas.CategorySSD, Brand: "TestA", Model: "SSD Model A", Specs: specs.Specs, PriceCNY: strPtr("400.00")},
+		store.Candidate{SKU: "ssd-b", Category: schemas.CategorySSD, Brand: "TestB", Model: "SSD Model B", Specs: specs.Specs, PriceCNY: strPtr("420.00")},
+	)
+	var draft map[string]any
+	if err := json.Unmarshal(record.Draft, &draft); err != nil {
+		t.Fatal(err)
+	}
+	draft["selection"].(map[string]any)["ssd"] = []map[string]any{
+		{"sku": "ssd-a", "quantity": 1},
+		{"sku": "ssd-b", "quantity": 1},
+	}
+	raw, _ := json.Marshal(draft)
+	record.Draft = raw
+	record.Outcome = "proposal"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome == "clarify" {
+		t.Fatalf("full ssd correspondence must not clarify: %+v", got)
+	}
+	for _, line := range got.Quote.Lines {
+		if strings.Contains(line.SKU, "ssd") && !line.Owned {
+			t.Fatalf("fully corresponding ssd selection must stay exempt: %+v", got.Quote.Lines)
+		}
+	}
+}
+
+// 聚焦反例（BV2-110 无依据断言剔除的边界）：整行关键词剔除只允许发生在
+// 服务端核验过完整合计之后。合计缺价时算术未核验，"可能超出预算"未被权威
+// 核算矛盾，必须保留——静默删除会掩盖缺价件推高合计的方向性提示。
+func TestBudgetClaimDropRequiresVerifiedCompleteQuote(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	record.Issues = []string{"整机合计可能超出预算，若超出需用户确认降档或加预算"}
+	for n := range catalog.Candidates {
+		if catalog.Candidates[n].Category == schemas.CategoryGPU {
+			catalog.Candidates[n].PriceCNY = nil
+		}
+	}
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog, MaxTurns: 1}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Quote == nil || got.Quote.MissingCount == 0 {
+		t.Fatalf("fixture must produce a missing price: %+v", got.Quote)
+	}
+	if !strings.Contains(strings.Join(got.Issues, "\n"), "可能超出预算") {
+		t.Fatalf("合计未核验时不得剔除模型预算提示: %v", got.Issues)
+	}
+}
+
+// 聚焦反例（掩盖取舍，红-first）：合计已核验且在有效上限内时，一条 issue
+// 同时携带错误的"超预算"断言与真实的配件/用户取舍（降档、请用户确认），不
+// 得整行剔除并使方案越过未解决项错误交付 ready——混合行必须保留为待解决项
+// （outcome 退为 proposal），不依赖模型 reply 或预算 note 兜底。
+func TestMixedBudgetClaimKeepsTradeoffUnresolved(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	budget := input.State.Fields["budget_cny"]
+	budget.Value = json.RawMessage(`4500`)
+	input.State.Fields["budget_cny"] = budget
+	record.Issues = []string{"整机总价4579.90元超出硬上限，如需压回4500以内可降内存档位，请您确认取舍"}
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(got.Issues, "\n")
+	if !strings.Contains(joined, "降内存档位") || !strings.Contains(joined, "请您确认取舍") {
+		t.Fatalf("混合 issue 中的真实取舍被删除: %v", got.Issues)
+	}
+	if got.Outcome == "ready" {
+		t.Fatalf("存在未解决取舍时不得交付 ready: %v", got.Issues)
+	}
+}
+
+// 边界（完整报价＋有效上限内，纯误判）：issue 的内容全部由预算记账措辞与
+// 数字构成（无任何取舍/配件/用户决策内容）时，才是"可明确识别为纯预算
+// 误判"的独立 issue，可整行剔除并交付 ready；此时服务端以 note 如实复述
+// "报价高于陈述金额、上限内交付"（辅助信息，不是正确性的兜底机制）。
+func TestPureBudgetMisjudgmentDroppedDeliversReady(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	budget := input.State.Fields["budget_cny"]
+	budget.Value = json.RawMessage(`4500`)
+	input.State.Fields["budget_cny"] = budget
+	record.Issues = []string{"当前报价超出预算硬上限"}
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(got.Issues, "\n"), "超出预算") {
+		t.Fatalf("纯预算误判应被剔除: %v", got.Issues)
+	}
+	if got.Outcome != "ready" {
+		t.Fatalf("上限内且无剩余 issue 应交付 ready，got %s (issues=%v)", got.Outcome, got.Issues)
+	}
+	notes := strings.Join(got.Delivery.Notes, "\n")
+	if !strings.Contains(notes, "4579.90") || !strings.Contains(notes, "4500") || !strings.Contains(notes, "4950") {
+		t.Fatalf("纯误判剔除后应以 note 如实复述预算张力: %v", got.Delivery.Notes)
+	}
+}
+
+// 边界（完整报价＋超有效上限）：服务端自身核算同样认定超上限时，模型的
+// 预算断言与权威核算一致，不得剔除（剔除只发生在"与确定性算术矛盾"时）。
+func TestOverCeilingClaimStaysGrounded(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	budget := input.State.Fields["budget_cny"]
+	budget.Value = json.RawMessage(`4000`)
+	input.State.Fields["budget_cny"] = budget
+	record.Issues = []string{"整机总价4579.90元超出预算，需用户确认是否接受或降档"}
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(got.Issues, "\n"), "超出预算") {
+		t.Fatalf("超上限时模型预算断言与核算一致，不得剔除: %v", got.Issues)
+	}
+	if got.Outcome == "ready" {
+		t.Fatalf("超上限交付不得 ready: %v", got.Issues)
+	}
+}
+
+// 聚焦反例（取舍简写，红-first）：数字、箭头、圈号等是真实的取舍简写
+// （如压价选项 7434→6244、①②③ 方案列表、金额数字），不得当作纯预算误判
+// 的"空残渣"整行剔除——它们在场时 issue 必须按混合内容保留，方案停在
+// proposal。纯误判类因此收窄为不含任何数字/简写的记账措辞行。
+func TestTradeoffShorthandKeptAsMixed(t *testing.T) {
+	for _, issue := range []string{
+		"当前报价超出预算硬上限：7434→6244",
+		"超出预算硬上限：①7434 ②6244 ③7022",
+		"总价超出预算硬上限434元",
+	} {
+		t.Run(issue, func(t *testing.T) {
+			input, record, catalog := completeRecording(t)
+			budget := input.State.Fields["budget_cny"]
+			budget.Value = json.RawMessage(`4500`)
+			input.State.Fields["budget_cny"] = budget
+			record.Issues = []string{issue}
+			m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+				raw, _ := json.Marshal(record)
+				return genai.NewContentFromText(string(raw), genai.RoleModel)
+			}}
+			got, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(strings.Join(got.Issues, "\n"), "6244") && !strings.Contains(strings.Join(got.Issues, "\n"), "434") {
+				t.Fatalf("取舍简写被整行删除: %v", got.Issues)
+			}
+			if got.Outcome == "ready" {
+				t.Fatalf("取舍简写在场时不得交付 ready: %v", got.Issues)
+			}
+		})
+	}
+}
+
+// 聚焦反例（BV2-104 Pass³v3 r3 红例，红-first）：零匹配已有件的品类被 draft
+// **留空**（"memory": null）且模型宣称 ready——服务端以"品类未被选中=真正
+// 沿用"放行并出 note。但零匹配意味着"沿用"根本没有被核账过：内存槽位的
+// 容量/代别是否被旧件满足未经验证，保留还是改购仍是用户的计价取舍，必须
+// clarify，不得交付。
+func TestUnmatchedOwnedWithEmptySlotForcesTradeoffClarify(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"memory","model":"G.Skill Ripjaws V 32GB DDR4-3200","quantity":1}]`),
+	}
+	draft := map[string]any{}
+	if err := json.Unmarshal(record.Draft, &draft); err != nil {
+		t.Fatal(err)
+	}
+	sel := draft["selection"].(map[string]any)
+	sel["memory"] = nil // 留空内存槽：Pass³v3 r3 的真实形态
+	raw, _ := json.Marshal(draft)
+	record.Draft = raw
+	record.Outcome = "ready"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome != "clarify" {
+		t.Fatalf("零匹配已有件品类留空不得交付（got %s）: issues=%v", got.Outcome, got.Issues)
+	}
+	joined := strings.Join(got.Issues, "; ")
+	for _, want := range []string{"计价取舍", "内存", "G.Skill Ripjaws V 32GB DDR4-3200"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("取舍说明缺 %q: %v", want, got.Issues)
+		}
+	}
+}
+
+// 相邻正例（避免误拦）：draft **可解码**（七类 SKU 齐备）时，无论取舍结果
+// 如何都走常规路径——被选中零匹配品类由 ownershipTradeoffPending 出常规取
+// 舍 clarify，不叠加"结构校验失败"issue；合法交付路径由
+// TestSavedCompleteProposalAutomaticallyDelivers 等既有测试覆盖。
+// （留空品类的"沿用"在结构上不能成为交付：validate 需要七类 SKU 真值，
+// null 使 draft 不可解码——那正是缺口 1 的绕过通道。）
+func TestValidDraftWithUnmatchedOwnedKeepsNormalPath(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"cooler","model":"目录没有的旧风冷X","quantity":1}]`),
+	}
+	record.Outcome = "ready"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome != "clarify" {
+		t.Fatalf("零匹配被选中品类必须走常规取舍 clarify（got %s）", got.Outcome)
+	}
+	joined := strings.Join(got.Issues, "; ")
+	if strings.Contains(joined, "结构校验") {
+		t.Fatalf("可解码 draft 不得叠加结构校验失败 issue: %v", got.Issues)
+	}
+	if !strings.Contains(joined, "计价取舍") {
+		t.Fatalf("常规取舍说明缺失: %v", got.Issues)
 	}
 }

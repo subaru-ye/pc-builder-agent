@@ -343,8 +343,10 @@ func TestBudgetSolverTruthAuditAgainstFrozenCatalog(t *testing.T) {
 	}
 
 	// B2-002 step1：r9 交付卡在 DISPLAY_OUTPUT（无独显且 5700X3D 无核显）。
-	// 加目录最低独显 3060（2789）后校验通过、新增采购 4667 ≤ 6000——预算
-	// 不是必须用户取舍的问题，authored 期望据此从 clarify 定版为标注 proposal。
+	// 加目录最低独显 3060（2789）后校验通过。BV2-104 修复后的 v2 已有件核账
+	// 合同：宽松型号"5600"/"B550M"与目录全名不构成精确匹配，选中的 5700X3D
+	// 升级件与主板按新购计价——升级不是已有件豁免（旧期望 4667 ≤ 6000 正是
+	// 品类级豁免把新购升级件当已有件免计价的账实不一致语义，已修订）。
 	x2 := newExec(`[{"category":"cpu","model":"5600","quantity":1},{"category":"motherboard","model":"B550M","quantity":1}]`)
 	b2 := `{"schema_version":1,"requirement_ref":"current","build_ref":"proposal","selection":{"cpu":"cpu-r7-5700x3d","gpu":"gpu-msi-3060-ventus2x","motherboard":"mb-msi-b550m-pro-vdh-wifi","memory":"mem-crucial-ballistix-16-3200","ssd":[{"sku":"ssd-crucial-bx500-1tb","quantity":1}],"psu":"psu-msi-mag-a650bn","case":"case-asus-prime-ap201","cooler":"cooler-deepcool-ag400"}}`
 	x2.evaluate(context.Background(), json.RawMessage(b2))
@@ -352,8 +354,11 @@ func TestBudgetSolverTruthAuditAgainstFrozenCatalog(t *testing.T) {
 		t.Fatalf("b2-002 candidate build must fully pass: %+v", x2.result.Validation)
 	}
 	amount := quoteAmount(*x2.result.Quote, "new_purchase")
-	if amount == nil || amount.Cmp(new(big.Rat).SetInt64(6000)) > 0 || amount.FloatString(2) != "4667.00" {
-		t.Fatalf("b2-002 purchase total must stay within budget: %v", amount)
+	if amount == nil || amount.FloatString(2) != "6815.00" {
+		t.Fatalf("b2-002 upgrade parts must be priced as new purchase: %v", amount)
+	}
+	if amount.Cmp(new(big.Rat).SetInt64(6000)) <= 0 {
+		t.Fatalf("priced upgrade must exceed budget so the tradeoff reaches the user: %v", amount)
 	}
 }
 

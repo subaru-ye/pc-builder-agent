@@ -11,7 +11,10 @@ import (
 )
 
 type Suite struct {
-	Live       bool              `json:"live,omitempty"`
+	Live bool `json:"live,omitempty"`
+	// BuilderV2 标记 Builder v2 专项评估的 live 形态：Screening 离线（种子轮
+	// 为核定需求的 scripted 适配器输入），Builder 真实执行，调用预算共享。
+	BuilderV2  bool              `json:"builder_v2,omitempty"`
 	Version    string            `json:"version"`
 	Provenance string            `json:"provenance"`
 	Catalog    CatalogFixture    `json:"catalog"`
@@ -96,6 +99,10 @@ type Expect struct {
 	Validation             string                                `json:"validation,omitempty"`
 	IssuesContain          []string                              `json:"issues_contain,omitempty"`
 	RequireTools           []string                              `json:"require_tools,omitempty"`
+	// ObserveTools 是观察性工具指标（grading-v2 起）：只记录模型是否使用与
+	// 调用次数，不构成通过/失败条件——工具选择属模型行为观察，不为分数
+	// 强迫调用。与 RequireTools（硬性）互斥使用。
+	ObserveTools           []string                              `json:"observe_tools,omitempty"`
 	ForbidTools            []string                              `json:"forbid_tools,omitempty"`
 	BuilderCalls           *int                                  `json:"builder_calls,omitempty"`
 	ReplyForbidden         []string                              `json:"reply_forbidden,omitempty"`
@@ -108,6 +115,21 @@ type Expect struct {
 	RetainedReferences     [][]string                            `json:"retained_references,omitempty"`
 	CandidateSpecs         map[string]map[string]json.RawMessage `json:"candidate_specs,omitempty"`
 	SearchCandidates       map[string]bool                       `json:"search_candidates,omitempty"`
+	// FrozenConstraints 断言 Builder 实际收到的冻结载荷携带核定的 v2 有效选型
+	// 约束（确认事务冻结的 effective_constraints）。Builder v2 专用；v1 冻结
+	// 套件不设置该字段。
+	FrozenConstraints *FrozenConstraintsGold `json:"frozen_constraints,omitempty"`
+}
+
+// FrozenConstraintsGold 是冻结 EffectiveConstraints 的金标：Spec 用点路径断言
+// 规范化 review_spec 的字段值（与 requirement.go 的线上格式一致），Defaults
+// 断言被展开系统默认的字段来源。该合同由确认事务冻结，评估器只读不造。
+type FrozenConstraintsGold struct {
+	Spec map[string]json.RawMessage `json:"spec,omitempty"`
+	// Defaults 要求列出的默认项；Value 为空时只断言字段出现且来源匹配。
+	Defaults []ReqV2DefaultGold `json:"defaults,omitempty"`
+	// AbsentDefaults 要求不得出现在 Defaults 里的字段（用户显式设定时默认不展开）。
+	AbsentDefaults []string `json:"absent_defaults,omitempty"`
 }
 type Trace struct {
 	Role           string          `json:"role"`
@@ -126,6 +148,13 @@ type Check struct {
 	Pass   bool   `json:"pass"`
 	Detail string `json:"detail,omitempty"`
 }
+
+// ToolObservation 记录一个观察性工具在本步的使用情况：calls 为模型发出的
+// planning_action 调用次数（0 = 未使用）。仅记录，不判定。
+type ToolObservation struct {
+	Tool  string `json:"tool"`
+	Calls int    `json:"calls"`
+}
 type StepRecord struct {
 	Kind  string                   `json:"kind"`
 	Text  string                   `json:"text,omitempty"`
@@ -141,6 +170,9 @@ type StepRecord struct {
 	Reply           string                 `json:"reply"`
 	Trace           []Trace                `json:"trace"`
 	Checks          []Check                `json:"checks"`
+	// ToolObservations 是观察性工具指标（Expect.ObserveTools）：不进入 Checks、
+	// 不影响 pass/classification，只记录模型是否使用与调用次数。
+	ToolObservations []ToolObservation     `json:"tool_observations,omitempty"`
 	DurationMS      int64                  `json:"duration_ms"`
 	Error           string                 `json:"error,omitempty"`
 	Classification  string                 `json:"classification"`
@@ -194,6 +226,22 @@ type Report struct {
 	DurationMS          int64          `json:"duration_ms"`
 	Limitations         []string       `json:"limitations"`
 	Intent              *IntentReport  `json:"intent,omitempty"`
+	// ToolContract 是 builder 工具合同指纹（system instruction + tools 声明的
+	// 规范化哈希）。用于区分 planning_action 合同版本；零请求时为 nil。
+	ToolContract *ToolContractIdentity `json:"tool_contract,omitempty"`
+}
+
+// ToolContractIdentity 记录一次运行实际下发的 builder 工具合同：提示词与
+// 工具声明整体规范化后哈希。合同改动（如具名工具、错误结构）会改变该指纹，
+// 前后批次的对比必须以指纹一致为前提。注意：指纹只覆盖提示词与声明；仅改
+// 参数校验或错误返回时指纹可能不变——因此同时记录错误合同版本，配对报告
+// 还须引用 manifest 的 Git HEAD 与二进制/源码哈希作为代码版本。
+type ToolContractIdentity struct {
+	SHA256 string `json:"sha256"`
+	Model  string `json:"model,omitempty"`
+	// ErrorContract 是 planning 侧工具错误/响应合同的显式版本号（常量，
+	// 合同改动时人工递增）；与 SHA256 互补。
+	ErrorContract string `json:"error_contract,omitempty"`
 }
 
 // IntentReport aggregates the optional Jev observations. Confidence and the

@@ -129,3 +129,13 @@ grade.go）——观察项不产生 check、不影响 pass/classification；聚�
 - 产物：`artifacts/builder-v2-20260925-bv2104-directedlive-b-20260927`、`artifacts/builder-v2-20260925-bv2105-directedlive-b-20260927`（plan-live 预检目录以 -preflight 后缀留存）。
 
 **整套复评条件**：两缺口修复经冻结轨迹回放（红→绿）与相邻正例、全量 Go 测试、机制套件零模型 replay、两题定向 live 验证；`ToolErrorContractVersion` 不变（v2，budgetAlternatives/工具声明未动）、工具指纹不变——与 Pass³ v3 同前提，**具备整套 Pass³ 复评条件**；是否复跑由下一轮决定（上一轮 8/10 中两失败题即本题）。
+
+## 11. 相邻 ITX 漏口补修（2026-09-27，静态审阅发现，红-first）
+
+**漏口**：`itxCaseVerifiable`（gates.go）把"声明 sfx/sfx_l 电源仓"的机箱判为可验 ITX 小机箱，但规则 #8 的电源仓检查只对**纯 ITX** 机箱触发——若目录出现"matx,itx 通吃机箱、声明仅支持 SFX 电源仓、实际选中 ATX 电源"，规则放行、planning 层豁免自评，ATX 电源随 ready 交付。当前冻结目录无此组合（ap201 无电源仓字段，不触发），故不影响已登记结果；但该边界未守住。
+
+**修复（规则层，rules/clearance.go）**：电源仓检查（形态 ∈ 声明集合、长度 ≤ 限长）改为在**声明了 supported_psu_form_factors 的任何机箱**上触发，不再限于纯 ITX；纯 ITX 未声明电源仓字段的保持 unknown（物理限界按结构必核，字段缺失如实产出 unknown）。语义变化：失败/通过文案从"ITX 机箱"泛化为"机箱"（`TestITXPSUInstallation` 文案断言同步更新，outcome 不变）。
+
+**红例/正例**：`TestDeclaredPSUBayEnforcedOnNonITXOnlyCase`（修复前红：通吃机箱声明 SFX 仓选 ATX 电源被 pass）→ 修复后 fail；`TestDeclaredPSUBayPassesWithSFXOnNonITXOnlyCase`（同机箱选 SFX 电源保持 pass）；`TestLargerCaseDoesNotInferPSUClearance`（未声明电源仓的大机箱不做推断，语义保留）。
+
+**回归**：`go test ./...`＋`go vet` 全绿；机制套件零模型 replay 10/10（`artifacts/builder-v2-20260925-mech-r2-postfix-v40-psubay-20260927`）。工具指纹/反馈合同不变。修复提交后按同前提跑完整 Pass³ v4（§12）。

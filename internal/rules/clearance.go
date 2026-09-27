@@ -101,8 +101,11 @@ func (coolerClearanceRule) Check(b schemas.ResolvedBuild) schemas.CheckResult {
 }
 
 // formFactorSupportRule 规则 #8 FORM_FACTOR_SUPPORT(错误级):主板板型 ∈ 机箱支持板型；
-// 对仅支持 ITX 主板的机箱，同时核对电源形态及电源长度。较大机箱的电源仓结构差异
-// 不在现有字段中表达，因此本规则不对其推断安装兼容性。
+// 对仅支持 ITX 主板的机箱，同时核对电源形态及电源长度。机箱**声明**了
+// supported_psu_form_factors 时，无论板型集合如何，电源仓都是数据可验的
+// 物理限界——必须核对实际选中的电源（静态审阅发现的相邻漏口：matx,itx
+// 通吃机箱声明 SFX 仓后 ATX 电源曾被放行）。未声明电源仓字段的大机箱，
+// 其电源仓结构差异不在现有字段中表达，本规则不对其推断安装兼容性。
 type formFactorSupportRule struct{}
 
 func (formFactorSupportRule) ID() schemas.RuleID { return schemas.RuleFormFactorSupport }
@@ -127,16 +130,19 @@ func (formFactorSupportRule) Check(b schemas.ResolvedBuild) schemas.CheckResult 
 		return fail(schemas.RuleFormFactorSupport, schemas.SeverityError, observed,
 			fmt.Sprintf("主板板型 %s 不在机箱支持板型 %v 内", *b.Motherboard.FormFactor, b.Case.SupportedFormFactors))
 	}
-	if len(b.Case.SupportedFormFactors) != 1 || b.Case.SupportedFormFactors[0] != schemas.FormFactorITX {
+	pureITX := len(b.Case.SupportedFormFactors) == 1 && b.Case.SupportedFormFactors[0] == schemas.FormFactorITX
+	declaredPSUBay := len(b.Case.SupportedPSUFormFactors) > 0
+	if !pureITX && !declaredPSUBay {
 		return pass(schemas.RuleFormFactorSupport, observed, "主板板型在机箱支持范围内")
 	}
-	return checkITXPSUFit(b, observed, &missing)
+	return checkPSUBayFit(b, observed, &missing)
 }
 
-// checkITXPSUFit 对纯 ITX 机箱核对电源形态与限长。电源仓是物理限界:数据
-// 齐备时即判定——ATX 电源塞不进 sfx/sfx_l 仓位,与用户是否表达 size_pref 无关
-// (BV2-105 Pass³v3 r3:matx 机箱放行 ITX 主板后,ATX 电源被判可交付)。
-func checkITXPSUFit(b schemas.ResolvedBuild, observed map[string]any, missing *[]string) schemas.CheckResult {
+// checkPSUBayFit 核对电源与机箱电源仓：形态 ∈ 机箱声明集合，长度 ≤ 限长。
+// 纯 ITX 机箱（即使未声明电源仓字段）按物理结构必须核验——字段缺失产出
+// unknown；声明了电源仓的机箱同理。数据齐备时即判定，ATX 电源塞不进
+// sfx/sfx_l 仓位与用户是否表达 size_pref 无关。
+func checkPSUBayFit(b schemas.ResolvedBuild, observed map[string]any, missing *[]string) schemas.CheckResult {
 	if b.PSU.FormFactor == nil {
 		*missing = append(*missing, "psu.form_factor")
 	} else {
@@ -160,14 +166,14 @@ func checkITXPSUFit(b schemas.ResolvedBuild, observed map[string]any, missing *[
 	if b.PSU.FormFactor != nil && b.Case.SupportedPSUFormFactors != nil &&
 		!slices.Contains(b.Case.SupportedPSUFormFactors, *b.PSU.FormFactor) {
 		return fail(schemas.RuleFormFactorSupport, schemas.SeverityError, observed,
-			fmt.Sprintf("ITX 机箱支持电源形态 %v,所选电源为 %s", b.Case.SupportedPSUFormFactors, *b.PSU.FormFactor))
+			fmt.Sprintf("机箱支持电源形态 %v,所选电源为 %s", b.Case.SupportedPSUFormFactors, *b.PSU.FormFactor))
 	}
 	if b.PSU.LengthMM != nil && b.Case.PSULengthMaxMM != nil && *b.PSU.LengthMM > *b.Case.PSULengthMaxMM {
 		return fail(schemas.RuleFormFactorSupport, schemas.SeverityError, observed,
-			fmt.Sprintf("电源长 %d mm 超过 ITX 机箱电源限长 %d mm", *b.PSU.LengthMM, *b.Case.PSULengthMaxMM))
+			fmt.Sprintf("电源长 %d mm 超过机箱电源限长 %d mm", *b.PSU.LengthMM, *b.Case.PSULengthMaxMM))
 	}
 	if len(*missing) > 0 {
 		return unknown(schemas.RuleFormFactorSupport, observed, *missing, "ITX 机箱电源安装规格缺失,无法判定")
 	}
-	return pass(schemas.RuleFormFactorSupport, observed, "主板与电源均在 ITX 机箱安装范围内")
+	return pass(schemas.RuleFormFactorSupport, observed, "主板与电源均在机箱安装范围内")
 }

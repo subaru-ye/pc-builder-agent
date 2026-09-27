@@ -25,17 +25,27 @@ var internalIssueCode = regexp.MustCompile(`^[A-Z][A-Z_]{3,}[：:]`)
 var budgetOverrunClaim = regexp.MustCompile(`超出硬上限|超过硬上限|超出预算|超过预算|预算超出`)
 
 // budgetAccountingVocab 是"纯预算误判"判定的封闭词表：仅当一个匹配断言
-// 关键词的 issue 在剔除这些记账措辞与数字/标点后不剩任何字母，才被认定为
-// 纯预算误判。词表外的一切内容（配件、用户决策、未知措辞）一律保守保留为
-// 待解决项——BV2-110 的混合行同时携带误判与 ①②③ 真实取舍，整行剔除会
-// 让方案越过未解决项错误 ready（ponytail：封闭词表偏保守，误判为"混合"
-// 只会多保留，不会多删除；词表按真实误判样例再扩）。
+// 关键词的 issue 在剔除这些记账措辞与标点后不剩任何字母、数字或简写标记，
+// 才被认定为纯预算误判。词表外的一切内容（配件、用户决策、未知措辞）一律
+// 保守保留为待解决项——BV2-110 的混合行同时携带误判与 ①②③ 真实取舍，
+// 整行剔除会让方案越过未解决项错误 ready（ponytail：封闭词表偏保守，误判
+// 为"混合"只会多保留，不会多删除；词表按真实误判样例再扩）。
 var budgetAccountingVocab = []string{
 	"当前报价", "报价", "总价", "合计", "金额",
 	"超出", "超过", "预算", "硬上限", "弹性", "范围内", "超支", "缺口", "不足", "超",
 	"元", "约",
 }
 
+// tradeoffShorthandMarks 是取舍简写标记：箭头/升降号表示压价方向；圈号
+// （①②③ 等 No 类，unicode.IsNumber 已覆盖）与数字构成选项/金额简写。
+// 它们承载真实取舍内容（如压价选项 7434→6244、方案列表），不是可剔除的
+// "空残渣"。
+const tradeoffShorthandMarks = "→←↔↑↓⇒⇄⇀⇁"
+
+// pureBudgetOverrunClaim 判定一条 issue 是否"可明确识别为纯预算误判"：
+// 整行只含记账措辞，不含任何字母、数字或简写标记。含数字/箭头/圈号的行
+// （"7000→6244"、"①7434②6244"、金额"434元"）按混合内容保留为待解决项，
+// 方案停在 proposal。
 func pureBudgetOverrunClaim(issue string) bool {
 	if !budgetOverrunClaim.MatchString(issue) {
 		return false
@@ -45,7 +55,7 @@ func pureBudgetOverrunClaim(issue string) bool {
 		s = strings.ReplaceAll(s, w, "")
 	}
 	for _, r := range s {
-		if unicode.IsLetter(r) {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) || strings.ContainsRune(tradeoffShorthandMarks, r) {
 			return false
 		}
 	}

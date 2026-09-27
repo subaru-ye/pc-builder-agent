@@ -682,3 +682,37 @@ func TestOverCeilingClaimStaysGrounded(t *testing.T) {
 		t.Fatalf("超上限交付不得 ready: %v", got.Issues)
 	}
 }
+
+// 聚焦反例（取舍简写，红-first）：数字、箭头、圈号等是真实的取舍简写
+// （如压价选项 7434→6244、①②③ 方案列表、金额数字），不得当作纯预算误判
+// 的"空残渣"整行剔除——它们在场时 issue 必须按混合内容保留，方案停在
+// proposal。纯误判类因此收窄为不含任何数字/简写的记账措辞行。
+func TestTradeoffShorthandKeptAsMixed(t *testing.T) {
+	for _, issue := range []string{
+		"当前报价超出预算硬上限：7434→6244",
+		"超出预算硬上限：①7434 ②6244 ③7022",
+		"总价超出预算硬上限434元",
+	} {
+		t.Run(issue, func(t *testing.T) {
+			input, record, catalog := completeRecording(t)
+			budget := input.State.Fields["budget_cny"]
+			budget.Value = json.RawMessage(`4500`)
+			input.State.Fields["budget_cny"] = budget
+			record.Issues = []string{issue}
+			m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+				raw, _ := json.Marshal(record)
+				return genai.NewContentFromText(string(raw), genai.RoleModel)
+			}}
+			got, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(strings.Join(got.Issues, "\n"), "6244") && !strings.Contains(strings.Join(got.Issues, "\n"), "434") {
+				t.Fatalf("取舍简写被整行删除: %v", got.Issues)
+			}
+			if got.Outcome == "ready" {
+				t.Fatalf("取舍简写在场时不得交付 ready: %v", got.Issues)
+			}
+		})
+	}
+}

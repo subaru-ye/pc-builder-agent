@@ -7,6 +7,8 @@ package product
 // Builder 注入待 jev-v2/Builder 分支合并后另定。设计见 docs/tech/偏好记忆设计草案.md。
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -53,6 +55,7 @@ type preferenceMemoryStore interface {
 	ActivePreferenceMemoriesByOwner(ctx context.Context, ownerID string) ([]schemas.PreferenceMemory, error)
 	ActivePreferenceMemoryForOwners(ctx context.Context, owners []string, id string) (schemas.PreferenceMemory, error)
 	DeletePreferenceMemory(ctx context.Context, ownerID, id string) error
+	RequirementEditFingerprint(ctx context.Context, sessionID, requestID string) (string, bool, error)
 }
 
 func preferenceNotSavable(detail string) error {
@@ -349,6 +352,11 @@ func (s *Service) PreferenceSuggestions(ctx context.Context, owners []string, se
 // 白名单外、已生效、过期与 subject 不符的一律跳过而非覆盖。
 // 写入以面板编辑(kind=edit)口径落账,历史原话保留在记忆来源中,
 // 不伪装成本轮用户消息。
+// 幂等键语义与需求修订一致:fingerprint 只记录成功写入——
+//   - 同键同请求重放:不重复写入,逐项按当前状态给出跳过原因
+//     (已生效项 field_already_set;原已应用但此后被撤销的项 duplicated),applied 为空;
+//   - 同键不同请求(首次已成功写入):指纹不匹配,返回稳定冲突(ErrIdempotencyConflict);
+//   - 首次失败(如 revision 冲突)不落指纹,同键重试正常重试。
 func (s *Service) ConfirmPreferences(ctx context.Context, owners []string, sessionID, requestID string, input PreferenceConfirmInput) (PreferenceConfirmResult, error) {
 	st, ok := s.store.(preferenceMemoryStore)
 	if !ok {
@@ -364,12 +372,22 @@ func (s *Service) ConfirmPreferences(ctx context.Context, owners []string, sessi
 	if err != nil {
 		return PreferenceConfirmResult{}, err
 	}
+	// 幂等键语义与需求修订入口完全对齐:指纹按"本次将写入的编辑内容"计算,
+	// 与 EditRequirement 落库的指纹同构——
+	//   同键重放(首次已成功写入,无论字段此后是否仍生效):命中同指纹,
+	//   不重复写入,待应用项按 duplicated 跳过,applied 为空;
+	//   同键不同请求(内容不同,含记忆已被改写):指纹不匹配,稳定冲突拒绝;
+	//   首次失败(如 revision 冲突)不落指纹,同键重试正常重试。
 	state, err := schemas.DecodeRequirementState(ws.RequirementState)
 	if err != nil {
 		return PreferenceConfirmResult{}, preferenceNotSavable("该会话没有可用的增量需求状态。")
 	}
 	result := PreferenceConfirmResult{Skipped: []PreferenceConfirmSkip{}}
-	operations := make([]schemas.RequirementOperation, 0, len(input.MemoryIDs))
+	type pendingApply struct {
+		id string
+		op schemas.RequirementOperation
+	}
+	var pending []pendingApply
 	seen := map[string]bool{}
 	today := time.Now().UTC()
 	for _, id := range input.MemoryIDs {
@@ -400,13 +418,12 @@ func (s *Service) ConfirmPreferences(ctx context.Context, owners []string, sessi
 			continue
 		}
 		seen[memory.Field] = true
-		operations = append(operations, schemas.RequirementOperation{
+		pending = append(pending, pendingApply{id: memory.ID, op: schemas.RequirementOperation{
 			Op: "set", Field: memory.Field, Value: memory.Value,
 			Strength: memory.Strength, Scope: "session",
-		})
-		result.Applied = append(result.Applied, memory.ID)
+		}})
 	}
-	if len(operations) == 0 {
+	if len(pending) == 0 {
 		detail, err := s.GetSession(ctx, ws.OwnerID, sessionID)
 		if err != nil {
 			return PreferenceConfirmResult{}, err
@@ -414,8 +431,38 @@ func (s *Service) ConfirmPreferences(ctx context.Context, owners []string, sessi
 		result.Detail = detail
 		return result, nil
 	}
-	detail, err := s.EditRequirement(ctx, ws.OwnerID, sessionID, requestID,
-		RequirementEdit{ExpectedRevision: input.ExpectedRevision, Operations: operations})
+	operations := make([]schemas.RequirementOperation, 0, len(pending))
+	for _, p := range pending {
+		operations = append(operations, p.op)
+	}
+	// 与 EditRequirement 落库指纹同构的预检:同键重放不重复写入,
+	// 同键不同内容以稳定冲突拒绝(首次失败未落指纹,重试不受影响)。
+	edit := RequirementEdit{ExpectedRevision: input.ExpectedRevision, Operations: operations}
+	request, err := json.Marshal(edit)
+	if err != nil {
+		return PreferenceConfirmResult{}, err
+	}
+	fingerprint := fmt.Sprintf("%x", sha256.Sum256(request))
+	if old, found, err := st.RequirementEditFingerprint(ctx, sessionID, requestID); err != nil {
+		return PreferenceConfirmResult{}, err
+	} else if found {
+		if old != fingerprint {
+			return PreferenceConfirmResult{}, store.ErrIdempotencyConflict
+		}
+		for _, p := range pending {
+			result.Skipped = append(result.Skipped, PreferenceConfirmSkip{MemoryID: p.id, Reason: PreferenceSkipDuplicated})
+		}
+		detail, err := s.GetSession(ctx, ws.OwnerID, sessionID)
+		if err != nil {
+			return PreferenceConfirmResult{}, err
+		}
+		result.Detail = detail
+		return result, nil
+	}
+	for _, p := range pending {
+		result.Applied = append(result.Applied, p.id)
+	}
+	detail, err := s.EditRequirement(ctx, ws.OwnerID, sessionID, requestID, edit)
 	if err != nil {
 		return PreferenceConfirmResult{}, err
 	}

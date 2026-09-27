@@ -422,7 +422,7 @@ export interface paths {
         put?: never;
         /**
          * 把用户逐项确认的偏好写入当前需求状态
-         * @description 走既有需求修订入口：expected_revision 校验 + 幂等键指纹； 每条记忆由服务端重读核验（白名单、subject、未过期、未生效），跳过项逐条返回原因， 当前会话已明确的值不会被历史偏好覆盖。写入以面板编辑口径落账，历史原话不伪装成本轮用户消息。 重复提交同一请求时其余项按已生效跳过，结果一致。
+         * @description 走既有需求修订入口：expected_revision 校验 + 幂等键指纹； 每条记忆由服务端重读核验（白名单、subject、未过期、未生效），跳过项逐条返回原因， 当前会话已明确的值不会被历史偏好覆盖。写入以面板编辑口径落账，历史原话不伪装成本轮用户消息。 幂等键语义：指纹按本次写入内容（含 expected_revision）计算，只记录成功写入—— 同键同内容重放不重复写入，applied 为空且各项按当前状态给出 skipped 原因（含 duplicated）； 同键不同内容返回 409 幂等冲突；首次失败未落指纹，同键重试正常执行。
          */
         post: operations["confirmSessionPreferences"];
         delete?: never;
@@ -956,7 +956,10 @@ export interface components {
             skipped: {
                 /** Format: uuid */
                 memory_id: string;
-                /** @enum {string} */
+                /**
+                 * @description duplicated 同时表示同请求内重复与同一幂等键已处理过
+                 * @enum {string}
+                 */
                 reason: "not_found" | "subject_mismatch" | "field_not_storable" | "field_already_set" | "stale" | "duplicated";
             }[];
             session: components["schemas"]["Session"];

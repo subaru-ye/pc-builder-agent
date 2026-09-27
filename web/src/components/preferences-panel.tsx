@@ -59,25 +59,31 @@ export function PreferencesPanel({ session }: { session: Session }) {
     onError: (error) => toast.error(userMessage(error)),
   });
 
-  // 召回确认:显式选择归属后才读取建议;确认走服务端端点,
+  // 召回确认:显式选择归属后才读取建议;自定义归属必须把输入的名称
+  // 作为真实 subject 传递(而非选择器占位值)。确认走服务端端点,
   // 当前会话已生效字段会被服务端跳过,历史偏好不会覆盖本轮需求。
   const [recallSubject, setRecallSubject] = useState("self");
+  const [recallCustom, setRecallCustom] = useState("");
+  const effectiveRecallSubject = recallSubject === "custom" ? recallCustom.trim() : recallSubject;
   const [recallOpen, setRecallOpen] = useState(false);
   const suggestions = useQuery({
-    queryKey: [...queryKeys.preferences, "suggestions", session.id, recallSubject],
-    queryFn: () => api.preferenceSuggestions(session.id, recallSubject),
-    enabled: recallOpen,
+    queryKey: [...queryKeys.preferences, "suggestions", session.id, effectiveRecallSubject],
+    queryFn: () => api.preferenceSuggestions(session.id, effectiveRecallSubject),
+    enabled: recallOpen && effectiveRecallSubject !== "",
   });
   const [picked, setPicked] = useState<Record<string, string>>({});
   const [dismissed, setDismissed] = useState<Record<string, boolean>>({});
+  const resetRecallChoices = () => { setPicked({}); setDismissed({}); };
   const confirm = useMutation({
     mutationFn: (ids: string[]) => {
       const revision = session.requirement_state?.revision;
       if (revision === undefined) throw new Error("当前需求不可用");
-      return api.confirmPreferences(session.id, { expected_revision: revision, subject: recallSubject, memory_ids: ids }, crypto.randomUUID());
+      return api.confirmPreferences(session.id, { expected_revision: revision, subject: effectiveRecallSubject, memory_ids: ids }, crypto.randomUUID());
     },
     onSuccess: (result) => {
       client.setQueryData(queryKeys.session(session.id), result.session);
+      // 建议随当前需求变化(已生效字段不再出现),列表键按归属前缀整体失效。
+      void client.invalidateQueries({ queryKey: [...queryKeys.preferences, "suggestions"] });
       void client.invalidateQueries({ queryKey: queryKeys.preferences });
       toast.success(result.applied.length > 0 ? `已确认 ${result.applied.length} 项偏好` : "所选偏好都已生效或不可用，未做修改");
     },
@@ -136,17 +142,17 @@ export function PreferencesPanel({ session }: { session: Session }) {
     <div className="mt-4 border-t pt-3">
       <div className="flex flex-wrap items-center gap-2">
         <select aria-label="选择要召回的归属" className={`${selectClass} max-w-52 flex-1`} value={recallSubject}
-          onChange={(event) => { setRecallSubject(event.target.value); setPicked({}); }}>
+          onChange={(event) => { setRecallSubject(event.target.value); setRecallOpen(false); resetRecallChoices(); }}>
           <option value="self">本人的偏好</option>
           {knownSubjects.map((item) => <option key={item} value={item}>{subjectLabel(item)}</option>)}
           <option value="custom">代配对象（输入名称）…</option>
         </select>
         {recallSubject === "custom" && <input
           className="h-11 w-40 rounded-md border bg-[var(--canvas)] px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-          placeholder="代配对象名称" maxLength={40} value={recallSubject === "custom" ? customSubject : ""}
-          onChange={(event) => setCustomSubject(event.target.value)} aria-label="召回的代配对象名称" />}
-        <Button variant="outline" size="sm" disabled={recallSubject === "custom" && customSubject.trim() === ""}
-          onClick={() => { setDismissed({}); setRecallOpen(true); void suggestions.refetch(); }}>载入建议</Button>
+          placeholder="代配对象名称" maxLength={40} value={recallCustom}
+          onChange={(event) => { setRecallCustom(event.target.value); setRecallOpen(false); resetRecallChoices(); }} aria-label="召回的代配对象名称" />}
+        <Button variant="outline" size="sm" disabled={effectiveRecallSubject === ""}
+          onClick={() => { resetRecallChoices(); setRecallOpen(true); void suggestions.refetch(); }}>载入建议</Button>
       </div>
       {recallOpen && <>
         {suggestions.isLoading && <p className="mt-2 text-sm text-[var(--ink-muted)]">正在读取历史偏好…</p>}
@@ -165,6 +171,9 @@ export function PreferencesPanel({ session }: { session: Session }) {
                         checked={chosen === choice.id} disabled={item.status !== "conflict"}
                         onChange={() => setPicked((prev) => ({ ...prev, [item.field]: choice.id }))} />
                       <span className="min-w-0 break-words">{preferenceTitle(choice)}</span>
+                      <span className="shrink-0 text-xs text-[var(--ink-muted)]">
+                        {choice.strength === "must" ? "必须满足" : "尽量满足"}
+                      </span>
                     </label>
                     <span className="shrink-0 text-xs text-[var(--ink-subtle)]">
                       {new Date(choice.created_at).toLocaleDateString("zh-CN")}

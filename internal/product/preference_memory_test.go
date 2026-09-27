@@ -617,3 +617,75 @@ func TestSaveSessionPreferenceWhitelistAndScope(t *testing.T) {
 		assertProblemCode(t, err, "preference_not_savable")
 	})
 }
+
+func TestConfirmPreferencesIdempotencyKey(t *testing.T) {
+	st := newFakePreferenceStore()
+	st.session = store.WebSession{ID: "session-1", OwnerID: "owner-1",
+		RequirementState: sourceSessionState(t, "chat", "msg-1",
+			`[{"op":"set","field":"budget_cny","value":8000,"scope":"session","evidence":"stated","quote":"预算8000"}]`,
+			"预算8000")}
+	addChatMessage(st, "user", "预算8000")
+	svc := newPreferenceTestService(t, st)
+	ctx := context.Background()
+	noise := mustCreateMemory(t, st, schemas.PreferenceMemory{OwnerID: "owner-1", Subject: "self", Field: "noise_pref",
+		Value: json.RawMessage(`"silent"`), Strength: schemas.PreferenceStrengthPrefer, Evidence: schemas.PreferenceEvidenceStated, Source: seededSource("s0")})
+	other := mustCreateMemory(t, st, schemas.PreferenceMemory{OwnerID: "owner-1", Subject: "self", Field: "brand_pref.gpu",
+		Value: json.RawMessage(`"amd"`), Strength: schemas.PreferenceStrengthPrefer, Evidence: schemas.PreferenceEvidenceStated, Source: seededSource("s0")})
+
+	// 首次成功:同键重放返回一致结果(applied 为空,按已生效跳过),不重复写入。
+	first, err := svc.ConfirmPreferences(ctx, []string{"owner-1"}, "session-1", "key-1",
+		PreferenceConfirmInput{ExpectedRevision: 1, Subject: "self", MemoryIDs: []string{noise.ID}})
+	if err != nil || len(first.Applied) != 1 {
+		t.Fatalf("首次确认应写入: %+v err=%v", first, err)
+	}
+	retry, err := svc.ConfirmPreferences(ctx, []string{"owner-1"}, "session-1", "key-1",
+		PreferenceConfirmInput{ExpectedRevision: 2, Subject: "self", MemoryIDs: []string{noise.ID}})
+	if err != nil || len(retry.Applied) != 0 || len(retry.Skipped) != 1 || retry.Skipped[0].Reason != PreferenceSkipAlreadySet {
+		t.Fatalf("同键重放应按已生效跳过: %+v err=%v", retry, err)
+	}
+
+	// 同键不同请求(首次已成功):稳定冲突,不落任何变更。
+	_, err = svc.ConfirmPreferences(ctx, []string{"owner-1"}, "session-1", "key-1",
+		PreferenceConfirmInput{ExpectedRevision: 2, Subject: "self", MemoryIDs: []string{other.ID}})
+	if !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("同键不同请求应稳定冲突: %v", err)
+	}
+	state, err := schemas.DecodeRequirementState(st.session.RequirementState)
+	if err != nil || state.Fields["brand_pref.gpu"].Status == "active" {
+		t.Fatalf("冲突路径不得写入: %v", err)
+	}
+
+	// 首次失败(revision 冲突)不落指纹:同键重试用正确修订号即可成功。
+	if _, err := svc.ConfirmPreferences(ctx, []string{"owner-1"}, "session-1", "key-2",
+		PreferenceConfirmInput{ExpectedRevision: 99, Subject: "self", MemoryIDs: []string{other.ID}}); !errors.Is(err, store.ErrRequirementRevision) {
+		t.Fatalf("错误修订号应失败: %v", err)
+	}
+	retried, err := svc.ConfirmPreferences(ctx, []string{"owner-1"}, "session-1", "key-2",
+		PreferenceConfirmInput{ExpectedRevision: 2, Subject: "self", MemoryIDs: []string{other.ID}})
+	if err != nil || len(retried.Applied) != 1 {
+		t.Fatalf("失败后的同键重试应成功: %+v err=%v", retried, err)
+	}
+
+	// 重放且字段此后被撤销:同键同内容(含原修订号)重放不重复写入(撤销保持),
+	// 按 duplicated 跳过;修订号变化即构成不同请求,走稳定冲突。
+	if _, err := svc.EditRequirement(ctx, "owner-1", "session-1", "remove-1", RequirementEdit{
+		ExpectedRevision: 3,
+		Operations:       []schemas.RequirementOperation{{Op: "remove", Field: "noise_pref"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	replay, err := svc.ConfirmPreferences(ctx, []string{"owner-1"}, "session-1", "key-1",
+		PreferenceConfirmInput{ExpectedRevision: 1, Subject: "self", MemoryIDs: []string{noise.ID}})
+	if err != nil || len(replay.Applied) != 0 || replay.Skipped[0].Reason != PreferenceSkipDuplicated {
+		t.Fatalf("重放且字段已撤销应按 duplicated 跳过: %+v err=%v", replay, err)
+	}
+	state, err = schemas.DecodeRequirementState(st.session.RequirementState)
+	if err != nil || state.Fields["noise_pref"].Status != "removed" {
+		t.Fatalf("重放不得复活已撤销字段: %v %+v", err, state.Fields["noise_pref"])
+	}
+	_, err = svc.ConfirmPreferences(ctx, []string{"owner-1"}, "session-1", "key-1",
+		PreferenceConfirmInput{ExpectedRevision: 4, Subject: "self", MemoryIDs: []string{noise.ID}})
+	if !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("同键不同内容(修订号变化)应稳定冲突: %v", err)
+	}
+}

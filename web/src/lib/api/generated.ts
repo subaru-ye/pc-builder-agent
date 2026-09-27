@@ -422,7 +422,7 @@ export interface paths {
         put?: never;
         /**
          * 把用户逐项确认的偏好写入当前需求状态
-         * @description 走既有需求修订入口：expected_revision 校验 + 幂等键指纹； 每条记忆由服务端重读核验（白名单、subject、未过期、未生效），跳过项逐条返回原因， 当前会话已明确的值不会被历史偏好覆盖。写入以面板编辑口径落账，历史原话不伪装成本轮用户消息。 幂等键语义：指纹按本次写入内容（含 expected_revision）计算，只记录成功写入—— 同键同内容重放不重复写入，applied 为空且各项按当前状态给出 skipped 原因（含 duplicated）； 同键不同内容返回 409 幂等冲突；首次失败未落指纹，同键重试正常执行。
+         * @description 走既有需求修订入口：expected_revision 校验 + 幂等键指纹； 每条记忆由服务端重读核验（白名单、subject、未过期、未生效），跳过项逐条返回原因， 当前会话已明确的值不会被历史偏好覆盖。写入以面板编辑口径落账，历史原话不伪装成本轮用户消息。 幂等键语义：指纹按本次写入内容（含 expected_revision）计算，只记录成功写入—— 同键同内容重放不重复写入，applied 为空且各项按当前状态给出 skipped 原因（含 duplicated）； 同键不同内容且本次仍有待写入项时返回 409 幂等冲突； 同键不同内容但本次经核验已无可写入项时，不比对指纹、不产生任何写入，返回 200 与逐项 skipped； 首次失败未落指纹，同键重试正常执行。
          */
         post: operations["confirmSessionPreferences"];
         delete?: never;

@@ -666,6 +666,28 @@ func TestConfirmPreferencesIdempotencyKey(t *testing.T) {
 		t.Fatalf("失败后的同键重试应成功: %+v err=%v", retried, err)
 	}
 
+	// 同键不同请求但本次已无可写入项:不比对指纹、不产生任何写入,
+	// 以 200 + 逐项 skipped 返回(合同:冲突只在会产生写入时拦截)。
+	before, err := schemas.DecodeRequirementState(st.session.RequirementState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	benign, err := svc.ConfirmPreferences(ctx, []string{"owner-1"}, "session-1", "key-2",
+		PreferenceConfirmInput{ExpectedRevision: 2, Subject: "self", MemoryIDs: []string{noise.ID, other.ID}})
+	if err != nil || len(benign.Applied) != 0 || len(benign.Skipped) != 2 {
+		t.Fatalf("无可写入项的同键不同请求应 200 跳过: %+v err=%v", benign, err)
+	}
+	for _, skip := range benign.Skipped {
+		if skip.Reason != PreferenceSkipAlreadySet {
+			t.Fatalf("应全部按已生效跳过: %+v", benign.Skipped)
+		}
+	}
+	after, err := schemas.DecodeRequirementState(st.session.RequirementState)
+	if err != nil || before.Revision != after.Revision ||
+		string(before.Fields["noise_pref"].Value) != string(after.Fields["noise_pref"].Value) {
+		t.Fatalf("该路径不得产生任何写入: %v", err)
+	}
+
 	// 重放且字段此后被撤销:同键同内容(含原修订号)重放不重复写入(撤销保持),
 	// 按 duplicated 跳过;修订号变化即构成不同请求,走稳定冲突。
 	if _, err := svc.EditRequirement(ctx, "owner-1", "session-1", "remove-1", RequirementEdit{

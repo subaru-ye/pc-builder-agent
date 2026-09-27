@@ -376,7 +376,9 @@ func (s *Service) ConfirmPreferences(ctx context.Context, owners []string, sessi
 	// 与 EditRequirement 落库的指纹同构——
 	//   同键重放(首次已成功写入,无论字段此后是否仍生效):命中同指纹,
 	//   不重复写入,待应用项按 duplicated 跳过,applied 为空;
-	//   同键不同请求(内容不同,含记忆已被改写):指纹不匹配,稳定冲突拒绝;
+	//   同键不同请求且本次仍有待写入项:指纹不匹配,稳定冲突拒绝;
+	//   同键不同请求但本次已无可写入项:不比对指纹、不产生任何写入,
+	//   以 200 + 逐项 skipped 返回(冲突只在会产生写入时拦截);
 	//   首次失败(如 revision 冲突)不落指纹,同键重试正常重试。
 	state, err := schemas.DecodeRequirementState(ws.RequirementState)
 	if err != nil {

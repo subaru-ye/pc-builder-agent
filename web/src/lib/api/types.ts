@@ -20,6 +20,7 @@ export type Share = components["schemas"]["Share"];
 export type ShareRecord = components["schemas"]["ShareRecord"];
 export type Preference = components["schemas"]["Preference"];
 export type PreferenceSaveAction = components["schemas"]["PreferenceSaveResponse"]["action"];
+export type PreferenceSuggestion = components["schemas"]["PreferenceSuggestion"];
 export type PublicBuildView = components["schemas"]["PublicBuildView"];
 export type AuthState = components["schemas"]["AuthState"];
 export type Account = components["schemas"]["Account"];

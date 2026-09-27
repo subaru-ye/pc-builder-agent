@@ -6,17 +6,21 @@ package producthttp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/product"
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
+	"github.com/subaru-ye/pc-builder-agent/internal/store"
 )
 
 type preferenceService interface {
 	SaveSessionPreference(context.Context, string, string, product.PreferenceSave) (product.PreferenceSaveResult, error)
 	ListPreferences(context.Context, []string) ([]schemas.PreferenceMemory, error)
 	DeletePreference(context.Context, []string, string) error
+	PreferenceSuggestions(context.Context, []string, string, string) ([]product.PreferenceSuggestion, error)
+	ConfirmPreferences(context.Context, []string, string, string, product.PreferenceConfirmInput) (product.PreferenceConfirmResult, error)
 }
 
 type preferenceSourceDTO struct {
@@ -109,6 +113,80 @@ func (a *API) listPreferences(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"schema_version": 1, "preferences": dtos})
 }
 
+// sessionPreferenceSuggestions 是 GET /api/v1/sessions/{session_id}/preferences/suggestions:
+// 召回当前身份可访问、指定 subject 的有效偏好供逐项确认。
+// 只读不写;当前会话已生效的字段不出现在建议中,值冲突列全部选项由用户挑选。
+func (a *API) sessionPreferenceSuggestions(w http.ResponseWriter, r *http.Request) {
+	service, ok := a.service.(preferenceService)
+	if !ok {
+		a.writeError(w, r, product.NewProblem("preference_unavailable", "偏好记忆暂不可用", 503, "请稍后重试。", requestID(r)))
+		return
+	}
+	p, ok := a.principal(w, r)
+	if !ok {
+		return
+	}
+	subject := r.URL.Query().Get("subject")
+	if subject == "" {
+		a.writeProblem(w, r, product.NewProblem("invalid_request", "缺少归属对象", 400,
+			"subject 必填：self 表示本人，其余为具名代配对象。", requestID(r)))
+		return
+	}
+	suggestions, err := service.PreferenceSuggestions(r.Context(), p.Owners, r.PathValue("session_id"), subject)
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"schema_version": 1, "subject": subject, "suggestions": suggestions})
+}
+
+// confirmSessionPreferences 是 POST /api/v1/sessions/{session_id}/preferences/confirm:
+// 用户逐项确认后写入当前 RequirementState。复用 EditRequirement 的 revision
+// 校验与指纹幂等;当前会话已生效的字段跳过不覆盖,白名单外与过期记忆跳过。
+func (a *API) confirmSessionPreferences(w http.ResponseWriter, r *http.Request) {
+	key, ok := a.idempotencyKey(w, r)
+	if !ok {
+		return
+	}
+	service, ok := a.service.(preferenceService)
+	if !ok {
+		a.writeError(w, r, product.NewProblem("preference_unavailable", "偏好记忆暂不可用", 503, "请稍后重试。", requestID(r)))
+		return
+	}
+	var body struct {
+		SchemaVersion    int      `json:"schema_version"`
+		ExpectedRevision *int     `json:"expected_revision"`
+		Subject          string   `json:"subject"`
+		MemoryIDs        []string `json:"memory_ids"`
+	}
+	if !a.decodeJSON(w, r, &body) {
+		return
+	}
+	if body.SchemaVersion != 1 || body.ExpectedRevision == nil || *body.ExpectedRevision < 0 ||
+		body.Subject == "" || len(body.MemoryIDs) == 0 || len(body.MemoryIDs) > 32 {
+		a.writeProblem(w, r, product.NewProblem("invalid_request", "确认请求无效", 400,
+			"schema_version 必须为 1，expected_revision 来自当前需求，memory_ids 为 1–32 条且 subject 必填。", requestID(r)))
+		return
+	}
+	p, ok := a.principal(w, r)
+	if !ok {
+		return
+	}
+	result, err := service.ConfirmPreferences(r.Context(), p.Owners, r.PathValue("session_id"), key,
+		product.PreferenceConfirmInput{ExpectedRevision: *body.ExpectedRevision, Subject: body.Subject, MemoryIDs: body.MemoryIDs})
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	skipped := result.Skipped
+	if skipped == nil {
+		skipped = []product.PreferenceConfirmSkip{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"schema_version": 1, "applied": result.Applied, "skipped": skipped, "session": toSession(result.Detail),
+	})
+}
+
 // deletePreference 是 DELETE /api/v1/preferences/{preference_id}:
 // 物理删除(含 supersede 链墓碑),跨 owner 未命中统一 404。
 func (a *API) deletePreference(w http.ResponseWriter, r *http.Request) {
@@ -125,6 +203,12 @@ func (a *API) deletePreference(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := service.DeletePreference(r.Context(), p.Owners, r.PathValue("preference_id")); err != nil {
+		if errors.Is(err, store.ErrPreferenceMemoryNotFound) {
+			// 删除尚未实现请求级幂等:重试同一删除会到达这里(已生效)。
+			a.writeProblem(w, r, product.NewProblem("not_found", "偏好不存在或已删除", 404,
+				"该偏好当前不可见；如果刚删除过，删除已经生效，无需重试。", requestID(r)))
+			return
+		}
 		a.writeError(w, r, err)
 		return
 	}

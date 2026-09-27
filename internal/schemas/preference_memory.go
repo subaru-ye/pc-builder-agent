@@ -32,6 +32,19 @@ const (
 	PreferenceStatusRetract   = "retracted"
 )
 
+// StablePreferenceFields 是可保存为长期偏好的最小白名单:只含品牌、静音、
+// 尺寸、外观这类跨会话稳定的装配偏好。预算、已有件、用途、一次性价格/规格
+// 与未分类 free.* 条目不是稳定偏好,不在白名单内。白名单在保存与召回确认
+// 两侧同时生效(服务端为准,前端仅预过滤);扩充属于显式产品决策。
+var StablePreferenceFields = []string{
+	"brand_pref.cpu", "brand_pref.gpu", "noise_pref", "size_pref", "appearance",
+}
+
+// IsStablePreferenceField 报告字段是否在稳定偏好白名单内。
+func IsStablePreferenceField(field string) bool {
+	return slices.Contains(StablePreferenceFields, field)
+}
+
 // PreferenceSource 记录偏好来自哪次会话哪条消息的哪段原话。
 // kind 与 RequirementSource 同口径(chat|edit);message_id 由服务端注入,模型不可指定。
 type PreferenceSource struct {

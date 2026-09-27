@@ -18,6 +18,7 @@ import type {
   FeedbackReason,
   Preference,
   PreferenceSaveAction,
+  PreferenceSuggestion,
 } from "./types";
 
 const client = createClient<paths>({ baseUrl: "", credentials: "include" });
@@ -185,11 +186,28 @@ export const api = {
   async listPreferences(): Promise<Preference[]> {
     return unwrap(await client.GET("/api/v1/preferences")).preferences;
   },
+  async preferenceSuggestions(sessionID: string, subject: string): Promise<PreferenceSuggestion[]> {
+    return unwrap(await client.GET("/api/v1/sessions/{session_id}/preferences/suggestions", {
+      params: { path: { session_id: sessionID }, query: { subject } },
+    })).suggestions;
+  },
+  async confirmPreferences(
+    sessionID: string,
+    body: { expected_revision: number; subject: string; memory_ids: string[] },
+    key: string,
+  ): Promise<{ applied: string[]; skipped: { memory_id: string; reason: string }[]; session: Session }> {
+    return unwrap(await client.POST("/api/v1/sessions/{session_id}/preferences/confirm", {
+      params: { path: { session_id: sessionID }, header: { "Idempotency-Key": key } },
+      body: { schema_version: 1, ...body },
+    }));
+  },
   async deletePreference(preferenceID: string, key: string): Promise<void> {
     const result = await client.DELETE("/api/v1/preferences/{preference_id}", {
       params: { path: { preference_id: preferenceID }, header: { "Idempotency-Key": key } },
     });
-    if (!result.response.ok) unwrap(result as never);
+    if (result.response.ok) return;
+    if (result.response.status === 404) return; // 已删除或不存在:重复删除安全,按成功处理
+    unwrap(result as never);
   },
 };
 

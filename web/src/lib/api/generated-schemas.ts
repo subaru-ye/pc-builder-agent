@@ -563,6 +563,40 @@ const PreferenceListResponse = z.object({
   schema_version: z.number().int(),
   preferences: z.array(Preference),
 });
+const PreferenceSuggestion = z.object({
+  field: z.string(),
+  status: z.enum(["suggest", "conflict"]),
+  choices: z.array(Preference).min(1),
+});
+const PreferenceSuggestionResponse = z.object({
+  schema_version: z.number().int(),
+  subject: z.string(),
+  suggestions: z.array(PreferenceSuggestion),
+});
+const PreferenceConfirmInput = z.object({
+  schema_version: z.number().int(),
+  expected_revision: z.number().int().gte(0),
+  subject: z.string().min(1).max(40),
+  memory_ids: z.array(z.string().uuid()).min(1).max(32),
+});
+const PreferenceConfirmResponse = z.object({
+  schema_version: z.number().int(),
+  applied: z.array(z.string().uuid()),
+  skipped: z.array(
+    z.object({
+      memory_id: z.string().uuid(),
+      reason: z.enum([
+        "not_found",
+        "subject_mismatch",
+        "field_not_storable",
+        "field_already_set",
+        "stale",
+        "duplicated",
+      ]),
+    })
+  ),
+  session: Session,
+});
 const Money = z.string();
 const PriceFreshness = z.enum(["fresh", "aging", "stale", "unknown"]);
 const BuildSummary = z.object({
@@ -778,6 +812,10 @@ export const schemas = {
   Preference,
   PreferenceSaveResponse,
   PreferenceListResponse,
+  PreferenceSuggestion,
+  PreferenceSuggestionResponse,
+  PreferenceConfirmInput,
+  PreferenceConfirmResponse,
   Money,
   PriceFreshness,
   BuildSummary,

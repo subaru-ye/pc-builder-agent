@@ -271,3 +271,35 @@ func TestWebMessageByIDScopedToSession(t *testing.T) {
 		t.Fatalf("跨会话引用应 not found: %v", err)
 	}
 }
+
+func TestActivePreferenceMemoryForOwnersScoping(t *testing.T) {
+	s := setupStore(t)
+	ctx := context.Background()
+
+	mine, err := s.CreatePreferenceMemory(ctx, preferenceFixture("owner-a", schemas.PreferenceSubjectSelf, "brand_pref.gpu", `"nvidia"`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreatePreferenceMemory(ctx, preferenceFixture("owner-b", schemas.PreferenceSubjectSelf, "noise_pref", `"quiet"`)); err != nil {
+		t.Fatal(err)
+	}
+
+	found, err := s.ActivePreferenceMemoryForOwners(ctx, []string{"owner-a", "owner-b"}, mine.ID)
+	if err != nil || found.ID != mine.ID {
+		t.Fatalf("多 owner 任一命中即可: %+v err=%v", found, err)
+	}
+	if _, err := s.ActivePreferenceMemoryForOwners(ctx, []string{"owner-b"}, mine.ID); !errors.Is(err, ErrPreferenceMemoryNotFound) {
+		t.Fatalf("不在 owners 内应 not found: %v", err)
+	}
+	if _, err := s.ActivePreferenceMemoryForOwners(ctx, []string{"owner-a", "owner-b"}, "11111111-1111-1111-1111-111111111111"); !errors.Is(err, ErrPreferenceMemoryNotFound) {
+		t.Fatalf("不存在应 not found: %v", err)
+	}
+	// superseded 墓碑不可被确认为 active。
+	if _, err := s.SupersedePreferenceMemory(ctx, "owner-a", mine.ID,
+		preferenceFixture("owner-a", schemas.PreferenceSubjectSelf, "brand_pref.gpu", `"amd"`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ActivePreferenceMemoryForOwners(ctx, []string{"owner-a"}, mine.ID); !errors.Is(err, ErrPreferenceMemoryNotFound) {
+		t.Fatalf("墓碑不可作为 active 读取: %v", err)
+	}
+}

@@ -24,12 +24,17 @@ const testOwner = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
 type fakePreferenceService struct {
 	fakeService
-	saveResult product.PreferenceSaveResult
-	saveErr    error
-	memories   []schemas.PreferenceMemory
-	listErr    error
-	deleteErr  error
-	deleted    []string
+	saveResult   product.PreferenceSaveResult
+	saveErr      error
+	memories     []schemas.PreferenceMemory
+	listErr      error
+	deleteErr    error
+	deleted      []string
+	suggestions  map[string][]product.PreferenceSuggestion
+	suggestErr   error
+	confirmErr   error
+	confirmResult product.PreferenceConfirmResult
+	confirmed    []product.PreferenceConfirmInput
 }
 
 func (f *fakePreferenceService) SaveSessionPreference(context.Context, string, string, product.PreferenceSave) (product.PreferenceSaveResult, error) {
@@ -46,6 +51,21 @@ func (f *fakePreferenceService) DeletePreference(_ context.Context, _ []string, 
 	}
 	f.deleted = append(f.deleted, preferenceID)
 	return nil
+}
+
+func (f *fakePreferenceService) PreferenceSuggestions(_ context.Context, _ []string, _ string, subject string) ([]product.PreferenceSuggestion, error) {
+	if f.suggestErr != nil {
+		return nil, f.suggestErr
+	}
+	return f.suggestions[subject], nil
+}
+
+func (f *fakePreferenceService) ConfirmPreferences(_ context.Context, _ []string, _ string, _ string, input product.PreferenceConfirmInput) (product.PreferenceConfirmResult, error) {
+	if f.confirmErr != nil {
+		return product.PreferenceConfirmResult{}, f.confirmErr
+	}
+	f.confirmed = append(f.confirmed, input)
+	return f.confirmResult, nil
 }
 
 func newPreferenceTestAPI(t *testing.T, service *fakePreferenceService) *API {
@@ -192,5 +212,112 @@ func TestPreferenceEndpointsUnavailable(t *testing.T) {
 	rec = preferenceRequest(t, api, http.MethodDelete, "/api/v1/preferences/pref-1", "")
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("删除降级应 503: %d", rec.Code)
+	}
+}
+
+func TestSessionPreferenceSuggestionsEndpoint(t *testing.T) {
+	service := &fakePreferenceService{
+		fakeService: fakeService{session: store.WebSession{ID: "session-1", OwnerID: testOwner}},
+		suggestions: map[string][]product.PreferenceSuggestion{
+			"self": {{Field: "noise_pref", Status: "suggest", Choices: []schemas.PreferenceMemory{{
+				ID: "11111111-1111-1111-1111-111111111111", Subject: "self", Field: "noise_pref", Value: json.RawMessage(`"silent"`),
+			}}}},
+		},
+	}
+	api := newPreferenceTestAPI(t, service)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sessions/session-1/preferences/suggestions", nil)
+	req.AddCookie(&http.Cookie{Name: anonymousCookieName, Value: testOwner})
+	rec := httptest.NewRecorder()
+	api.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("缺 subject 应 400: %d", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/sessions/session-1/preferences/suggestions?subject=self", nil)
+	req.AddCookie(&http.Cookie{Name: anonymousCookieName, Value: testOwner})
+	rec = httptest.NewRecorder()
+	api.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("建议应 200: %d %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Suggestions []map[string]any `json:"suggestions"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil || len(response.Suggestions) != 1 {
+		t.Fatalf("建议形状错误: %s %v", rec.Body.String(), err)
+	}
+
+	service.suggestErr = store.ErrWebSessionNotFound
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/sessions/other/preferences/suggestions?subject=self", nil)
+	req.AddCookie(&http.Cookie{Name: anonymousCookieName, Value: testOwner})
+	rec = httptest.NewRecorder()
+	api.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("会话不可达应 404: %d", rec.Code)
+	}
+}
+
+func TestConfirmSessionPreferencesEndpoint(t *testing.T) {
+	service := &fakePreferenceService{
+		fakeService: fakeService{session: store.WebSession{ID: "session-1", OwnerID: testOwner}},
+		confirmResult: product.PreferenceConfirmResult{
+			Applied: []string{"11111111-1111-1111-1111-111111111111"},
+			Skipped: []product.PreferenceConfirmSkip{},
+		},
+	}
+	api := newPreferenceTestAPI(t, service)
+	body := `{"schema_version":1,"expected_revision":2,"subject":"self","memory_ids":["11111111-1111-1111-1111-111111111111"]}`
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/sessions/session-1/preferences/confirm", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: anonymousCookieName, Value: testOwner})
+	rec := httptest.NewRecorder()
+	api.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("缺幂等键应 400: %d", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/sessions/session-1/preferences/confirm", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", uuid.NewString())
+	req.AddCookie(&http.Cookie{Name: anonymousCookieName, Value: testOwner})
+	rec = httptest.NewRecorder()
+	api.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("确认应 200: %d %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Applied []string         `json:"applied"`
+		Skipped []map[string]any `json:"skipped"`
+		Session map[string]any   `json:"session"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil || len(response.Applied) != 1 || response.Session == nil {
+		t.Fatalf("确认响应形状错误: %s %v", rec.Body.String(), err)
+	}
+	if len(service.confirmed) != 1 || service.confirmed[0].ExpectedRevision != 2 || service.confirmed[0].Subject != "self" {
+		t.Fatalf("服务应收到修订号与归属: %+v", service.confirmed)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/sessions/session-1/preferences/confirm", strings.NewReader(`{"schema_version":1,"expected_revision":2,"subject":"self","memory_ids":[]}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", uuid.NewString())
+	req.AddCookie(&http.Cookie{Name: anonymousCookieName, Value: testOwner})
+	rec = httptest.NewRecorder()
+	api.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("空确认列表应 400: %d", rec.Code)
+	}
+}
+
+func TestDeletePreferenceRetryCopy(t *testing.T) {
+	service := &fakePreferenceService{
+		fakeService: fakeService{session: store.WebSession{ID: "session-1", OwnerID: testOwner}},
+		deleteErr:   store.ErrPreferenceMemoryNotFound,
+	}
+	api := newPreferenceTestAPI(t, service)
+	rec := preferenceRequest(t, api, http.MethodDelete, "/api/v1/preferences/11111111-1111-1111-1111-111111111111", "")
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "删除已经生效") {
+		t.Fatalf("重复删除应返回明确 404 文案: %d %s", rec.Code, rec.Body.String())
 	}
 }

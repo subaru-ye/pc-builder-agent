@@ -301,6 +301,25 @@ func (s *Store) ActivePreferenceMemoriesByOwner(ctx context.Context, ownerID str
 	return memories, nil
 }
 
+// ActivePreferenceMemoryForOwners 在身份可访问的多个 owner 中按 ID 读取
+// active 记忆,供召回确认前的服务端重读核验;全部未命中按 not found 处理。
+func (s *Store) ActivePreferenceMemoryForOwners(ctx context.Context, owners []string, id string) (schemas.PreferenceMemory, error) {
+	if len(owners) == 0 {
+		return schemas.PreferenceMemory{}, ErrPreferenceMemoryNotFound
+	}
+	m, err := scanPreferenceMemory(s.pool.QueryRow(ctx, `
+		SELECT `+preferenceMemoryColumns+` FROM owner_preference_memories
+		WHERE id = $1 AND status = $2 AND owner_id = ANY($3)`,
+		id, schemas.PreferenceStatusActive, owners))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return schemas.PreferenceMemory{}, ErrPreferenceMemoryNotFound
+	}
+	if err != nil {
+		return schemas.PreferenceMemory{}, fmt.Errorf("store: 查询偏好记忆: %w", err)
+	}
+	return m, nil
+}
+
 // preferenceMemoryMissing 区分"不存在"与"存在但已失效",供撤销/删除给出准确错误。
 func (s *Store) preferenceMemoryMissing(ctx context.Context, ownerID, id string) error {
 	var status string

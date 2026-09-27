@@ -382,3 +382,238 @@ func TestPreferenceUnavailableWithoutCapability(t *testing.T) {
 	err = svc.DeletePreference(context.Background(), []string{"owner-1"}, "x")
 	assertProblemCode(t, err, "preference_unavailable")
 }
+
+func (f *fakePreferenceStore) ActivePreferenceMemoryForOwners(_ context.Context, owners []string, id string) (schemas.PreferenceMemory, error) {
+	for _, owner := range owners {
+		m, ok := f.memories[id]
+		if ok && m.OwnerID == owner && m.Status == schemas.PreferenceStatusActive {
+			return m, nil
+		}
+	}
+	return schemas.PreferenceMemory{}, store.ErrPreferenceMemoryNotFound
+}
+
+func mustCreateMemory(t *testing.T, st *fakePreferenceStore, m schemas.PreferenceMemory) schemas.PreferenceMemory {
+	t.Helper()
+	created, err := st.CreatePreferenceMemory(context.Background(), m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return created
+}
+
+func seededSource(sessionID string) schemas.PreferenceSource {
+	return schemas.PreferenceSource{Kind: "chat", SessionID: sessionID, MessageID: "m0", Quote: "早前原话"}
+}
+
+func TestPreferenceSuggestionsGrouping(t *testing.T) {
+	st := newFakePreferenceStore()
+	// 会话内已明确显卡偏好:该字段不得被历史建议建议覆盖。
+	st.session = store.WebSession{ID: "session-1", OwnerID: "owner-1",
+		RequirementState: sourceSessionState(t, "chat", "msg-1",
+			`[{"op":"set","field":"brand_pref.gpu","value":"nvidia","scope":"session","evidence":"stated","quote":"显卡要N卡"}]`,
+			"预算8000，显卡要N卡")}
+	addChatMessage(st, "user", "预算8000，显卡要N卡")
+	svc := newPreferenceTestService(t, st)
+	ctx := context.Background()
+	mustCreateMemory(t, st, schemas.PreferenceMemory{OwnerID: "owner-1", Subject: "self", Field: "noise_pref",
+		Value: json.RawMessage(`"silent"`), Strength: schemas.PreferenceStrengthPrefer, Evidence: schemas.PreferenceEvidenceStated, Source: seededSource("s0")})
+	mustCreateMemory(t, st, schemas.PreferenceMemory{OwnerID: "owner-1", Subject: "friend:xw", Field: "noise_pref",
+		Value: json.RawMessage(`"normal"`), Strength: schemas.PreferenceStrengthPrefer, Evidence: schemas.PreferenceEvidenceStated, Source: seededSource("s0")})
+	mustCreateMemory(t, st, schemas.PreferenceMemory{OwnerID: "owner-1", Subject: "self", Field: "brand_pref.gpu",
+		Value: json.RawMessage(`"amd"`), Strength: schemas.PreferenceStrengthPrefer, Evidence: schemas.PreferenceEvidenceStated, Source: seededSource("s0")})
+	mustCreateMemory(t, st, schemas.PreferenceMemory{OwnerID: "owner-2", Subject: "self", Field: "brand_pref.gpu",
+		Value: json.RawMessage(`"intel"`), Strength: schemas.PreferenceStrengthPrefer, Evidence: schemas.PreferenceEvidenceStated, Source: seededSource("s0")})
+	mustCreateMemory(t, st, schemas.PreferenceMemory{OwnerID: "owner-1", Subject: "self", Field: "brand_pref.cpu",
+		Value: json.RawMessage(`"amd"`), Strength: schemas.PreferenceStrengthPrefer, Evidence: schemas.PreferenceEvidenceStated, Source: seededSource("s0")})
+	mustCreateMemory(t, st, schemas.PreferenceMemory{OwnerID: "owner-2", Subject: "self", Field: "brand_pref.cpu",
+		Value: json.RawMessage(`"intel"`), Strength: schemas.PreferenceStrengthPrefer, Evidence: schemas.PreferenceEvidenceStated, Source: seededSource("s0")})
+	mustCreateMemory(t, st, schemas.PreferenceMemory{OwnerID: "owner-2", Subject: "self", Field: "noise_pref",
+		Value: json.RawMessage(`"silent"`), Strength: schemas.PreferenceStrengthPrefer, Evidence: schemas.PreferenceEvidenceStated, Source: seededSource("s0")})
+	mustCreateMemory(t, st, schemas.PreferenceMemory{OwnerID: "owner-1", Subject: "self", Field: "budget_cny",
+		Value: json.RawMessage("8000"), Strength: schemas.PreferenceStrengthPrefer, Evidence: schemas.PreferenceEvidenceStated, Source: seededSource("s0")})
+	mustCreateMemory(t, st, schemas.PreferenceMemory{OwnerID: "owner-1", Subject: "self", Field: "size_pref",
+		Value: json.RawMessage(`"itx"`), Volatile: true, ObservedAt: "2020-01-01",
+		Strength: schemas.PreferenceStrengthPrefer, Evidence: schemas.PreferenceEvidenceStated, Source: seededSource("s0")})
+	fresh := mustCreateMemory(t, st, schemas.PreferenceMemory{OwnerID: "owner-1", Subject: "self", Field: "appearance",
+		Value: json.RawMessage(`"white"`), Volatile: true, ObservedAt: "2999-01-01",
+		Strength: schemas.PreferenceStrengthPrefer, Evidence: schemas.PreferenceEvidenceStated, Source: seededSource("s0")})
+
+	list, err := svc.PreferenceSuggestions(ctx, []string{"owner-1", "owner-2"}, "session-1", "self")
+	if err != nil {
+		t.Fatal(err)
+	}
+	byField := map[string]PreferenceSuggestion{}
+	for _, s := range list {
+		byField[s.Field] = s
+	}
+	if got := byField["brand_pref.cpu"]; got.Status != PreferenceSuggestionConflict || len(got.Choices) != 2 {
+		t.Fatalf("不同身份值冲突应列全部选项: %+v", got)
+	}
+	if got := byField["noise_pref"]; got.Status != PreferenceSuggestionSuggest || len(got.Choices) != 1 {
+		t.Fatalf("同值跨身份应去重为单一建议: %+v", got)
+	}
+	if _, ok := byField["brand_pref.gpu"]; ok {
+		t.Fatal("当前会话已生效字段不得进入建议(当前需求优先)")
+	}
+	if got := byField["appearance"]; got.Status != PreferenceSuggestionSuggest || got.Choices[0].ID != fresh.ID {
+		t.Fatalf("窗口内易失记录可作为建议: %+v", got)
+	}
+	if _, ok := byField["size_pref"]; ok {
+		t.Fatal("过期易失记录不得进入建议")
+	}
+	if _, ok := byField["budget_cny"]; ok {
+		t.Fatal("白名单外字段不得进入建议")
+	}
+
+	friendList, err := svc.PreferenceSuggestions(ctx, []string{"owner-1"}, "session-1", "friend:xw")
+	if err != nil || len(friendList) != 1 || friendList[0].Field != "noise_pref" {
+		t.Fatalf("代配对象只应看到自己的记录: %+v err=%v", friendList, err)
+	}
+	if _, err := svc.PreferenceSuggestions(ctx, []string{"owner-2"}, "session-1", "self"); !errors.Is(err, store.ErrWebSessionNotFound) {
+		t.Fatalf("会话不可达应稳定 404: %v", err)
+	}
+	// 确认前不产生任何写入。
+	before, err := svc.GetSession(ctx, "owner-1", "session-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.PreferenceSuggestions(ctx, []string{"owner-1", "owner-2"}, "session-1", "self"); err != nil {
+		t.Fatal(err)
+	}
+	after, err := svc.GetSession(ctx, "owner-1", "session-1")
+	if err != nil || string(before.Session.RequirementState) != string(after.Session.RequirementState) {
+		t.Fatalf("建议只读,不得改变需求状态: %v", err)
+	}
+}
+
+func TestConfirmPreferencesLifecycle(t *testing.T) {
+	st := newFakePreferenceStore()
+	st.session = store.WebSession{ID: "session-1", OwnerID: "owner-1",
+		RequirementState: sourceSessionState(t, "chat", "msg-1",
+			`[{"op":"set","field":"budget_cny","value":8000,"scope":"session","evidence":"stated","quote":"预算8000"}]`,
+			"预算8000")}
+	addChatMessage(st, "user", "预算8000")
+	svc := newPreferenceTestService(t, st)
+	ctx := context.Background()
+	noise := mustCreateMemory(t, st, schemas.PreferenceMemory{OwnerID: "owner-1", Subject: "self", Field: "noise_pref",
+		Value: json.RawMessage(`"silent"`), Strength: schemas.PreferenceStrengthPrefer, Evidence: schemas.PreferenceEvidenceStated, Source: seededSource("s0")})
+	budget := mustCreateMemory(t, st, schemas.PreferenceMemory{OwnerID: "owner-1", Subject: "self", Field: "budget_cny",
+		Value: json.RawMessage("9000"), Strength: schemas.PreferenceStrengthPrefer, Evidence: schemas.PreferenceEvidenceStated, Source: seededSource("s0")})
+
+	// 白名单外字段即便被指名也跳过(防御直连调用)。
+	result, err := svc.ConfirmPreferences(ctx, []string{"owner-1"}, "session-1", "req-0",
+		PreferenceConfirmInput{ExpectedRevision: 1, Subject: "self", MemoryIDs: []string{noise.ID}})
+	if err != nil || len(result.Applied) != 1 {
+		t.Fatalf("白名单内确认应写入: %+v err=%v", result, err)
+	}
+	state, err := schemas.DecodeRequirementState(result.Detail.Session.RequirementState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	field := state.Fields["noise_pref"]
+	if field.Status != "active" || string(field.Value) != `"silent"` || field.Scope != "session" {
+		t.Fatalf("确认后应写入当前需求: %+v", field)
+	}
+	// 历史原话不得伪装成本轮用户消息:写入走面板编辑口径,证据不冒充 stated。
+	if field.Source == nil || field.Source.Kind != "edit" || field.Source.Quote == "早前原话" {
+		t.Fatalf("来源应为面板编辑而非历史原话: %+v", field.Source)
+	}
+	if field.Evidence != "" {
+		t.Fatalf("确认写入不得声称本轮 stated 证据: %q", field.Evidence)
+	}
+
+	// 重复请求:已生效字段全部跳过,状态不再变化。
+	result, err = svc.ConfirmPreferences(ctx, []string{"owner-1"}, "session-1", "req-1",
+		PreferenceConfirmInput{ExpectedRevision: 2, Subject: "self", MemoryIDs: []string{noise.ID}})
+	if err != nil || len(result.Applied) != 0 || len(result.Skipped) != 1 || result.Skipped[0].Reason != PreferenceSkipAlreadySet {
+		t.Fatalf("重复确认应按已生效跳过: %+v err=%v", result, err)
+	}
+
+	// 当前需求优先的第二层保障:预算属白名单外,确认侧直接跳过(保存与确认双重拦截)。
+	// 已生效字段优先已由上方 noise 重复确认(field_already_set)证明。
+	result, err = svc.ConfirmPreferences(ctx, []string{"owner-1"}, "session-1", "req-2",
+		PreferenceConfirmInput{ExpectedRevision: 2, Subject: "self", MemoryIDs: []string{budget.ID}})
+	if err != nil || len(result.Applied) != 0 || result.Skipped[0].Reason != PreferenceSkipField {
+		t.Fatalf("白名单外确认应跳过: %+v err=%v", result, err)
+	}
+	state, err = schemas.DecodeRequirementState(result.Detail.Session.RequirementState)
+	if err != nil || string(state.Fields["budget_cny"].Value) != "8000" {
+		t.Fatalf("会话内预算必须保持不变: %v %s", err, state.Fields["budget_cny"].Value)
+	}
+
+	// 跨身份冲突:同请求选同字段两条 → 只应用一条,另一条按重复跳过。
+	itx := mustCreateMemory(t, st, schemas.PreferenceMemory{OwnerID: "owner-1", Subject: "self", Field: "size_pref",
+		Value: json.RawMessage(`"itx"`), Strength: schemas.PreferenceStrengthPrefer, Evidence: schemas.PreferenceEvidenceStated, Source: seededSource("s0")})
+	atx := mustCreateMemory(t, st, schemas.PreferenceMemory{OwnerID: "owner-2", Subject: "self", Field: "size_pref",
+		Value: json.RawMessage(`"atx"`), Strength: schemas.PreferenceStrengthPrefer, Evidence: schemas.PreferenceEvidenceStated, Source: seededSource("s0")})
+	result, err = svc.ConfirmPreferences(ctx, []string{"owner-1", "owner-2"}, "session-1", "req-3",
+		PreferenceConfirmInput{ExpectedRevision: 2, Subject: "self", MemoryIDs: []string{itx.ID, atx.ID}})
+	if err != nil || len(result.Applied) != 1 || result.Skipped[0].Reason != PreferenceSkipDuplicated {
+		t.Fatalf("同请求重复字段应去重: %+v err=%v", result, err)
+	}
+
+	// 删除重试:删除未实现请求级幂等,重试得到稳定 not found。
+	if err := svc.DeletePreference(ctx, []string{"owner-1"}, itx.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.DeletePreference(ctx, []string{"owner-1"}, itx.ID); !errors.Is(err, store.ErrPreferenceMemoryNotFound) {
+		t.Fatalf("重复删除应稳定 not found: %v", err)
+	}
+}
+
+func TestSaveSessionPreferenceWhitelistAndScope(t *testing.T) {
+	cases := []struct {
+		name    string
+		ops     string
+		message string
+		save    PreferenceSave
+	}{
+		{
+			name:    "预算不在白名单",
+			ops:     `[{"op":"set","field":"budget_cny","value":8000,"scope":"session","evidence":"stated","quote":"预算8000"}]`,
+			message: "预算8000",
+			save:    PreferenceSave{Field: "budget_cny", Subject: "self"},
+		},
+		{
+			name:    "free 字段不在白名单",
+			ops:     `[{"op":"set","field":"free.临时想要水冷","value":"yes","scope":"session","evidence":"stated","quote":"这次想要水冷"}]`,
+			message: "这次想要水冷",
+			save:    PreferenceSave{Field: "free.临时想要水冷", Subject: "self"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			st := newFakePreferenceStore()
+			st.session = store.WebSession{ID: "session-1", OwnerID: "owner-1",
+				RequirementState: sourceSessionState(t, "chat", "msg-1", tc.ops, tc.message)}
+			addChatMessage(st, "user", tc.message)
+			svc := newPreferenceTestService(t, st)
+			_, err := svc.SaveSessionPreference(context.Background(), "owner-1", "session-1", tc.save)
+			assertProblemCode(t, err, "preference_not_savable")
+			if len(st.memories) != 0 {
+				t.Fatal("白名单外不得写入")
+			}
+		})
+	}
+	t.Run("scope 缺失拒绝", func(t *testing.T) {
+		st := newFakePreferenceStore()
+		st.session = store.WebSession{ID: "session-1", OwnerID: "owner-1",
+			RequirementState: sourceSessionState(t, "chat", "msg-1",
+				`[{"op":"set","field":"noise_pref","value":"silent","scope":"session","evidence":"stated","quote":"尽量安静"}]`, "尽量安静")}
+		addChatMessage(st, "user", "尽量安静")
+		var state schemas.RequirementState
+		if err := json.Unmarshal(st.session.RequirementState, &state); err != nil {
+			t.Fatal(err)
+		}
+		field := state.Fields["noise_pref"]
+		field.Scope = ""
+		state.Fields["noise_pref"] = field
+		raw, _ := json.Marshal(state)
+		st.session.RequirementState = raw
+		svc := newPreferenceTestService(t, st)
+		_, err := svc.SaveSessionPreference(context.Background(), "owner-1", "session-1",
+			PreferenceSave{Field: "noise_pref", Subject: "self"})
+		assertProblemCode(t, err, "preference_not_savable")
+	})
+}

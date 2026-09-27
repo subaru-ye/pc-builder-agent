@@ -141,6 +141,8 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/sessions/{session_id}/requirement-state", a.editRequirementState)
 	mux.HandleFunc("POST /api/v1/sessions/{session_id}/requirement/confirm", a.confirmRequirement)
 	mux.HandleFunc("POST /api/v1/sessions/{session_id}/preferences", a.savePreference)
+	mux.HandleFunc("GET /api/v1/sessions/{session_id}/preferences/suggestions", a.sessionPreferenceSuggestions)
+	mux.HandleFunc("POST /api/v1/sessions/{session_id}/preferences/confirm", a.confirmSessionPreferences)
 	mux.HandleFunc("GET /api/v1/preferences", a.listPreferences)
 	mux.HandleFunc("DELETE /api/v1/preferences/{preference_id}", a.deletePreference)
 	mux.HandleFunc("GET /api/v1/runs/{run_id}", a.getRun)

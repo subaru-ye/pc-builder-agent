@@ -126,3 +126,55 @@ func TestParamDefaultsAndLegalValuesUnchanged(t *testing.T) {
 }
 
 func pricePtr(s string) *string { return &s }
+
+// 红例（收口返工 1）：payload 为 JSON null 是显式输入，不得按"空参数"执行
+// （修复前：null 解码为 nil 对象静默通过，search_local 执行全品类检索）。
+func TestParamNullPayloadRejected(t *testing.T) {
+	got := paramExec().call(context.Background(), map[string]any{
+		"action": "search_local", "payload": `null`})
+	err, _ := got["error"].(string)
+	if !strings.Contains(err, "null") || !strings.Contains(err, "重试") {
+		t.Fatalf("null payload 必须报错: %q", err)
+	}
+	if got["candidates"] != nil {
+		t.Fatal("null payload 不得执行检索")
+	}
+}
+
+// 红例（收口返工 2）：批量子查询里的未知字段（catgory）不得在解码/重序列化
+// 时静默消失——必须在批量入口按 queries[i] 点名拒绝。
+func TestParamBatchSubqueryUnknownFieldRejected(t *testing.T) {
+	got := paramExec().call(context.Background(), map[string]any{
+		"action":  "search_local_batch",
+		"payload": `{"queries":[{"query":"x","catgory":"cpu"}]}`})
+	err, _ := got["error"].(string)
+	for _, want := range []string{"queries[0]", "catgory", "category"} {
+		if !strings.Contains(err, want) {
+			t.Fatalf("子查询未知字段错误缺 %q: %q", want, err)
+		}
+	}
+	if got["results"] != nil {
+		t.Fatal("含未知字段的子查询不得执行")
+	}
+}
+
+// 红例（收口返工 3）：read_evidence/read_page 的显式越界窗口参数不得由
+// evidenceWindow 静默改写为默认——入口报错指出字段、允许范围与重试。
+func TestParamWindowParamsRejected(t *testing.T) {
+	got := paramExec().call(context.Background(), map[string]any{
+		"action": "read_evidence", "payload": `{"id":"source-1","limit":99999}`})
+	err, _ := got["error"].(string)
+	for _, want := range []string{"limit", "16000", "重试"} {
+		if !strings.Contains(err, want) {
+			t.Fatalf("窗口 limit 越界错误缺 %q: %q", want, err)
+		}
+	}
+	got = paramExec().call(context.Background(), map[string]any{
+		"action": "read_page", "payload": `{"url":"https://example.com","offset":-3}`})
+	err, _ = got["error"].(string)
+	for _, want := range []string{"offset", "0", "重试"} {
+		if !strings.Contains(err, want) {
+			t.Fatalf("窗口 offset 越界错误缺 %q: %q", want, err)
+		}
+	}
+}

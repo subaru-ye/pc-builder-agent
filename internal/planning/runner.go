@@ -30,7 +30,10 @@ import (
 // v3（2026-09-27）：参数合同收紧——payload 语法错误带定位、逐 action 未知
 // 字段/必填字段校验、显式越界 limit/offset/非法 category 报错（不再静默
 // 改写）、未知 action 列合法集；详见 docs/changes/builder-tool-param-contract.md。
-const ToolErrorContractVersion = "planning-tool-errors-v3"
+// v4（2026-09-27 收口返工）：补三类静默通道——payload 显式 null 拒绝、
+// 批量子查询未知字段在批量入口拒绝（防类型化解码吞掉）、read_evidence/
+// read_page 显式越界窗口参数入口拒绝（不再由 evidenceWindow 静默改写）。
+const ToolErrorContractVersion = "planning-tool-errors-v4"
 
 const instruction = `你是装机顾问，可以自主调用工具检索、比较、选配和修正。选型约束(预算与弹性、configuration_scope、用途与性能取向、尺寸/静音/品牌等有效条件)以 input.effective_constraints.spec 为唯一权威——它是用户核定确认时冻结的完整有效需求(已展开系统默认,defaults 标注来源);requirement_state 只用于用户事实与来源溯源,其中 unknown 的字段(如 performance_goal)不代表约束未定,也不得从 state 重新推导或覆盖冻结值。没有 effective_constraints 的历史载荷才按旧语义把该状态当作权威需求。来源、撤销、临时例外和备选必须尊重；不得用历史消息恢复旧要求。free.* 是与常用字段同等有效的用户要求。fact/context 是场景，constraint 是配置条件。用户的 must 不能偷偷改成 prefer。
 request是本轮已授权执行的用户原话，base_draft是本会话已有正式配置，previous_proposal是上次选配进展。base_candidates是原配置配件在本轮目录中的规格与报价，unresolved_base_ids才是当前未找到的原件编号；initial_candidates只是部分样本，未出现在样本中不代表目录无型号或无报价。升级/改单时基于它们检索和比较，不要再次索要已有型号或重复确认执行方向。用户让你自行选更好的处理器时，根据用途、原CPU、剩余整机预算和兼容性自主检索候选；不要把找型号退回给用户。“其他配件尽量不动”是软偏好，先尝试兼容升级，确需联动再说明原因；预算充足不代表允许超出既定预算。正式配置中的配件不代表用户已购，不擅自设为已有件。纯讨论备选不能覆盖当前要求。
@@ -387,6 +390,9 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		}
 		return map[string]any{"error": fmt.Sprintf("payload 缺失或不是 JSON 对象字符串（%s）；payload 须为 JSON 对象字符串，请整体重试。", err)}
 	}
+	if rawFields == nil {
+		return map[string]any{"error": fmt.Sprintf("payload 为 null：必须为 JSON 对象（%s 的字段：%s）。请按格式整体重试。", action, strings.Join(known, ", "))}
+	}
 	for key := range rawFields {
 		if !slices.Contains(known, key) {
 			return map[string]any{"error": fmt.Sprintf("payload 含未知字段 %q；%s 允许的字段：%s。请移除或更正后整体重试。", key, action, strings.Join(known, ", "))}
@@ -417,6 +423,22 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 				return map[string]any{"error": "每个本地查询须为JSON对象"}
 			}
 		}
+		// 子查询的未知字段必须在批量入口拦截：类型化解码会静默丢弃它们，
+		// 随后的逐项执行（重新序列化）永远看不到拼错字段。
+		var rawQueries []json.RawMessage
+		if err := json.Unmarshal(rawFields["queries"], &rawQueries); err == nil {
+			for i, item := range rawQueries {
+				var itemFields map[string]json.RawMessage
+				if json.Unmarshal(item, &itemFields) != nil {
+					continue // null/非对象项由上方 nil 检查或逐项执行报错。
+				}
+				for key := range itemFields {
+					if !slices.Contains(paramActions["search_local"], key) {
+						return map[string]any{"error": fmt.Sprintf("queries[%d] 含未知字段 %q；子查询允许的字段：%s。请移除或更正后整体重试。", i, key, strings.Join(paramActions["search_local"], ", "))}
+					}
+				}
+			}
+		}
 		results := []map[string]any{}
 		for i, query := range p.Queries {
 			// Run reserves the first tool execution before dispatch. Each further
@@ -435,6 +457,9 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		}
 		return map[string]any{"results": results, "executed_queries": len(results), "pending_queries": p.Queries[len(results):]}
 	case "read_evidence":
+		if errMsg := checkWindowParams(rawFields); errMsg != "" {
+			return map[string]any{"error": errMsg}
+		}
 		if p.ID == "" {
 			return map[string]any{"error": "payload.id 缺失：read_evidence 须为 {\"id\":\"来源编号\"}（如 local:候选编号 或 source-N）；请补齐后重试。"}
 		}
@@ -665,6 +690,9 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		}
 		return x.addEvidence(rows)
 	case "read_page":
+		if errMsg := checkWindowParams(rawFields); errMsg != "" {
+			return map[string]any{"error": errMsg}
+		}
 		if p.URL == "" {
 			return map[string]any{"error": "payload.url 缺失：read_page 须为 {\"url\":\"https://...\"}（method 可选）；请补齐后重试。"}
 		}
@@ -1190,4 +1218,29 @@ func (x *execution) finalize() Result {
 	}
 	x.result.Delivery = &Delivery{Status: status, Issues: append([]string{}, deduped...), Notes: notes}
 	return x.result
+}
+
+// checkWindowParams 校验 read_evidence/read_page 的显式窗口参数：limit 允许
+// 1..pageWindow（缺席默认 pageWindow）、offset ≥ 0（缺席默认 0）。显式越界
+// 值报错并给出允许范围，不再由 evidenceWindow 静默改写为默认。
+func checkWindowParams(rawFields map[string]json.RawMessage) string {
+	if _, explicit := rawFields["limit"]; explicit {
+		var limit int
+		if json.Unmarshal(rawFields["limit"], &limit) != nil {
+			return fmt.Sprintf("payload.limit 须为整数；允许 1 至 %d（缺席默认 %d）。请修正后整体重试。", pageWindow, pageWindow)
+		}
+		if limit <= 0 || limit > pageWindow {
+			return fmt.Sprintf("payload.limit 显式值 %d 越界：允许 1 至 %d（缺席默认 %d）。请修正后整体重试。", limit, pageWindow, pageWindow)
+		}
+	}
+	if _, explicit := rawFields["offset"]; explicit {
+		var offset int
+		if json.Unmarshal(rawFields["offset"], &offset) != nil {
+			return fmt.Sprintf("payload.offset 须为整数；必须 ≥ 0（缺席默认 0）。请修正后整体重试。")
+		}
+		if offset < 0 {
+			return fmt.Sprintf("payload.offset 显式值 %d 非法：必须 ≥ 0（缺席默认 0）。请修正后整体重试。", offset)
+		}
+	}
+	return ""
 }

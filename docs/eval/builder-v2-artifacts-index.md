@@ -2,7 +2,7 @@
 
 `artifacts/` 在 .gitignore 中不入库。本索引为需留存产物的 sha256 清单，供后续复核
 （文件移动或清理后可凭哈希对照备份）。生成方式：`sha256sum` 逐文件；suite/provenance
-未列出的 replay 目录（mech v35–v40 等）仅报告归档，关键结论已在 change 文档与运行
+未列出的 replay 目录（mech v35–v43 等）仅报告归档，关键结论已在 change 文档与运行
 记录中以文字登记。
 
 ## Pass³ live 批次

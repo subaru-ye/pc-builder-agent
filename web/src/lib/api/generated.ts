@@ -342,6 +342,115 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{session_id}/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["SessionID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 把当前会话的一个需求字段保存为跨会话偏好
+         * @description 用户显式保存：值、强度与来源一律取自服务端需求状态，请求体只提供字段与归属对象。 服务端核验会话归属、原始用户消息与原文引用，拒绝临时例外、不确定/推断证据与面板编辑来源。 同字段同值重复保存幂等返回 unchanged；值变化构成改主意，返回 superseded。偏好只是待确认建议，不是自动生效约束。
+         */
+        post: operations["saveSessionPreference"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 列出当前身份的全部 active 跨会话偏好
+         * @description 含登录账号认领的匿名 owner；本人(self)在前。仅返回 active 记录，不含已删除或已被取代的墓碑。
+         */
+        get: operations["listPreferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/preferences/suggestions": {
+        parameters: {
+            query: {
+                /** @description self 表示本人，其余为具名代配对象；由用户显式选择。 */
+                subject: string;
+            };
+            header?: never;
+            path: {
+                session_id: components["parameters"]["SessionID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 召回可确认的跨会话偏好建议（只读）
+         * @description 只读当前身份可访问、指定 subject 的 active 偏好：仅稳定偏好白名单字段、 剔除超出新鲜度窗口的易失记录；当前会话已生效的字段不出现（当前需求优先）。 同字段不同身份记忆值冲突时 status=conflict 并列全部选项，由用户挑选或放弃，服务端不代选。
+         */
+        get: operations["sessionPreferenceSuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/preferences/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["SessionID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 把用户逐项确认的偏好写入当前需求状态
+         * @description 走既有需求修订入口：expected_revision 校验 + 幂等键指纹； 每条记忆由服务端重读核验（白名单、subject、未过期、未生效），跳过项逐条返回原因， 当前会话已明确的值不会被历史偏好覆盖。写入以面板编辑口径落账，历史原话不伪装成本轮用户消息。 幂等键语义：指纹按本次写入内容（含 expected_revision）计算，只记录成功写入—— 同键同内容重放不重复写入，applied 为空且各项按当前状态给出 skipped 原因（含 duplicated）； 同键不同内容且本次仍有待写入项时返回 409 幂等冲突； 同键不同内容但本次经核验已无可写入项时，不比对指纹、不产生任何写入，返回 200 与逐项 skipped； 首次失败未落指纹，同键重试正常执行。
+         */
+        post: operations["confirmSessionPreferences"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/preferences/{preference_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * 删除一条跨会话偏好
+         * @description 物理删除（含改主意 supersede 链的墓碑）；跨身份未命中统一 404。 当前未实现请求级幂等：携带同一 Idempotency-Key 重试会得到 404（表示已删除或不存在）， 客户端应把删除后的 404 视为已生效，不要自动重发。
+         */
+        delete: operations["deletePreference"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/events": {
         parameters: {
             query?: never;
@@ -579,7 +688,7 @@ export interface components {
             /** Format: uri-reference */
             instance?: string;
             /** @enum {string} */
-            code: "invalid_request" | "not_found" | "session_busy" | "invalid_session_phase" | "schema_validation_failed" | "upstream_unavailable" | "context_expired" | "run_timeout" | "run_interrupted" | "run_active" | "run_cancelled" | "generation_failed" | "events_expired" | "internal_error" | "daily_budget_exceeded" | "feedback_unavailable" | "invalid_retry_target" | "requirement_not_ready" | "requirement_review_conflict" | "requirement_revision_conflict" | "requirement_state_unsupported" | "model_authentication_failed" | "model_quota_exhausted" | "model_rate_limited" | "model_timeout" | "auth_disabled" | "auth_invalid_credentials" | "auth_email_exists" | "auth_weak_password" | "auth_session_expired" | "auth_unavailable";
+            code: "invalid_request" | "not_found" | "session_busy" | "invalid_session_phase" | "schema_validation_failed" | "upstream_unavailable" | "context_expired" | "run_timeout" | "run_interrupted" | "run_active" | "run_cancelled" | "generation_failed" | "events_expired" | "internal_error" | "daily_budget_exceeded" | "feedback_unavailable" | "invalid_retry_target" | "requirement_not_ready" | "requirement_review_conflict" | "requirement_revision_conflict" | "requirement_state_unsupported" | "model_authentication_failed" | "model_quota_exhausted" | "model_rate_limited" | "model_timeout" | "preference_unavailable" | "preference_not_savable" | "preference_invalid" | "auth_disabled" | "auth_invalid_credentials" | "auth_email_exists" | "auth_weak_password" | "auth_session_expired" | "auth_unavailable";
             request_id: string;
         } & {
             [key: string]: unknown;
@@ -771,6 +880,90 @@ export interface components {
             schema_version: 1;
             feedback: components["schemas"]["Feedback"] | null;
         };
+        PreferenceSaveInput: {
+            /** @constant */
+            schema_version: 1;
+            /** @description 已知需求字段或 free.* 条目；值与来源由服务端从会话需求状态提取，请求不可传入 */
+            field: string;
+            /** @description self 表示本人，其余为具名代配对象标签，由用户显式选择 */
+            subject: string;
+        };
+        PreferenceSource: {
+            /** @enum {string} */
+            kind: "chat";
+            session_id: string;
+            message_id: string;
+            /** @description 字段对应的用户原话（消息原文子串） */
+            quote: string;
+        };
+        Preference: {
+            /** Format: uuid */
+            id: string;
+            subject: string;
+            field: string;
+            /** @description 偏好值，任意 JSON */
+            value: unknown;
+            /** @enum {string} */
+            strength: "prefer" | "must";
+            /** @enum {string} */
+            evidence: "stated" | "accepted_proposal";
+            /** @description 易失事实必须带 observed_at，召回按新鲜度过滤 */
+            volatile: boolean;
+            /** Format: date */
+            observed_at?: string;
+            source: components["schemas"]["PreferenceSource"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PreferenceSaveResponse: {
+            /** @constant */
+            schema_version: 1;
+            preference: components["schemas"]["Preference"];
+            /** @enum {string} */
+            action: "created" | "superseded" | "unchanged";
+        };
+        PreferenceListResponse: {
+            /** @constant */
+            schema_version: 1;
+            preferences: components["schemas"]["Preference"][];
+        };
+        PreferenceSuggestion: {
+            field: string;
+            /** @enum {string} */
+            status: "suggest" | "conflict";
+            choices: components["schemas"]["Preference"][];
+        };
+        PreferenceSuggestionResponse: {
+            /** @constant */
+            schema_version: 1;
+            subject: string;
+            suggestions: components["schemas"]["PreferenceSuggestion"][];
+        };
+        PreferenceConfirmInput: {
+            /** @constant */
+            schema_version: 1;
+            /** @description 来自当前需求状态的 revision */
+            expected_revision: number;
+            subject: string;
+            memory_ids: string[];
+        };
+        PreferenceConfirmResponse: {
+            /** @constant */
+            schema_version: 1;
+            applied: string[];
+            skipped: {
+                /** Format: uuid */
+                memory_id: string;
+                /**
+                 * @description duplicated 同时表示同请求内重复与同一幂等键已处理过
+                 * @enum {string}
+                 */
+                reason: "not_found" | "subject_mismatch" | "field_not_storable" | "field_already_set" | "stale" | "duplicated";
+            }[];
+            session: components["schemas"]["Session"];
+        };
         Run: {
             /** @constant */
             schema_version: 1;
@@ -801,7 +994,7 @@ export interface components {
             /** @enum {string} */
             kind?: "fact" | "context" | "constraint";
             /** @enum {string} */
-            evidence?: "stated" | "uncertain";
+            evidence?: "stated" | "accepted_proposal" | "uncertain";
             /** @enum {string} */
             strength?: "must" | "prefer";
             /** @enum {string} */
@@ -1982,6 +2175,132 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["FeedbackResponse"];
                 };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    saveSessionPreference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["SessionID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreferenceSaveInput"];
+            };
+        };
+        responses: {
+            /** @description 保存结果（action = created | superseded | unchanged） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceSaveResponse"];
+                };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    listPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 偏好列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceListResponse"];
+                };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    sessionPreferenceSuggestions: {
+        parameters: {
+            query: {
+                /** @description self 表示本人，其余为具名代配对象；由用户显式选择。 */
+                subject: string;
+            };
+            header?: never;
+            path: {
+                session_id: components["parameters"]["SessionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 建议列表（可能为空） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceSuggestionResponse"];
+                };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    confirmSessionPreferences: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                session_id: components["parameters"]["SessionID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreferenceConfirmInput"];
+            };
+        };
+        responses: {
+            /** @description 确认结果与最新会话 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceConfirmResponse"];
+                };
+            };
+            "4XX": components["responses"]["Problem"];
+        };
+    };
+    deletePreference: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                preference_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已删除 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             "4XX": components["responses"]["Problem"];
         };

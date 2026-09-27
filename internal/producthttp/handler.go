@@ -140,6 +140,11 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/sessions/{session_id}/requirement", a.replaceRequirement)
 	mux.HandleFunc("PATCH /api/v1/sessions/{session_id}/requirement-state", a.editRequirementState)
 	mux.HandleFunc("POST /api/v1/sessions/{session_id}/requirement/confirm", a.confirmRequirement)
+	mux.HandleFunc("POST /api/v1/sessions/{session_id}/preferences", a.savePreference)
+	mux.HandleFunc("GET /api/v1/sessions/{session_id}/preferences/suggestions", a.sessionPreferenceSuggestions)
+	mux.HandleFunc("POST /api/v1/sessions/{session_id}/preferences/confirm", a.confirmSessionPreferences)
+	mux.HandleFunc("GET /api/v1/preferences", a.listPreferences)
+	mux.HandleFunc("DELETE /api/v1/preferences/{preference_id}", a.deletePreference)
 	mux.HandleFunc("GET /api/v1/runs/{run_id}", a.getRun)
 	mux.HandleFunc("GET /api/v1/runs/{run_id}/feedback", a.runFeedback)
 	mux.HandleFunc("POST /api/v1/runs/{run_id}/feedback", a.runFeedback)
@@ -819,8 +824,11 @@ func (a *API) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		a.writeProblem(w, r, product.NewProblem("invalid_request", "幂等键冲突", 409, "同一个 Idempotency-Key 已用于不同请求。", requestID(r)))
 	case errors.Is(err, store.ErrOwnerAlreadyClaimed):
 		a.writeProblem(w, r, product.NewProblem("not_found", "资源不存在", 404, "", requestID(r)))
-	case errors.Is(err, store.ErrWebSessionNotFound), errors.Is(err, store.ErrRunNotFound), errors.Is(err, store.ErrBuildNotFound), errors.Is(err, store.ErrShareNotFound):
+	case errors.Is(err, store.ErrWebSessionNotFound), errors.Is(err, store.ErrRunNotFound), errors.Is(err, store.ErrBuildNotFound), errors.Is(err, store.ErrShareNotFound), errors.Is(err, store.ErrPreferenceMemoryNotFound):
 		a.writeProblem(w, r, product.NewProblem("not_found", "资源不存在", 404, "", requestID(r)))
+	case errors.Is(err, schemas.ErrPreferenceMemoryInvalid):
+		a.writeProblem(w, r, product.NewProblem("preference_invalid", "偏好记忆无效", 422,
+			"偏好记录没有通过服务端校验，请确认字段、证据与来源后重试。", requestID(r)))
 	case errors.Is(err, store.ErrSessionBusy):
 		a.writeProblem(w, r, product.NewProblem("session_busy", "会话正在处理中", 409,
 			"同一会话一次只允许一个活动运行。", requestID(r)))

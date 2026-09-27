@@ -22,6 +22,7 @@ var (
 	ErrRequirementNotReady    = errors.New("需求尚未达到确认条件")
 	ErrRequirementReviewConflict = errors.New("需求核定预览已变化，请重新核定")
 	ErrRetryTargetInvalid     = errors.New("重试目标运行无效")
+	ErrWebMessageNotFound     = errors.New("产品消息不存在")
 )
 
 type SessionPhase string
@@ -287,6 +288,25 @@ func (s *Store) WebMessages(ctx context.Context, sessionID string) ([]WebMessage
 		return nil, fmt.Errorf("store: 遍历产品消息失败: %w", err)
 	}
 	return out, nil
+}
+
+// WebMessageByID 按会话内消息 ID 精确读取,供偏好保存等来源核验使用:
+// sessionID 同时出现在条件里,跨会话引用一律不存在。
+func (s *Store) WebMessageByID(ctx context.Context, sessionID, messageID string) (WebMessage, error) {
+	var m WebMessage
+	err := s.pool.QueryRow(ctx, `
+		SELECT id::text, session_id, client_message_id::text, role, content, run_id::text, created_at,
+		       COALESCE(display_content,''), COALESCE(build_version, 0)
+		FROM web_messages WHERE id = $1 AND session_id = $2`, messageID, sessionID).
+		Scan(&m.ID, &m.SessionID, &m.ClientMessageID, &m.Role,
+			&m.Content, &m.RunID, &m.CreatedAt, &m.DisplayContent, &m.BuildVersion)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return WebMessage{}, ErrWebMessageNotFound
+	}
+	if err != nil {
+		return WebMessage{}, fmt.Errorf("store: 查询产品消息失败: %w", err)
+	}
+	return m, nil
 }
 
 // ScreeningMessages 只返回同类初筛运行的稳定产品消息。它不会把 build 的

@@ -87,7 +87,7 @@ const RequirementField: z.ZodType<components["schemas"]["RequirementField"]> = z
     value: z.unknown().optional(),
     status: z.enum(["unknown", "active", "removed", "conflict"]),
     kind: z.enum(["fact", "context", "constraint"]).optional(),
-    evidence: z.enum(["stated", "uncertain"]).optional(),
+    evidence: z.enum(["stated", "accepted_proposal", "uncertain"]).optional(),
     strength: z.enum(["must", "prefer"]).optional(),
     scope: z.enum(["session", "temporary"]).optional(),
     source: RequirementSource.optional(),
@@ -430,6 +430,9 @@ const Problem = z
       "model_quota_exhausted",
       "model_rate_limited",
       "model_timeout",
+      "preference_unavailable",
+      "preference_not_savable",
+      "preference_invalid",
       "auth_disabled",
       "auth_invalid_credentials",
       "auth_email_exists",
@@ -526,6 +529,73 @@ const FeedbackInput = z.object({
   schema_version: z.number().int(),
   reason: FeedbackReason,
   comment: z.string().max(2000).optional(),
+});
+const PreferenceSaveInput = z.object({
+  schema_version: z.number().int(),
+  field: z.string().max(64),
+  subject: z.string().min(1).max(40),
+});
+const PreferenceSource = z.object({
+  kind: z.literal("chat"),
+  session_id: z.string(),
+  message_id: z.string(),
+  quote: z.string(),
+});
+const Preference = z.object({
+  id: z.string().uuid(),
+  subject: z.string(),
+  field: z.string(),
+  value: z.unknown(),
+  strength: z.enum(["prefer", "must"]),
+  evidence: z.enum(["stated", "accepted_proposal"]),
+  volatile: z.boolean(),
+  observed_at: z.string().optional(),
+  source: PreferenceSource,
+  created_at: z.string().datetime({ offset: true }),
+  updated_at: z.string().datetime({ offset: true }),
+});
+const PreferenceSaveResponse = z.object({
+  schema_version: z.number().int(),
+  preference: Preference,
+  action: z.enum(["created", "superseded", "unchanged"]),
+});
+const PreferenceListResponse = z.object({
+  schema_version: z.number().int(),
+  preferences: z.array(Preference),
+});
+const PreferenceSuggestion = z.object({
+  field: z.string(),
+  status: z.enum(["suggest", "conflict"]),
+  choices: z.array(Preference).min(1),
+});
+const PreferenceSuggestionResponse = z.object({
+  schema_version: z.number().int(),
+  subject: z.string(),
+  suggestions: z.array(PreferenceSuggestion),
+});
+const PreferenceConfirmInput = z.object({
+  schema_version: z.number().int(),
+  expected_revision: z.number().int().gte(0),
+  subject: z.string().min(1).max(40),
+  memory_ids: z.array(z.string().uuid()).min(1).max(32),
+});
+const PreferenceConfirmResponse = z.object({
+  schema_version: z.number().int(),
+  applied: z.array(z.string().uuid()),
+  skipped: z.array(
+    z.object({
+      memory_id: z.string().uuid(),
+      reason: z.enum([
+        "not_found",
+        "subject_mismatch",
+        "field_not_storable",
+        "field_already_set",
+        "stale",
+        "duplicated",
+      ]),
+    })
+  ),
+  session: Session,
 });
 const Money = z.string();
 const PriceFreshness = z.enum(["fresh", "aging", "stale", "unknown"]);
@@ -737,6 +807,15 @@ export const schemas = {
   Feedback,
   FeedbackResponse,
   FeedbackInput,
+  PreferenceSaveInput,
+  PreferenceSource,
+  Preference,
+  PreferenceSaveResponse,
+  PreferenceListResponse,
+  PreferenceSuggestion,
+  PreferenceSuggestionResponse,
+  PreferenceConfirmInput,
+  PreferenceConfirmResponse,
   Money,
   PriceFreshness,
   BuildSummary,

@@ -1,7 +1,8 @@
 package schemas
 
 // 跨会话装机偏好记忆(L1 原子记忆)与会话需求(RequirementState)分开建模:
-// 会话内 temporary/uncertain 的内容不升级入库,本类型没有 scope 概念;
+// 写入链路须阻止会话内 temporary/uncertain 内容升级;本类型没有 scope 概念,
+// 因而校验器本身无法核对原始会话 scope;
 // 召回一律降级为待确认建议,不得自动成为硬约束。设计见 docs/tech/偏好记忆设计草案.md。
 import (
 	"encoding/json"

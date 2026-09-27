@@ -85,21 +85,21 @@ func TestPreferenceMemoryLifecycle(t *testing.T) {
 		t.Fatalf("撤销后重建同身份偏好应成功: %v", err)
 	}
 
-	// 删除:物理删除,行消失。
+	// 删除:同一偏好的旧值、墓碑及来源原话一并物理删除。
 	if err := s.DeletePreferenceMemory(ctx, "owner-a", recreated.ID); err != nil {
 		t.Fatal(err)
 	}
 	var count int
 	if err := s.pool.QueryRow(ctx,
-		`SELECT count(*) FROM owner_preference_memories WHERE id = $1`, recreated.ID).Scan(&count); err != nil || count != 0 {
-		t.Fatalf("删除必须是物理删除: %v count=%d", err, count)
+		`SELECT count(*) FROM owner_preference_memories WHERE owner_id = $1 AND subject = $2 AND field = $3`,
+		"owner-a", schemas.PreferenceSubjectSelf, "brand_pref.gpu").Scan(&count); err != nil || count != 0 {
+		t.Fatalf("删除必须清除同一偏好的全部历史: %v count=%d", err, count)
 	}
 	if err := s.DeletePreferenceMemory(ctx, "owner-a", recreated.ID); !errors.Is(err, ErrPreferenceMemoryNotFound) {
 		t.Fatalf("重复删除应返回 ErrPreferenceMemoryNotFound: %v", err)
 	}
-	// 撤销留下的墓碑仍在(审计痕迹),但删除可将其清除。
-	if err := s.DeletePreferenceMemory(ctx, "owner-a", updated.ID); err != nil {
-		t.Fatal(err)
+	if err := s.DeletePreferenceMemory(ctx, "owner-a", updated.ID); !errors.Is(err, ErrPreferenceMemoryNotFound) {
+		t.Fatalf("旧墓碑也应已删除: %v", err)
 	}
 }
 

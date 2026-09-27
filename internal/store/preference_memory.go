@@ -79,8 +79,8 @@ func preferenceSourceJSON(source schemas.PreferenceSource) ([]byte, error) {
 }
 
 // CreatePreferenceMemory 写入一条新偏好。调用方必须先取得用户明确表达
-// (stated)或明确接受(accepted_proposal)的证据;会话内 temporary/uncertain
-// 内容在 schemas 校验层即被拒绝,不升级为长期记忆。
+// (stated)或明确接受(accepted_proposal)的证据,并核对原始会话 scope;
+// schemas 校验只能拒绝不受支持的证据标签,无法验证传入来源是否真实。
 func (s *Store) CreatePreferenceMemory(ctx context.Context, m schemas.PreferenceMemory) (schemas.PreferenceMemory, error) {
 	if err := schemas.ValidatePreferenceMemory(m); err != nil {
 		return schemas.PreferenceMemory{}, err
@@ -195,10 +195,14 @@ func (s *Store) RetractPreferenceMemory(ctx context.Context, ownerID, id string)
 	return nil
 }
 
-// DeletePreferenceMemory 物理删除记忆(含墓碑):用户要求遗忘即真删除,不留审计副本。
+// DeletePreferenceMemory 物理删除该 owner/subject/field 的全部记忆及墓碑,
+// 避免旧值和来源原话留在 supersede 链中。原始会话消息另由会话生命周期管理。
 func (s *Store) DeletePreferenceMemory(ctx context.Context, ownerID, id string) error {
 	tag, err := s.pool.Exec(ctx,
-		`DELETE FROM owner_preference_memories WHERE id = $1 AND owner_id = $2`, id, ownerID)
+		`DELETE FROM owner_preference_memories AS m
+		 USING owner_preference_memories AS target
+		 WHERE target.id = $1 AND target.owner_id = $2
+		   AND m.owner_id = target.owner_id AND m.subject = target.subject AND m.field = target.field`, id, ownerID)
 	if err != nil {
 		return fmt.Errorf("store: 删除偏好记忆: %w", err)
 	}

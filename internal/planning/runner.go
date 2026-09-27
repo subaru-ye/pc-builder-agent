@@ -920,10 +920,21 @@ func (x *execution) finalize() Result {
 	// 自述措辞，也拦截模型直接宣称的 ready（BV2-104：proposal+措辞绕过 →
 	// ready 交付账实不一致）。
 	if (x.result.Outcome == "proposal" || x.result.Outcome == "ready") && len(x.result.Draft) > 0 {
-		if draft, err := schemas.DecodeBuildDraft(x.result.Draft); err == nil {
+		draft, err := schemas.DecodeBuildDraft(x.result.Draft)
+		if err == nil {
 			if pending := x.ownershipTradeoffPending(draft); len(pending) > 0 {
 				x.result.Outcome = "clarify"
 				x.result.Issues = append(x.result.Issues, ownershipTradeoffIssue(pending))
+			}
+		} else {
+			// Draft 违反 selection 契约（如七类必选给 null）时核账无从执行，
+			// 不能当作"无取舍"放行：零匹配已有件仍在场时，沿用/改购取舍未
+			// 经确认，必须 clarify 并逐件点名（BV2-104 Pass³v3 r3：null 内存
+			// 使 evaluate 与 finalize 的解码双双失败，缺口被静默跳过）。
+			if pending := x.unmatchedOwnedParts(); len(pending) > 0 {
+				x.result.Outcome = "clarify"
+				x.result.Issues = append(x.result.Issues, ownershipTradeoffIssue(pending))
+				x.result.Issues = append(x.result.Issues, "方案配置未通过结构校验（"+err.Error()+"），需修正后重新核验。")
 			}
 		}
 	}
@@ -1000,9 +1011,18 @@ func (x *execution) finalize() Result {
 				continue
 			}
 			// 硬性板型由服务端确定性核验（已选主板板型匹配 + 安装范围规则通
-			// 过）时，尺寸约束不依赖模型自评；BV2-105 三轮合格 ITX 方案因模型
-			// 缺席尺寸自评而停留在 proposal。
+			// 过 + 机箱为数据可验的 ITX 机箱）时，尺寸约束不依赖模型自评；
+			// BV2-105 三轮合格 ITX 方案因模型缺席尺寸自评而停留在 proposal。
 			if field == "size_pref" && x.sizePrefServerVerified(v) {
+				continue
+			}
+			// 机箱不是数据可验的 ITX 小机箱（如 matx,itx 通吃机箱）时，模型
+			// 的"满足 ITX"自评与可核数据矛盾或无从核验，不得据此 ready；
+			// 停在 proposal 并点名需用户或更具体数据确认（BV2-105 Pass³v3 r3：
+			// AP201+ATX 电源被判满足 ITX 并交付）。
+			if field == "size_pref" && x.itxCaseUnverified(v) {
+				x.result.Outcome = "proposal"
+				x.result.Issues = append(x.result.Issues, schemas.RequirementFieldLabel(field)+"（ITX）缺少可核验的小机箱数据：已选机箱未声明仅支持 ITX 板型或 SFX/SFX-L 电源仓，需更换数据可验的 ITX 机箱或与用户确认")
 				continue
 			}
 			a, ok := assessed[field]

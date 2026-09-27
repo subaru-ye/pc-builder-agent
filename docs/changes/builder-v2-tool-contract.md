@@ -108,3 +108,24 @@ grade.go）——观察项不产生 check、不影响 pass/classification；聚�
 - **残余失败全部与批量检索无关**；修复方向（留空品类强制 clarify、机箱/电源等级入尺寸核验）登记为下一阶段确定性 change 候选。
 - **可比性回读**：三轮报告 tool_contract 指纹 `11c6a31c…`（与旧批次一致）、error_contract `planning-tool-errors-v2`、head `4fc6077`——与旧批次的预算反馈行为、工具纪律硬分不可直接配对；质量/安全断言与用量可比较。
 - **定位**：只说明本专项题结果，不宣称完整产品 GO。报告：`artifacts/builder-v2-20260925-pass3v3-report-20260927.md`。
+
+## 10. Pass³ v3 残余缺口定向修复与两题定向验证（2026-09-27，同分支，候选即本节提交）
+
+**缺口 1（BV2-104 类：null 槽位绕过核账）**
+- **根因**：模型 draft 把零匹配已有件品类留空（`"memory": null`）→ `DecodeBuildDraft` 失败（七类必选合同）→ `evaluate` 在解码错误时保留原始 JSON（runner.go:767）→ `finalize` 的 `DecodeBuildDraft` 同样失败 → `ownershipTradeoffPending` 整个被跳过；`wasReady`（proposal/ready 自报）路径只剩 `deliveryIssues` 的"候选尚未完成兼容性核验"降级，outcome 落盘 proposal，取舍未经确认。Pass³v3 r1/r2 通过纯属模型自报 clarify，服务端并未守住该路径。
+- **修复（finalize 兜底，runner.go）**：draft 不可解码且 outcome 为 proposal/ready 时，改用 `unmatchedOwnedParts()`（目录零精确匹配的已有件全列）判取舍——非空则强转 clarify 并逐件点名 + 追加"方案配置未通过结构校验"issue。可解码 draft 完全走原路径，不受影响。
+- **红例/正例**：`TestUnmatchedOwnedWithEmptySlotForcesTradeoffClarify`（修复前红：proposal+"候选尚未完成兼容性核验"，取舍被吞）；`TestValidDraftWithUnmatchedOwnedKeepsNormalPath`（可解码 draft 不叠加结构校验 issue，常规取舍 clarify 不变）。既有合法交付路径由 `TestSavedCompleteProposalAutomaticallyDelivers` 等覆盖。
+
+**缺口 2（BV2-105 类：通吃机箱被判满足 must ITX）**
+- **根因**：`sizePrefServerVerified` 只核"主板板型=ITX + FORM_FACTOR_SUPPORT 通过"，未核机箱本身。AP201（supported_form_factors=[matx,itx]、无电源仓字段）装 ITX 主板即通过 FORM_FACTOR_SUPPORT，模型自评 size_pref=met 也在场（证据引用存在），双门皆过 → ATX 电源随 ready 交付；金标 case 属性断言（supported_psu_form_factors ∈ sfx/sfx_l）拦住，判败。
+- **修复（两处，均为确定性）**：①`sizePrefServerVerified` 增加"机箱为数据可验的 ITX 小机箱"前提（`itxCaseVerifiable`：supported_form_factors 仅 itx，或声明 sfx/sfx_l 电源仓约束）；②must 循环新增 `itxCaseUnverified` 否定分支——机箱不可验时模型自评不得通过，outcome=proposal 并点名"缺少可核验的小机箱数据，需更换数据可验的 ITX 机箱或与用户确认"。规则引擎（rules 层）保持用户无感知的物理判定不变；本修复在 planning 层的 must 字段合同。
+- **红例/正例（Pass³v3 真实轨迹冻结回放）**：`TestBV2105Pass3v3FrozenReplayRejectsUniversalCaseAsITX`（r3 失败轨迹 7 响应，修复前 ready，修复后不得 ready 且 issue 点名 ITX）；`TestBV2105Pass3v3FrozenReplayKeepsTrueITXCaseReady`（r1 通过轨迹 6 响应，nr200p+SFX 电源+ITX 主板，修复后仍 ready——合法方案不被拦）。
+
+**边界与剩余风险**：①通吃机箱装 SFX 电源的场景会被停在 proposal 需用户确认——数据不可验时的保守代价（消除它需目录补电源仓字段，属数据管道工作）；②`itxCaseVerifiable` 依赖目录属性声明，属性缺失的候选永不豁免自评（保守方向）；③规则引擎对大机箱电源仓仍不做推断（TestLargerCaseDoesNotInferPSUClearance 语义保留）。
+
+**定向 live 验证（明确预算：每题 ≤15 次 provider 调用，plan-first，零重试，单题派生套件 provenance 已登记）**：
+- BV2-104：**1/1 通过**，5 次调用，82,708 tokens——模型自行 clarify 点名 32GB DDR4-3200 沿用/改购取舍并选中替身计价（outcome=clarify）。
+- BV2-105：**1/1 通过**，5 次调用，144,949 tokens——模型自选真 ITX 组合（nr200p + SFX 电源 + ITX 主板）交付 ready。
+- 产物：`artifacts/builder-v2-20260925-bv2104-directedlive-b-20260927`、`artifacts/builder-v2-20260925-bv2105-directedlive-b-20260927`（plan-live 预检目录以 -preflight 后缀留存）。
+
+**整套复评条件**：两缺口修复经冻结轨迹回放（红→绿）与相邻正例、全量 Go 测试、机制套件零模型 replay、两题定向 live 验证；`ToolErrorContractVersion` 不变（v2，budgetAlternatives/工具声明未动）、工具指纹不变——与 Pass³ v3 同前提，**具备整套 Pass³ 复评条件**；是否复跑由下一轮决定（上一轮 8/10 中两失败题即本题）。

@@ -229,6 +229,25 @@ func (x *execution) deliveryIssues() (issues, notes []string) {
 	return issues, notes
 }
 
+// unmatchedOwnedParts 列出目录零精确匹配的已有件（全部，不区分品类是否被
+// 选中）。用于 draft 不可解码、核账无从执行的兜底：此时任何"沿用"都未经
+// 核账，取舍必须回到用户。
+func (x *execution) unmatchedOwnedParts() []schemas.OwnedPart {
+	var unmatched []schemas.OwnedPart
+	for _, p := range x.accountingSpec().OwnedParts {
+		matched := false
+		for _, c := range x.candidates {
+			if matchesOwnedPart(c, p) {
+				matched = true
+			}
+		}
+		if !matched {
+			unmatched = append(unmatched, p)
+		}
+	}
+	return unmatched
+}
+
 // ownershipTradeoffPending 检测"已有件保留 vs 改购"需要用户取舍的交付形态：
 // 用户已有件在目录无精确型号匹配，draft 仍以其他候选占住该品类。此时选中
 // SKU 与用户已有件的型号/数量未核实，不得仅凭同品类把选中 SKU 当作已有件
@@ -267,7 +286,21 @@ func (x *execution) ownershipTradeoffPending(draft schemas.BuildDraft) []schemas
 		}
 		chosen := selected[p.Category]
 		if len(chosen) == 0 {
-			continue // 品类未被选中：真正沿用用户已有件，无取舍。
+			// 品类被留空：仅当该已有件在目录有精确匹配（规格真值可核、槽位
+			// 兼容性由规则引擎按旧件真值检验）时才是"真正沿用"。零匹配的
+			// 留空意味着"沿用"未经任何核账——容量/代别是否被旧件满足未知，
+			// 保留还是改购仍是用户计价取舍，不得静默交付（BV2-104 Pass³v3
+			// r3：draft 留空 memory 以 proposal 自报，绕过取舍 clarify）。
+			matched := false
+			for _, c := range x.candidates {
+				if matchesOwnedPart(c, p) {
+					matched = true
+				}
+			}
+			if !matched {
+				pending = append(pending, p)
+			}
+			continue
 		}
 		corresponds := false
 		for _, c := range chosen {

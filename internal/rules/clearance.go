@@ -130,23 +130,30 @@ func (formFactorSupportRule) Check(b schemas.ResolvedBuild) schemas.CheckResult 
 	if len(b.Case.SupportedFormFactors) != 1 || b.Case.SupportedFormFactors[0] != schemas.FormFactorITX {
 		return pass(schemas.RuleFormFactorSupport, observed, "主板板型在机箱支持范围内")
 	}
+	return checkITXPSUFit(b, observed, &missing)
+}
+
+// checkITXPSUFit 对纯 ITX 机箱核对电源形态与限长。电源仓是物理限界:数据
+// 齐备时即判定——ATX 电源塞不进 sfx/sfx_l 仓位,与用户是否表达 size_pref 无关
+// (BV2-105 Pass³v3 r3:matx 机箱放行 ITX 主板后,ATX 电源被判可交付)。
+func checkITXPSUFit(b schemas.ResolvedBuild, observed map[string]any, missing *[]string) schemas.CheckResult {
 	if b.PSU.FormFactor == nil {
-		missing = append(missing, "psu.form_factor")
+		*missing = append(*missing, "psu.form_factor")
 	} else {
 		observed["psu_form_factor"] = string(*b.PSU.FormFactor)
 	}
 	if b.Case.SupportedPSUFormFactors == nil {
-		missing = append(missing, "case.supported_psu_form_factors")
+		*missing = append(*missing, "case.supported_psu_form_factors")
 	} else {
 		observed["case_supported_psu_form_factors"] = b.Case.SupportedPSUFormFactors
 	}
 	if b.PSU.LengthMM == nil {
-		missing = append(missing, "psu.length_mm")
+		*missing = append(*missing, "psu.length_mm")
 	} else {
 		observed["psu_length_mm"] = *b.PSU.LengthMM
 	}
 	if b.Case.PSULengthMaxMM == nil {
-		missing = append(missing, "case.psu_length_max_mm")
+		*missing = append(*missing, "case.psu_length_max_mm")
 	} else {
 		observed["case_psu_length_max_mm"] = *b.Case.PSULengthMaxMM
 	}
@@ -159,8 +166,8 @@ func (formFactorSupportRule) Check(b schemas.ResolvedBuild) schemas.CheckResult 
 		return fail(schemas.RuleFormFactorSupport, schemas.SeverityError, observed,
 			fmt.Sprintf("电源长 %d mm 超过 ITX 机箱电源限长 %d mm", *b.PSU.LengthMM, *b.Case.PSULengthMaxMM))
 	}
-	if len(missing) > 0 {
-		return unknown(schemas.RuleFormFactorSupport, observed, missing, "ITX 机箱电源安装规格缺失,无法判定")
+	if len(*missing) > 0 {
+		return unknown(schemas.RuleFormFactorSupport, observed, *missing, "ITX 机箱电源安装规格缺失,无法判定")
 	}
 	return pass(schemas.RuleFormFactorSupport, observed, "主板与电源均在 ITX 机箱安装范围内")
 }

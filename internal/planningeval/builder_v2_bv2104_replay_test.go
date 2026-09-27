@@ -155,7 +155,7 @@ func bv2104SetupFile(t *testing.T, frozenFile, caseID string) (planning.Runner, 
 		} `json:"steps"`
 	}
 	for _, c := range suite.Cases {
-		if c.ID == "BV2-104" {
+		if c.ID == caseID {
 			rawCase, _ := json.Marshal(c)
 			if err := json.Unmarshal(rawCase, &caseData); err != nil {
 				t.Fatal(err)
@@ -182,7 +182,7 @@ func bv2104SetupFile(t *testing.T, frozenFile, caseID string) (planning.Runner, 
 	// 种子轮是核定需求的脚本化适配器输入（非真实用户轮），与 harness 同口径
 	// 用 edit 来源写入，不做 quote 归属校验。
 	state, err = schemas.ApplyRequirementUpdate(state, schemas.RequirementUpdate{Operations: ops},
-		schemas.RequirementSource{Kind: "edit", MessageID: "bv2-104-seed", Quote: caseData.Steps[0].Text})
+		schemas.RequirementSource{Kind: "edit", MessageID: "bv2-seed", Quote: caseData.Steps[0].Text})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,5 +303,39 @@ func TestBV2110FrozenLiveReplayKeepsTradeoffUnresolved(t *testing.T) {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("真实取舍内容被剔除（缺 %q）：%v", want, got.Issues)
 		}
+	}
+}
+
+// BV2-105 尺寸缺口红-first 回放（Pass³v3 r3 失败轨迹，7 次真实响应）：模型选
+// ITX 主板 + AP201（supported_form_factors=[matx,itx] 通吃机箱、无电源仓约束
+// 数据）+ ATX 电源并宣称 ready。size_pref=itx must 的服务端核验必须区分
+// "数据可验的 ITX 机箱"与通吃机箱——通吃机箱不豁免模型自评，该序列不得
+// ready（金标 case 属性断言要求 sfx/sfx_l 电源仓声明）。修复前：ready。
+func TestBV2105Pass3v3FrozenReplayRejectsUniversalCaseAsITX(t *testing.T) {
+	runner, input := bv2104SetupFile(t, "testdata/builder-v2-live-20260925/bv2-105-pass3v3-frozen-builder-responses.json", "BV2-105")
+	got, err := runner.Run(context.Background(), input)
+	if err != nil {
+		t.Fatalf("replay run: %v", err)
+	}
+	if got.Outcome == "ready" {
+		t.Fatalf("通吃机箱+ATX 电源不得被判满足 must ITX 并交付 ready: issues=%v", got.Issues)
+	}
+	joined := strings.Join(got.Issues, "\n")
+	if !strings.Contains(joined, "ITX") {
+		t.Fatalf("issue 应说明尺寸约束未满足: %v", got.Issues)
+	}
+}
+
+// BV2-105 相邻正例（Pass³v3 r1 通过轨迹，6 次真实响应）：真 ITX 机箱
+// （nr200p，supported_form_factors=[itx] + sfx/sfx_l 电源仓）+ SFX 电源 +
+// ITX 主板——数据可验的合格组合，修复后仍必须 ready，不得把合法方案拦下。
+func TestBV2105Pass3v3FrozenReplayKeepsTrueITXCaseReady(t *testing.T) {
+	runner, input := bv2104SetupFile(t, "testdata/builder-v2-live-20260925/bv2-105-pass3v3-r1-passing-frozen-builder-responses.json", "BV2-105")
+	got, err := runner.Run(context.Background(), input)
+	if err != nil {
+		t.Fatalf("replay run: %v", err)
+	}
+	if got.Outcome != "ready" {
+		t.Fatalf("真 ITX 机箱合格组合必须保持 ready，got %s (issues=%v)", got.Outcome, got.Issues)
 	}
 }

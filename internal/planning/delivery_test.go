@@ -716,3 +716,75 @@ func TestTradeoffShorthandKeptAsMixed(t *testing.T) {
 		})
 	}
 }
+
+// 聚焦反例（BV2-104 Pass³v3 r3 红例，红-first）：零匹配已有件的品类被 draft
+// **留空**（"memory": null）且模型宣称 ready——服务端以"品类未被选中=真正
+// 沿用"放行并出 note。但零匹配意味着"沿用"根本没有被核账过：内存槽位的
+// 容量/代别是否被旧件满足未经验证，保留还是改购仍是用户的计价取舍，必须
+// clarify，不得交付。
+func TestUnmatchedOwnedWithEmptySlotForcesTradeoffClarify(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"memory","model":"G.Skill Ripjaws V 32GB DDR4-3200","quantity":1}]`),
+	}
+	draft := map[string]any{}
+	if err := json.Unmarshal(record.Draft, &draft); err != nil {
+		t.Fatal(err)
+	}
+	sel := draft["selection"].(map[string]any)
+	sel["memory"] = nil // 留空内存槽：Pass³v3 r3 的真实形态
+	raw, _ := json.Marshal(draft)
+	record.Draft = raw
+	record.Outcome = "ready"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome != "clarify" {
+		t.Fatalf("零匹配已有件品类留空不得交付（got %s）: issues=%v", got.Outcome, got.Issues)
+	}
+	joined := strings.Join(got.Issues, "; ")
+	for _, want := range []string{"计价取舍", "内存", "G.Skill Ripjaws V 32GB DDR4-3200"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("取舍说明缺 %q: %v", want, got.Issues)
+		}
+	}
+}
+
+// 相邻正例（避免误拦）：draft **可解码**（七类 SKU 齐备）时，无论取舍结果
+// 如何都走常规路径——被选中零匹配品类由 ownershipTradeoffPending 出常规取
+// 舍 clarify，不叠加"结构校验失败"issue；合法交付路径由
+// TestSavedCompleteProposalAutomaticallyDelivers 等既有测试覆盖。
+// （留空品类的"沿用"在结构上不能成为交付：validate 需要七类 SKU 真值，
+// null 使 draft 不可解码——那正是缺口 1 的绕过通道。）
+func TestValidDraftWithUnmatchedOwnedKeepsNormalPath(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	input.State.Fields["owned_parts"] = schemas.RequirementField{
+		Status: "active", Kind: "fact", Strength: "must",
+		Value: json.RawMessage(`[{"category":"cooler","model":"目录没有的旧风冷X","quantity":1}]`),
+	}
+	record.Outcome = "ready"
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome != "clarify" {
+		t.Fatalf("零匹配被选中品类必须走常规取舍 clarify（got %s）", got.Outcome)
+	}
+	joined := strings.Join(got.Issues, "; ")
+	if strings.Contains(joined, "结构校验") {
+		t.Fatalf("可解码 draft 不得叠加结构校验失败 issue: %v", got.Issues)
+	}
+	if !strings.Contains(joined, "计价取舍") {
+		t.Fatalf("常规取舍说明缺失: %v", got.Issues)
+	}
+}

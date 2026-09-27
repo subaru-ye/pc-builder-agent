@@ -277,16 +277,58 @@ func (x *execution) sizePrefViolated(v schemas.RequirementField) bool {
 	return false
 }
 
+// itxCaseVerifiable 报告已选机箱在目录数据下可验为 ITX 小机箱：
+// supported_form_factors 仅 itx，或声明了 sfx/sfx_l 电源形态约束（电源仓
+// 物理限界随数据可见）。"matx,itx"通吃机箱不在其列——通常收 ATX 电源，
+// 与 must ITX（必须 ITX 小机箱）语义矛盾且电源仓数据不可验。
+func (x *execution) itxCaseVerifiable() bool {
+	draft, err := schemas.DecodeBuildDraft(x.result.Draft)
+	if err != nil || draft.Selection.Case == "" {
+		return false
+	}
+	for _, c := range x.candidates {
+		if c.Category != schemas.CategoryCase || c.ID != draft.Selection.Case {
+			continue
+		}
+		specs := map[string]json.RawMessage{}
+		if json.Unmarshal(c.Specs, &specs) != nil {
+			return false
+		}
+		var forms []string
+		if raw, ok := specs["supported_form_factors"]; ok {
+			_ = json.Unmarshal(raw, &forms)
+		}
+		if len(forms) == 1 && strings.EqualFold(forms[0], string(schemas.SizePrefITX)) {
+			return true
+		}
+		var psuForms []string
+		if raw, ok := specs["supported_psu_form_factors"]; ok {
+			_ = json.Unmarshal(raw, &psuForms)
+		}
+		for _, f := range psuForms {
+			if strings.EqualFold(f, "sfx") || strings.EqualFold(f, "sfx_l") {
+				return true
+			}
+		}
+		return false
+	}
+	return false
+}
+
 // sizePrefServerVerified 报告硬性板型已由服务端确定性核验：偏好 ITX、已选
-// 主板板型匹配（sizePrefViolated 为 false）且安装范围规则（FORM_FACTOR_
-// SUPPORT）通过。此时尺寸硬约束不依赖模型自评（BV2-105 三轮合格 ITX 方案
-// 因模型缺席尺寸自评而停留在 proposal）。
+// 主板板型匹配（sizePrefViolated 为 false）、安装范围规则（FORM_FACTOR_
+// SUPPORT）通过，且机箱本身是数据可验的 ITX 机箱（itxCaseVerifiable）。此时
+// 尺寸硬约束不依赖模型自评（BV2-105 三轮合格 ITX 方案因模型缺席尺寸自评而
+// 停留在 proposal）。
 func (x *execution) sizePrefServerVerified(v schemas.RequirementField) bool {
 	if x.sizePrefViolated(v) {
 		return false
 	}
 	want := strings.Trim(strings.TrimSpace(string(v.Value)), `"`)
 	if !strings.EqualFold(want, string(schemas.SizePrefITX)) {
+		return false
+	}
+	if !x.itxCaseVerifiable() {
 		return false
 	}
 	if x.result.Validation == nil {
@@ -298,6 +340,20 @@ func (x *execution) sizePrefServerVerified(v schemas.RequirementField) bool {
 		}
 	}
 	return false
+}
+
+// itxCaseUnverified 报告 must ITX 的交付形态中，机箱**不是**数据可验的 ITX
+// 小机箱（通吃机箱或机箱缺失）。此时模型的"满足 ITX"自评与可核数据矛盾或
+// 无从核验，不得据此交付 ready（BV2-105 Pass³v3 r3：AP201+ATX 电源被判满足）。
+func (x *execution) itxCaseUnverified(v schemas.RequirementField) bool {
+	if x.sizePrefViolated(v) {
+		return false // 已由 violated 分支处理
+	}
+	want := strings.Trim(strings.TrimSpace(string(v.Value)), `"`)
+	if !strings.EqualFold(want, string(schemas.SizePrefITX)) {
+		return false
+	}
+	return !x.itxCaseVerifiable()
 }
 
 // noBudgetGateFeedback 权威状态中没有用户表达的预算金额时，交付配置是把关键

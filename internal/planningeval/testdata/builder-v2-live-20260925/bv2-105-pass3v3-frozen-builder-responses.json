@@ -1,0 +1,186 @@
+{
+ "provenance": {
+  "source": "artifacts/builder-v2-20260925-pass3v3-r3-20260927/report.json BV2-105 confirm-step trace（live，候选 4fc6077，grading-v2 r3 失败轮）",
+  "extracted": "2026-09-27",
+  "model": "deepseek-v4-flash-0731@ws-5z8rvj9oxtusr5m0",
+  "note": "BV2-105 尺寸缺口红-first 证据（7 次真实 provider 响应）：模型选 ITX 主板+AP201（matx,itx 通吃机箱）+ATX 电源并宣称 ready，被金标 case 属性断言拦截；服务端 sizePrefServerVerified 未核机箱属性。修复后该序列不得 ready。只读回放，不是新盲测。"
+ },
+ "responses": [
+  {
+   "parts": [
+    {
+     "functionCall": {
+      "id": "call_6a2b6d2721224dfeb38853b7",
+      "args": {
+       "action": "search_local",
+       "payload": "{\"query\":\"ITX\",\"category\":\"case\",\"order_by\":\"relevance\",\"limit\":16}"
+      },
+      "name": "planning_action"
+     }
+    },
+    {
+     "functionCall": {
+      "id": "call_3510f9d561d74bfc9088b6b5",
+      "args": {
+       "action": "search_local",
+       "payload": "{\"query\":\"\",\"category\":\"motherboard\",\"order_by\":\"relevance\",\"limit\":16}"
+      },
+      "name": "planning_action"
+     }
+    }
+   ],
+   "role": "model"
+  },
+  {
+   "parts": [
+    {
+     "text": "I need to build an ITX build. Let me note key findings:\n- ITX case options: NR200P (699, needs SFX PSU), Fractal Terra (1449, SFX PSU), Asus AP201 (supports matx+itx with ATX PSU), Lian Li A3-mATX.\n- ITX motherboard: MSI MPG B650I EDGE WIFI (1450, AM5, DDR5).\n- I need to check for ITX motherboard options and compatible PSU/cooler.\n\nThe user wants ITX small form factor. Let me look at more CPU options and check for ITX motherboards on other platforms (AM4, LGA1700) and PSUs.\n\nLet me search for more options"
+    },
+    {
+     "functionCall": {
+      "id": "call_1bc2266d67594062b7bd59cc",
+      "args": {
+       "action": "search_local",
+       "payload": "{\"query\":\"ITX\",\"category\":\"motherboard\",\"order_by\":\"price_asc\",\"limit\":16}"
+      },
+      "name": "planning_action"
+     }
+    },
+    {
+     "functionCall": {
+      "id": "call_9d5f1a488bef4ae7873307ed",
+      "args": {
+       "action": "search_local",
+       "payload": "{\"query\":\"SFX\",\"category\":\"psu\",\"order_by\":\"price_asc\",\"limit\":16}"
+      },
+      "name": "planning_action"
+     }
+    },
+    {
+     "functionCall": {
+      "id": "call_b4f826b697bf4285aaa95a30",
+      "args": {
+       "action": "search_local",
+       "payload": "{\"query\":\"\",\"category\":\"cpu\",\"order_by\":\"price_asc\",\"limit\":16}"
+      },
+      "name": "planning_action"
+     }
+    }
+   ],
+   "role": "model"
+  },
+  {
+   "parts": [
+    {
+     "text": "Now I have a good picture. The user wants an ITX build with 9000 budget, general office use (\"普通办公\"). Key constraints:\n- ITX small form factor (must)\n- Budget 9000 CNY (must)\n- Tower configuration scope\n- General office use (fact)\n\nThe challenge: The ITX motherboard in the catalog is only **MSI MPG B650I EDGE WIFI** (AM5, DDR5, 1450 CNY). This is quite expensive. Let me consider whether an ITX motherboard exists for cheaper platforms (AM4/Intel).\n\nLet me check if there are any more ITX motherboards in the catalog. It seems only B650I EDGE WIFI is the ITX motherboard found (wireless). There might also be other ITX boards. Let me check the remaining motherboard catalog and also cooler/SSD options. Also need to figure out which case to use.\n\nFor ITX, the options are:\n1. **NR200P** (699) - needs SFX PSU, but SFX PSUs are expensive (CM V SFX 850W at 1199, the only affordable SFX)\n2. **Fractal Terra** (1449) - too expensive\n3. **Asus AP201** (412) - supports matx+itx AND ATX PSU (present as \"supported_form_factors\":[\"matx\",\"itx\"]), so can use cheaper ATX PSU\n4. **Lian Li A3-mATX** (499) - supports matx+itx, needs checking PSU support\n\nThe AP201 supports ITX boards with ATX PSU (it's a 33L case). This is the most cost-effective for an ITX build with a standard ATX PSU.\n\nSo my build approach:\n- **Case**: Asus Prime AP201 (412) - ITX-friendly, supports ATX PSU, mesh, nice size\n- **Motherboard**: Must be ITX. Only B650I EDGE WIFI available (1450, AM5/DDR5). That forces AM5 platform.\n- **CPU**: Ryzen 5 7500F (780, AM5, 65W) or Ryzen 5 8400F (656) - both AM5\n- **GPU**: Since general office use, maybe integrated or a discrete GPU. Given budget 9000, and the requirement was general office. But the catalog prices suggest they may want a discrete GPU. Let me consider. Actually for \"普通办公\" a discrete GPU isn't strictly needed. But the cost of ITX board+case is high. Let me compute.\n\nLet me consider budget. With ITX B650I board at 1450:\n- CPU: Ryzen 5 7500F (780) or 8400F (656)\n- Motherboard: 1450\n- RAM: DDR5 needed. Need to check DDR5 RAM options.\n- SSD: NVMe preferred (B650I has 2 M.2 slots). Let me search NVMe SSD.\n- PSU: ATX, use MSI A650BN (269) with AP201\n- Case: AP201 (412)\n- Cooler: need low-profile or standard air cooler. AP201 supports up to 170mm cooler height, so Hyper 212 (159mm, 54.5) or AG400 works.\n- GPU: for office use, discrete not required. But if user wants GPU, RTX 3060 (2789) or RTX 5060 (3028).\n\nLet me search for DDR5 memory and NVMe SSD options.\n\n"
+    },
+    {
+     "functionCall": {
+      "id": "call_e7be0d64345c43f28807f2a1",
+      "args": {
+       "action": "search_local",
+       "payload": "{\"query\":\"DDR5\",\"category\":\"memory\",\"order_by\":\"price_asc\",\"limit\":16}"
+      },
+      "name": "planning_action"
+     }
+    },
+    {
+     "functionCall": {
+      "id": "call_cd2d2c57b8844d52b8c7b5b7",
+      "args": {
+       "action": "search_local",
+       "payload": "{\"query\":\"NVMe\",\"category\":\"ssd\",\"order_by\":\"price_asc\",\"limit\":16}"
+      },
+      "name": "planning_action"
+     }
+    }
+   ],
+   "role": "model"
+  },
+  {
+   "parts": [
+    {
+     "text": "I now have a full picture. Let me analyze the constraints:\n\n**ITX constraint is the driving factor.** The only ITX motherboard in the catalog is **MSI MPG B650I EDGE WIFI** (AM5, DDR5, 1450 CNY). This significantly constrains the build to the AM5/DDR5 platform.\n\nThere are no cheap ITX motherboards for AM4 or Intel in this catalog. So the AM5 platform is forced by the ITX requirement (unless we relax to a smaller mATX case which also supports ITX boards... but ITX boards are the issue).\n\nLet me reconsider. Wait - the size_pref is \"itx\". The A3-mATX and AP201 cases support both matx and itx boards. But we need an ITX board for a true ITX build. The only ITX board available is B650I EDGE WIFI.\n\nSo the ITX build forces AM5 platform. Let me build:\n\n**Platform (AM5 forced):**\n- CPU: Ryzen 5 7500F (780) - good value, or 8400F (656)\n- Motherboard: MSI MPG B650I EDGE WIFI (1450)\n- Memory: DDR5 needed. Options: Kingston FURY Beast 16GB DDR5-5200 (2379!)... these are expensive. Kingston Beast 16GB DDR5-6000 CL30 (2499). Very expensive.\n\nThe DDR5 memory in this catalog is extremely expensive (2379+ for 16GB). This is a problem. Let me compute the total.\n\n**Compute a reasonable ITX build:**\n\nOption A (with discrete GPU - since office use may need/want, and catalog has GPU options):\n- CPU: R5 8400F (656) \n- MB: B650I EDGE (1450)\n- RAM: Kingston Beast 16GB DDR5-5200 (2379) — minimum DDR5\n- SSD: Zhitai Ti600 1TB NVMe (679)\n- GPU: RTX 3060 (2789) or RTX 5060 (3028)\n- PSU: MSI A650BN (269) [ATX, fits AP201]\n- Case: AP201 (412)\n- Cooler: AG400 (79)\n\nTotal without GPU: 656+1450+2379+679+269+412+79 = 5924\nWith RTX 3060: 5924+2789 = 8713 ✓ (within 9000)\nWith RTX 5060: 5924+3028 = 8952 ✓ (within 9000)\n\nBut wait, the memory is a big cost (2379 for 16GB DDR5). This dramatically skews the build. \n\nHmm, the user said \"普通办公\" (general office). For office use, a discrete GPU isn't required. Let me reconsider whether the user needs one. But the fact that the user wants a discrete GPU isn't clear. For general office, integrated graphics might suffice. But the 7500F/8400F have no iGPU (has_igpu: false). The Ryzen 5 4600G has iGPU but it's AM4, and there's no ITX AM4 board available.\n\nWait — actually, let me reconsider. Given it's office use, maybe the user really does not need a GPU, and could use an iGPU CPU. But the AM5 ITX board only works with AM5 CPUs, and the AM5 CPUs with iGPU are R5 7600/7600X/9600X (expensive) or the 8400F/7500F (no iGPU). \n\nActually, hold on. Let me reconsider whether the user needs a GPU at all for office use. Given budget 9000 and ITX, and the forced expensive platform, I think the intended build likely includes a discrete GPU. The GPU options present (RTX 3060, RTX 5060) suggest gaming eligibility. But since it's \"普通办公\", maybe just integrated.\n\nGiven the memory is extremely expensive in this catalog, the budget will be tight. Let me consider the discrete GPU build since budget allows.\n\nLet me evaluate the build with RTX 5060 (3028):\nTotal = 8952, within 9000 ✓ and within flex (9000*1.1=9900 too). \n\nActually let me use the RTX 5060 which is newer and faster. Budget = 8952, fits within 9000.\n\nActually, let me reconsider the RAM. Kingston Beast 16GB DDR5-5200 at 2379 is expensive. But it's the cheapest DDR5 in the catalog. The alternative - is there any cheaper DDR5 option? The search returned all DDR5 options. The cheapest DDR5 is 2379. OK.\n\nHmm, but wait — this is a huge chunk of the budget. Let me reconsider whether there's a cheaper ITX path. \n\nActually, is there any mATX board that could go in an ITX-designated case? The size_pref is \"itx\" (must). Truly ITX requires ITX motherboard. The only ITX board is B650I. So AM5 platform it is.\n\nLet me reconsider possibility of using Intel LGA1700 with ITX board — but no ITX Intel boards in catalog. So AM5 forced.\n\nLet me now do a first evaluate with the build.\n\nBuild selection:\n- CPU: cpu-r5-7500f (780) — better than 8400F for performance; or 8400F (656). For office + maybe light gaming, 7500F is good value. But 8400F cheaper. Let me use 8400F to save for GPU, or 7500F. Actually for general use, let me pick R5 7500F (stronger) since budget allows. Hmm, but the GPU is more important. Let me consider with RTX 5060.\n\nTotal with 7500F: 780+1450+2379+679+269+412+79+3028 = 9076. That's slightly over 9000. \n\nWith 8400F: 656+1450+2379+679+269+412+79+3028 = 8952 ✓\n\nSo 8400F fits within 9000 with RTX 5060. Good.\n\nAlternatively cheaper SSD: Kingston NV2 1TB (709) vs Zhitai Ti600 (679). Ti600 is cheaper. Use Ti600 679.\n\nLet me settle the draft:\n- CPU: cpu-r5-8400f (656)\n- MB: mb-msi-b650i-edge (1450)\n- RAM: mem-kingston-beast-16-5200 (2379)\n- SSD: ssd-zhitai-ti600-1tb (679)\n- GPU: gpu-gb-5060-windforce (3028)\n- PSU: psu-msi-mag-a650bn (269)\n- Case: case-asus-prime-ap201 (412)\n- Cooler: cooler-deepcool-ag400 (79)\n\nTotal = 656+1450+2379+679+3028+269+412+79 = 8952 ✓ Within 9000.\n\nLet me verify cooler compatibility: AP201 cooler height max 170mm, AG400 height 150mm ✓. CPU 65W TDP, AG400 cooling 220W ✓.\n\nGPU: RTX 5060 WINDFORCE length 199mm, AP201 supports up to 338mm ✓. Power: single 8pin, A650BN has 2x 8pin ✓.\n\nActually, wait - the AG400 is a 120mm tower cooler, 150mm height, fits in AP201 (170mm). Good.\n\nLet me also double check the B650I board supports the 8400F. The 8400F supports chipsets: A620, X670E, X670, B650E, B650, X870E, X870, B840, B850. B650I is B650 ✓.\n\nMotherboard M.2: 2 slots, SSD is M.2 ✓.\n\nLet me evaluate this config.\n\nAlso note: for \"普通办公\" use, discrete GPU might be overkill, but within budget it's fine and provides flexibility. However, I should note in assessments that office use doesn't strictly require a discrete GPU, but budget permits and offers future flexibility. Actually, since the user chose general office + ITX, and the memory/catalog prices are very high, let me just present a balanced build.\n\nLet me run the evaluate.\n\n"
+    },
+    {
+     "functionCall": {
+      "id": "call_aebaf8a4ec834db8a64d5aff",
+      "args": {
+       "action": "evaluate",
+       "payload": "{\"draft\":{\"schema_version\":1,\"requirement_ref\":\"current\",\"build_ref\":\"proposal\",\"selection\":{\"cpu\":\"cpu-r5-8400f\",\"gpu\":\"gpu-gb-5060-windforce\",\"motherboard\":\"mb-msi-b650i-edge\",\"memory\":\"mem-kingston-beast-16-5200\",\"ssd\":[{\"sku\":\"ssd-zhitai-ti600-1tb\",\"quantity\":1}],\"psu\":\"psu-msi-mag-a650bn\",\"case\":\"case-asus-prime-ap201\",\"cooler\":\"cooler-deepcool-ag400\"},\"rationale\":{\"cpu\":\"AM5平台(ITX主板仅有B650I可用)下性价比选择，65W低功耗\",\"motherboard\":\"目录中唯一的ITX主板，AM5/DDR5平台\",\"memory\":\"目录中最便宜的DDR5内存(ITX主板需DDR5)\",\"gpu\":\"普通办公+余量预算下配RTX 5060，199mm短卡适配ITX机箱且单8pin接入\",\"psu\":\"ATX电源适配AP201机箱，650W足够\",\"case\":\"AP201支持ITX主板并兼容ATX电源，紧凑小机箱\",\"cooler\":\"AG400高度150mm适配AP201(170mm限高)，220W解热足够\"}}}"
+      },
+      "name": "planning_action"
+     }
+    }
+   ],
+   "role": "model"
+  },
+  {
+   "parts": [
+    {
+     "text": "The evaluate passed with all checks green. Total = 8952 CNY, within the 9000 budget.\n\nAll validations pass:\n- Socket AM5 match\n- Chipset B650 supported\n- Memory DDR5 match, speed within board limit\n- GPU clearance (199mm) fits AP201 (338mm)\n- Cooler clearance fits\n- PSU headroom OK (650W vs 310W load)\n- Form factor ITX fits\n- M.2 and power connector OK\n\nThe build is complete and validated within budget. Let me deliver this as ready.\n\nWait - the user in this session just gave the initial requirement (budget 9000, ITX, office use, all new). This is the config request. The instructions say the evaluate ran and we should deliver. The user asked for a build (the initial requirement states the constraints). Since this is a fresh configuration build based on stated requirements, and evaluate passed, I should deliver a ready outcome.\n\nActually, let me reconsider the outcome type. The requirement is a full config request with firm constraints (budget 9000 must, ITX must, office use). This is a clear \"give me a config\" request (the session started with the effective constraints established). So ready is appropriate.\n\nLet me present the assessments for each active constraint:\n- budget_cny: 9000, total 8952, met\n- existing_parts: none (all new), met\n- size_pref: itx, case AP201 + ITX board, met\n- use_case.type: general office, met (discrete GPU included as flexibility; office tasks easily handled)\n\nNote about the memory cost: The DDR5 kit costs 2379 for 16GB which is high. I should note the memory dominates the budget. Also note that office use doesn't require a discrete GPU, but budget permits the RTX 5060 which adds flexibility (light gaming/accelerated workloads). And mention that within the ITX constraint, the only available ITX motherboard is AM5/DDR5, which drives up memory cost.\n\nOne consideration: I selected the RTX 5060 discrete GPU even though use is general office. Since the user's stated use is office, this is fine as headroom/flexibility, but I should be transparent. Alternatively I could drop the GPU. But since budget is generous (9000) and ITX platform is expensive, including GPU is reasonable. However it may be worth noting the alternative. But since the user asked for a complete config and budget is met, delivering ready with the GPU as flexibility is reasonable. I'll note that the GPU is optional for office-only use in assessments.\n\nLet me finalize the JSON output as ready.\n\n"
+    },
+    {
+     "functionCall": {
+      "id": "call_fba3e79a24c24687af147b17",
+      "args": {
+       "action": "search_semantic",
+       "payload": "{\"query\":\"ITX小机箱迷你主机\",\"category\":\"case\"}"
+      },
+      "name": "planning_action"
+     }
+    }
+   ],
+   "role": "model"
+  },
+  {
+   "parts": [
+    {
+     "text": "Semantic search is unavailable, no problem. I have all the data needed. The build passed validation completely. Let me deliver the final result.\n\nThe build is complete and validated within the 9000 budget for an ITX office PC:\n\n- **CPU**: AMD Ryzen 5 8400F (AM5, 65W) — 656元\n- **散热**: Deepcool AG400 — 79元\n- **主板**: MSI MPG B650I EDGE WIFI (ITX) — 1450元\n- **内存**: Kingston FURY Beast 16GB DDR5-5200 — 2379元\n- **SSD**: 致态 Ti600 1TB NVMe — 679元\n- **显卡**: Gigabyte RTX 5060 Windforce 8G — 3028元\n- **电源**: MSI MAG A650BN 650W — 269元\n- **机箱**: Asus Prime AP201（ITX）— 412元\n- **合计**: 8952元\n\nAll compatibility checks passed.\n\n```json\n{\n  \"outcome\": \"ready\",\n  \"reply\": \"已完成9000元ITX装机方案（8952元）。ITX尺寸是硬性要求，而目录中可用的ITX主板仅有【MSI B650I EDGE WIFI】这款AM5/DDR5主板，因此本方案锁定AMD新平台，这也带动了DDR5内存成本（16GB约2379元）。\\n\\n核心配置：CPU选65W低功耗的Ryzen 5 8400F（656元），配AG400风冷（150mm高、适配AP201机箱）；机箱用Asus Prime AP201（ITX、兼容ATX电源）；电源用MSI A650BN（650W，负载余量充足）；SSD用致态Ti600 1TB NVMe。显卡给到RTX 5060 8G短卡（199mm），完全适配ITX机箱。\\n\\n说明：普通办公本不必须独显，但预算允许下配RTX 5060给以后留了余量（轻游戏/图形加速）。若确认纯办公不玩游戏，可考虑去掉独显把预算留给更大内存/SSD，或正好压满预算。整机约8952元，未超预算上限，所有兼容项（插槽、内存代际、显卡/散热限位、供电接口）均核验通过。\",\n  \"draft\": {\n    \"schema_version\": 1,\n    \"requirement_ref\": \"current\",\n    \"build_ref\": \"proposal\",\n    \"selection\": {\n      \"cpu\": \"cpu-r5-8400f\",\n      \"gpu\": \"gpu-gb-5060-windforce\",\n      \"motherboard\": \"mb-msi-b650i-edge\",\n      \"memory\": \"mem-kingston-beast-16-5200\",\n      \"ssd\": [{\"sku\": \"ssd-zhitai-ti600-1tb\", \"quantity\": 1}],\n      \"psu\": \"psu-msi-mag-a650bn\",\n      \"case\": \"case-asus-prime-ap201\",\n      \"cooler\": \"cooler-deepcool-ag400\"\n    },\n    \"rationale\": {\n      \"cpu\": \"AM5平台唯一可用ITX主板下性价比低功耗选择(65W)\",\n      \"motherboard\": \"目录唯一ITX主板，锁定AM5/DDR5平台\",\n      \"memory\": \"目录中最便宜DDR5内存(ITX主机必配DDR5)\",\n      \"gpu\": \"普通办公为主，预算允许配RTX 5060短卡留足图形余量\",\n      \"psu\": \"650W ATX电源，适配AP201机箱，负载余量1.3倍以上\",\n      \"case\": \"AP201支持ITX主板并兼容ATX电源，紧凑小体积\",\n      \"cooler\": \"AG400高度150mm适配AP201(170mm限高)\"\n    }\n  },\n  \"assessments\": [\n    {\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"整机合计8952元，未超9000元预算上限\", \"evidence\": [\"local:cpu-r5-8400f\",\"local:mb-msi-b650i-edge\",\"local:mem-kingston-beast-16-5200\",\"local:gpu-gb-5060-windforce\",\"local:psu-msi-mag-a650bn\",\"local:case-asus-prime-ap201\",\"local:cooler-deepcool-ag400\",\"local:ssd-zhitai-ti600-1tb\"]},\n    {\"field\": \"size_pref\", \"status\": \"met\", \"explanation\": \"使用ITX主板(MSI B650I EDGE WIFI)与AP201 ITX机箱，满足must级ITX尺寸要求\", \"evidence\": [\"local:mb-msi-b650i-edge\",\"local:case-asus-prime-ap201\"]},\n    {\"field\": \"existing_parts\", \"status\": \"met\", \"explanation\": \"用户为全新购买，无既有件，已按全新整机核价\", \"evidence\": [\"local:cpu-r5-8400f\"]},\n    {\"field\": \"use_case.type\", \"status\": \"met\", \"explanation\": \"普通办公场景下，该配置性能充裕；独显为预算允许下的灵活性配置，办公可平稳胜任\", \"evidence\": [\"local:gpu-gb-5060-windforce\"]}\n  ],\n  \"issues\": [\n    \"内存成本偏高（16GB DDR5 5200 约2379元），源于ITX主板仅AM5/DDR5平台可选；若纯办公可去掉独显把预算用于升级内存/SSD。\"\n  ],\n  \"assumptions\": [\n    \"默认接受配独显RTX 5060以留图形余量；若用户明确纯办公不需要独显，可调整为无独显方案。\",\n    \"价格来自2026-09-17本地目录快照。\"\n  ]\n}\n```"
+    }
+   ],
+   "role": "model"
+  },
+  {
+   "parts": [
+    {
+     "text": "The config validation passed completely (overall_status: pass) at 8952元, within the 9000 budget. The issue I flagged about memory cost was an informational note, not an actual unmet constraint.\n\nLet me reconsider whether there's a meaningful issue. The budget is met (8952 ≤ 9000). The remaining issue note about \"内存成本偏高\" was just an observation, not a blocking problem. Since the constraint (budget must ≤ 9000) is satisfied and all compatibility checks pass, this config is valid.\n\nThere's no actual over-budget problem requiring correction. The build is complete, validated, and within budget. So I should deliver `ready` without unnecessary changes.\n\nLet me confirm I've addressed the note. The \"issue\" about high memory cost is not a constraint violation — it's a design note. Since budget is met, cost is partly a function of the ITX platform constraints (only AM5/DDR5 ITX board available in catalog). Including the discrete GPU is a legitimate budget-allowed choice, not a user-must-violation.\n\nI should deliver ready with the understanding that the memory cost note is informational. The config meets all mandatory constraints (budget, ITX size, office use, all-new). No unresolved user decisions needed.\n\nI don't need more tool calls — the fully-priced candidate set was validated. Deliver ready.\n\n```json\n{\n  \"outcome\": \"ready\",\n  \"reply\": \"方案已核验通过，无需修正。整机合计8952元，未超9000元预算上限。之前关于\\\"内存成本偏高\\\"的备注仅为选型说明（因目录中唯一ITX主板为AM5/DDR5平台，DDR5内存价格本身偏高），并非预算超标或约束冲突。\\n\\n最终配置：Ryzen 5 8400F + MSI B650I EDGE WIFI(ITX) + 金士顿FURY Beast 16GB DDR5 + 致态Ti600 1TB + RTX 5060 8G + MSI A650BN 650W + Asus Prime AP201 + Deepcool AG400，合计8952元。所有兼容项（插槽、芯片组、内存代际与频率、显卡/散热限位、供电接口、M.2、电源余量）均核验通过。\\n\\n注：普通办公本不必须独显，本方案在预算内配备RTX 5060作为图形余量；若确认纯办公不需要独显，可另行调整方案以把预算投向更大内存/存储。\",\n  \"draft\": {\n    \"schema_version\": 1,\n    \"requirement_ref\": \"current\",\n    \"build_ref\": \"proposal\",\n    \"selection\": {\n      \"cpu\": \"cpu-r5-8400f\",\n      \"gpu\": \"gpu-gb-5060-windforce\",\n      \"motherboard\": \"mb-msi-b650i-edge\",\n      \"memory\": \"mem-kingston-beast-16-5200\",\n      \"ssd\": [{\"sku\": \"ssd-zhitai-ti600-1tb\", \"quantity\": 1}],\n      \"psu\": \"psu-msi-mag-a650bn\",\n      \"case\": \"case-asus-prime-ap201\",\n      \"cooler\": \"cooler-deepcool-ag400\"\n    },\n    \"rationale\": {\n      \"cpu\": \"AM5平台唯一可用ITX主板下性价比低功耗选择(65W)\",\n      \"motherboard\": \"目录唯一ITX主板，锁定AM5/DDR5平台\",\n      \"memory\": \"目录中最便宜DDR5内存(ITX主机必配DDR5)\",\n      \"gpu\": \"普通办公为主，预算允许配RTX 5060短卡留足图形余量\",\n      \"psu\": \"650W ATX电源适配AP201机箱，负载余量1.3倍以上\",\n      \"case\": \"AP201支持ITX主板兼容ATX电源，紧凑小体积\",\n      \"cooler\": \"AG400高度150mm适配AP201(170mm限高)\"\n    }\n  },\n  \"assessments\": [\n    {\"field\": \"budget_cny\", \"status\": \"met\", \"explanation\": \"整机合计8952元，未超9000元上限\", \"evidence\": [\"local:cpu-r5-8400f\",\"local:mb-msi-b650i-edge\",\"local:mem-kingston-beast-16-5200\",\"local:gpu-gb-5060-windforce\",\"local:psu-msi-mag-a650bn\",\"local:case-asus-prime-ap201\",\"local:cooler-deepcool-ag400\",\"local:ssd-zhitai-ti600-1tb\"]},\n    {\"field\": \"size_pref\", \"status\": \"met\", \"explanation\": \"ITX主板(MSI B650I EDGE) + AP201 ITX机箱，满足must级ITX要求\", \"evidence\": [\"local:mb-msi-b650i-edge\",\"local:case-asus-prime-ap201\"]},\n    {\"field\": \"existing_parts\", \"status\": \"met\", \"explanation\": \"全新购买，无既有件，按全新整机核价\", \"evidence\": [\"local:cpu-r5-8400f\"]},\n    {\"field\": \"use_case.type\", \"status\": \"met\", \"explanation\": \"普通办公场景性能充裕；独显为预算允许下的灵活性配置\", \"evidence\": [\"local:gpu-gb-5060-windforce\"]}\n  ],\n  \"issues\": [],\n  \"assumptions\": [\n    \"默认接受配独显RTX 5060以留图形余量；若用户明确纯办公不需要独显，可调整去掉独显并把预算投内存/存储。\",\n    \"价格来自2026-09-17本地目录快照。\"\n  ]\n}\n```"
+    }
+   ],
+   "role": "model"
+  }
+ ],
+ "effective_constraints_spec": {
+  "schema_version": 2,
+  "budget_cny": 9000,
+  "budget_flex": 0.1,
+  "use_case": {
+   "type": "general",
+   "titles": []
+  },
+  "size_pref": "itx",
+  "noise_pref": "any",
+  "brand_pref": {
+   "cpu": "any",
+   "gpu": "any"
+  },
+  "configuration_scope": [
+   "tower"
+  ],
+  "existing_parts": [],
+  "priority": [],
+  "notes": "",
+  "constraint_strengths": {
+   "budget_cny": "must",
+   "existing_parts": "must",
+   "size_pref": "must",
+   "use_case.type": "must"
+  },
+  "requirement_semantics": {
+   "budget_cny": "constraint",
+   "existing_parts": "fact",
+   "size_pref": "constraint",
+   "use_case.type": "fact"
+  }
+ }
+}

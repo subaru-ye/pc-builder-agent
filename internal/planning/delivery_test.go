@@ -602,10 +602,11 @@ func TestBudgetClaimDropRequiresVerifiedCompleteQuote(t *testing.T) {
 	}
 }
 
-// 聚焦反例（掩盖取舍）：合计已核验且在有效上限内时，含"超出硬上限"的无依据
-// 行按整行剔除；被删行同时承载预算取舍时，服务端必须以 note 如实复述真实
-// 事实（报价高于陈述金额、上限内交付不构成超支），不得静默抹掉预算张力。
-func TestInCeilingClaimDropRestatesBudgetTensionAsNote(t *testing.T) {
+// 聚焦反例（掩盖取舍，红-first）：合计已核验且在有效上限内时，一条 issue
+// 同时携带错误的"超预算"断言与真实的配件/用户取舍（降档、请用户确认），不
+// 得整行剔除并使方案越过未解决项错误交付 ready——混合行必须保留为待解决项
+// （outcome 退为 proposal），不依赖模型 reply 或预算 note 兜底。
+func TestMixedBudgetClaimKeepsTradeoffUnresolved(t *testing.T) {
 	input, record, catalog := completeRecording(t)
 	budget := input.State.Fields["budget_cny"]
 	budget.Value = json.RawMessage(`4500`)
@@ -619,17 +620,65 @@ func TestInCeilingClaimDropRestatesBudgetTensionAsNote(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(strings.Join(got.Issues, "\n"), "超出硬上限") {
-		t.Fatalf("in-ceiling 无依据断言必须剔除: %v", got.Issues)
+	joined := strings.Join(got.Issues, "\n")
+	if !strings.Contains(joined, "降内存档位") || !strings.Contains(joined, "请您确认取舍") {
+		t.Fatalf("混合 issue 中的真实取舍被删除: %v", got.Issues)
+	}
+	if got.Outcome == "ready" {
+		t.Fatalf("存在未解决取舍时不得交付 ready: %v", got.Issues)
+	}
+}
+
+// 边界（完整报价＋有效上限内，纯误判）：issue 的内容全部由预算记账措辞与
+// 数字构成（无任何取舍/配件/用户决策内容）时，才是"可明确识别为纯预算
+// 误判"的独立 issue，可整行剔除并交付 ready；此时服务端以 note 如实复述
+// "报价高于陈述金额、上限内交付"（辅助信息，不是正确性的兜底机制）。
+func TestPureBudgetMisjudgmentDroppedDeliversReady(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	budget := input.State.Fields["budget_cny"]
+	budget.Value = json.RawMessage(`4500`)
+	input.State.Fields["budget_cny"] = budget
+	record.Issues = []string{"当前报价超出预算硬上限"}
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(got.Issues, "\n"), "超出预算") {
+		t.Fatalf("纯预算误判应被剔除: %v", got.Issues)
 	}
 	if got.Outcome != "ready" {
-		t.Fatalf("上限内方案必须交付 ready，got %s (issues=%v)", got.Outcome, got.Issues)
-	}
-	if got.Delivery == nil {
-		t.Fatal("delivery missing")
+		t.Fatalf("上限内且无剩余 issue 应交付 ready，got %s (issues=%v)", got.Outcome, got.Issues)
 	}
 	notes := strings.Join(got.Delivery.Notes, "\n")
 	if !strings.Contains(notes, "4579.90") || !strings.Contains(notes, "4500") || !strings.Contains(notes, "4950") {
-		t.Fatalf("剔除断言后必须以 note 复述真实预算张力: %v", got.Delivery.Notes)
+		t.Fatalf("纯误判剔除后应以 note 如实复述预算张力: %v", got.Delivery.Notes)
+	}
+}
+
+// 边界（完整报价＋超有效上限）：服务端自身核算同样认定超上限时，模型的
+// 预算断言与权威核算一致，不得剔除（剔除只发生在"与确定性算术矛盾"时）。
+func TestOverCeilingClaimStaysGrounded(t *testing.T) {
+	input, record, catalog := completeRecording(t)
+	budget := input.State.Fields["budget_cny"]
+	budget.Value = json.RawMessage(`4000`)
+	input.State.Fields["budget_cny"] = budget
+	record.Issues = []string{"整机总价4579.90元超出预算，需用户确认是否接受或降档"}
+	m := &scriptedModel{respond: func(_ int, _ *model.LLMRequest) *genai.Content {
+		raw, _ := json.Marshal(record)
+		return genai.NewContentFromText(string(raw), genai.RoleModel)
+	}}
+	got, err := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(got.Issues, "\n"), "超出预算") {
+		t.Fatalf("超上限时模型预算断言与核算一致，不得剔除: %v", got.Issues)
+	}
+	if got.Outcome == "ready" {
+		t.Fatalf("超上限交付不得 ready: %v", got.Issues)
 	}
 }

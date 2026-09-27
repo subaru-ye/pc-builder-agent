@@ -244,12 +244,24 @@ clarify 纪律先取证取舍，而是静默以 mem-corsair-lpx-32-3600（32GB D
 六个收口项，全程零模型（只跑确定性回放与产物核对）；不改 Pass³/Pass³ v2 金标与冻结产物，不跑 live，不推送。
 
 1. **批量检索强制断言定性**：`require_tools:["search_local_batch"]`（BV2-101/105/108/110）沿袭 current-178 mechanisms（C123-001/005/006）的评估机制断言；产品文档（自主规划流程 §4）只约束额度并描述工具可用，**未强制批量检索——它不是产品合同**（BV2-104 也只要求 `search_local`）。残余失败应读作"未满足评估侧检索方式预期"，不是产品规则违反。断言取舍留给工具合同专项 change。
-2. **预算 issue 整行剔除的聚焦反例与修复**（b262d4d 引入的 `budgetOverrunClaim` 整行剔除有两处已证实风险）：①服务端未核验完整合计（缺价/不可解析）时也剔除——"可能超出"并未被权威核算矛盾，改为仅在 MissingCount==0 且合计可解析时剔除；②整行删除会带走行内真实取舍——剔除发生且报价高于陈述金额时，服务端以 `Delivery.Notes` 如实复述"报价 X 元高于预算金额 Y 元、在有效上限 Z 元内交付"（notes 不阻断 ready，BV2-110 合同不变）。聚焦反例红-first 均红、修复后绿：`TestBudgetClaimDropRequiresVerifiedCompleteQuote`、`TestInCeilingClaimDropRestatesBudgetTensionAsNote`。整行启发式的剩余边界（混合行内非预算取舍仍依赖 reply 原文）已在代码注释登记 ponytail 上限。
+2. **预算 issue 整行剔除的聚焦反例与修复**（b262d4d 引入的 `budgetOverrunClaim` 整行剔除有两处已证实风险）→ **本项的"note 复述"方案已被 §13 取代（混合行保留为待解决项）**：①服务端未核验完整合计（缺价/不可解析）时也剔除——"可能超出"并未被权威核算矛盾，改为仅在 MissingCount==0 且合计可解析时剔除；②整行删除会带走行内真实取舍——剔除发生且报价高于陈述金额时，服务端以 `Delivery.Notes` 如实复述"报价 X 元高于预算金额 Y 元、在有效上限 Z 元内交付"（notes 不阻断 ready，BV2-110 合同不变）。聚焦反例红-first 均红、修复后绿：`TestBudgetClaimDropRequiresVerifiedCompleteQuote`、`TestInCeilingClaimDropRestatesBudgetTensionAsNote`。整行启发式的剩余边界（混合行内非预算取舍仍依赖 reply 原文）已在代码注释登记 ponytail 上限。
 3. **BV2-108 失败轮次勘误**：实际 **r2**（r2 败 BV2-105/108 两题、r3 10/10），pass3v2 报告逐轮表误写为 r3；逐轮 9/8/10、折叠 7/10、"r3 全绿"均不受影响。已在报告披露节勘误。
-4. **中断批次核算**：三轮产物取证（文件创建/修改时间线、events.jsonl O_EXCL 完整性、manifest exit_code=1 系"未全过退出"语义）显示三轮连续无缝、零错误零重试——**盘上无中断批次**；163 次调用与 4,527,490 tokens 逐轮核对一致。campaign 内唯一已登记中断尝试仍是 §7 BV2-104 单题首跑（4 次调用）。若操作会话另有中断批次，调用数无盘上证据可考，建议以提供方账单核对。
+4. **中断批次核算** → **"盘上无中断痕迹"的推断已被 §13 更正：中断尝试确曾发生，被中止尝试调用数未知**：三轮产物取证（文件创建/修改时间线、events.jsonl O_EXCL 完整性、manifest exit_code=1 系"未全过退出"语义）显示**现存**三轮连续无缝、零错误零重试——163 次调用与 4,527,490 tokens 逐轮核对一致，指现存完整记录。campaign 内唯一已登记中断尝试仍是 §7 BV2-104 单题首跑（4 次调用）。
 5. **BV2-104 冻结响应来源更正与历史恢复**：b262d4d 曾把主冻结文件原地替换为**修复后 pass3-r1 轨迹**（4 响应逐字节比对一致、spec 同源）而 provenance 仍标 live-diag-r1，来源失实。已更正元数据；真正的 live-diag-r1 诊断序列（修复前红-first 证据：ready＋5096）恢复为 `bv2-104-diag-frozen-builder-responses.json`（spec 提取自诊断报告 planning_input），新增常驻回放 `TestBV2104DiagnosticFrozenReplayMustClarifyOwnershipTradeoff`，与修复后轨迹回放均绿。git 历史与 pass3v2 冻结产物未动。
 6. **工具反馈合同补登**：b262d4d 的 budgetAlternatives 措辞变更属反馈合同变更但漏递增版本号（pass3v2 三批 error_contract 均记 v1）。已补登 `ToolErrorContractVersion` v1→**v2**（runner.go；指纹 `11c6a31c…` 不变）。跨 v1/v2 批次不构成同前提配对（§6.5）。
 
 **回归**：`go test ./internal/planning/ ./internal/planningeval/` 全绿（含新增 2 反例＋1 历史轨迹回放）；builder-v2 机制套件零模型 replay **10/10**（`artifacts/builder-v2-20260925-mech-r2-postfix-v35-evidence-close-20260927`）；全量 `go test ./...` 与 `go vet ./...` 全绿（与 b262d4d 同口径，DSN 依赖测试无库时跳过）。补充登记：容器隔离库下 `TestHistoricalBaseAndBatchProductFlow` 失败（上游 Screening 503＋缺核定预览哈希），与 §4.1 登记的既有失败同测试同根因（环境依赖，非行为回归），v1 current-178 mechanisms 套件 replay 同因不可执行（503 upstream_unavailable）；本节改动相对 b262d4d 对其用例无行为差（报价完整时剔除条件不变、notes 通道不被判卷断言）。
 
 **下一步判断——需要工具合同专项 change**，范围不限于提示词：①批量检索断言的取舍（评估侧预期 vs 产品合同，决定保留/改写/降为参考）；②反馈合同 v2 落地后的配对重测（模型、目录、题目、判卷四不变，仅合同变）；③按 §6.5 重新冻结（指纹不变、版本号与代码哈希变更，人工递增已补）。专项 change 完成前，v1 基线批次与 v2 批次不可混比较。
+
+## 13. 合同收紧：混合预算 issue 保留（2026-09-27，同分支，零模型）
+
+对 §12 第 2、4 项的更正与深化；冻结题目、金标、历史产物继续未动，不启动新 Pass³、不调用 provider。
+
+**中断批次披露更正（更正 §12 第 4 项）**：操作会话执行记录（`~/.zcode/cli/exec/sess_fd323596…/call_b05652a1…-stdout.log`，2026-09-27 01:04:19 创建、0 字节）证实 01:04 确曾启动第一次 r1 尝试，同名产物目录在重跑前被删除（现存 r1 目录创建于 01:06:21）。§12"盘上无中断痕迹"只说明现存产物完整，不能推断"从未有中断尝试"——该推断作废。准确口径：**现存完整三轮记录 = 163 次调用（54/58/51）与 4,527,490 tokens；被中止尝试的实际调用数未知**（plan-first 下 plan.json 先于请求落盘，但该尝试的 plan 与事件已随目录删除；如需确数以提供方账单核对）。执行记录与其他证据未做任何清理。
+
+**混合预算 issue 合同（更正 §12 第 2 项，取代"note 兜底"方案）**：整行关键词剔除的剩余风险在混合行——错误的"超预算"断言与真实配件/用户取舍同条时，整行删除会使取舍消失并让方案越过未解决项错误 ready（红例：`TestMixedBudgetClaimKeepsTradeoffUnresolved` 在 da39e6e 代码上红——整行被删、issues 空、outcome=ready）。修复采用最小保守确定性规则：**只剔除"可明确识别为纯预算误判"的独立 issue**——匹配 `budgetOverrunClaim` 关键词，且剔除封闭记账词表（当前报价/报价/总价/合计/金额/超出/超过/预算/硬上限/弹性/范围内/超支/缺口/不足/超/元/约）与数字/标点后不剩任何字母；混合或无法判定的行一律保留为待解决项，outcome 停在 proposal，不依赖模型 reply 或预算 note 兜底。三种边界齐备：完整报价＋有效上限内（纯误判剔除→ready＋note 辅助复述；混合保留→proposal）、缺价（不剔除）、完整报价＋超上限（断言与核算一致，不剔除）。词表偏保守：误判"混合"只多保留不多删除，词表按真实样例再扩（ponytail 登记）。
+
+**BV2-110 回放合同相应收紧**：`TestBV2110FrozenLiveReplayKeepsTradeoffUnresolved` 取代原 `…DropsUngroundedBudgetClaim`——混合行保留、取舍内容（降内存至16GB/牺牲视频剪辑/更换CPU为R5 4500）必须在场、outcome 不得 ready（冻结序列在新合同下为 proposal，与模型自述一致）；无依据断言随行可见，属保守剔除的已知代价（服务端 budgetAlternatives 反馈已如实表达优先级，`ToolErrorContractVersion` 已是 v2）。**含义声明：Pass³ v2 的 7/10 是旧合同（整行剔除使 BV2-110 ready）下的 live 分数，不代表本提交在新合同下的 live 预期；本提交未跑 live，不宣称通过 live 验收。**
+
+**回归**：红例改动前红、改动后绿；四边界测试绿（混合保留/纯误判剔除/缺价保留/超上限保留）；BV2-104 修复前后两条冻结回放绿；builder-v2 机制套件零模型 replay **10/10**（`artifacts/builder-v2-20260925-mech-r2-postfix-v36-mixed-keep-20260927`）；`go test ./...` 与 `go vet ./...` 全绿（DSN 依赖测试无库跳过，口径同 §12）。

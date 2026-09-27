@@ -283,20 +283,25 @@ func TestBV2105FrozenLiveReplayDeliversITXReady(t *testing.T) {
 	}
 }
 
-// BV2-110 冻结 live 回放：预算上限是冻结合同的确定性算术（7000×1.1=7700）。
-// 模型把 7000 误作硬上限并自述"超出硬上限"——与确定性核算矛盾的无依据
-// 断言必须被剔除，方案（7434 ≤ 7700）应可交付。
-func TestBV2110FrozenLiveReplayDropsUngroundedBudgetClaim(t *testing.T) {
+// BV2-110 冻结 live 回放：预算上限是冻结合同的确定性算术（7000×1.1=7700），
+// 模型把 7000 误作硬上限。其最终 issue 同时携带该无依据断言与真实取舍选项
+// （①接受 7434；②降内存至 16GB 约 6244；③换 CPU 约 7022）。确定性合同：
+// 混合行不得整行剔除——取舍保留为待解决项，方案停在 proposal，不得越过
+// 未解决项自动 ready；无依据断言随行保留（保守剔除的已知代价，服务端
+// budgetAlternatives 反馈已如实区分预算金额与有效上限）。
+func TestBV2110FrozenLiveReplayKeepsTradeoffUnresolved(t *testing.T) {
 	runner, input := bv2104Setup(t, "BV2-110")
 	got, err := runner.Run(context.Background(), input)
 	if err != nil {
 		t.Fatalf("replay run: %v", err)
 	}
 	joined := strings.Join(got.Issues, "\n")
-	if strings.Contains(joined, "超出硬上限") || strings.Contains(joined, "预算超出") {
-		t.Fatalf("ungrounded budget-overrun claim must be dropped: %v", got.Issues)
+	if got.Outcome == "ready" {
+		t.Fatalf("混合预算 issue（含未解决取舍）在场时不得交付 ready: %v", got.Issues)
 	}
-	if got.Outcome != "ready" {
-		t.Fatalf("in-ceiling plan must deliver ready after claim strip, got %s (issues=%v)", got.Outcome, got.Issues)
+	for _, want := range []string{"降内存至16GB", "牺牲视频剪辑", "更换CPU为R5 4500"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("真实取舍内容被剔除（缺 %q）：%v", want, got.Issues)
+		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/subaru-ye/pc-builder-agent/internal/schemas"
 )
@@ -22,6 +23,34 @@ var internalIssueCode = regexp.MustCompile(`^[A-Z][A-Z_]{3,}[：:]`)
 // budgetOverrunClaim 匹配模型自述的"超预算/超硬上限"断言；服务端预算上限
 // 是冻结约束的确定性算术，与之矛盾的模型断言按无依据剔除。
 var budgetOverrunClaim = regexp.MustCompile(`超出硬上限|超过硬上限|超出预算|超过预算|预算超出`)
+
+// budgetAccountingVocab 是"纯预算误判"判定的封闭词表：仅当一个匹配断言
+// 关键词的 issue 在剔除这些记账措辞与数字/标点后不剩任何字母，才被认定为
+// 纯预算误判。词表外的一切内容（配件、用户决策、未知措辞）一律保守保留为
+// 待解决项——BV2-110 的混合行同时携带误判与 ①②③ 真实取舍，整行剔除会
+// 让方案越过未解决项错误 ready（ponytail：封闭词表偏保守，误判为"混合"
+// 只会多保留，不会多删除；词表按真实误判样例再扩）。
+var budgetAccountingVocab = []string{
+	"当前报价", "报价", "总价", "合计", "金额",
+	"超出", "超过", "预算", "硬上限", "弹性", "范围内", "超支", "缺口", "不足", "超",
+	"元", "约",
+}
+
+func pureBudgetOverrunClaim(issue string) bool {
+	if !budgetOverrunClaim.MatchString(issue) {
+		return false
+	}
+	s := issue
+	for _, w := range budgetAccountingVocab {
+		s = strings.ReplaceAll(s, w, "")
+	}
+	for _, r := range s {
+		if unicode.IsLetter(r) {
+			return false
+		}
+	}
+	return true
+}
 
 func stripInternalIssueCodes(issues []string) []string {
 	for i, s := range issues {
@@ -125,21 +154,22 @@ func (x *execution) deliveryIssues() (issues, notes []string) {
 		}
 	}
 	// 预算上限是冻结合同的确定性算术（budget×(1+flex)）：完整合计已核验且在
-	// 上限内时，模型自述的"超出预算/硬上限"与权威核算矛盾，按无依据断言剔除
-	// （BV2-110：把 7000 预算误作硬上限，忽略 flex 展开的 7700 有效上限）。
-	// 合计缺价或不可解析时不剔除——服务端没有核验过算术，"可能超出"未被
-	// 矛盾，静默删除会掩盖方向性提示。剔除按整行进行，行内其余取舍内容随之
-	// 消失：此时服务端以 note 如实复述"报价高于陈述金额、但上限内"，不静默
-	// 抹掉预算张力；行内非预算取舍仍依赖模型 reply 原文。
-	// ponytail: 整行关键词剔除是启发式，按语义拆分"断言/取舍"留待有真实
-	// 混合行证据时再做。
+	// 上限内时，模型自述的"超出预算/硬上限"与权威核算矛盾。剔除仅限"可明确
+	// 识别为纯预算误判"的独立 issue（整行只含记账措辞与数字）；混合或无法
+	// 判定的行一律保留为待解决项——方案因此停在 proposal，不得越过未解决项
+	// 自动 ready（BV2-110 混合行携带 ①②③ 真实取舍，整行剔除曾把它们一并
+	// 删掉）。合计缺价或不可解析时不剔除——服务端没有核验过算术，"可能超出"
+	// 未被矛盾。note 只是剔除发生后的如实复述（辅助信息），不是正确性的
+	// 兜底机制；保留行的无依据断言随行可见，属保守剔除的已知代价。
+	// ponytail: 封闭词表偏保守——把真实混合行误判为"纯"需要词表吞掉取舍
+	// 措辞，词表保持最小并只按真实样例扩充。
 	if !serverOverBudget {
 		if upper, ok := x.budgetCeiling(); ok {
 			if total, parsed := new(big.Rat).SetString(quote.TotalCNY); parsed && quote.MissingCount == 0 {
 				filtered := make([]string, 0, len(x.result.Issues))
 				dropped := false
 				for _, issue := range x.result.Issues {
-					if budgetOverrunClaim.MatchString(issue) {
+					if pureBudgetOverrunClaim(issue) {
 						dropped = true
 						continue
 					}

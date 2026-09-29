@@ -64,4 +64,34 @@ describe("PreferencesPanel 召回确认", () => {
     expect(screen.getByText("必须满足")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /静音：安静/ })).toBeDisabled();
   });
+
+  it("多身份冲突时每个候选值各自展示来源原话,不能只显示首选", async () => {
+    vi.spyOn(api, "listPreferences").mockResolvedValue([]);
+    vi.spyOn(api, "preferenceSuggestions").mockResolvedValue([
+      {
+        field: "noise_pref", status: "conflict",
+        choices: [
+          {
+            id: "p1", subject: "self", field: "noise_pref", value: "silent", strength: "prefer",
+            evidence: "stated", volatile: false,
+            source: { kind: "chat", session_id: "s0", message_id: "m0", quote: "我想要安静一点的机子" },
+            created_at: "2026-09-27T00:00:00Z", updated_at: "2026-09-27T00:00:00Z",
+          },
+          {
+            id: "p2", subject: "self", field: "noise_pref", value: "normal", strength: "prefer",
+            evidence: "stated", volatile: false,
+            source: { kind: "chat", session_id: "s0", message_id: "m9", quote: "先看普通噪音的方案就行" },
+            created_at: "2026-09-28T00:00:00Z", updated_at: "2026-09-28T00:00:00Z",
+          },
+        ],
+      },
+    ]);
+    renderPanel();
+
+    await userEvent.click(screen.getByRole("button", { name: "载入建议" }));
+    await waitFor(() => expect(screen.getByText("不同身份的记录有冲突，请选一项或忽略")).toBeInTheDocument());
+    // 两个候选值的来源原话都必须可见,否则用户无法辨认选项出自哪个身份。
+    expect(screen.getByTitle("我想要安静一点的机子")).toBeInTheDocument();
+    expect(screen.getByTitle("先看普通噪音的方案就行")).toBeInTheDocument();
+  });
 });

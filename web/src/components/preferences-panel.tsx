@@ -165,24 +165,27 @@ export function PreferencesPanel({ session }: { session: Session }) {
             return <li key={item.field} className="py-2.5">
               <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">
-                  {item.choices.map((choice) => <div key={choice.id} className="flex items-baseline gap-2">
-                    <label className="flex min-w-0 flex-1 items-baseline gap-2 text-sm">
-                      <input type="radio" className="accent-[var(--primary)]" name={`pref-${item.field}`}
-                        checked={chosen === choice.id} disabled={item.status !== "conflict"}
-                        onChange={() => setPicked((prev) => ({ ...prev, [item.field]: choice.id }))} />
-                      <span className="min-w-0 break-words">{preferenceTitle(choice)}</span>
-                      <span className="shrink-0 text-xs text-[var(--ink-muted)]">
-                        {choice.strength === "must" ? "必须满足" : "尽量满足"}
-                      </span>
-                    </label>
-                    <span className="shrink-0 text-xs text-[var(--ink-subtle)]">
-                      {new Date(choice.created_at).toLocaleDateString("zh-CN")}
+              {item.choices.map((choice) => <div key={choice.id}>
+                <div className="flex items-baseline gap-2">
+                  <label className="flex min-w-0 flex-1 items-baseline gap-2 text-sm">
+                    <input type="radio" className="accent-[var(--primary)]" name={`pref-${item.field}`}
+                      checked={chosen === choice.id} disabled={item.status !== "conflict"}
+                      onChange={() => setPicked((prev) => ({ ...prev, [item.field]: choice.id }))} />
+                    <span className="min-w-0 break-words">{preferenceTitle(choice)}</span>
+                    <span className="shrink-0 text-xs text-[var(--ink-muted)]">
+                      {choice.strength === "must" ? "必须满足" : "尽量满足"}
                     </span>
-                  </div>)}
+                  </label>
+                  <span className="shrink-0 text-xs text-[var(--ink-subtle)]">
+                    {new Date(choice.created_at).toLocaleDateString("zh-CN")}
+                  </span>
+                </div>
+                {/* 每个候选值(冲突时多个)各自携带来源原话,供用户辨认出自哪个身份的哪句话。 */}
+                <p className="mt-0.5 truncate text-xs text-[var(--ink-subtle)]" title={choice.source.quote}>
+                  原话:{choice.source.quote}
+                </p>
+              </div>)}
                   {item.status === "conflict" && <p className="mt-0.5 text-xs status-review">不同身份的记录有冲突，请选一项或忽略</p>}
-                  <p className="mt-0.5 truncate text-xs text-[var(--ink-subtle)]" title={item.choices[0]?.source.quote}>
-                    原话：{item.choices[0]?.source.quote}
-                  </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <Button size="sm" variant="outline" disabled={confirm.isPending || !chosen}

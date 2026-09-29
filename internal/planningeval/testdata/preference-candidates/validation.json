@@ -1,0 +1,1011 @@
+{
+  "schema_version": 1,
+  "gold_status": "provisional",
+  "provenance": "assistant_authored_synthetic",
+  "split": "validation",
+  "cases": [
+    {
+      "id": "PC-V01",
+      "family": "pc-v01",
+      "category": "long_term",
+      "turns": [
+        {
+          "role": "user",
+          "content": "我一向优先选择英特尔CPU。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "brand_pref.cpu",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "intel",
+                "quote": "我一向优先选择英特尔CPU。"
+              }
+            ]
+          },
+          "id": "PC-V01-m1"
+        }
+      ],
+      "expected": [
+        {
+          "field": "brand_pref.cpu",
+          "value": "intel",
+          "strength": "prefer",
+          "evidence": "stated",
+          "message_id": "PC-V01-m1",
+          "quote": "我一向优先选择英特尔CPU。"
+        }
+      ],
+      "rationale": "稳定品牌偏好，使用另一种品牌表述。"
+    },
+    {
+      "id": "PC-V02",
+      "family": "pc-v02",
+      "category": "long_term",
+      "turns": [
+        {
+          "role": "user",
+          "content": "我的装机习惯是优先NVIDIA显卡。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "brand_pref.gpu",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "nvidia",
+                "quote": "我的装机习惯是优先NVIDIA显卡。"
+              }
+            ]
+          },
+          "id": "PC-V02-m1"
+        }
+      ],
+      "expected": [
+        {
+          "field": "brand_pref.gpu",
+          "value": "nvidia",
+          "strength": "prefer",
+          "evidence": "stated",
+          "message_id": "PC-V02-m1",
+          "quote": "我的装机习惯是优先NVIDIA显卡。"
+        }
+      ],
+      "rationale": "习惯是持续性证据，暂定为正例。"
+    },
+    {
+      "id": "PC-V03",
+      "family": "pc-v03",
+      "category": "long_term",
+      "turns": [
+        {
+          "role": "user",
+          "content": "机箱颜色长期偏好黑色。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "appearance",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "黑色",
+                "quote": "机箱颜色长期偏好黑色。"
+              }
+            ]
+          },
+          "id": "PC-V03-m1"
+        }
+      ],
+      "expected": [
+        {
+          "field": "appearance",
+          "value": "黑色",
+          "strength": "prefer",
+          "evidence": "stated",
+          "message_id": "PC-V03-m1",
+          "quote": "机箱颜色长期偏好黑色。"
+        }
+      ],
+      "rationale": "明确长期外观倾向。"
+    },
+    {
+      "id": "PC-V04",
+      "family": "pc-v04",
+      "category": "long_term",
+      "turns": [
+        {
+          "role": "user",
+          "content": "帮我记下：以后主机必须安静。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "noise_pref",
+                "strength": "must",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "silent",
+                "quote": "帮我记下：以后主机必须安静。"
+              }
+            ]
+          },
+          "id": "PC-V04-m1"
+        }
+      ],
+      "expected": [
+        {
+          "field": "noise_pref",
+          "value": "silent",
+          "strength": "must",
+          "evidence": "stated",
+          "message_id": "PC-V04-m1",
+          "quote": "帮我记下：以后主机必须安静。"
+        }
+      ],
+      "rationale": "明确保存意图与必须强度；输出仍待确认。"
+    },
+    {
+      "id": "PC-V05",
+      "family": "pc-v05",
+      "category": "session_only",
+      "turns": [
+        {
+          "role": "user",
+          "content": "机箱用ITX。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "size_pref",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "itx",
+                "quote": "机箱用ITX。"
+              }
+            ]
+          },
+          "id": "PC-V05-m1"
+        }
+      ],
+      "expected": [],
+      "rationale": "没有跨会话持续性证据。"
+    },
+    {
+      "id": "PC-V06",
+      "family": "pc-v06",
+      "category": "temporary",
+      "turns": [
+        {
+          "role": "user",
+          "content": "这台以后就用N卡，其他机器另说。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "brand_pref.gpu",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "nvidia",
+                "quote": "这台以后就用N卡，其他机器另说。"
+              }
+            ]
+          },
+          "id": "PC-V06-m1"
+        }
+      ],
+      "expected": [],
+      "rationale": "即使上游给 session，消息仍把要求限于这一台。"
+    },
+    {
+      "id": "PC-V07",
+      "family": "pc-v07",
+      "category": "uncertain",
+      "turns": [
+        {
+          "role": "user",
+          "content": "今后也许想试试安静的机箱。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "noise_pref",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "silent",
+                "quote": "今后也许想试试安静的机箱。"
+              }
+            ]
+          },
+          "id": "PC-V07-m1"
+        }
+      ],
+      "expected": [],
+      "rationale": "即使上游 stated，表达仍有不确定性。"
+    },
+    {
+      "id": "PC-V08",
+      "family": "pc-v08",
+      "category": "context",
+      "turns": [
+        {
+          "role": "user",
+          "content": "我不是一直喜欢N卡。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "brand_pref.gpu",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "nvidia",
+                "quote": "我不是一直喜欢N卡。"
+              }
+            ]
+          },
+          "id": "PC-V08-m1"
+        }
+      ],
+      "expected": [],
+      "rationale": "否定持续偏好的命题。"
+    },
+    {
+      "id": "PC-V09",
+      "family": "pc-v09",
+      "category": "context",
+      "turns": [
+        {
+          "role": "user",
+          "content": "我在举例：以后显卡必须用N卡。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "brand_pref.gpu",
+                "strength": "must",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "nvidia",
+                "quote": "我在举例：以后显卡必须用N卡。"
+              }
+            ]
+          },
+          "id": "PC-V09-m1"
+        }
+      ],
+      "expected": [],
+      "rationale": "示例句不可当成自己的真实偏好。"
+    },
+    {
+      "id": "PC-V10",
+      "family": "pc-v10",
+      "category": "context",
+      "turns": [
+        {
+          "role": "user",
+          "content": "我以前一直喜欢N卡。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "brand_pref.gpu",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "nvidia",
+                "quote": "我以前一直喜欢N卡。"
+              }
+            ]
+          },
+          "id": "PC-V10-m1"
+        }
+      ],
+      "expected": [],
+      "rationale": "历史时态没有确认当前仍然喜欢，需追问；用于观察时态误提取。"
+    },
+    {
+      "id": "PC-V11",
+      "family": "pc-v11",
+      "category": "context",
+      "turns": [
+        {
+          "role": "user",
+          "content": "角色的台词是我一直喜欢安静。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "noise_pref",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "silent",
+                "quote": "角色的台词是我一直喜欢安静。"
+              }
+            ]
+          },
+          "id": "PC-V11-m1"
+        }
+      ],
+      "expected": [],
+      "rationale": "角色台词不是用户的偏好；用于观察词表外转述。"
+    },
+    {
+      "id": "PC-V12",
+      "family": "pc-v12",
+      "category": "proposal",
+      "turns": [
+        {
+          "role": "assistant",
+          "content": "你希望以后机箱都必须是ATX，对吗？",
+          "update": {
+            "operations": []
+          },
+          "id": "PC-V12-m1"
+        },
+        {
+          "role": "user",
+          "content": "对，就按这个长期选择。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "size_pref",
+                "strength": "must",
+                "scope": "session",
+                "evidence": "accepted_proposal",
+                "kind": "constraint",
+                "value": "atx",
+                "quote": "对，就按这个长期选择。"
+              }
+            ]
+          },
+          "id": "PC-V12-m2"
+        }
+      ],
+      "expected": [
+        {
+          "field": "size_pref",
+          "value": "atx",
+          "strength": "must",
+          "evidence": "accepted_proposal",
+          "message_id": "PC-V12-m2",
+          "quote": "对，就按这个长期选择。"
+        }
+      ],
+      "rationale": "对明确长期提案的接受值得形成候选；离线缺产品授权信息应保留弃权。"
+    },
+    {
+      "id": "PC-V13",
+      "family": "pc-v13",
+      "category": "temporary",
+      "turns": [
+        {
+          "role": "user",
+          "content": "我一向用N卡。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "brand_pref.gpu",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "nvidia",
+                "quote": "我一向用N卡。"
+              }
+            ]
+          },
+          "id": "PC-V13-m1"
+        },
+        {
+          "role": "user",
+          "content": "这次先试试A卡。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "brand_pref.gpu",
+                "strength": "prefer",
+                "scope": "temporary",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "amd",
+                "quote": "这次先试试A卡。"
+              }
+            ]
+          },
+          "id": "PC-V13-m2"
+        }
+      ],
+      "expected": [],
+      "rationale": "临时最终状态不发新候选，也不复制历史。"
+    },
+    {
+      "id": "PC-V14",
+      "family": "pc-v14",
+      "category": "change",
+      "turns": [
+        {
+          "role": "user",
+          "content": "以后都用N卡。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "brand_pref.gpu",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "nvidia",
+                "quote": "以后都用N卡。"
+              }
+            ]
+          },
+          "id": "PC-V14-m1"
+        },
+        {
+          "role": "user",
+          "content": "改用A卡吧。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "brand_pref.gpu",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "amd",
+                "quote": "改用A卡吧。"
+              }
+            ]
+          },
+          "id": "PC-V14-m2"
+        }
+      ],
+      "expected": [],
+      "rationale": "改口缺持续范围，不继承旧值的长期意图。"
+    },
+    {
+      "id": "PC-V15",
+      "family": "pc-v15",
+      "category": "recipient",
+      "turns": [
+        {
+          "role": "user",
+          "content": "朋友老陈今后想选小机箱。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "size_pref",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "itx",
+                "quote": "朋友老陈今后想选小机箱。"
+              }
+            ]
+          },
+          "id": "PC-V15-m1"
+        }
+      ],
+      "expected": [
+        {
+          "field": "size_pref",
+          "value": "itx",
+          "strength": "prefer",
+          "evidence": "stated",
+          "message_id": "PC-V15-m1",
+          "quote": "朋友老陈今后想选小机箱。"
+        }
+      ],
+      "rationale": "具名对象偏好，候选必须等待显式选择归属。"
+    },
+    {
+      "id": "PC-V16",
+      "family": "pc-v16",
+      "category": "uncertain",
+      "turns": [
+        {
+          "role": "user",
+          "content": "以后显卡优先N卡或者A卡，还没决定。",
+          "update": {
+            "operations": [
+              {
+                "op": "conflict",
+                "field": "brand_pref.gpu",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "uncertain",
+                "kind": "constraint",
+                "value": "nvidia",
+                "quote": "以后显卡优先N卡或者A卡，还没决定。"
+              }
+            ]
+          },
+          "id": "PC-V16-m1"
+        }
+      ],
+      "expected": [],
+      "rationale": "冲突选择未定。"
+    },
+    {
+      "id": "PC-V17",
+      "family": "pc-v17",
+      "category": "context",
+      "turns": [
+        {
+          "role": "user",
+          "content": "以后CPU用AMD，显卡用N卡。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "brand_pref.cpu",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "amd",
+                "quote": "以后CPU用AMD，显卡用N卡。"
+              },
+              {
+                "op": "set",
+                "field": "brand_pref.gpu",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "nvidia",
+                "quote": "以后CPU用AMD，显卡用N卡。"
+              }
+            ]
+          },
+          "id": "PC-V17-m1"
+        }
+      ],
+      "expected": [
+        {
+          "field": "brand_pref.cpu",
+          "value": "amd",
+          "strength": "prefer",
+          "evidence": "stated",
+          "message_id": "PC-V17-m1",
+          "quote": "以后CPU用AMD，显卡用N卡。"
+        },
+        {
+          "field": "brand_pref.gpu",
+          "value": "nvidia",
+          "strength": "prefer",
+          "evidence": "stated",
+          "message_id": "PC-V17-m1",
+          "quote": "以后CPU用AMD，显卡用N卡。"
+        }
+      ],
+      "rationale": "暂定以后作用于并列的两个未来选择；需人工复核作用域，基线可能漏第二项。"
+    },
+    {
+      "id": "PC-V18",
+      "family": "pc-v18",
+      "category": "long_term",
+      "turns": [
+        {
+          "role": "user",
+          "content": "我一直偏爱纯白色机箱。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "appearance",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "白色",
+                "quote": "我一直偏爱纯白色机箱。"
+              }
+            ]
+          },
+          "id": "PC-V18-m1"
+        }
+      ],
+      "expected": [
+        {
+          "field": "appearance",
+          "value": "白色",
+          "strength": "prefer",
+          "evidence": "stated",
+          "message_id": "PC-V18-m1",
+          "quote": "我一直偏爱纯白色机箱。"
+        }
+      ],
+      "rationale": "原话包含标准化后的颜色。"
+    },
+    {
+      "id": "PC-V19",
+      "family": "pc-v19",
+      "category": "out_of_scope",
+      "turns": [
+        {
+          "role": "user",
+          "content": "以后一直复用这张显卡。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "existing_parts",
+                "strength": "must",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "fact",
+                "value": [
+                  "gpu"
+                ],
+                "quote": "以后一直复用这张显卡。"
+              }
+            ]
+          },
+          "id": "PC-V19-m1"
+        }
+      ],
+      "expected": [],
+      "rationale": "已有件不是稳定偏好白名单字段。"
+    },
+    {
+      "id": "PC-V20",
+      "family": "pc-v20",
+      "category": "out_of_scope",
+      "turns": [
+        {
+          "role": "user",
+          "content": "以后通常玩游戏。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "use_case.type",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "fact",
+                "value": "gaming",
+                "quote": "以后通常玩游戏。"
+              }
+            ]
+          },
+          "id": "PC-V20-m1"
+        }
+      ],
+      "expected": [],
+      "rationale": "用途不属于保存白名单。"
+    },
+    {
+      "id": "PC-V21",
+      "family": "pc-v21",
+      "category": "out_of_scope",
+      "turns": [
+        {
+          "role": "user",
+          "content": "以后散热必须支持360冷排。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "free.cooler",
+                "strength": "must",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "支持360冷排",
+                "quote": "以后散热必须支持360冷排。"
+              }
+            ]
+          },
+          "id": "PC-V21-m1"
+        }
+      ],
+      "expected": [],
+      "rationale": "自由规格字段不得绕过白名单。"
+    },
+    {
+      "id": "PC-V22",
+      "family": "pc-v22",
+      "category": "source",
+      "turns": [
+        {
+          "role": "assistant",
+          "content": "你长期偏爱静音。",
+          "update": {
+            "operations": []
+          },
+          "id": "PC-V22-m1"
+        },
+        {
+          "role": "user",
+          "content": "我没这么说过。",
+          "update": {
+            "operations": []
+          },
+          "id": "PC-V22-m2"
+        }
+      ],
+      "expected": [],
+      "rationale": "无用户操作来源，助手上下文不产生候选。"
+    },
+    {
+      "id": "PC-V23",
+      "family": "pc-v23",
+      "category": "uncertain",
+      "turns": [
+        {
+          "role": "user",
+          "content": "以后一直用ITX合适吗？",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "size_pref",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "itx",
+                "quote": "以后一直用ITX合适吗？"
+              }
+            ]
+          },
+          "id": "PC-V23-m1"
+        }
+      ],
+      "expected": [],
+      "rationale": "咨询句不表示已确定长期偏好。"
+    },
+    {
+      "id": "PC-V24",
+      "family": "pc-v24",
+      "category": "long_term",
+      "turns": [
+        {
+          "role": "user",
+          "content": "这次也照旧，我一直喜欢安静。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "noise_pref",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "silent",
+                "quote": "这次也照旧，我一直喜欢安静。"
+              }
+            ]
+          },
+          "id": "PC-V24-m1"
+        }
+      ],
+      "expected": [
+        {
+          "field": "noise_pref",
+          "value": "silent",
+          "strength": "prefer",
+          "evidence": "stated",
+          "message_id": "PC-V24-m1",
+          "quote": "这次也照旧，我一直喜欢安静。"
+        }
+      ],
+      "rationale": "明确长期偏好仍成立；这次是沿用而非临时例外，供检查整句拦截的过度拒绝。"
+    },
+    {
+      "id": "PC-V25",
+      "family": "pc-v25",
+      "category": "change",
+      "turns": [
+        {
+          "role": "user",
+          "content": "显卡A卡N卡还拿不准。",
+          "update": {
+            "operations": [
+              {
+                "op": "conflict",
+                "field": "brand_pref.gpu",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "uncertain",
+                "kind": "constraint",
+                "value": "amd",
+                "quote": "显卡A卡N卡还拿不准。"
+              }
+            ]
+          },
+          "id": "PC-V25-m1"
+        },
+        {
+          "role": "user",
+          "content": "以后显卡还是必须用A卡。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "brand_pref.gpu",
+                "strength": "must",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "amd",
+                "quote": "以后显卡还是必须用A卡。"
+              }
+            ]
+          },
+          "id": "PC-V25-m2"
+        }
+      ],
+      "expected": [
+        {
+          "field": "brand_pref.gpu",
+          "value": "amd",
+          "strength": "must",
+          "evidence": "stated",
+          "message_id": "PC-V25-m2",
+          "quote": "以后显卡还是必须用A卡。"
+        }
+      ],
+      "rationale": "后续明确表达解决冲突，历史不确定不应永远阻断候选。"
+    },
+    {
+      "id": "PC-V26",
+      "family": "pc-v26",
+      "category": "source",
+      "turns": [
+        {
+          "role": "user",
+          "content": "今天只问预算。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "noise_pref",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "silent",
+                "quote": "我一直喜欢安静"
+              }
+            ]
+          },
+          "expect_rejected": true,
+          "id": "PC-V26-m1"
+        }
+      ],
+      "expected": [],
+      "rationale": "伪造 quote 被真实 reducer 拒绝，不能产生候选。"
+    },
+    {
+      "id": "PC-V27",
+      "family": "pc-v27",
+      "category": "long_term",
+      "turns": [
+        {
+          "role": "user",
+          "content": "以后显卡什么牌子都行。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "brand_pref.gpu",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "any",
+                "quote": "以后显卡什么牌子都行。"
+              }
+            ]
+          },
+          "id": "PC-V27-m1"
+        }
+      ],
+      "expected": [
+        {
+          "field": "brand_pref.gpu",
+          "value": "any",
+          "strength": "prefer",
+          "evidence": "stated",
+          "message_id": "PC-V27-m1",
+          "quote": "以后显卡什么牌子都行。"
+        }
+      ],
+      "rationale": "长期无品牌偏好也可能值得记忆；暂定正例，基线对 any 弃权。"
+    },
+    {
+      "id": "PC-V28",
+      "family": "pc-v28",
+      "category": "inferred",
+      "turns": [
+        {
+          "role": "user",
+          "content": "看到你选小桌子，推测以后你都喜欢ITX。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "size_pref",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "inferred",
+                "kind": "constraint",
+                "value": "itx",
+                "quote": "看到你选小桌子，推测以后你都喜欢ITX。"
+              }
+            ]
+          },
+          "expect_rejected": true,
+          "id": "PC-V28-m1"
+        }
+      ],
+      "expected": [],
+      "rationale": "推断标签不能成为 stated 证据。"
+    },
+    {
+      "id": "PC-V29",
+      "family": "pc-v29",
+      "category": "context",
+      "turns": [
+        {
+          "role": "user",
+          "content": "以后显卡都用N卡。",
+          "update": {
+            "operations": [
+              {
+                "op": "set",
+                "field": "brand_pref.gpu",
+                "strength": "prefer",
+                "scope": "session",
+                "evidence": "stated",
+                "kind": "constraint",
+                "value": "nvidia",
+                "quote": "以后显卡都用N卡。"
+              }
+            ]
+          },
+          "id": "PC-V29-m1"
+        },
+        {
+          "role": "user",
+          "content": "别把这条偏好记下来。",
+          "update": {
+            "operations": []
+          },
+          "id": "PC-V29-m2"
+        }
+      ],
+      "expected": [],
+      "rationale": "后续消息撤回记忆意愿，即使未改需求字段也不应发候选；用于观察仅看字段来源的多轮上限。"
+    }
+  ]
+}

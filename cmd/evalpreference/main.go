@@ -7,8 +7,9 @@
 //	handoff-run   — 在一次性 peval_handoff_* 临时库上执行四类交接场景(scripted builder
 //	                 观测确认事务冻结并派发的完整 PlanningInput),门禁失败非零退出。
 //
-// 全程零模型、零外部网络;需求状态由 scripted screening 经真实产品管道产生。
-// 不评估自动提取、初筛注入或 Builder 模型注入,PM-STALE 仅验证白名单拒绝写入。
+// candidate-check / candidate-run — 离线长期偏好候选实验，零数据库、零模型；
+// 字段由 scripted operations 经 Reducer 提供，输出候选而不保存。
+// 其余模式也均零模型，不评估初筛/Builder 模型注入。
 package main
 
 import (
@@ -23,13 +24,35 @@ import (
 )
 
 func main() {
-	mode := flag.String("mode", "check", "check | run | handoff-check | handoff-run")
+	mode := flag.String("mode", "check", "check | run | handoff-check | handoff-run | candidate-check | candidate-run")
 	out := flag.String("out", "", "run 模式产物目录(必须不存在)")
+	split := flag.String("split", "dev", "candidate-run 的语料分组: dev | validation | all")
 	dsn := flag.String("dsn", os.Getenv("PG_TEST_DSN"), "PostgreSQL 服务器 DSN(仅 localhost;临时库由本入口创建并删除)")
 	flag.Parse()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	switch *mode {
+	case "candidate-check":
+		if err := planningeval.CheckPreferenceCandidateEval(); err != nil {
+			fmt.Fprintln(os.Stderr, "candidate-check:", err)
+			os.Exit(1)
+		}
+		fmt.Println("preference candidate check: 两组暂定金标格式与 Reducer 夹具有效（不代表人工签收）")
+	case "candidate-run":
+		if *out == "" {
+			fmt.Fprintln(os.Stderr, "candidate-run 需要 -out(必须不存在的目录)")
+			os.Exit(2)
+		}
+		report, err := planningeval.RunPreferenceCandidateEval(*split)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "candidate-run:", err)
+			os.Exit(1)
+		}
+		if err := planningeval.WritePreferenceCandidateReport(*out, report); err != nil {
+			fmt.Fprintln(os.Stderr, "write:", err)
+			os.Exit(1)
+		}
+		fmt.Printf("report: %s/report.md | gold=provisional | ready_for_product=false\n", *out)
 	case "check":
 		if err := planningeval.CheckPreferenceMemoryEval(); err != nil {
 			fmt.Fprintln(os.Stderr, "check:", err)
@@ -111,7 +134,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "未知 mode %q(仅 check|run|handoff-check|handoff-run)\n", *mode)
+		fmt.Fprintf(os.Stderr, "未知 mode %q(见 -help)\n", *mode)
 		os.Exit(2)
 	}
 }

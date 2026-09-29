@@ -7,7 +7,9 @@
 > [小规模真实用户走查脚本与记录表](走查脚本-召回漏斗-20260929.md)(未执行,不虚构数据)。
 > 评估对象是当前产品合同:用户显式保存稳定偏好、按显式选择的 subject 手动召回、逐项确认;
 > **无自动提取、初筛或 Builder 模型注入,本评估不宣称任何模型效果**。
-> 入口 `cmd/evalpreference`(check/run),实现于 `internal/planningeval/preference_memory_eval.go`;
+> 入口 `cmd/evalpreference`(check/run;另有 handoff-check/handoff-run 见下文
+> [Builder 交接确定性评估](#builder-交接确定性评估2026-09-29分支-codexmemory-builder-handoff-eval)),
+> 实现于 `internal/planningeval/preference_memory_eval.go`;
 > 全程零模型:需求状态由 scripted screening 输出经真实产品管道(StartMessage → pipeline →
 > Reducer → store)产生,保存/召回/确认/删除全部走真实 `product.Service` 与一次性
 > `peval_prefeval_*` 临时库(结束物理删除,不触碰主库)。
@@ -66,6 +68,47 @@ PG_TEST_DSN=postgres://<user>:<pass>@127.0.0.1:15432/postgres?sslmode=disable \
 - 评估不经过 HTTP 层(API 已由 `internal/producthttp` 测试覆盖);评估直接驱动
   `product.Service`,与浏览器走查(真实 UI+API+PG)互补。
 - 自动提取、初筛召回注入、Builder 模型注入均未接入,也不在本评估范围。
+
+## Builder 交接确定性评估(2026-09-29,分支 codex/memory-builder-handoff-eval)
+
+> 状态:**四类交接场景可运行、门禁全绿**(真实结果见[运行记录](../运行记录.md))。
+> 追踪用户确认偏好后,值与 must/prefer 强度从 `RequirementState` 经需求投影
+> (`RequirementStateSpec` → 核定预览 `RequirementReviewSpec`)到确认事务冻结的
+> Builder 载荷(`PlanningBuilderInput` → `PlanningInput.EffectiveConstraints`)的
+> 确定性传递。这是阶段四"确认写入 RequirementState"向下游 Builder 交接的延伸,
+> 仍属用户显式召回确认的合同范围——**不是**自动召回注入(那仍在待定表)。
+> 入口 `cmd/evalpreference -mode handoff-check | handoff-run`,实现于
+> `internal/planningeval/preference_builder_handoff_eval.go`;复用阶段四的
+> prefEvalEnv/scripted screening/确认写入设施,临时库前缀 `peval_handoff_`。
+
+**scripted builder 口径**:确认走真实 `StartConfirm`,确认事务在 store 内冻结
+完整 `PlanningInput` 并由 `executeRemote` 派发;gateway.Remote(scripted builder,
+零模型)记录实际收到的完整冻结载荷,断言只读该载荷与 run 冻结的
+`builder_input_hash`(V5 同口径:两者规范化 hash 必须相等)。scripted builder
+无 oracle 输出,planning 以失败终态结束是刻意行为,不评估选件质量(planning-v2
+范围);builder 未收到载荷按 technical fault 暴露。
+
+| 用例 | 分类 | 覆盖 | 关键断言 |
+|---|---|---|---|
+| PM-BH-01 | unconfirmed | 未确认不进入载荷 | 建议在但不确认:State 保持 unknown;冻结载荷该字段按系统默认展开(any)、无 strength 键;记忆行无副作用 |
+| PM-BH-02 | confirmed | 确认后保真进入 | must(noise_pref)+prefer(brand_pref.gpu)确认后:State 与冻结载荷的值、`constraint_strengths` 逐项一致;载荷内 RequirementState 同步携带 |
+| PM-BH-03 | current-first | 当前会话优先 | 本轮明确 nvidia/must 进入载荷,历史 amd 不出现在建议与载荷;强度取当前会话表达 |
+| PM-BH-04 | owner-conflict | 冲突未选不进入 | 双 owner 冲突悬而未决时载荷无该字段(默认 any、无 strength);选择 nvidia 后所选值与强度进入 |
+
+门禁(preference-handoff-eval-gates-v1):`technical_fault=0`、`failed_assertions=0`、
+`failed_cases=0`、`categories_covered=4`。运行方式与阶段四一致,仅 mode 换为
+`handoff-check` / `handoff-run`。
+
+已知边界(除阶段四边界外):
+
+- 评估到"冻结载荷被 scripted builder 收到"为止,不执行真实选件,不验证
+  `requirement_constraints` 的 must/prefer 门槛行为(该层由 buildharness 单测覆盖,
+  选件质量由 planning-v2 覆盖)。
+- 失败重试(RetryOfRunID)继承冻结载荷的路径未单列场景(与首次确认共用同一
+  `PlanningBuilderInput` 组装,由 store 测试覆盖)。
+- 场景措辞须命中 `existingPartsClearedEvidence` 白名单("没有旧件"等):空
+  existing_parts 是 scripted screening 守卫的关键字段,泛化措辞会被降级为观察、
+  状态不 ready——这是产品守卫按设计工作,不是评估缺陷。
 
 ## 历史评审与修复记录
 

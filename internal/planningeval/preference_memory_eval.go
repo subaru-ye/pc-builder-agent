@@ -74,10 +74,11 @@ var prefEvalCategories = []string{"iso", "tmp", "chg", "del", "stale", "conf"}
 // prefEvalEnv 是一次运行的共享设施:一个 Service/gateway 服务全部场景,
 // conn 直连临时库做存储层核验(supersede 墓碑、物理删除)。
 type prefEvalEnv struct {
-	svc  *product.Service
-	g    *gateway
-	sink *recordingEventSink
-	conn *pgx.Conn
+	svc    *product.Service
+	g      *gateway
+	sink   *recordingEventSink
+	conn   *pgx.Conn
+	dbName string
 }
 
 type prefDriver struct {
@@ -202,11 +203,15 @@ func fieldValueString(raw json.RawMessage) string {
 	return string(raw)
 }
 
-// prefEvalCases 是六类场景的冻结注册表;ID 对应 docs/eval/preference-memory/README.md。
-var prefEvalCases = []struct {
+// prefEvalCaseSpec 是偏好记忆评估的场景注册表条目;阶段四基线与
+// Builder 交接评估共用同一执行器与门禁口径。
+type prefEvalCaseSpec struct {
 	ID, Category, Summary string
 	Run                   func(ctx context.Context, env *prefEvalEnv) ([]PrefEvalAssertion, error)
-}{
+}
+
+// prefEvalCases 是六类场景的冻结注册表;ID 对应 docs/eval/preference-memory/README.md。
+var prefEvalCases = []prefEvalCaseSpec{
 	{"PM-ISO-01", "iso", "本人与代配对象偏好隔离:按显式 subject 召回各只返回对应建议,确认不越权写入另一 subject 的字段",
 		runPrefEvalISO01},
 	{"PM-ISO-02", "iso", "多 owner 冲突:同字段不同值列为 conflict 选项,每个候选值的来源原话可辨认,确认只写入用户所选",
@@ -752,36 +757,36 @@ func CheckPreferenceMemoryEval() error {
 	return nil
 }
 
-// RunPreferenceMemoryEval 在一次性临时库上执行全部场景并落门禁判定。
-// serverDSN 只提供服务器(必须 localhost);临时库名以 peval_prefeval_ 开头,
-// 迁移后执行,结束物理删除,不触碰主库。
-func RunPreferenceMemoryEval(ctx context.Context, serverDSN string) (*PrefEvalReport, error) {
-	if err := CheckPreferenceMemoryEval(); err != nil {
-		return nil, err
-	}
+// setupPrefEvalEnv 在一次性临时库上组装偏好记忆评估的共享设施:迁移、
+// store、gateway(scripted screening/builder)、sink 与 product.Service。
+// serverDSN 只提供服务器(必须 localhost);临时库名以 dbPrefix 开头,迁移后
+// 执行;cleanup 先 Shutdown 再关连接并物理删除临时库,不触碰主库。
+// 阶段四基线与 Builder 交接评估共用该设施,不建第二套驱动。
+func setupPrefEvalEnv(ctx context.Context, serverDSN, dbPrefix string) (*prefEvalEnv, func(), error) {
 	u, err := url.Parse(serverDSN)
 	if err != nil || (u.Hostname() != "127.0.0.1" && u.Hostname() != "localhost") {
-		return nil, fmt.Errorf("preference eval: 需要指向 localhost 的 PostgreSQL 服务器 DSN")
+		return nil, nil, fmt.Errorf("preference eval: 需要指向 localhost 的 PostgreSQL 服务器 DSN")
 	}
 	admin, err := pgx.Connect(ctx, serverDSN)
 	if err != nil {
-		return nil, fmt.Errorf("preference eval: 服务器不可达: %w", err)
+		return nil, nil, fmt.Errorf("preference eval: 服务器不可达: %w", err)
 	}
-	name := fmt.Sprintf("peval_prefeval_%d", time.Now().UnixNano())
+	name := fmt.Sprintf("%s%d", dbPrefix, time.Now().UnixNano())
 	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name); err != nil {
 		_ = admin.Close(ctx)
-		return nil, fmt.Errorf("preference eval: 创建临时库失败: %w", err)
+		return nil, nil, fmt.Errorf("preference eval: 创建临时库失败: %w", err)
 	}
-	defer func() {
+	drop := func() {
 		_, _ = admin.Exec(context.Background(), "DROP DATABASE "+name+" WITH (FORCE)")
 		_ = admin.Close(ctx)
-	}()
+	}
 	evalURL := *u
 	evalURL.Path = "/" + name
 	dsn := evalURL.String()
 	dbh, err := sql.Open("pgx", dsn)
 	if err != nil {
-		return nil, err
+		drop()
+		return nil, nil, err
 	}
 	goose.SetBaseFS(migrations.Migrations)
 	goose.SetLogger(goose.NopLogger())
@@ -789,29 +794,53 @@ func RunPreferenceMemoryEval(ctx context.Context, serverDSN string) (*PrefEvalRe
 	err = goose.UpContext(ctx, dbh, "migrations")
 	_ = dbh.Close()
 	if err != nil {
-		return nil, fmt.Errorf("preference eval: 迁移失败: %w", err)
+		drop()
+		return nil, nil, fmt.Errorf("preference eval: 迁移失败: %w", err)
 	}
 
 	st, err := store.New(ctx, dsn)
 	if err != nil {
-		return nil, err
+		drop()
+		return nil, nil, err
 	}
-	defer st.Close()
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
-		return nil, err
+		st.Close()
+		drop()
+		return nil, nil, err
 	}
-	defer func() { _ = conn.Close(ctx) }()
 	g := &gateway{store: st}
 	sink := newRecordingEventSink()
 	svc, err := product.NewService(ctx, st, g, sink)
 	if err != nil {
+		_ = conn.Close(ctx)
+		st.Close()
+		drop()
+		return nil, nil, err
+	}
+	return &prefEvalEnv{svc: svc, g: g, sink: sink, conn: conn, dbName: name}, func() {
+		_ = svc.Shutdown(ctx)
+		_ = conn.Close(ctx)
+		st.Close()
+		drop()
+	}, nil
+}
+
+// RunPreferenceMemoryEval 在一次性临时库上执行全部场景并落门禁判定。
+// serverDSN 只提供服务器(必须 localhost);临时库名以 peval_prefeval_ 开头,
+// 迁移后执行,结束物理删除,不触碰主库。
+func RunPreferenceMemoryEval(ctx context.Context, serverDSN string) (*PrefEvalReport, error) {
+	if err := CheckPreferenceMemoryEval(); err != nil {
 		return nil, err
 	}
-	env := &prefEvalEnv{svc: svc, g: g, sink: sink, conn: conn}
+	env, cleanup, err := setupPrefEvalEnv(ctx, serverDSN, "peval_prefeval_")
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
 
 	report := &PrefEvalReport{
-		SchemaVersion: 1, GeneratedAt: time.Now().UTC(), Mode: "deterministic", Database: name,
+		SchemaVersion: 1, GeneratedAt: time.Now().UTC(), Mode: "deterministic", Database: env.dbName,
 		Limitations: []string{
 			"零模型:需求状态由 scripted screening 经真实产品管道产生,不评估模型提取效果。",
 			"只覆盖显式保存/手动召回/逐项确认产品合同;无自动提取、初筛注入或 Builder 模型注入。",
@@ -835,8 +864,15 @@ func RunPreferenceMemoryEval(ctx context.Context, serverDSN string) (*PrefEvalRe
 		result.Assertions = assertions
 		report.Cases = append(report.Cases, result)
 	}
-	_ = svc.Shutdown(ctx)
 
+	executePrefEvalGates(report, prefEvalCategories, "=6")
+	return report, nil
+}
+
+// executePrefEvalGates 汇总场景结果并落四个确定性门禁:技术故障零容忍、
+// 断言全过(负向断言不与正向抵消)、失败用例零容忍、分类全覆盖。
+// threshold 是 categories_covered 门禁的期望值文案(如 "=6")。
+func executePrefEvalGates(report *PrefEvalReport, categories []string, threshold string) {
 	failed := 0
 	faults := 0
 	for _, c := range report.Cases {
@@ -863,11 +899,15 @@ func RunPreferenceMemoryEval(ctx context.Context, serverDSN string) (*PrefEvalRe
 		}
 	}
 	sort.Slice(report.Cases, func(i, j int) bool { return report.Cases[i].ID < report.Cases[j].ID })
+	covered := map[string]bool{}
+	for _, c := range report.Cases {
+		covered[c.Category] = true
+	}
 	report.GateVerdicts = []PrefEvalGateVerdict{
 		{Name: "technical_fault", Actual: fmt.Sprint(faults), Threshold: "=0", Pass: faults == 0},
 		{Name: "failed_assertions", Actual: fmt.Sprint(failed), Threshold: "=0", Pass: failed == 0},
 		{Name: "failed_cases", Actual: fmt.Sprint(failedCases), Threshold: "=0", Pass: failedCases == 0},
-		{Name: "categories_covered", Actual: fmt.Sprint(len(prefEvalCategories)), Threshold: "=6", Pass: len(prefEvalCategories) == 6},
+		{Name: "categories_covered", Actual: fmt.Sprint(len(covered)), Threshold: threshold, Pass: len(covered) == len(categories)},
 	}
 	report.GatePassed = true
 	for _, v := range report.GateVerdicts {
@@ -875,7 +915,6 @@ func RunPreferenceMemoryEval(ctx context.Context, serverDSN string) (*PrefEvalRe
 			report.GatePassed = false
 		}
 	}
-	return report, nil
 }
 
 // WritePrefEvalReport 落盘 report.json 与 report.md;目录必须不存在。

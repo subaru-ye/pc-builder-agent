@@ -190,6 +190,9 @@ func TestReqV2DiscoveryAndIntegrity(t *testing.T) {
 	if live.Evidence.Status != "complete" || live.Mode != "live" {
 		t.Fatalf("live-ok 证据状态=%s 模式=%s", live.Evidence.Status, live.Mode)
 	}
+	if live.Evidence.Notes == nil {
+		t.Fatal("完整证据无说明时 notes 必须是空数组")
+	}
 	if len(live.Models) != 1 || live.Models[0].Model != "test-model" {
 		t.Fatalf("模型身份投影错误: %+v", live.Models)
 	}
@@ -248,6 +251,80 @@ func TestReqV2DiscoveryAndIntegrity(t *testing.T) {
 	}
 }
 
+func TestReqV2EmptyCollectionsAreJSONCollections(t *testing.T) {
+	root := t.TempDir()
+	writeRun(t, root, "zero-model", func(plan, report, _, _ map[string]any) {
+		delete(plan, "models")
+		delete(report, "splits")
+	})
+	broken := writeRun(t, root, "broken-report", func(plan, _, _, _ map[string]any) {
+		delete(plan, "models")
+	})
+	if err := os.WriteFile(filepath.Join(broken.Dir, "report.json"), []byte("{broken"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	store := newReqV2Store(t, root)
+	for _, run := range store.RunsReqV2().Runs {
+		raw, err := json.Marshal(run)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(raw), `"models":[]`) || !strings.Contains(string(raw), `"splits":[]`) {
+			t.Fatalf("%s summary 集合不应为 null: %s", run.DirName, raw)
+		}
+		if run.DirName != "broken-report" {
+			continue
+		}
+		detail, err := store.reqV2Lookup(run.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err = json.Marshal(detail.detail)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, field := range []string{`"gate_verdicts":[]`, `"limitations":[]`, `"cases":[]`, `"per_layer":{}`, `"model_quality":{}`} {
+			if !strings.Contains(string(raw), field) {
+				t.Fatalf("损坏报告的 %s 不应为 null: %s", field, raw)
+			}
+		}
+	}
+}
+
+func TestReqV2IdentityAndLayerTotalsUseSetAndPassK(t *testing.T) {
+	root := t.TempDir()
+	writeRun(t, root, "reordered-splits", func(plan, report, _, _ map[string]any) {
+		plan["splits"] = []string{"development", "calibration"}
+		report["splits"] = []string{"calibration", "development"}
+		cases := report["cases"].([]any)
+		for repeat, pass := range map[int]bool{2: false, 3: true} {
+			row := map[string]any{}
+			for key, value := range cases[0].(map[string]any) {
+				row[key] = value
+			}
+			row["repeat"], row["pass"] = repeat, pass
+			cases = append(cases, row)
+		}
+		cases = append(cases, map[string]any{"layer": "extraction", "id": "ex-1", "split": "development", "repeat": 1, "pass": false, "observation": map[string]any{"skipped": "zero model"}})
+		report["cases"] = cases
+		report["per_layer"] = map[string]any{"reducer": map[string]any{"cases": 1, "passed": 0}, "extraction": map[string]any{"cases": 0, "passed": 0, "skipped": 1}}
+	})
+	store := newReqV2Store(t, root)
+	run := store.RunsReqV2().Runs[0]
+	if run.Evidence.Status != "complete" {
+		t.Fatalf("顺序不同的 splits 与一致的 Pass^k 汇总应保留完整证据: %+v", run.Evidence)
+	}
+	detail, err := store.reqV2Lookup(run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range detail.detail.CaseIndex {
+		if entry.ID == "ex-1" && !entry.Skipped {
+			t.Fatal("observation.skipped 应标记为跳过")
+		}
+	}
+}
+
 func TestReqV2RunDetailAndCase(t *testing.T) {
 	root := t.TempDir()
 	writeRun(t, root, "live-ok", func(_, report, _, _ map[string]any) {
@@ -279,6 +356,9 @@ func TestReqV2RunDetailAndCase(t *testing.T) {
 	}
 	if len(caseDetail.Repeats) != 1 || !caseDetail.Repeats[0].Pass {
 		t.Fatalf("逐题 repeat 投影错误: %+v", caseDetail.Repeats)
+	}
+	if !caseDetail.PassK {
+		t.Fatal("所有 repeat 通过的单题应投影为 Pass^k 通过")
 	}
 	if len(caseDetail.Repeats[0].Turns) != 1 || caseDetail.Repeats[0].Turns[0].Reply != "好的" {
 		t.Fatalf("turn 观测投影错误: %+v", caseDetail.Repeats[0].Turns)

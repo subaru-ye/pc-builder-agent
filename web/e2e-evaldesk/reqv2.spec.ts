@@ -193,7 +193,22 @@ test.describe("Requirement v2 合成产物", () => {
 });
 
 test.describe("Requirement v2 真实产物抽查(需本机 evaldesk 服务)", () => {
-  test("spec3-final-live 的 16 条门槛、六层与结论可在浏览器逐项核对", async ({ page }) => {
+  test("运行目录可显示无模型的真实产物", async ({ page }, testInfo) => {
+    const probe = await page.request.get("/api/evaldesk/requirement-v2/runs");
+    test.skip(!probe.ok(), "本机评估服务未启动;真实产物抽查跳过");
+    const { runs } = await probe.json();
+    const zero = runs.find((run: { superseded: boolean; models: unknown[] }) => !run.superseded && run.models.length === 0);
+    test.skip(!zero, "本机无零模型产物");
+    await page.goto("/eval");
+    await expect(page.getByTestId(`reqv2-run-${zero.dir_name}`)).toBeVisible();
+    await expect(page.getByText("模型未记录").first()).toBeVisible();
+    await page.evaluate(() => localStorage.setItem("pcb-theme", "dark"));
+    await page.reload();
+    await expect(page.getByTestId(`reqv2-run-${zero.dir_name}`)).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("real-catalog.png") });
+  });
+
+  test("spec3-final-live 的 16 条门槛、六层与结论可在浏览器逐项核对", async ({ page }, testInfo) => {
     const probe = await page.request.get("/api/evaldesk/requirement-v2/runs");
     test.skip(!probe.ok(), "本机 evaldesk 服务未启动;真实产物抽查跳过,不影响合成用例");
     const { runs } = await probe.json();
@@ -207,7 +222,8 @@ test.describe("Requirement v2 真实产物抽查(需本机 evaldesk 服务)", ()
     await expect(page.getByTestId("layer-extraction")).toContainText("25/26");
     const unevaluable = await page.getByText(/UNEVALUABLE · 未满足评估条件/).count();
     expect(unevaluable).toBeGreaterThanOrEqual(0);
-    await page.screenshot({ path: "reqv2-real-spec3.png", fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath("detail-viewport.png") });
+    await page.screenshot({ path: testInfo.outputPath("reqv2-real-spec3.png"), fullPage: true });
   });
 
   test("零模型与 regrade 运行身份在浏览器正确呈现", async ({ page }) => {

@@ -23,7 +23,7 @@ func (s *Store) CaseReqV2(id, layer, caseID string) (*ReqV2CaseDetail, error) {
 		return nil, err
 	}
 	detail := &ReqV2CaseDetail{
-		Run: run.summary.ID, Layer: layer, Case: caseID,
+		Run: run.summary.ID, Layer: layer, Case: caseID, PassK: true,
 		Integrity: run.summary.Evidence,
 	}
 	// 从 report.json 重新解码,取到该 case 的完整观测(含 turns)。

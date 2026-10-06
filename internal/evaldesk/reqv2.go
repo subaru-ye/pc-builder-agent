@@ -216,14 +216,17 @@ type reqV2ReportHead struct {
 }
 
 type ReqV2CaseResultRow struct {
-	Layer      string   `json:"layer"`
-	ID         string   `json:"id"`
-	Split      string   `json:"split"`
-	Session    string   `json:"session"`
-	Repeat     int      `json:"repeat"`
-	Pass       bool     `json:"pass"`
-	Vetoes     []string `json:"vetoes,omitempty"`
-	Skipped    string   `json:"skipped,omitempty"`
+	Layer           string   `json:"layer"`
+	ID              string   `json:"id"`
+	Split           string   `json:"split"`
+	Session         string   `json:"session"`
+	Repeat          int      `json:"repeat"`
+	Pass            bool     `json:"pass"`
+	Vetoes          []string `json:"vetoes,omitempty"`
+	Skipped         string   `json:"skipped,omitempty"`
+	ObservationMeta struct {
+		Skipped string `json:"skipped"`
+	} `json:"observation"`
 	Assertions []struct {
 		Name           string `json:"name"`
 		Pass           bool   `json:"pass"`
@@ -270,7 +273,7 @@ func (ig *reqV2Integrity) finalize() ReqV2Evidence {
 	if status == "" || status == "ok" {
 		status = "complete"
 	}
-	return ReqV2Evidence{Status: status, Notes: ig.notes}
+	return ReqV2Evidence{Status: status, Notes: append([]string{}, ig.notes...)}
 }
 
 // ---- 发现与缓存 ----
@@ -436,7 +439,11 @@ func (s *Store) checkReqV2Identity(dir string, plan *reqV2PlanIdentity, report *
 	identity("grader_version", plan.GraderVersion, report.GraderVersion)
 	identity("manifest_sha256", plan.ManifestSHA256, report.ManifestSHA256)
 	identity("gates_sha256", plan.GatesSHA256, report.GatesSHA256)
-	identity("splits", strings.Join(plan.Splits, ","), strings.Join(report.Splits, ","))
+	planSplits := append([]string{}, plan.Splits...)
+	reportSplits := append([]string{}, report.Splits...)
+	sort.Strings(planSplits)
+	sort.Strings(reportSplits)
+	identity("splits", strings.Join(planSplits, ","), strings.Join(reportSplits, ","))
 	if plan.Repeats == report.Repeats {
 		ig.record("repeats", "ok", "")
 	} else {
@@ -552,25 +559,27 @@ func (s *Store) verifyReqV2Results(dir string, report *reqV2ReportHead, ig *reqV
 
 // verifyReqV2LayerTotals 交叉核对报告汇总与逐题记录;只提示不一致,保留报告原值。
 func verifyReqV2LayerTotals(report *reqV2ReportHead, ig *reqV2Integrity) {
-	folded := map[string]*ReqV2LayerRow{}
+	folded := map[string]map[string]bool{}
 	for _, row := range report.Cases {
-		layer := folded[row.Layer]
-		if layer == nil {
-			layer = &ReqV2LayerRow{}
-			folded[row.Layer] = layer
-		}
-		layer.Cases++
-		if row.Pass {
-			layer.Passed++
-		}
-	}
-	for name, summary := range report.PerLayer {
-		computed, ok := folded[name]
-		if !ok {
+		if row.Skipped != "" || row.ObservationMeta.Skipped != "" {
 			continue
 		}
-		if summary.Cases != computed.Cases || summary.Passed != computed.Passed {
-			ig.record("per_layer/"+name, "incomplete", fmt.Sprintf("层 %s 报告汇总与逐题记录不一致(报告 %d/%d,逐题 %d/%d);保留报告原值", name, summary.Cases, summary.Passed, computed.Cases, computed.Passed))
+		if folded[row.Layer] == nil {
+			folded[row.Layer] = map[string]bool{}
+		}
+		passed, seen := folded[row.Layer][row.ID]
+		folded[row.Layer][row.ID] = (!seen || passed) && row.Pass
+	}
+	for name, summary := range report.PerLayer {
+		cases := folded[name]
+		passed := 0
+		for _, pass := range cases {
+			if pass {
+				passed++
+			}
+		}
+		if summary.Cases != len(cases) || summary.Passed != passed {
+			ig.record("per_layer/"+name, "incomplete", fmt.Sprintf("层 %s 报告汇总与逐题 Pass^k 不一致(报告 %d/%d,逐题 %d/%d);保留报告原值", name, summary.Cases, summary.Passed, len(cases), passed))
 		}
 	}
 }
@@ -585,8 +594,8 @@ func (s *Store) buildReqV2Summary(id, dir string, plan *reqV2PlanIdentity, repor
 		ID: id, DirName: dirName, Label: filepath.ToSlash(rel), CreatedAt: strptr(plan.CreatedAt),
 		Mode: mode, ZeroModel: zeroModel, Regrade: plan.Regrade,
 		SourceRun: strings.TrimSpace(plan.SourceRun), Superseded: strings.HasPrefix(dirName, "superseded-"),
-		Grader: firstNonEmpty(report.GraderVersion, plan.GraderVersion, "未记录"), Splits: report.Splits, Repeats: report.Repeats,
-		CodeCommit: plan.CodeCommit, CodeDirty: plan.CodeDirty,
+		Grader: firstNonEmpty(report.GraderVersion, plan.GraderVersion, "未记录"), Splits: append([]string{}, report.Splits...), Repeats: report.Repeats,
+		CodeCommit: plan.CodeCommit, CodeDirty: plan.CodeDirty, Models: []ReqV2ModelIdentity{},
 		GatePassed: report.GatePassed, Conclusion: truncateText(report.Conclusion, reqV2MaxText),
 		Evidence: evidence, ManifestSHA: shortSHA(report.ManifestSHA256), GatesSHA: shortSHA(report.GatesSHA256),
 		MaxCalls: plan.MaxModelRequests,
@@ -611,19 +620,26 @@ func (s *Store) buildReqV2Summary(id, dir string, plan *reqV2PlanIdentity, repor
 }
 
 func buildReqV2Detail(summary ReqV2RunSummary, plan *reqV2PlanIdentity, report *reqV2ReportHead, checks []ReqV2IntegrityCheck) *ReqV2RunDetail {
-	return &ReqV2RunDetail{
+	detail := &ReqV2RunDetail{
 		ReqV2RunSummary: summary,
 		DurationMS:      report.DurationMS,
-		GateVerdicts:    report.GateVerdicts,
+		GateVerdicts:    append([]ReqV2GateVerdictRow{}, report.GateVerdicts...),
 		PerLayer:        report.PerLayer,
 		ModelQuality:    report.ModelQuality,
 		Usage:           report.Usage,
-		Limitations:     report.Limitations,
+		Limitations:     append([]string{}, report.Limitations...),
 		CaseIndex:       buildReqV2CaseIndex(report.Cases),
 		RegradePlan:     buildReqV2RegradePlan(plan),
 		Thresholds:      report.Gates,
 		Integrity:       checks,
 	}
+	if detail.PerLayer == nil {
+		detail.PerLayer = map[string]ReqV2LayerRow{}
+	}
+	if detail.ModelQuality == nil {
+		detail.ModelQuality = map[string]json.RawMessage{}
+	}
+	return detail
 }
 
 func buildReqV2CaseIndex(cases []ReqV2CaseResultRow) []ReqV2CaseIndexEntry {
@@ -633,15 +649,13 @@ func buildReqV2CaseIndex(cases []ReqV2CaseResultRow) []ReqV2CaseIndexEntry {
 		key := row.Layer + "/" + row.ID
 		entry, ok := index[key]
 		if !ok {
-			entry = &ReqV2CaseIndexEntry{Layer: row.Layer, ID: row.ID, Split: row.Split, Session: row.Session, PassK: true, Repeats: []int{}, Failures: []string{}}
+			entry = &ReqV2CaseIndexEntry{Layer: row.Layer, ID: row.ID, Split: row.Split, Session: row.Session, PassK: true, Skipped: true, Repeats: []int{}, Failures: []string{}}
 			index[key] = entry
 			order = append(order, key)
 		}
 		entry.Repeats = append(entry.Repeats, row.Repeat)
 		entry.PassK = entry.PassK && row.Pass
-		if row.Skipped != "" {
-			entry.Skipped = true
-		}
+		entry.Skipped = entry.Skipped && (row.Skipped != "" || row.ObservationMeta.Skipped != "")
 		entry.Vetoes += len(row.Vetoes)
 		for _, assertion := range row.Assertions {
 			if !assertion.Pass && assertion.Classification != "" {

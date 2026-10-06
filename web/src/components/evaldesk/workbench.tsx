@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronRight, CircleHelp, FlaskConical, History, ListChecks, RefreshCw, Search, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronRight, CircleHelp, FlaskConical, History, ListChecks, Menu, RefreshCw, Search, X } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -14,6 +14,7 @@ import { RunProvenance, RunTimeline } from "./provenance";
 import { CommitHistory, SuiteLibrary } from "./catalog";
 import { WorkbenchNavigation, type DeskSection } from "./navigation";
 import { ReqV2Workbench } from "./reqv2";
+import navigationStyles from "./navigation.module.css";
 import styles from "./workbench.module.css";
 
 const statusLabels: Record<CaseStatus, string> = { regressed: "退步", improved: "改善", persistent_failure: "持续失败", output_changed: "成绩不变 · 输出变化", unchanged: "未变化", added: "新增题", removed: "删除题", modified: "修改题", unavailable: "证据不足" };
@@ -110,7 +111,7 @@ function Comparison({ data, openCase, provenance }: { data: CompareResponse; ope
       {data.notices.find(n => n.startsWith("多项条件")) && <p className={styles.notice}>{data.notices.find(n => n.startsWith("多项条件"))}</p>}
       {data.strictReason && <p className={styles.notice}>{data.strictReason}</p>}
       <details className={styles.versionDetails}><summary>版本证据与比较口径 · 完整标识及 {unknown.length} 项缺失证据</summary>{data.notices.map((notice, i) => <p key={i}>{notice}</p>)}{data.conditions.map(c => <div key={c.key} className={styles.conditionDetail}><b>{c.label} · {c.state === "same" ? "相同" : c.state === "changed" ? "已变化" : "未记录 / 不足"}</b><p>基线：{c.baseline ?? "未记录"}</p><p>候选：{c.candidate ?? "未记录"}</p></div>)}</details>
-      <div className={styles.filters} aria-label="变化速览">{(["regressed", "improved", "persistent_failure", "calls"] as const).filter(f => count(f) > 0).map(f => <button key={f} onClick={() => { setFilter(f); document.querySelector('[aria-label="逐题变化"]')?.scrollIntoView({ block: "start" }); }}>{filterName(f)} {count(f)} <ArrowRight size={14} className="inline" aria-hidden="true" /></button>)}</div>
+      <div className={styles.filters} role="group" aria-label="变化速览">{(["regressed", "improved", "persistent_failure", "calls"] as const).filter(f => count(f) > 0).map(f => <button key={f} onClick={() => { setFilter(f); document.querySelector('[aria-label="逐题变化"]')?.scrollIntoView({ block: "start" }); }}>{filterName(f)} {count(f)} <ArrowRight size={14} className="inline" aria-hidden="true" /></button>)}</div>
     </section>
     <MetricComparison data={data} />
     <section aria-label="逐题变化"><div className={styles.sectionHead}><div><h2>点题目查看原因</h2><p>退步 {data.counts.regressed} · 改善 {data.counts.improved} · 持续失败 {data.counts.persistent_failure} · 同分输出变化 {data.counts.output_changed}</p></div><label className={styles.search}><Search size={16} /><span className="sr-only">搜索题目</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder="题号或题目名称" /></label></div>
@@ -175,6 +176,7 @@ function CaseDetail({ data, comparison, close }: { data: CaseResponse; compariso
 
 export function EvalWorkbench() {
   const params = useSearchParams();
+  const [v2NavOpen, setV2NavOpen] = useState(false);
   const queryClient = useQueryClient();
   const baseline = params.get("baseline") ?? "", candidate = params.get("candidate") ?? "", caseId = params.get("case") ?? "";
   const requestedView = params.get("view");
@@ -219,18 +221,19 @@ export function EvalWorkbench() {
   const runSelect = (role: "baseline" | "candidate") => <label className={styles.selectLabel}><span>{role === "baseline" ? "基线运行 · 作为参照" : "候选运行 · 查看变化"}</span><small>{role === "baseline" ? "选一次历史评估，作为比较的起点" : "选另一次评估，看它相对基线的变化"}</small><select aria-label={role === "baseline" ? "基线运行" : "候选运行"} aria-describedby="eval-selection-help" value={role === "baseline" ? baseline : candidate} onChange={e => navigate({ [role]: e.target.value, case: null })}><option value="">{role === "baseline" ? "选择作为参照的运行" : "选择要比较的运行"}</option>{runs.data?.runs.map(run => <option key={run.id} value={run.id} data-run-label={run.label}>{optionCaption(run)}</option>)}</select></label>;
   const deskSwitch = (
     <nav aria-label="评估体系" style={{ display: "grid", gap: 4 }}>
-      <button className={styles.navItem} aria-current={desk !== "legacy" ? "page" : undefined} onClick={() => navigate({ desk: null })}><ListChecks size={17} aria-hidden /><span>Requirement v2</span></button>
-      <button className={styles.navItem} aria-current={desk === "legacy" ? "page" : undefined} onClick={() => navigate({ desk: "legacy", view: "runs", run: null, case: null, layer: null })}><History size={17} aria-hidden /><span>历史评估</span></button>
+      <button className={navigationStyles.navItem} aria-current={desk !== "legacy" ? "page" : undefined} onClick={() => { setV2NavOpen(false); navigate({ desk: null }); }}><ListChecks size={17} aria-hidden /><span>Requirement v2</span></button>
+      <button className={navigationStyles.navItem} aria-current={desk === "legacy" ? "page" : undefined} onClick={() => { setV2NavOpen(false); navigate({ desk: "legacy", view: "runs", run: null, case: null, layer: null }); }}><History size={17} aria-hidden /><span>历史评估</span></button>
     </nav>
   );
   return <div className={styles.workspace}>
     <header className={styles.header}><Link href="/" className={styles.brand}><FlaskConical size={19} aria-hidden="true" /><span>装机配置单 <span className={styles.desktopOnly}>Agent</span></span></Link><span className={styles.readonly}>本机评估 · 只读</span><label className={styles.theme}><span className="sr-only">外观</span><select aria-label="外观" value={theme} onChange={e => setTheme(e.target.value as ThemePreference)}><option value="system">系统</option><option value="dark">深色</option><option value="light">浅色</option></select></label></header>
     <div className={styles.layout}>
     {desk !== "legacy" ? <>
-      <aside className={styles.sidebar} id="evaldesk-navigation">
-        <p className={styles.caption}>评估工作台</p>
+      <div className={navigationStyles.mobileBar}><Button variant="outline" aria-expanded={v2NavOpen} aria-controls="evaldesk-navigation" onClick={() => setV2NavOpen(!v2NavOpen)}>{v2NavOpen ? <X size={16} /> : <Menu size={16} />}工作台菜单</Button><span>Requirement v2</span></div>
+      <aside className={`${navigationStyles.sidebar} ${v2NavOpen ? navigationStyles.expanded : ""}`} id="evaldesk-navigation">
+        <p className={navigationStyles.caption}>评估工作台</p>
         {deskSwitch}
-        <p className={styles.hint}>只读本机产物 · 不重跑、不重判、不改门槛。</p>
+        <p className={navigationStyles.hint}>只读本机产物 · 不重跑、不重判、不改门槛。</p>
       </aside>
       <ReqV2Workbench params={params} navigate={navigate} onReread={() => void queryClient.invalidateQueries({ queryKey: ["evaldesk"] })} />
     </> : <>

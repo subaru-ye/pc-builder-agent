@@ -24,17 +24,16 @@ function GateState({ verdict }: { verdict: ReqV2GateVerdictRow }) {
 function EvidenceBadge({ evidence }: { evidence: ReqV2Evidence }) {
   const label = evidence.status === "complete" ? "证据完整" : evidence.status === "incomplete" ? "证据不完整" : "证据无效";
   const tone = evidence.status === "complete" ? "status-pass" : evidence.status === "incomplete" ? "status-review" : "status-fail";
-  return <span className={`${styles.state} ${tone}`}><AlertTriangle size={14} aria-hidden={evidence.status === "complete"} />{label}</span>;
+  const Icon = evidence.status === "complete" ? Check : evidence.status === "incomplete" ? CircleHelp : AlertTriangle;
+  return <span className={`${styles.state} ${tone}`}><Icon size={14} aria-hidden />{label}</span>;
 }
 
 function ErrorMessage({ error, retry }: { error: Error; retry: () => void }) {
   return <div className={styles.empty} role="alert"><p>{error.message}</p><Button variant="outline" onClick={retry}>重新读取</Button></div>;
 }
 
-const modeTone = (run: ReqV2RunSummary) => run.mode === "live" ? "status-review" : "status-unknown";
-
-function RunCatalog({ runs, warnings, openRun, onReread, pending, error }: {
-  runs?: ReqV2RunsResponse; warnings?: string[]; openRun: (id: string) => void; onReread: () => void; pending: boolean; error?: Error;
+function RunCatalog({ runs, openRun, onReread, pending, error }: {
+  runs?: ReqV2RunsResponse; openRun: (id: string) => void; onReread: () => void; pending: boolean; error?: Error;
 }) {
   const [type, setType] = useState<string>("all");
   const [evidence, setEvidence] = useState<string>("all");
@@ -43,41 +42,48 @@ function RunCatalog({ runs, warnings, openRun, onReread, pending, error }: {
   const all = runs?.runs ?? [];
   const current = all.filter(run => !run.superseded);
   const archived = all.filter(run => run.superseded);
+  const query = search.trim().toLowerCase();
   const match = (run: ReqV2RunSummary) =>
     (type === "all" || (type === "zero_model" ? run.zero_model : run.mode === type)) &&
     (evidence === "all" || run.evidence.status === evidence) &&
-    `${run.label} ${run.grader_version} ${run.models.map(m => m.model).join(" ")}`.toLowerCase().includes(search.toLowerCase());
+    `${run.label} ${run.grader_version} ${run.models.map(m => m.model).join(" ")}`.toLowerCase().includes(query);
   const visible = current.filter(match);
   const visibleArchived = archived.filter(match);
-  const row = (run: ReqV2RunSummary) => <button key={run.id} className={`${styles.runGrid} ${styles.runRow}`} data-testid={`reqv2-run-${run.dir_name}`} onClick={() => openRun(run.id)}>
-    <span className={styles.runName}><time dateTime={run.created_at ?? undefined}>{reqV2Time(run.created_at)}</time><ChevronRight size={14} aria-hidden /><span className={run.superseded ? styles.muted : ""}>{run.dir_name}</span></span>
-    <span><b>{reqV2ModeLabels[run.mode] ?? run.mode}</b><small className={styles.block}>{run.zero_model ? "零模型 · " : ""}{run.splits.join("/") || "split 未记录"} · repeats {run.repeats}</small></span>
-    <span><span className={styles.muted}>{run.grader_version}</span><small className={styles.block}>{run.models.map(m => m.model).join(" · ") || "模型未记录"}</small></span>
-    <span>{run.gate_passed == null
-      ? <span className="status-unknown">结论未记录</span>
-      : run.gate_passed
-        ? <span className="status-pass">冻结门槛通过</span>
-        : <span className="status-fail">冻结门槛未全过</span>}
-      <small className={styles.block}><EvidenceBadge evidence={run.evidence} /></small>
-    </span>
-    <ChevronRight className={styles.rowChevron} size={16} aria-hidden />
+  const row = (run: ReqV2RunSummary) => <button key={run.id} className={styles.catalogRow} data-testid={`reqv2-run-${run.dir_name}`} onClick={() => openRun(run.id)}>
+    <span className={styles.catalogIdentity}><strong>{run.dir_name}</strong><time dateTime={run.created_at ?? undefined}>{reqV2Time(run.created_at)}</time></span>
+    <span className={styles.catalogContext}><b>{reqV2ModeLabels[run.mode] ?? run.mode}</b><small>{run.models.map(m => m.model).join(" · ") || "模型未记录"} · {run.splits.join("/") || "split 未记录"} · {run.repeats} 次</small></span>
+    <span className={run.gate_passed == null ? "status-unknown" : run.gate_passed ? "status-pass" : "status-fail"}>{run.gate_passed == null ? "未记录" : run.gate_passed ? "通过" : "未通过"}</span>
+    <EvidenceBadge evidence={run.evidence} />
+    <ChevronRight size={16} className={styles.catalogArrow} aria-hidden />
   </button>;
   return <section aria-label="Requirement v2 运行目录">
-    <div className={styles.sectionHead}><div><h2>v2 运行 <span>{all.length}</span></h2><p>只读审阅冻结的 plan/report/results;目录名与时间不代表运行好坏。</p></div>
-      <label className={styles.search}><Search size={16} aria-hidden /><span className="sr-only">搜索运行</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder="目录、判卷版本或模型" /></label></div>
-    <div className={styles.filters} aria-label="运行过滤">
-      {["all", "live", "deterministic", "replay", "regrade", "zero_model"].map(value => <button key={value} aria-pressed={type === value} onClick={() => setType(value)}>{value === "all" ? "全部类型" : value === "zero_model" ? "零模型" : reqV2ModeLabels[value]}</button>)}
-      {["all", "complete", "incomplete", "invalid"].map(value => <button key={value} aria-pressed={evidence === value} onClick={() => setEvidence(value)}>{value === "all" ? "全部证据" : value === "complete" ? "证据完整" : value === "incomplete" ? "证据不完整" : "证据无效"}</button>)}
+    <div className={styles.catalogSummary} aria-label="运行概况">
+      <div><strong>{current.length}</strong><span>当前运行</span></div>
+      <div><strong>{current.filter(run => run.evidence.status === "complete").length}</strong><span>证据完整</span></div>
+      <div><strong>{current.filter(run => run.gate_passed === true).length}</strong><span>门槛通过</span></div>
+      <div><strong>{archived.length}</strong><span>历史归档</span></div>
     </div>
-    {(warnings ?? []).map((warning, i) => <p key={i} className={styles.notice}>{warning}</p>)}
+    <p className={styles.catalogHelp}>门槛是冻结评估结论；证据状态只表示产物能否核对，不代表方案通过。</p>
+    <div className={styles.catalogToolbar}>
+      <div className={styles.catalogTabs} aria-label="运行类型">
+        {["all", "live", "deterministic", "replay", "regrade"].map(value => <button key={value} aria-pressed={type === value} onClick={() => setType(value)}>{value === "all" ? "全部" : reqV2ModeLabels[value]}</button>)}
+      </div>
+      <div className={styles.catalogTools}>
+        <label className={styles.catalogSelect}><span className="sr-only">证据状态</span><select value={evidence} onChange={event => setEvidence(event.target.value)}><option value="all">全部证据</option><option value="complete">证据完整</option><option value="incomplete">证据不完整</option><option value="invalid">证据无效</option></select></label>
+        <label className={styles.search}><Search size={16} aria-hidden /><span className="sr-only">搜索运行</span><input value={search} onChange={event => setSearch(event.target.value)} placeholder="搜索运行或模型" /></label>
+      </div>
+    </div>
     {pending && <p className={styles.empty} role="status">正在扫描 artifacts/reqv2…</p>}
     {error && <ErrorMessage error={error} retry={onReread} />}
     {runs && !pending && !error && <>
+      <div className={styles.catalogHeading}><h2>当前运行 <span>{visible.length}</span></h2><span>按创建时间排列</span></div>
+      <div className={styles.catalogColumns} aria-hidden><span>运行 / 时间</span><span>类型 / 模型 / 范围</span><span>冻结门槛</span><span>证据</span><span /></div>
       {visible.map(row)}
-      {!visible.length && <div className={styles.empty}>{all.length ? "没有匹配的运行,请更换过滤条件。" : "artifacts/reqv2 下尚无 Requirement v2 运行。可进入历史评估查看旧产物;这里不会伪造 0 分或未通过结论。"}</div>}
+      {!visible.length && <div className={styles.empty}>{all.length ? "当前运行没有匹配项，请调整筛选条件。" : "artifacts/reqv2 下尚无 Requirement v2 运行。"}</div>}
       {archived.length > 0 && <details className={styles.versionDetails} open={showArchived} onToggle={e => setShowArchived(e.currentTarget.open)}>
-        <summary>superseded 历史归档 · {archived.length} 次(不作为当前基线)</summary>
+        <summary>superseded 历史归档 · {archived.length} 次（不作为当前基线）</summary>
         {visibleArchived.map(row)}
+        {!visibleArchived.length && <p className={styles.empty}>归档中没有匹配项。</p>}
       </details>}
     </>}
   </section>;
@@ -105,7 +111,7 @@ function RunDetail({ run, openCase, openCompare, back }: { run: ReqV2RunDetail; 
     const rows = run.gate_verdicts.filter(v => group.layers.includes(v.layer) || (group.key === "model" && v.layer === "global"));
     if (!rows.length) return null;
     return <section className={styles.turn} key={group.key}><h3>{group.title}</h3><p className={styles.muted}>{group.hint}</p>
-      <div className={styles.caseGrid}>{rows.map((verdict, i) => <div key={i} className={styles.caseRow} data-testid={`gate-${verdict.layer}-${verdict.metric}`}>
+      <div>{rows.map((verdict, i) => <div key={i} className={`${styles.caseGrid} ${styles.caseRow}`} data-testid={`gate-${verdict.layer}-${verdict.metric}`}>
         <span><b>{reqV2LayerLabels[verdict.layer] ?? verdict.layer}</b><small className={styles.block}>{verdict.metric}{verdict.note ? ` · ${verdict.note}` : ""}</small></span>
         <span><span className={styles.mobileLabel}>实际</span>{verdict.actual || "—"}</span>
         <span><span className={styles.mobileLabel}>阈值</span>{verdict.threshold || "—"}</span>
@@ -118,7 +124,7 @@ function RunDetail({ run, openCase, openCompare, back }: { run: ReqV2RunDetail; 
     if (!row) return null;
     const quality = run.model_quality[layer] as Record<string, unknown> | undefined;
     const classifications = Object.entries(row.failure_classifications ?? {});
-    return <div key={layer} className={styles.caseRow} data-testid={`layer-${layer}`}>
+    return <div key={layer} className={`${styles.caseGrid} ${styles.caseRow}`} data-testid={`layer-${layer}`}>
       <span><b>{reqV2LayerLabels[layer] ?? layer}</b><small className={styles.block}>{classifications.map(([key, count]) => `${key} ×${count}`).join(" · ") || "无失败分类"}</small></span>
       <span><span className={styles.mobileLabel}>Pass^k</span>{row.passed}/{row.cases}<small className={styles.block}>跳过 {row.skipped} · veto {row.vetoes}</small></span>
       {quality != null && <span className={styles.muted}><details><summary>模型层指标(不与确定性层平均)</summary><pre className="whitespace-pre-wrap break-all text-xs">{JSON.stringify(quality, null, 1)}</pre></details></span>}
@@ -133,22 +139,27 @@ function RunDetail({ run, openCase, openCompare, back }: { run: ReqV2RunDetail; 
   return <section aria-label="v2 运行详情">
     <div className={styles.sectionHead}><div><h2>{run.dir_name}</h2><p>{reqV2ModeLabels[run.mode] ?? run.mode} · {reqV2Time(run.created_at)}</p></div>
       <Button variant="outline" onClick={back}><ArrowLeft size={15} />返回运行目录</Button></div>
-    <section className={styles.turn} aria-label="运行身份"><h3>身份与有效性</h3>
-      <dl className={styles.versionDetails}><>{identity.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</></dl>
-      {run.evidence.status !== "complete" && <div className={styles.notice} role="alert"><b>证据状态:{run.evidence.status === "invalid" ? "无效" : "不完整"}</b>{run.evidence.notes.map((note, i) => <p key={i}>{note}</p>)}</div>}
-      <details className={styles.versionDetails}><summary>完整性核对明细({run.integrity_checks.length} 项;核对的是证据完整性,不等于重判正确性)</summary>{run.integrity_checks.map((check, i) => <p key={i}>{check.state === "ok" ? "✓" : "×"} {check.check}{check.detail ? ` — ${check.detail}` : ""}</p>)}</details>
-    </section>
-    <section className={styles.turn} aria-label="结论" data-testid="reqv2-conclusion"><h3>结论(冻结报告原文)</h3>
-      <p className={run.gate_passed ? "status-pass" : run.gate_passed == null ? "status-unknown" : "status-fail"}><b>{conclusion}</b></p>
-      <p className={styles.muted}>{run.conclusion || "(报告未写结论)"}</p>
+    <div className={styles.detailOverview} aria-label="运行状态">
+      <div data-testid="reqv2-conclusion"><span>冻结门槛</span><strong className={run.gate_passed ? "status-pass" : run.gate_passed == null ? "status-unknown" : "status-fail"}>{conclusion}</strong></div>
+      <div><span>证据状态</span><strong><EvidenceBadge evidence={run.evidence} /></strong></div>
+      <div><span>运行范围</span><strong>{run.splits.join("/") || "split 未记录"} · {run.repeats} 次重复</strong></div>
+    </div>
+    {run.evidence.notes.length > 0 && <div className={run.evidence.status === "complete" ? styles.detailNotes : styles.notice} role={run.evidence.status === "complete" ? undefined : "alert"}>{run.evidence.notes.map((note, i) => <p key={i}>{note}</p>)}</div>}
+    <section className={styles.turn} aria-label="报告结论"><h3>报告结论</h3>
+      <p className={styles.muted}>{run.conclusion || "报告未写结论。"}</p>
       {run.limitations.length > 0 && <details className={styles.versionDetails} open><summary>报告声明的限制({run.limitations.length} 条)</summary>{run.limitations.map((item, i) => <p key={i}>· {item}</p>)}</details>}
     </section>
+    <details className={styles.detailTechnical}><summary>运行身份与完整性核对 · {run.integrity_checks.length} 项</summary>
+      <dl className={styles.detailIdentity}>{identity.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+      <p className={styles.muted}>核对的是证据完整性，不代表冻结门槛通过。</p>
+      {run.integrity_checks.map((check, i) => <p key={i}>{check.state === "ok" ? "✓" : "×"} {check.check}{check.detail ? ` — ${check.detail}` : ""}</p>)}
+    </details>
     <section className={styles.turn} aria-label="冻结门槛"><h3>冻结门槛({run.gate_verdicts.length} 项,来自冻结报告,不可在工作台修改)</h3>
       {gateGroups[0] && gateGroup(gateGroups[0])}{gateGroup(gateGroups[1])}
     </section>
     <section className={styles.turn} aria-label="六层结果"><h3>六层结果</h3>
       <p className={styles.muted}>确定性层要求 100%;模型层单独显示 precision/recall/任务成功,不与确定性层平均。</p>
-      <div className={styles.caseGrid}>
+      <div>
         {["reducer", "readiness", "policy", "ui-contract"].map(layerRow)}
         {["extraction", "conversations"].map(layerRow)}
       </div>
@@ -166,10 +177,10 @@ function RunDetail({ run, openCase, openCompare, back }: { run: ReqV2RunDetail; 
         <button aria-pressed={layerFilter === "all"} onClick={() => setLayerFilter("all")}>全部层</button>
         {Object.keys(run.per_layer).map(layer => <button key={layer} aria-pressed={layerFilter === layer} onClick={() => setLayerFilter(layer)}>{reqV2LayerLabels[layer] ?? layer}</button>)}
       </div>
-      <div className={styles.caseGrid}>{caseRows.map(entry => <button key={`${entry.layer}/${entry.id}`} className={`${styles.caseGrid} ${styles.caseRow}`} onClick={() => openCase(entry.layer, entry.id)}>
+      <div>{caseRows.map(entry => <button key={`${entry.layer}/${entry.id}`} className={`${styles.caseGrid} ${styles.caseRow}`} onClick={() => openCase(entry.layer, entry.id)}>
         <span><b>{entry.id}</b><small className={styles.block}>{reqV2LayerLabels[entry.layer] ?? entry.layer} · {entry.split}</small></span>
         <span><span className={styles.mobileLabel}>repeats</span>{entry.repeats.join(", ")}</span>
-        <span>{entry.pass_k ? <span className="status-pass">Pass^k 通过</span> : <span className="status-fail">Pass^k 未通过</span>}{entry.skipped && <small className={styles.block}>跳过</small>}{entry.vetoes > 0 && <small className="status-fail block">veto ×{entry.vetoes}</small>}</span>
+        <span>{entry.skipped ? <span className="status-unknown">已跳过 · 未评估</span> : entry.pass_k ? <span className="status-pass">Pass^k 通过</span> : <span className="status-fail">Pass^k 未通过</span>}{entry.vetoes > 0 && <small className="status-fail block">veto ×{entry.vetoes}</small>}</span>
         <ChevronRight className={styles.rowChevron} size={16} aria-hidden />
       </button>)}
       {!caseRows.length && <div className={styles.empty}>此过滤没有题目。</div>}</div>
@@ -186,7 +197,7 @@ function CaseDetail({ data, back }: { data: NonNullable<ReturnType<typeof useQue
   const [selected, setSelected] = useState<number | null>(null);
   const repeat = data.repeats.find(r => r.repeat === selected) ?? failing;
   return <section aria-label="v2 逐题证据" className={styles.inspector}>
-    <div className={styles.sectionHead}><div><h2>{data.layer} / {data.case}</h2><p>{data.split} · session {data.session || "未记录"} · Pass^k {data.pass_k ? "通过" : "未通过"}</p></div>
+    <div className={styles.sectionHead}><div><h2>{data.layer} / {data.case}</h2><p>{data.split} · session {data.session || "未记录"} · {data.repeats.every(item => item.skipped) ? "已跳过 · 未评估" : `Pass^k ${data.pass_k ? "通过" : "未通过"}`}</p></div>
       <Button variant="outline" onClick={back}><ArrowLeft size={15} />返回运行</Button></div>
     {data.integrity.status !== "complete" && <p className={styles.notice}>本运行证据{data.integrity.status === "invalid" ? "无效" : "不完整"}:{data.integrity.notes.join(";")}</p>}
     <div className={styles.filters} aria-label="重复次数">{data.repeats.map(item => <button key={item.repeat} aria-pressed={item.repeat === repeat.repeat} onClick={() => setSelected(item.repeat)}>第 {item.repeat} 次{item.pass ? "" : " · 失败"}</button>)}</div>
@@ -194,7 +205,7 @@ function CaseDetail({ data, back }: { data: NonNullable<ReturnType<typeof useQue
       {repeat.error && <p role="alert" className="status-fail">{repeat.error}</p>}
       {!!repeat.vetoes?.length && <p className="status-fail">veto:{repeat.vetoes.join(";")}</p>}
       <h4>断言</h4>
-      <div className={styles.caseGrid}>{repeat.assertions.map((assertion, i) => <div key={i} className={styles.caseRow}>
+      <div>{repeat.assertions.map((assertion, i) => <div key={i} className={`${styles.caseGrid} ${styles.caseRow}`}>
         <span>{assertion.pass ? <Check size={14} className="status-pass inline" aria-hidden /> : <X size={14} className="status-fail inline" aria-hidden />} <b>{assertion.name}</b></span>
         <span className={styles.muted}>{assertion.classification || ""}{assertion.detail ? `${assertion.classification ? " · " : ""}${assertion.detail}` : ""}</span>
       </div>)}</div>
@@ -273,16 +284,18 @@ export function ReqV2Workbench({ params, navigate, onReread }: { params: URLSear
     void queryClient.invalidateQueries({ queryKey: ["evaldesk", "reqv2"] });
     onReread();
   };
-  return <main className={styles.content}><div className={styles.titleRow}><div><h1 id="eval-page-heading" tabIndex={-1}>Requirement v2 评估工作台</h1><p>只读审阅冻结的 v2 运行证据:身份、门槛、六层与逐题逐轮。这里不会重跑、重判或修改任何产物。</p></div>
+  return <main className={styles.content}><div className={styles.titleRow}><div><h1 id="eval-page-heading" tabIndex={-1}>Requirement v2 评估工作台</h1><p>本机冻结运行 · 只读审阅</p></div>
     <Button variant="outline" onClick={reread}><RefreshCw size={15} />重新读取</Button></div>
     {runs.data?.warnings.map((warning, i) => <p key={i} className={styles.notice}>{warning}</p>)}
-    {runId && run.data && !caseId && <RunDetail run={run.data} back={() => navigate({ run: null })} openCase={(caseLayer, id) => navigate({ layer: caseLayer, case: id })} openCompare={() => navigate({ view: "compare" })} />}
-    {runId && layer && caseId && (caseDetail.isPending
+    {runId && !comparing && run.isPending && <p className={styles.empty} role="status">正在读取运行详情…</p>}
+    {runId && !comparing && run.error && <ErrorMessage error={run.error} retry={() => void run.refetch()} />}
+    {runId && run.data && !caseId && !comparing && <RunDetail run={run.data} back={() => navigate({ run: null })} openCase={(caseLayer, id) => navigate({ layer: caseLayer, case: id })} openCompare={() => navigate({ desk: "reqv2", view: "compare" })} />}
+    {runId && layer && caseId && !comparing && (caseDetail.isPending
       ? <p className={styles.empty} role="status">正在读取逐题证据…</p>
       : caseDetail.error
         ? <ErrorMessage error={caseDetail.error} retry={() => void caseDetail.refetch()} />
         : caseDetail.data && <CaseDetail data={caseDetail.data} back={() => navigate({ case: null, layer: null })} />)}
     {comparing && runs.data && <CompareView params={params} runs={runs.data.runs} back={() => navigate({ view: null })} />}
-    {!runId && !comparing && <RunCatalog runs={runs.data} warnings={runs.data?.warnings} pending={runs.isPending} error={runs.error ?? undefined} openRun={id => navigate({ run: id })} onReread={reread} />}
+    {!runId && !comparing && <RunCatalog runs={runs.data} pending={runs.isPending} error={runs.error ?? undefined} openRun={id => navigate({ run: id })} onReread={reread} />}
   </main>;
 }

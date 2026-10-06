@@ -106,7 +106,7 @@ test.afterEach(async ({ page }) => {
 });
 
 test("saved regression opens the failed repeat and preserves visible versus original replies", async ({ page }, testInfo) => {
-  requireArtifacts([paths.baseline, paths.candidate].map(path => [path, ["meta.json", "cases.json", "results.jsonl"]]));
+  requireArtifacts([paths.baseline, paths.candidate].map(path => [path, ["meta.json", "cases.json", "results.jsonl", "source.json"]]));
   const a = savedRun(paths.baseline), b = savedRun(paths.candidate);
   await selectPair(page, a.path, b.path);
   await expect(page.getByText("严格对照条件通过 · 统一口径离线复核", { exact: true })).toBeVisible();

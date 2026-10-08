@@ -57,7 +57,7 @@ Builder 复用同一分类与实验视图，仅纳入 policy / ui-contract 有�
 
 桌面三栏：左 240px 会话列表(可调 200–360px),中对话，右 `clamp(360px, 34vw, 480px)` 共享 inspector(可调 280–640px,聊天至少保留 360px),顶层为「需求状态 / 配置详情」双 Tab。`ResizableWorkspace` 分隔线支持键盘 16px 微调、Home/End 到边界、双击恢复默认；宽度存 localStorage(仅为界面偏好)。
 
-- 会话摘要常驻聊天顶部,只含阶段/三轴摘要、缺失数量或「可以核定」和打开需求状态的入口,不再重复需求字段表。需求状态是右栏默认 Tab:分组 rows 展示已确定、待填写、冲突、撤销和系统默认;配置详情在 `version_count=0` 时真实 disabled 并说明「生成配置后可查看」,生成后只启用不抢焦点、不自动切换;会话切换或重新进入重置到需求 Tab。
+- 会话摘要常驻聊天顶部,只含阶段/三轴摘要、缺失数量或「可以核定」和打开需求状态的入口,不再重复需求字段表。需求状态是右栏默认 Tab:冲突与待填写置顶为「必须澄清」分区,其余分组 rows 展示已确定、撤销和系统默认;配置详情在 `version_count=0` 时真实 disabled 并说明「生成配置后可查看」,生成后只启用不抢焦点、不自动切换;会话切换或重新进入重置到需求 Tab。
 - 简单字段在需求状态 Tab 行内编辑(显式保存/取消,`PATCH requirement-state` 带 `expected_revision` 与幂等键,成功以返回的完整 Session 替换缓存;409 保留输入、重取真值提示重试);复杂与批量编辑打开最大宽 672px 需求抽屉,仍走同一 operations API。核定使用独立 672px Drawer/Dialog:展示服务端 review_spec 的全部有效约束(含系统默认与未指定项),modified 时展示服务端 `review_diff`;确认请求携带打开/保存后最新的 `expected_revision` 与 `expected_review_hash`,失败重试另传 `build_relation.retry_run_id` 指定的 `retry_of_run_id`,前端不自行计算 hash、不从消息寻找 run ID;同一次确认点击/网络重试复用同一幂等键,409 后重新核定用新键且面板不关闭。
 - `Message.display_content` 为服务端生成的可选展示摘要，聊天展示与复制优先使用非空摘要；摘要复用 presenter 的版本、配件名称、报价口径和规则结论，不调用额外模型。旧消息仅依据同会话运行证据生成只读摘要，无法准确关联时保留原文。
 - 切换会话按 session_id 重建聊天组件，运行句柄和未发送输入不误带入另一会话。
@@ -73,7 +73,7 @@ Builder 复用同一分类与实验视图，仅纳入 policy / ui-contract 有�
 - 首次发送按钮立即 submitting 防双击；Session GET 返回 active_run 时自动连接 SSE;刷新先画已有消息/版本再恢复 run,不清空检查器。404 统一通用不存在页，不区分他人会话与真实不存在。degraded=true 时顶栏常驻提示，不阻塞当前操作。
 - 聊天：user 与 assistant 用对齐、留白和轻表面区分，不做大气泡和彩色头像；markdown 仅支持段落、列表、强调和安全链接，禁用原始 HTML;composer Shift+Enter 换行、Enter 发送，中文输入法 composition 期间 Enter 不发送；running 状态禁用再次发送，不提供假取消按钮。
 - 生成未交付时，聊天持久化服务端按结构化业务原因生成的安全说明(待核验条件、需求已保存、原配置保留、下一步)；失败操作区保留「查看或补充需求」和重试，原始远程输出只作证据不直接作为错误文案。
-- 需求状态与核定面板全部读取服务端三轴与 readiness:前端不实现字段依赖、readiness、默认值、hash 或确认比较;预算上限展示使用服务端 `effective_budget_ceiling_cny`,不复制 10% 规则。品牌 any 明确显示「不限（用户已确认）」,系统默认标注「系统默认」。字段错误显示 API 稳定字段路径。
+- 需求状态与核定面板全部读取服务端三轴与 readiness:前端不实现字段依赖、readiness、默认值、hash 或确认比较;预算上限展示使用服务端 `effective_budget_ceiling_cny`,不复制 10% 规则。品牌 any 明确显示「不限」,系统默认标注「系统默认」;已撤销字段若被系统默认接替,「已撤销」与「系统默认」并列标注。字段错误显示 API 稳定字段路径。
 - 动态状态面板按服务端 kind 区分用途事实、补充说明与配置条件；只有配置条件显示必须/尽量满足。保留原话区展示未明确内容、原因和来源，撤销操作明确说明会同时撤销相关字段。
 - Agent 进度固定三阶段文案(screening 正在整理需求 / remote_processing 正在生成并校验配置 / finalizing 正在保存结果)；最后事件超 30 秒显示重连提示，超 60 秒加辅助文案，10 分钟失败后提供按新幂等键重试。
 

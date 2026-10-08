@@ -63,8 +63,8 @@ describe("RequirementStatusPane 字段状态", () => {
     expect(screen.getByText("待填写").closest("[data-field-row]")).toHaveTextContent("分辨率");
     await userEvent.click(screen.getByRole("button", { name: "补充分辨率" }));
     expect(screen.getByLabelText("编辑分辨率")).toBeInTheDocument();
-    expect(screen.getByText("已撤销，当前未指定").closest("[data-field-row]")).toHaveTextContent("显卡品牌");
-    expect(screen.getByText("不限（用户已确认）").closest("[data-field-row]")).toHaveTextContent("尺寸");
+    expect(screen.getByText("已撤销").closest("[data-field-row]")).toHaveTextContent("显卡品牌");
+    expect(screen.getAllByText("不限").some((node) => node.closest("[data-field-row]")?.textContent.includes("尺寸"))).toBe(true);
     expect(screen.getAllByText("系统默认").some((node) => node.closest("[data-field-row]")?.textContent.includes("CPU 品牌"))).toBe(true);
     expect(screen.getByText("显示器：当前版本不支持，未纳入配置")).toBeVisible();
   });
@@ -93,6 +93,30 @@ describe("RequirementStatusPane 字段状态", () => {
     })} />);
     expect(screen.getByText("需确认")).toBeVisible();
     expect(screen.getByText("原话：预算 8000，尽量安静，帮朋友装机")).toBeVisible();
+  });
+
+  it("collects conflicts and missing fields into the top 必须澄清 section without duplicating groups", () => {
+    const conflicted = makeRequirementState({
+      budget_cny: { status: "active", value: 8000, strength: "must", scope: "session", source },
+      "use_case.type": { status: "conflict", value: "gaming", strength: "must", scope: "session", source },
+    });
+    render(<RequirementStatusPane {...baseProps} session={paneSession({
+      requirement_state: conflicted,
+      requirement_readiness: { status: "incomplete", missing_fields: ["use_case.resolution"], blocking_conflicts: ["use_case.type"], unsupported_capabilities: [], next_question: null, confirmation_eligible: false, effective_defaults: [] },
+    })} />);
+    const section = screen.getByLabelText("必须澄清");
+    const badges = within(section).getAllByText(/需确认|待填写/);
+    // 冲突排在待填写之前;两行只在该分区渲染,分组里不再重复。
+    expect(badges.map((node) => node.textContent)).toEqual(["需确认", "待填写"]);
+    expect(badges[0].closest("[data-field-row]")).toHaveTextContent("主要用途");
+    expect(badges[1].closest("[data-field-row]")).toHaveTextContent("分辨率");
+    expect(document.querySelectorAll('[data-field-row="use_case.type"]')).toHaveLength(1);
+    expect(document.querySelectorAll('[data-field-row="use_case.resolution"]')).toHaveLength(1);
+  });
+
+  it("hides the 必须澄清 section once nothing blocks readiness", () => {
+    render(<RequirementStatusPane {...baseProps} session={readySession()} />);
+    expect(screen.queryByLabelText("必须澄清")).not.toBeInTheDocument();
   });
 });
 
@@ -153,20 +177,24 @@ describe("RequirementStatusPane 编辑与来源", () => {
     expect(screen.getByText("¥6,000")).toBeVisible();
   });
 
-  it("supports source navigation, explicit removal and restoring a temporary exception", async () => {
+  it("supports budget source navigation, explicit removal and restoring a temporary exception", async () => {
     const update = vi.fn().mockResolvedValue(undefined);
     const showSource = vi.fn();
     const previous = state.fields.noise_pref;
-    render(<RequirementStatusPane {...baseProps} onUpdate={update} onSource={showSource} session={paneSession({ requirement_state: makeRequirementState({ noise_pref: { ...previous, value: "normal", scope: "temporary", previous } }) })} />);
+    render(<RequirementStatusPane {...baseProps} onUpdate={update} onSource={showSource} session={paneSession({ requirement_state: makeRequirementState({ budget_cny: state.fields.budget_cny, noise_pref: { ...previous, value: "normal", scope: "temporary", previous } }) })} />);
     expect(screen.getByText(/临时例外/)).toBeVisible();
-    const sourceButton = screen.getByRole("button", { name: "查看静音来源与操作" });
-    await userEvent.click(sourceButton);
-    await userEvent.click(within(sourceButton.parentElement!.parentElement!.parentElement!).getByRole("button", { name: "查看来源消息" }));
+    // 常规字段行不再提供来源浏览;预算块保留来源跳转。
+    expect(screen.queryByRole("button", { name: "查看静音来源与操作" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "查看预算来源与操作" }));
+    await userEvent.click(screen.getByRole("button", { name: "查看来源消息" }));
     expect(showSource).toHaveBeenCalledWith("message-1");
-    await userEvent.click(screen.getByRole("button", { name: "恢复撤销前的要求" }));
-    expect(update).toHaveBeenLastCalledWith([{ op: "restore", field: "noise_pref" }]);
+    // 撤销收进字段编辑器。
+    await userEvent.click(screen.getByRole("button", { name: "修改静音" }));
     await userEvent.click(screen.getByRole("button", { name: "撤销这项要求" }));
     expect(update).toHaveBeenLastCalledWith([{ op: "remove", field: "noise_pref" }]);
+    // 恢复由行内图标承担。
+    await userEvent.click(screen.getByRole("button", { name: "恢复撤销前的静音" }));
+    expect(update).toHaveBeenLastCalledWith([{ op: "restore", field: "noise_pref" }]);
   });
 
   it("preserves edits after a failed save and reports the conflict honestly", async () => {
@@ -231,10 +259,11 @@ describe("RequirementStatusPane 系统默认的诚实展示", () => {
       requirement_state: removed,
       requirement_readiness: { status: "incomplete", missing_fields: ["existing_parts"], blocking_conflicts: [], unsupported_capabilities: [], next_question: null, confirmation_eligible: false, effective_defaults: effectiveDefaults },
     })} />);
-    const row = screen.getByText("已撤销，当前按系统默认").closest("[data-field-row]");
-    expect(row?.textContent).toContain("CPU 品牌");
+    const row = screen.getAllByText("系统默认")
+      .map((node) => node.closest("[data-field-row]"))
+      .find((rowNode) => rowNode?.textContent.includes("CPU 品牌"));
+    expect(row?.textContent).toContain("已撤销");
     expect(row?.textContent).toContain("不限");
-    expect(screen.queryByText("已撤销，当前未指定")).not.toBeInTheDocument();
   });
 
   it("configuration_scope 是范围声明,不作为需求字段行渲染", () => {

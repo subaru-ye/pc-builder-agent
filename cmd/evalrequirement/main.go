@@ -261,6 +261,10 @@ func main() {
 		}
 	}
 	commit, dirty := codeIdentity()
+	promptIdentity, err := savePromptEvidence(*out)
+	if err != nil {
+		fail(fmt.Errorf("冻结提示词原文失败: %w", err))
+	}
 	plan := map[string]any{
 		"mode": "live", "created_at": time.Now().UTC(),
 		"grader_version":     planningeval.ReqV2GraderVersion,
@@ -274,6 +278,7 @@ func main() {
 		"code_commit":        commit, "code_dirty": dirty,
 		"go_version":    runtime.Version(),
 		"binary_sha256": binaryHash(),
+		"prompts":       promptIdentity,
 		"note":          "prompt SHA256 per request is recorded in events.jsonl model_request events",
 	}
 	if *ablateStateView {

@@ -1,5 +1,11 @@
 package pipeline
 
+// RequirementPromptComponents 返回当前需求增量协议实际使用的静态原文。
+// 会话状态、用户输入与执行上下文是动态数据，不属于静态提示词。
+func RequirementPromptComponents() map[string]string {
+	return map[string]string{"system": requirementStateInstruction, "format_retry": formatFallbackInstruction}
+}
+
 // NewBuildPromptComponents 返回明确尚无配置版本时实际发送的编译提示词原文。
 // cmd/eval 的单轮及多轮初筛均显式使用这个状态，不将未使用的 legacy 指令混入身份。
 func NewBuildPromptComponents() map[string]string {

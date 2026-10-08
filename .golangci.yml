@@ -9,7 +9,7 @@ linters:
   settings:
     depguard:
       rules:
-        # internal/rules 零 LLM 隔离(CLAUDE.md 工程纪律):
+        # internal/rules 零 LLM 隔离(AGENTS.md 项目边界与验证):
         # 只允许标准库与 internal/schemas,禁止 ADK、模型 SDK、pgx、Redis、agents、store。
         rules-zero-llm:
           list-mode: strict

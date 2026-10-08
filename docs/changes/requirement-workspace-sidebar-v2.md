@@ -277,7 +277,7 @@ Spec 4 已提供三轴、`review_spec/review_hash` 与确认入口，但当前 S
 第二轮修复两件事：
 
 - 完整需求编辑器输入丢失：编辑基线在表单打开时一次性固定（状态快照 + 有效值预填），父组件重渲染、Session 轮询刷新或 defaults 新建 Map 不再触发 `form.reset`，未保存输入不丢失；保存 diff 始终按打开时的基线计算。保存遇 409 `requirement_revision_conflict` 保留输入并明示冲突（`problem.ts` 补冲突文案），不静默按新 revision 覆盖。为此把后端实际发出的全部 problem code 补齐进 OpenAPI `Problem.code` 枚举（此前 `requirement_revision_conflict` 等 13 个码后端已发出但枚举未登记），并重新生成前端类型。
-- 本地 Web 端口统一为 3101：`web/package.json` dev 脚本固定 `--port 3101`（单一出处），四个 Playwright 配置的 baseURL 默认、mock webServer、`PUBLIC_WEB_BASE_URL` 与 `web/src/lib/api/server.ts` 回退值、`cmd/api` 与 `producthttp` 默认公共 Web 地址、离线 harness 的 `REQUIREMENT_BROWSER_WEB_URL` 默认值（3102→3101）、compose 本地 Auth 回调地址（GOTRUE_SITE_URL/ALLOW_LIST）、`.env.example` 与相关文档（ops 部署文档、产品API文档、README、CLAUDE.md）全部对齐。环境变量覆盖能力保留；后端 API 端口（8082）与 mock API（18082）不变。
+- 本地 Web 端口统一为 3101：`web/package.json` dev 脚本固定 `--port 3101`（单一出处），四个 Playwright 配置的 baseURL 默认、mock webServer、`PUBLIC_WEB_BASE_URL` 与 `web/src/lib/api/server.ts` 回退值、`cmd/api` 与 `producthttp` 默认公共 Web 地址、离线 harness 的 `REQUIREMENT_BROWSER_WEB_URL` 默认值（3102→3101）、compose 本地 Auth 回调地址（GOTRUE_SITE_URL/ALLOW_LIST）、`.env.example` 与相关文档（ops 部署文档、产品API文档、README、当时的协作规则文档）全部对齐。环境变量覆盖能力保留；后端 API 端口（8082）与 mock API（18082）不变。
 
 第二轮验证（返工最终代码上全部通过）：
 

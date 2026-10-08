@@ -6,7 +6,7 @@ import "fmt"
 const BuildDraftSchemaVersion = 1
 
 // BuildDraft 生成 Agent → 校验 Agent 的结构化产出(设计方案 §四.2)。
-// 唯一权威出处为设计方案 §四.2,字段变更先改文档再改本包(CLAUDE.md 工程纪律)。
+// 唯一权威出处为设计方案 §四.2,字段变更先改文档再改本包(AGENTS.md 项目边界与验证)。
 //
 // Selection 复用 §四.1 的 BuildSelection parts 口径(七类必选、gpu 显式 SKU 或
 // null、ssd 为 {sku,quantity} 数组),校验 Agent 由此走 store.ResolveBuild → 规则引擎。

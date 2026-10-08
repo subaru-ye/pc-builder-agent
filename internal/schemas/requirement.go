@@ -203,7 +203,7 @@ type BrandPref struct {
 }
 
 // RequirementSpec 初筛 Agent → 生成 Agent 的结构化需求单(设计方案 §四.2)。
-// 唯一权威出处为设计方案 §四.2,字段变更先改文档再改本包(CLAUDE.md 工程纪律)。
+// 唯一权威出处为设计方案 §四.2,字段变更先改文档再改本包(AGENTS.md 项目边界与验证)。
 type RequirementSpec struct {
 	SchemaVersion int
 	BudgetCNY     int

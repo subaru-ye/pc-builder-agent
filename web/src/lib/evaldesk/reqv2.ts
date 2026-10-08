@@ -1,6 +1,6 @@
 // Requirement v2 评估工作台的类型与本机只读客户端。
 // 字段与 Go 端 internal/evaldesk/reqv2*.go 投影一一对应。
-export interface ReqV2ModelIdentity { role: string; model: string; provider?: string }
+export interface ReqV2ModelIdentity { role: string; model: string; provider?: string; reasoning_effort?: string; timeout?: string; session_cache?: boolean }
 export interface ReqV2Evidence { status: "complete" | "incomplete" | "invalid"; notes: string[] }
 export interface ReqV2RunSummary {
   id: string; dir_name: string; label: string; created_at: string | null;
@@ -9,7 +9,13 @@ export interface ReqV2RunSummary {
   code_commit?: string; code_dirty: boolean | null; models: ReqV2ModelIdentity[];
   gate_passed: boolean | null; conclusion: string; evidence: ReqV2Evidence;
   manifest_sha256?: string; gates_sha256?: string; max_model_requests?: number;
+  score_note?: string; plan_note?: string; prompt_sha256?: string;
+  layer_scores?: Record<string, ReqV2LayerRow>;
+  failed_gates?: ReqV2GateVerdictRow[];
 }
+export interface ReqV2ManifestRow { layer: string; cases: number; sessions: number; sha256: string }
+export interface ReqV2SplitRow { split: string; sessions: number; used: boolean }
+export interface ReqV2Manifest { dataset: string; frozen_at: string; grader_version: string; files: ReqV2ManifestRow[]; splits: ReqV2SplitRow[] }
 export interface ReqV2GateVerdictRow { layer: string; metric: string; actual: string; threshold: string; passed: boolean; evaluable: boolean; note?: string }
 export interface ReqV2LayerRow { cases: number; passed: number; skipped: number; vetoes: number; failure_classifications: Record<string, number> }
 export interface ReqV2CaseIndexEntry { layer: string; id: string; split: string; session: string; repeats: number[]; pass_k: boolean; skipped: boolean; vetoes: number; failures: string[] }
@@ -18,9 +24,25 @@ export interface ReqV2RunDetail extends ReqV2RunSummary {
   duration_ms: number; gate_verdicts: ReqV2GateVerdictRow[]; per_layer: Record<string, ReqV2LayerRow>;
   model_quality: Record<string, unknown>; usage: unknown; limitations: string[];
   cases: ReqV2CaseIndexEntry[]; regrade_plan?: unknown; integrity_checks: ReqV2IntegrityCheck[];
-  gate_thresholds?: unknown;
+  gate_thresholds?: unknown; manifest?: ReqV2Manifest;
 }
 export interface ReqV2RunsResponse { runs: ReqV2RunSummary[]; warnings: string[] }
+export interface ReqV2CurrentPrompts {
+  source: "evaldesk_binary"; sha256: string;
+  components: { role: string; name: string; text: string; sha256: string }[];
+}
+export interface ReqV2PromptVersion {
+  id: string; role: string; source: "git" | "run_snapshot"; commit?: string; created_at: string; subject?: string; runs?: string[];
+  components: ReqV2CurrentPrompts["components"];
+  review?: ReqV2PromptReview;
+}
+export interface ReqV2PromptReview {
+  commit: string; role: string; title: string; reason: string; changes: string;
+  verification: { kind: "live_record" | "offline_record" | "tests_added" | "not_recorded"; summary: string; limitation: string };
+  evidence: { kind: string; reference: string; excerpt: string }[];
+  run_names: string[];
+}
+export interface ReqV2PromptVersions { versions: ReqV2PromptVersion[]; notes: string[] }
 
 export interface ReqV2AssertionRow { name: string; pass: boolean; detail?: string; classification?: string }
 export interface ReqV2TurnRow { index: number; reply?: string; operations?: string[]; turn_signals?: string[]; duration_ms?: number; screen_model_called: boolean }
@@ -28,7 +50,8 @@ export interface ReqV2RepeatEvidence {
   repeat: number; pass: boolean; skipped?: string; error?: string; vetoes?: string[];
   assertions: ReqV2AssertionRow[]; turns?: ReqV2TurnRow[]; observation_rest?: Record<string, unknown>;
 }
-export interface ReqV2FrozenCase { layer: string; id: string; title?: string; split?: string; session?: string; rationale?: string; fields: Record<string, unknown>; sha256: string }
+export interface ReqV2FrozenCase { layer: string; id: string; title?: string; split?: string; session?: string; rationale?: string; fields: Record<string, unknown>; sha256: string; content_sha256: string }
+export interface ReqV2Dataset { cases: ReqV2FrozenCase[]; notes: string[] }
 export interface ReqV2CaseDetail {
   run: string; layer: string; case: string; split: string; session: string; pass_k: boolean;
   repeats: ReqV2RepeatEvidence[]; frozen?: ReqV2FrozenCase; frozen_note?: string; integrity: ReqV2Evidence;
@@ -47,14 +70,30 @@ export interface ReqV2CompareResponse {
 
 async function read<T>(path: string, params?: Record<string, string>): Promise<T> {
   const response = await fetch(`/api/evaldesk/requirement-v2/${path}${params ? `?${new URLSearchParams(params)}` : ""}`, { cache: "no-store" });
-  if (!response.ok) throw new Error("无法读取 Requirement v2 产物。请确认本机评估服务已启动,或刷新重新读取;历史记录未改动。");
+  if (!response.ok && path === "prompt-versions" && response.status === 404) throw new Error("当前评估服务尚不支持版本历史，请更新并重启本机 evaldesk 服务后重新读取。");
+  if (!response.ok) throw new Error("无法读取评估产物。请确认本机评估服务已启动,或刷新重新读取;历史记录未改动。");
   try { return await response.json() as T; }
   catch { throw new Error("评估服务返回了无法识别的内容。请检查本机服务与前端代理是否已启动。"); }
 }
 
 export const reqv2 = {
-  runs: () => read<ReqV2RunsResponse>("runs"),
+  prompts: () => read<ReqV2CurrentPrompts>("prompts"),
+  promptVersions: () => read<ReqV2PromptVersions>("prompt-versions"),
+  runs: async () => {
+    const response = await read<ReqV2RunsResponse>("runs");
+    const missing = response.runs.filter(run => !run.superseded && run.layer_scores == null);
+    // 旧服务的目录没有分层摘要，详情已有冻结分数；限制并发，避免一次打开页面打满本机服务。
+    for (let offset = 0; offset < missing.length; offset += 4) {
+      await Promise.all(missing.slice(offset, offset + 4).map(async run => {
+        const detail = await read<ReqV2RunDetail>("run", { id: run.id });
+        if (detail.per_layer == null) throw new Error("运行分层结果未返回，无法判断评估数量。请更新本机评估服务后重新读取；历史记录未改动。");
+        run.layer_scores = detail.per_layer;
+      }));
+    }
+    return response;
+  },
   run: (id: string) => read<ReqV2RunDetail>("run", { id }),
+  dataset: (id: string) => read<ReqV2Dataset>("dataset", { id }),
   case: (id: string, layer: string, caseId: string) => read<ReqV2CaseDetail>("case", { id, layer, case: caseId }),
   compare: (a: string, b: string) => read<ReqV2CompareResponse>("compare", { a, b }),
 };
@@ -64,8 +103,22 @@ export const reqV2ModeLabels: Record<string, string> = {
 };
 
 export const reqV2LayerLabels: Record<string, string> = {
-  extraction: "初筛抽取", conversations: "多轮对话", reducer: "Reducer", readiness: "Readiness", policy: "Policy", "ui-contract": "UI 合同",
+  extraction: "初筛抽取", conversations: "多轮对话", reducer: "Reducer", readiness: "Readiness", policy: "Policy", "ui-contract": "UI 合同", "selftest.json": "自检", "catalog.json": "商品目录",
 };
+
+// 按角色语义把六层分成两侧：初筛侧含需求状态机（Reducer/Readiness），
+// 选配侧只测 Builder 准入门与工作台合同，输出质量归 planning-v2。
+export interface ReqV2Side { key: string; title: string; hint: string; layers: string[] }
+export const reqV2Sides: ReqV2Side[] = [
+  {
+    key: "screening", title: "初筛 Screening 侧", layers: ["extraction", "conversations", "reducer", "readiness"],
+    hint: "真实 Screening 模型（初筛抽取、多轮对话）与需求状态机（Reducer、Readiness）。模型层单独显示 precision / recall / 任务成功，不与确定性层平均。",
+  },
+  {
+    key: "builder", title: "选配 Builder 侧", layers: ["policy", "ui-contract"],
+    hint: "Builder 准入门与工作台合同，零模型；Builder 输出质量归 planning-v2，此处只看准入与合同行为。",
+  },
+];
 
 export function reqV2Time(value: string | null): string {
   if (!value || Number.isNaN(new Date(value).getTime())) return "时间未记录";

@@ -66,11 +66,11 @@ func (s *Store) CaseReqV2(id, layer, caseID string) (*ReqV2CaseDetail, error) {
 				DurationMS   int64             `json:"duration_ms"`
 				ScreenCalled bool              `json:"screen_model_called"`
 			} `json:"turns"`
-			Readiness json.RawMessage `json:"readiness"`
-			UI        json.RawMessage `json:"ui"`
+			Readiness  json.RawMessage `json:"readiness"`
+			UI         json.RawMessage `json:"ui"`
 			FinalState json.RawMessage `json:"final_state"`
-			Skipped   string          `json:"skipped"`
-			Error     string          `json:"error"`
+			Skipped    string          `json:"skipped"`
+			Error      string          `json:"error"`
 		}
 		if row.Observation != nil && json.Unmarshal(row.Observation, &observation) == nil {
 			repeat.Skipped = firstNonEmpty(repeat.Skipped, observation.Skipped)
@@ -78,7 +78,7 @@ func (s *Store) CaseReqV2(id, layer, caseID string) (*ReqV2CaseDetail, error) {
 			for index, turn := range observation.Turns {
 				projected := ReqV2TurnRow{
 					Index: index + 1, Reply: truncateText(turn.Reply, reqV2MaxText),
-					Operations: truncateJSONEach(turn.Operations, reqV2MaxValueJSON),
+					Operations:  truncateJSONEach(turn.Operations, reqV2MaxValueJSON),
 					TurnSignals: turn.TurnSignals, DurationMS: turn.DurationMS,
 					ModelCalled: turn.ScreenCalled,
 				}
@@ -115,6 +115,51 @@ func (s *Store) CaseReqV2(id, layer, caseID string) (*ReqV2CaseDetail, error) {
 // reqV2FrozenCase 读取运行内冻结的 <layer>/cases.json 并按 id 定位;
 // 文件 SHA256 必须与报告冻结 manifest 一致,否则不投影题目内容。
 func (s *Store) reqV2FrozenCase(dir, layer, caseID string) (*ReqV2FrozenCase, string) {
+	cases, note := s.reqV2FrozenCases(dir, layer)
+	if note != "" {
+		return nil, note
+	}
+	for _, candidate := range cases {
+		if candidate.ID == caseID {
+			return &candidate, ""
+		}
+	}
+	return nil, "冻结题目中不存在该 id;不从当前题库补填"
+}
+
+// DatasetReqV2 包含全部冻结题目，包括未被本次测试选中的用途分组。
+func (s *Store) DatasetReqV2(id string) (*ReqV2Dataset, error) {
+	run, err := s.reqV2Lookup(id)
+	if err != nil {
+		return nil, err
+	}
+	response := &ReqV2Dataset{Cases: []ReqV2FrozenCase{}, Notes: []string{}}
+	manifest, err := s.readReqV2Manifest(run.dir)
+	if err != nil {
+		response.Notes = append(response.Notes, "评估集清单未通过校验，无法读取题目")
+		return response, nil
+	}
+	for _, file := range manifest.Files {
+		if !strings.HasSuffix(file.Path, "/cases.json") {
+			continue
+		}
+		layer := strings.TrimSuffix(file.Path, "/cases.json")
+		cases, note := s.reqV2FrozenCases(run.dir, layer)
+		if note != "" {
+			response.Notes = append(response.Notes, layer+"："+note)
+		} else {
+			response.Cases = append(response.Cases, cases...)
+		}
+	}
+	return response, nil
+}
+
+func (s *Store) reqV2FrozenCases(dir, layer string) ([]ReqV2FrozenCase, string) {
+	switch layer {
+	case "extraction", "conversations", "reducer", "readiness", "policy", "ui-contract":
+	default:
+		return nil, "不支持的题目分类"
+	}
 	manifest, err := s.readReqV2Manifest(dir)
 	if err != nil {
 		return nil, "冻结题目清单不可读取;不从当前题库或其他运行补填"
@@ -140,27 +185,33 @@ func (s *Store) reqV2FrozenCase(dir, layer, caseID string) (*ReqV2FrozenCase, st
 	if json.Unmarshal(raw, &cases) != nil {
 		return nil, "冻结题目文件无法解析"
 	}
+	projected := make([]ReqV2FrozenCase, 0, len(cases))
+	seen := map[string]bool{}
 	for _, candidate := range cases {
-		if id, _ := candidate["id"].(string); id == caseID {
-			fields := map[string]any{}
-			for key, value := range candidate {
-				if key == "id" || key == "title" || key == "split" || key == "session" || key == "rationale" {
-					continue
-				}
-				fields[key] = truncateValue(value, 32<<10)
-			}
-			text := func(key string) string {
-				value, _ := candidate[key].(string)
-				return value
-			}
-			return &ReqV2FrozenCase{
-				Layer: layer, ID: caseID, Title: text("title"), Split: text("split"),
-				Session: text("session"), Rationale: text("rationale"),
-				Fields: fields, SHA256: got,
-			}, ""
+		id, _ := candidate["id"].(string)
+		if id == "" || seen[id] {
+			return nil, "题目编号缺失或重复，无法定位题目"
 		}
+		seen[id] = true
+		fields := map[string]any{}
+		for key, value := range candidate {
+			if key == "id" || key == "title" || key == "split" || key == "session" || key == "rationale" {
+				continue
+			}
+			fields[key] = truncateValue(value, 32<<10)
+		}
+		text := func(key string) string {
+			value, _ := candidate[key].(string)
+			return value
+		}
+		content, _ := json.Marshal(candidate)
+		projected = append(projected, ReqV2FrozenCase{
+			Layer: layer, ID: id, Title: text("title"), Split: text("split"),
+			Session: text("session"), Rationale: text("rationale"),
+			Fields: fields, SHA256: got, ContentSHA: fmt.Sprintf("%x", sha256.Sum256(content)),
+		})
 	}
-	return nil, "冻结题目中不存在该 id;不从当前题库补填"
+	return projected, ""
 }
 
 func (s *Store) readReqV2Manifest(dir string) (*struct {
@@ -172,6 +223,13 @@ func (s *Store) readReqV2Manifest(dir string) (*struct {
 	raw, err := s.read(dir, "manifest.json")
 	if err != nil {
 		return nil, err
+	}
+	var report struct {
+		ManifestSHA string `json:"manifest_sha256"`
+	}
+	reportRaw, err := s.read(dir, "report.json")
+	if err != nil || json.Unmarshal(reportRaw, &report) != nil || report.ManifestSHA == "" || fmt.Sprintf("%x", sha256.Sum256(raw)) != report.ManifestSHA {
+		return nil, fmt.Errorf("清单与报告哈希不一致")
 	}
 	var manifest struct {
 		Files []struct {
@@ -220,19 +278,19 @@ func truncateJSONText(raw json.RawMessage, limit int) string {
 
 // ReqV2CompareResponse 区分严格对照与仅并列查看;不产出改善百分比。
 type ReqV2CompareResponse struct {
-	Strict   bool                `json:"strict"`
-	Reasons  []string            `json:"reasons,omitempty"`
-	Baseline ReqV2RunSummary     `json:"baseline"`
-	Candidate ReqV2RunSummary    `json:"candidate"`
-	Outcome  json.RawMessage     `json:"outcome,omitempty"`
-	CaseSet  ReqV2CompareCaseSet `json:"case_set"`
+	Strict    bool                `json:"strict"`
+	Reasons   []string            `json:"reasons,omitempty"`
+	Baseline  ReqV2RunSummary     `json:"baseline"`
+	Candidate ReqV2RunSummary     `json:"candidate"`
+	Outcome   json.RawMessage     `json:"outcome,omitempty"`
+	CaseSet   ReqV2CompareCaseSet `json:"case_set"`
 }
 
 type ReqV2CompareCaseSet struct {
-	BaselineCases int      `json:"baseline_cases"`
-	CandidateCases int     `json:"candidate_cases"`
-	Common        int      `json:"common"`
-	OnlyInBaseline []string `json:"only_in_baseline,omitempty"`
+	BaselineCases   int      `json:"baseline_cases"`
+	CandidateCases  int      `json:"candidate_cases"`
+	Common          int      `json:"common"`
+	OnlyInBaseline  []string `json:"only_in_baseline,omitempty"`
 	OnlyInCandidate []string `json:"only_in_candidate,omitempty"`
 }
 

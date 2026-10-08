@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/subaru-ye/pc-builder-agent/internal/evalsuite"
 	"github.com/subaru-ye/pc-builder-agent/internal/planningeval"
 )
 
@@ -27,9 +28,12 @@ const (
 )
 
 type ReqV2ModelIdentity struct {
-	Role     string `json:"role"`
-	Model    string `json:"model"`
-	Provider string `json:"provider,omitempty"`
+	Role            string `json:"role"`
+	Model           string `json:"model"`
+	Provider        string `json:"provider,omitempty"`
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
+	Timeout         string `json:"timeout,omitempty"`
+	SessionCache    *bool  `json:"session_cache,omitempty"`
 }
 
 type ReqV2Evidence struct {
@@ -38,27 +42,32 @@ type ReqV2Evidence struct {
 }
 
 type ReqV2RunSummary struct {
-	ID          string               `json:"id"`
-	DirName     string               `json:"dir_name"`
-	Label       string               `json:"label"`
-	CreatedAt   *string              `json:"created_at"`
-	Mode        string               `json:"mode"` // live | deterministic | replay | regrade | unknown
-	ZeroModel   bool                 `json:"zero_model"`
-	Regrade     bool                 `json:"regrade"`
-	SourceRun   string               `json:"source_run,omitempty"`
-	Superseded  bool                 `json:"superseded"`
-	Grader      string               `json:"grader_version"`
-	Splits      []string             `json:"splits"`
-	Repeats     int                  `json:"repeats"`
-	CodeCommit  string               `json:"code_commit,omitempty"`
-	CodeDirty   *bool                `json:"code_dirty"`
-	Models      []ReqV2ModelIdentity `json:"models"`
-	GatePassed  *bool                `json:"gate_passed"`
-	Conclusion  string               `json:"conclusion"`
-	Evidence    ReqV2Evidence        `json:"evidence"`
-	ManifestSHA string               `json:"manifest_sha256,omitempty"`
-	GatesSHA    string               `json:"gates_sha256,omitempty"`
-	MaxCalls    int                  `json:"max_model_requests,omitempty"`
+	ID          string                   `json:"id"`
+	DirName     string                   `json:"dir_name"`
+	Label       string                   `json:"label"`
+	CreatedAt   *string                  `json:"created_at"`
+	Mode        string                   `json:"mode"` // live | deterministic | replay | regrade | unknown
+	ZeroModel   bool                     `json:"zero_model"`
+	Regrade     bool                     `json:"regrade"`
+	SourceRun   string                   `json:"source_run,omitempty"`
+	Superseded  bool                     `json:"superseded"`
+	Grader      string                   `json:"grader_version"`
+	Splits      []string                 `json:"splits"`
+	Repeats     int                      `json:"repeats"`
+	CodeCommit  string                   `json:"code_commit,omitempty"`
+	CodeDirty   *bool                    `json:"code_dirty"`
+	Models      []ReqV2ModelIdentity     `json:"models"`
+	GatePassed  *bool                    `json:"gate_passed"`
+	Conclusion  string                   `json:"conclusion"`
+	Evidence    ReqV2Evidence            `json:"evidence"`
+	ManifestSHA string                   `json:"manifest_sha256,omitempty"`
+	GatesSHA    string                   `json:"gates_sha256,omitempty"`
+	MaxCalls    int                      `json:"max_model_requests,omitempty"`
+	ScoreNote   string                   `json:"score_note,omitempty"`
+	PlanNote    string                   `json:"plan_note,omitempty"`
+	PromptSHA   string                   `json:"prompt_sha256,omitempty"`
+	LayerScores map[string]ReqV2LayerRow `json:"layer_scores,omitempty"`
+	FailedGates []ReqV2GateVerdictRow    `json:"failed_gates,omitempty"`
 }
 
 type ReqV2GateVerdictRow struct {
@@ -103,6 +112,29 @@ type ReqV2RunDetail struct {
 	RegradePlan  json.RawMessage            `json:"regrade_plan,omitempty"`
 	Integrity    []ReqV2IntegrityCheck      `json:"integrity_checks"`
 	Thresholds   json.RawMessage            `json:"gate_thresholds,omitempty"`
+	Manifest     *ReqV2Manifest             `json:"manifest,omitempty"`
+}
+
+// ReqV2Manifest 投影冻结评估集清单:每层题数/会话数/哈希与 split 分布。
+type ReqV2Manifest struct {
+	Dataset  string             `json:"dataset"`
+	FrozenAt string             `json:"frozen_at"`
+	Grader   string             `json:"grader_version"`
+	Files    []ReqV2ManifestRow `json:"files"`
+	Splits   []ReqV2SplitRow    `json:"splits"`
+}
+
+type ReqV2ManifestRow struct {
+	Layer    string `json:"layer"`
+	Cases    int    `json:"cases"`
+	Sessions int    `json:"sessions"`
+	SHA256   string `json:"sha256"`
+}
+
+type ReqV2SplitRow struct {
+	Split    string `json:"split"`
+	Sessions int    `json:"sessions"`
+	Used     bool   `json:"used"`
 }
 
 type ReqV2IntegrityCheck struct {
@@ -119,12 +151,12 @@ type ReqV2AssertionRow struct {
 }
 
 type ReqV2TurnRow struct {
-	Index        int               `json:"index"`
-	Reply        string            `json:"reply,omitempty"`
-	Operations   []json.RawMessage `json:"operations,omitempty"`
-	TurnSignals  []string          `json:"turn_signals,omitempty"`
-	DurationMS   int64             `json:"duration_ms,omitempty"`
-	ModelCalled  bool              `json:"screen_model_called"`
+	Index       int               `json:"index"`
+	Reply       string            `json:"reply,omitempty"`
+	Operations  []json.RawMessage `json:"operations,omitempty"`
+	TurnSignals []string          `json:"turn_signals,omitempty"`
+	DurationMS  int64             `json:"duration_ms,omitempty"`
+	ModelCalled bool              `json:"screen_model_called"`
 }
 
 type ReqV2RepeatEvidence struct {
@@ -139,14 +171,20 @@ type ReqV2RepeatEvidence struct {
 }
 
 type ReqV2FrozenCase struct {
-	Layer     string         `json:"layer"`
-	ID        string         `json:"id"`
-	Title     string         `json:"title,omitempty"`
-	Split     string         `json:"split,omitempty"`
-	Session   string         `json:"session,omitempty"`
-	Rationale string         `json:"rationale,omitempty"`
-	Fields    map[string]any `json:"fields"`
-	SHA256    string         `json:"sha256"`
+	Layer      string         `json:"layer"`
+	ID         string         `json:"id"`
+	Title      string         `json:"title,omitempty"`
+	Split      string         `json:"split,omitempty"`
+	Session    string         `json:"session,omitempty"`
+	Rationale  string         `json:"rationale,omitempty"`
+	Fields     map[string]any `json:"fields"`
+	SHA256     string         `json:"sha256"`
+	ContentSHA string         `json:"content_sha256"`
+}
+
+type ReqV2Dataset struct {
+	Cases []ReqV2FrozenCase `json:"cases"`
+	Notes []string          `json:"notes"`
 }
 
 type ReqV2CaseDetail struct {
@@ -187,11 +225,16 @@ type reqV2PlanIdentity struct {
 	SourceManifest   string                        `json:"source_manifest_sha256"`
 	SourceReport     string                        `json:"source_report_sha256"`
 	Models           map[string]reqV2PlanModelSpec `json:"models"`
+	Note             string                        `json:"note"`
+	Prompts          *evalsuite.PromptIdentity     `json:"prompts,omitempty"`
 }
 
 type reqV2PlanModelSpec struct {
-	Model    string `json:"model"`
-	Provider string `json:"provider"`
+	Model           string `json:"model"`
+	Provider        string `json:"provider"`
+	ReasoningEffort string `json:"reasoning_effort"`
+	Timeout         string `json:"timeout"`
+	SessionCache    bool   `json:"session_cache"`
 }
 
 type reqV2ReportHead struct {
@@ -286,7 +329,7 @@ func (s *Store) reqV2Directories() (map[string]string, []string) {
 	root := s.reqV2Root()
 	st, err := os.Lstat(root)
 	if err != nil {
-		return dirs, []string{"artifacts/reqv2 尚无 Requirement v2 产物"}
+		return dirs, []string{"尚无评估产物，请先生成评估产物后重新读取"}
 	}
 	if st.Mode()&os.ModeSymlink != 0 {
 		return dirs, []string{"已跳过符号链接目录 artifacts/reqv2"}
@@ -350,7 +393,7 @@ func (s *Store) reqV2Lookup(id string) (*savedReqV2Run, error) {
 
 func (s *Store) reqV2Stamp(dir string) string {
 	var stamp strings.Builder
-	for _, name := range []string{"plan.json", "report.json", "results.jsonl", "manifest.json", "gates.json"} {
+	for _, name := range []string{"plan.json", "report.json", "results.jsonl", "manifest.json", "gates.json", "prompts.json"} {
 		path, err := s.safeFile(dir, name)
 		if err != nil {
 			fmt.Fprintf(&stamp, "%s:missing;", name)
@@ -372,11 +415,39 @@ func (s *Store) loadReqV2(id, dir string) *savedReqV2Run {
 	ig := &reqV2Integrity{}
 	plan, report := s.readReqV2PlanReport(dir, ig)
 	s.checkReqV2Identity(dir, plan, report, ig)
+	if plan.Prompts != nil {
+		raw, err := s.read(dir, "prompts.json")
+		if err == nil {
+			_, err = verifyPromptSnapshot(raw, plan.Prompts)
+		}
+		if err != nil {
+			ig.record("prompts", "invalid", "声明的提示词原文缺失或未通过指纹校验")
+		} else {
+			ig.record("prompts", "ok", "运行原文与记录指纹一致")
+		}
+	}
 	r := &savedReqV2Run{dir: dir, stamp: stamp}
 	r.summary = s.buildReqV2Summary(id, dir, plan, report, ig.finalize(), ig.checks)
-	r.detail = buildReqV2Detail(r.summary, plan, report, ig.checks)
+	if plan.Prompts != nil {
+		r.summary.PromptSHA = plan.Prompts.SHA256
+	}
+	r.detail = buildReqV2Detail(r.summary, plan, report, ig.checks, s.loadReqV2Manifest(dir, report, ig))
 	s.cacheReqV2[id] = r
 	return r
+}
+
+func strptr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 func (s *Store) RunsReqV2() ReqV2RunsResponse {
@@ -604,8 +675,20 @@ func (s *Store) buildReqV2Summary(id, dir string, plan *reqV2PlanIdentity, repor
 		if spec.Model == "" {
 			continue
 		}
-		summary.Models = append(summary.Models, ReqV2ModelIdentity{Role: role, Model: spec.Model, Provider: spec.Provider})
+		identity := ReqV2ModelIdentity{Role: role, Model: spec.Model, Provider: spec.Provider, ReasoningEffort: spec.ReasoningEffort, Timeout: spec.Timeout}
+		if spec.SessionCache {
+			identity.SessionCache = &spec.SessionCache
+		}
+		summary.Models = append(summary.Models, identity)
 	}
+	summary.ScoreNote = reqV2ScoreNote(report, summary.ZeroModel)
+	summary.LayerScores = report.PerLayer
+	for _, gate := range report.GateVerdicts {
+		if !gate.Passed {
+			summary.FailedGates = append(summary.FailedGates, gate)
+		}
+	}
+	summary.PlanNote = truncateText(plan.Note, reqV2MaxText)
 	sort.Slice(summary.Models, func(a, b int) bool { return summary.Models[a].Role < summary.Models[b].Role })
 	if summary.Superseded {
 		summary.Evidence.Notes = append(summary.Evidence.Notes, "superseded 归档运行:历史记录,不作为当前基线")
@@ -619,7 +702,7 @@ func (s *Store) buildReqV2Summary(id, dir string, plan *reqV2PlanIdentity, repor
 	return summary
 }
 
-func buildReqV2Detail(summary ReqV2RunSummary, plan *reqV2PlanIdentity, report *reqV2ReportHead, checks []ReqV2IntegrityCheck) *ReqV2RunDetail {
+func buildReqV2Detail(summary ReqV2RunSummary, plan *reqV2PlanIdentity, report *reqV2ReportHead, checks []ReqV2IntegrityCheck, manifest *ReqV2Manifest) *ReqV2RunDetail {
 	detail := &ReqV2RunDetail{
 		ReqV2RunSummary: summary,
 		DurationMS:      report.DurationMS,
@@ -632,6 +715,7 @@ func buildReqV2Detail(summary ReqV2RunSummary, plan *reqV2PlanIdentity, report *
 		RegradePlan:     buildReqV2RegradePlan(plan),
 		Thresholds:      report.Gates,
 		Integrity:       checks,
+		Manifest:        manifest,
 	}
 	if detail.PerLayer == nil {
 		detail.PerLayer = map[string]ReqV2LayerRow{}
@@ -640,6 +724,73 @@ func buildReqV2Detail(summary ReqV2RunSummary, plan *reqV2PlanIdentity, report *
 		detail.ModelQuality = map[string]json.RawMessage{}
 	}
 	return detail
+}
+
+// reqV2ScoreNote 汇总两侧层跑分为目录摘要;题数为 0 的层不参与合计,
+// 零模型运行的模型层单独标注跳过。只做展示汇总,不改变判卷口径。
+func reqV2ScoreNote(report *reqV2ReportHead, zeroModel bool) string {
+	sum := func(layers ...string) (passed, cases int) {
+		for _, layer := range layers {
+			row, ok := report.PerLayer[layer]
+			if !ok || row.Cases == 0 {
+				continue
+			}
+			passed += row.Passed
+			cases += row.Cases
+		}
+		return passed, cases
+	}
+	screeningP, screeningT := sum("extraction", "conversations", "reducer", "readiness")
+	builderP, builderT := sum("policy", "ui-contract")
+	if screeningT == 0 && builderT == 0 {
+		return ""
+	}
+	note := fmt.Sprintf("初筛 %d/%d · 选配 %d/%d", screeningP, screeningT, builderP, builderT)
+	if zeroModel {
+		note += " · 模型层跳过"
+	}
+	return note
+}
+
+// loadReqV2Manifest 投影已通过哈希核验的 manifest.json;解析失败不阻断运行展示。
+func (s *Store) loadReqV2Manifest(dir string, report *reqV2ReportHead, ig *reqV2Integrity) *ReqV2Manifest {
+	raw, err := s.read(dir, "manifest.json")
+	if err != nil {
+		return nil
+	}
+	var file struct {
+		Dataset       string `json:"dataset"`
+		FrozenAt      string `json:"frozen_at"`
+		GraderVersion string `json:"grader_version"`
+		Files         []struct {
+			Path     string `json:"path"`
+			Cases    int    `json:"cases"`
+			Sessions int    `json:"sessions"`
+			SHA256   string `json:"sha256"`
+		} `json:"files"`
+		SplitSessions map[string][]string `json:"split_sessions"`
+	}
+	if json.Unmarshal(raw, &file) != nil {
+		ig.record("manifest.json", "invalid", "manifest.json 无法解析为评估集清单")
+		return nil
+	}
+	manifest := &ReqV2Manifest{Dataset: file.Dataset, FrozenAt: file.FrozenAt, Grader: file.GraderVersion, Files: []ReqV2ManifestRow{}, Splits: []ReqV2SplitRow{}}
+	for _, row := range file.Files {
+		manifest.Files = append(manifest.Files, ReqV2ManifestRow{Layer: strings.TrimSuffix(row.Path, "/cases.json"), Cases: row.Cases, Sessions: row.Sessions, SHA256: shortSHA(row.SHA256)})
+	}
+	used := map[string]bool{}
+	for _, split := range report.Splits {
+		used[split] = true
+	}
+	splitNames := make([]string, 0, len(file.SplitSessions))
+	for split := range file.SplitSessions {
+		splitNames = append(splitNames, split)
+	}
+	sort.Strings(splitNames)
+	for _, split := range splitNames {
+		manifest.Splits = append(manifest.Splits, ReqV2SplitRow{Split: split, Sessions: len(file.SplitSessions[split]), Used: used[split]})
+	}
+	return manifest
 }
 
 func buildReqV2CaseIndex(cases []ReqV2CaseResultRow) []ReqV2CaseIndexEntry {

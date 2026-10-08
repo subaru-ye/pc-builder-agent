@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,8 +35,8 @@ func writeRun(t *testing.T, root, name string, mutate func(plan, report, manifes
 		t.Fatal(err)
 	}
 	gates := map[string]any{"version": "gates-test-v1", "frozen_at": "2026-09-24", "vetoes": []any{},
-		"deterministic_layers": map[string]any{"names": []string{"reducer", "readiness", "policy", "ui-contract"}, "required_pass_rate": 1.0},
-		"repetition":           map[string]any{"release_repeats": 3, "metric": "pass_all_k", "best_of_k_as_gate": false},
+		"deterministic_layers":   map[string]any{"names": []string{"reducer", "readiness", "policy", "ui-contract"}, "required_pass_rate": 1.0},
+		"repetition":             map[string]any{"release_repeats": 3, "metric": "pass_all_k", "best_of_k_as_gate": false},
 		"minimum_paired_samples": 2,
 		"model_quality_thresholds": map[string]any{"status": "frozen", "frozen_at": "2026-09-24",
 			"key_fields": []string{"budget_cny"}, "key_field_wrong_write_total_max": 0,
@@ -56,11 +57,11 @@ func writeRun(t *testing.T, root, name string, mutate func(plan, report, manifes
 		},
 		"cases": []any{
 			map[string]any{"layer": "reducer", "id": "rd-1", "split": "development", "session": "rd-dev-1", "repeat": 1, "pass": true,
-				"assertions": []any{map[string]any{"name": "reducer:no_error", "pass": true}},
+				"assertions":  []any{map[string]any{"name": "reducer:no_error", "pass": true}},
 				"observation": map[string]any{"turns": []any{map[string]any{"reply": "好的", "operations": []any{map[string]any{"op": "set", "field": "budget_cny"}}, "screen_model_called": false}}},
 			},
 		},
-		"usage": map[string]any{"model_calls": 2, "provider_errors": map[string]any{}, "tokens_known": 100, "tokens_all_known": true, "latency_p50_ms": 10, "latency_p95_ms": 20},
+		"usage":              map[string]any{"model_calls": 2, "provider_errors": map[string]any{}, "tokens_known": 100, "tokens_all_known": true, "latency_p50_ms": 10, "latency_p95_ms": 20},
 		"max_model_requests": 400, "limitations": []string{}, "duration_ms": 5}
 	plan := map[string]any{"mode": "live", "created_at": "2026-09-24T00:00:00Z", "grader_version": "reqv2-grader-test",
 		"splits": []string{"development"}, "repeats": 3, "code_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "code_dirty": false,
@@ -108,6 +109,57 @@ func newReqV2Store(t *testing.T, root string) *Store {
 		t.Fatal(err)
 	}
 	return store
+}
+
+func TestReqV2DatasetIncludesUntestedCasesAndRejectsTampering(t *testing.T) {
+	root := t.TempDir()
+	fixture := writeRun(t, root, "dataset", func(plan, report, manifest, gates map[string]any) {
+		path := filepath.Join(root, "artifacts", "reqv2", "dataset", "reducer", "cases.json")
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		data := []byte(`[{"id":"rd-1","title":"开发题","split":"development","expected":{"revision_delta":1}},{"id":"rd-holdout","title":"未测试的保留题","split":"holdout","expected":{"revision_delta":0}}]`)
+		if err := os.WriteFile(path, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		manifest["files"] = []any{map[string]any{"path": "reducer/cases.json", "sha256": sha256File(t, path), "cases": 2, "sessions": 2}}
+	})
+	store := newReqV2Store(t, root)
+	id := reqV2RunID("artifacts/reqv2/dataset")
+	response, err := store.DatasetReqV2(id)
+	if err != nil || len(response.Cases) != 2 || len(response.Notes) != 0 {
+		t.Fatalf("完整题库应包含未测试题目：%+v %v", response, err)
+	}
+	if response.Cases[1].ID != "rd-holdout" || response.Cases[0].ContentSHA == response.Cases[1].ContentSHA {
+		t.Fatalf("逐题身份或内容指纹无效：%+v", response.Cases)
+	}
+	caseDetail, err := store.CaseReqV2(id, "reducer", "rd-1")
+	if err != nil || caseDetail.Frozen.ContentSHA != response.Cases[0].ContentSHA {
+		t.Fatal("逐题证据与题库应复用相同投影")
+	}
+	request := httptest.NewRequest("GET", "http://127.0.0.1/api/evaldesk/requirement-v2/dataset?id="+id, nil)
+	recorder := httptest.NewRecorder()
+	Handler(store).ServeHTTP(recorder, request)
+	if recorder.Code != 200 || !strings.Contains(recorder.Body.String(), "rd-holdout") {
+		t.Fatalf("完整题库接口失败：%s", recorder.Body.String())
+	}
+	if err := os.WriteFile(filepath.Join(fixture.Dir, "reducer", "cases.json"), []byte(`[{"id":"changed"}]`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	response, err = store.DatasetReqV2(id)
+	if err != nil || len(response.Cases) != 0 || len(response.Notes) != 1 {
+		t.Fatalf("篡改题目不能展示：%+v %v", response, err)
+	}
+	if err := os.WriteFile(filepath.Join(fixture.Dir, "manifest.json"), []byte(`{"files":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	response, err = store.DatasetReqV2(id)
+	if err != nil || len(response.Cases) != 0 || len(response.Notes) != 1 {
+		t.Fatalf("篡改清单不能展示：%+v %v", response, err)
+	}
+	if _, note := store.reqV2FrozenCases(fixture.Dir, "../../other"); note == "" {
+		t.Fatal("不应读取非白名单分类")
+	}
 }
 
 func findRun(runs []ReqV2RunSummary, name string) *ReqV2RunSummary {
@@ -340,6 +392,9 @@ func TestReqV2RunDetailAndCase(t *testing.T) {
 	if len(detail.detail.GateVerdicts) != 2 {
 		t.Fatalf("gate verdicts 投影数量错误: %d", len(detail.detail.GateVerdicts))
 	}
+	if len(run.FailedGates) != 1 || run.FailedGates[0].Metric != "min_cases" || run.FailedGates[0].Evaluable {
+		t.Fatalf("摘要应保留未通过项的原始值与不可评估状态: %+v", run.FailedGates)
+	}
 	if detail.detail.Usage == nil {
 		t.Fatal("usage 未投影")
 	}
@@ -508,5 +563,97 @@ func TestReqV2RealArtifactSpotChecks(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(regrade.summary.Evidence.Notes, " "), "零模型重判旧观测") {
 		t.Fatal("regrade 未标明零模型重判")
+	}
+}
+
+func TestReqV2ScoreNoteManifestAndPromptProjection(t *testing.T) {
+	root := t.TempDir()
+	writeRun(t, root, "scored-live", func(plan, report, manifest, _ map[string]any) {
+		cases := []any{}
+		perLayer := map[string]any{}
+		for _, layer := range []string{"reducer", "readiness", "policy", "ui-contract", "extraction", "conversations"} {
+			fails := 0
+			if layer == "ui-contract" || layer == "extraction" {
+				fails = 1
+			}
+			for i := 1; i <= fails+1; i++ {
+				pass := i == 1 || fails == 0
+				cases = append(cases, map[string]any{"layer": layer, "id": layer + "-1" + string(rune('0'+i)), "split": "development", "session": layer + "-s1", "repeat": 1, "pass": pass,
+					"assertions": []any{map[string]any{"name": layer + ":no_error", "pass": pass}}})
+			}
+			perLayer[layer] = map[string]any{"cases": fails + 1, "passed": fails + 1 - fails, "skipped": 0, "vetoes": 0, "failure_classifications": map[string]any{}}
+		}
+		report["cases"] = cases
+		report["per_layer"] = perLayer
+		plan["note"] = "prompt SHA256 per request is recorded in events.jsonl model_request events"
+		plan["models"] = map[string]any{"screening": map[string]any{"model": "test-model", "provider": "test", "base_host": "http://127.0.0.1:1", "api_key": "secret", "reasoning_effort": "low", "timeout": "1m0s", "session_cache": true}}
+		manifest["files"] = []any{
+			map[string]any{"path": "reducer/cases.json", "sha256": "aa11", "cases": 2, "sessions": 2},
+			map[string]any{"path": "catalog.json", "sha256": "cc33", "cases": 0, "sessions": 0},
+		}
+		manifest["split_sessions"] = map[string]any{"development": []string{"reducer-s1", "extraction-s1"}, "holdout": []string{"reducer-h1"}}
+	})
+	store := newReqV2Store(t, root)
+	response := store.RunsReqV2()
+	run := findRun(response.Runs, "scored-live")
+	if run == nil {
+		t.Fatal("scored-live 未被发现")
+	}
+	// 初筛侧 reducer1+readiness1+extraction1+conversations1 = 4/5,选配侧 policy1+ui-contract1 = 2/3。
+	if run.ScoreNote != "初筛 4/5 · 选配 2/3" {
+		t.Fatalf("score_note 汇总错误: %q", run.ScoreNote)
+	}
+	if run.LayerScores["extraction"].Cases != 2 || run.LayerScores["policy"].Cases != 1 {
+		t.Fatalf("目录须提供分层冻结结果，不能从 score_note 反解析: %+v", run.LayerScores)
+	}
+	if run.PlanNote == "" {
+		t.Fatal("plan_note 未投影")
+	}
+	if len(run.Models) != 1 || run.Models[0].ReasoningEffort != "low" || run.Models[0].Timeout != "1m0s" || run.Models[0].SessionCache == nil || !*run.Models[0].SessionCache {
+		t.Fatalf("模型脱敏身份投影错误: %+v", run.Models)
+	}
+	if strings.Contains(fmt.Sprint(run.Models), "secret") || strings.Contains(fmt.Sprint(run.Models), "base_host") {
+		t.Fatal("模型身份投影泄漏敏感字段")
+	}
+	loaded, err := store.reqV2Lookup(run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail := loaded.detail
+	if detail.Manifest == nil || detail.Manifest.Dataset != "requirement-v2" || len(detail.Manifest.Files) != 2 {
+		t.Fatalf("manifest 投影错误: %+v", detail.Manifest)
+	}
+	if detail.Manifest.Files[1].Layer != "catalog.json" || detail.Manifest.Files[0].SHA256 != "aa11" {
+		t.Fatalf("manifest 文件投影错误: %+v", detail.Manifest.Files)
+	}
+	splits := map[string]ReqV2SplitRow{}
+	for _, split := range detail.Manifest.Splits {
+		splits[split.Split] = split
+	}
+	if splits["development"].Sessions != 2 || !splits["development"].Used || splits["holdout"].Used || splits["holdout"].Sessions != 1 {
+		t.Fatalf("split 分布投影错误: %+v", detail.Manifest.Splits)
+	}
+}
+
+func TestReqV2ZeroModelScoreNoteSkipsModelLayers(t *testing.T) {
+	root := t.TempDir()
+	writeRun(t, root, "zero-scored", func(plan, report, _, _ map[string]any) {
+		plan["mode"] = "deterministic"
+		plan["zero_model"] = true
+		report["mode"] = "deterministic"
+		report["cases"] = []any{map[string]any{"layer": "reducer", "id": "rd-1", "split": "development", "session": "rd-s1", "repeat": 1, "pass": true,
+			"assertions": []any{map[string]any{"name": "reducer:no_error", "pass": true}}}}
+		report["per_layer"] = map[string]any{
+			"reducer":    map[string]any{"cases": 1, "passed": 1, "skipped": 0, "vetoes": 0, "failure_classifications": map[string]any{}},
+			"extraction": map[string]any{"cases": 0, "passed": 0, "skipped": 2, "vetoes": 0, "failure_classifications": map[string]any{}},
+		}
+	})
+	store := newReqV2Store(t, root)
+	run := findRun(store.RunsReqV2().Runs, "zero-scored")
+	if run == nil {
+		t.Fatal("zero-scored 未被发现")
+	}
+	if run.ScoreNote != "初筛 1/1 · 选配 0/0 · 模型层跳过" {
+		t.Fatalf("零模型 score_note 错误: %q", run.ScoreNote)
 	}
 }

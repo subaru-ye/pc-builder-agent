@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	root := flag.String("root", ".", "repository root containing artifacts/eval and artifacts/evalchange")
+	root := flag.String("root", ".", "repository root containing artifacts/reqv2")
 	address := flag.String("addr", "127.0.0.1:8086", "loopback listen address")
 	flag.Parse()
 	if !evaldesk.ListenAddress(*address) {

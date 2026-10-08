@@ -40,37 +40,12 @@ func Handler(store *Store) http.Handler {
 		}
 		query := r.URL.Query()
 		switch r.URL.Path {
-		case "/api/evaldesk/runs":
-			writeJSON(w, store.Runs())
-		case "/api/evaldesk/timeline":
-			writeJSON(w, store.Timeline())
-		case "/api/evaldesk/provenance":
-			if query.Get("run") == "" {
-				apiError(w, http.StatusBadRequest, "请选择要查看的运行")
-				return
-			}
-			response, err := store.Provenance(query.Get("run"))
+		case "/api/evaldesk/requirement-v2/prompt-versions":
+			writeJSON(w, store.PromptVersionsReqV2())
+		case "/api/evaldesk/requirement-v2/prompts":
+			response, err := CurrentPromptsReqV2()
 			if err != nil {
-				apiError(w, http.StatusNotFound, "运行不存在或产物已移除")
-				return
-			}
-			writeJSON(w, response)
-		case "/api/evaldesk/compare":
-			a, b := query.Get("baseline"), query.Get("candidate")
-			if a == "" || b == "" {
-				apiError(w, http.StatusBadRequest, "请选择基线和候选运行")
-				return
-			}
-			response, err := store.Compare(a, b)
-			if err != nil {
-				apiError(w, http.StatusNotFound, "运行不存在或产物已移除")
-				return
-			}
-			writeJSON(w, response)
-		case "/api/evaldesk/cases":
-			response, err := store.Cases(query.Get("baseline"), query.Get("candidate"), query.Get("case"))
-			if err != nil {
-				apiError(w, http.StatusNotFound, "题目或运行不存在")
+				apiError(w, http.StatusInternalServerError, "无法读取当前提示词")
 				return
 			}
 			writeJSON(w, response)
@@ -87,6 +62,13 @@ func Handler(store *Store) http.Handler {
 				return
 			}
 			writeJSON(w, run.detail)
+		case "/api/evaldesk/requirement-v2/dataset":
+			response, err := store.DatasetReqV2(query.Get("id"))
+			if err != nil {
+				apiError(w, http.StatusNotFound, "评估集或运行不存在")
+				return
+			}
+			writeJSON(w, response)
 		case "/api/evaldesk/requirement-v2/case":
 			if query.Get("id") == "" || query.Get("layer") == "" || query.Get("case") == "" {
 				apiError(w, http.StatusBadRequest, "请选择运行、层与题目")

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { EvalWorkbench } from "@/components/evaldesk/workbench";
 
 export const metadata: Metadata = {
-  title: "本机评估 · 装机配置单 Agent",
+  title: "装机配置单 Agent",
   robots: { index: false, follow: false },
 };
 

@@ -1,0 +1,768 @@
+{
+  "schema_version": 1,
+  "reviewed_at": "2026-10-08",
+  "reviews": [
+    {
+      "commit": "f7290a5c8ce75e22eb63f454446af178b39fa810",
+      "role": "screening",
+      "title": "补齐已有配件的撤销授权",
+      "reason": "首轮修复测试中，模型在记录已有配件型号时又无依据撤销已有件，造成 2 次关键字段错写。",
+      "changes": "明确配件类别与准确型号可并存；记录型号不代表撤销，移除必须有本轮撤销原话。",
+      "verification": {
+        "kind": "live_record",
+        "summary": "同一开发/校准题库、模型及判卷口径的两批记录：多轮任务 6/7 → 7/7，关键字段错写 2 → 0；最终门槛 16/16、否决项 0。",
+        "limitation": "同时修改提示词和服务端守卫，不能把改善归因于提示词单因素；未运行保留验证集。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "f7290a5c8ce75e22eb63f454446af178b39fa810",
+          "excerpt": "fix: require explicit user intent before removing existing_parts\n\nSecond root cause from the fix batch's first run (candidate 6c533be,\nsaved as screening-fix-live-devcal-r3-20260924): while merging the model\ninto owned_parts the model also emitted remove existing_parts with the\nwhole utterance as quote - an ungrounded key-field wrong write\n(cv-owned-model-flow r2/r3).\n\nGuard: remove existing_parts now requires removal evidence in this\nturn's quote (intent verb + old/existing marker), otherwise downgraded\nto an observation. Prompt: existing_parts (categories) and owned_parts\n(exact models) coexist independently; committing a model does not imply\nwithdrawal. verifyAcceptedProposals and other contracts unchanged."
+        },
+        {
+          "kind": "test",
+          "reference": "f7290a5c8ce75e22eb63f454446af178b39fa810（新增回归测试）",
+          "excerpt": "TestPrepareRemoveExistingPartsRequiresRemovalEvidence"
+        },
+        {
+          "kind": "document",
+          "reference": "docs/changes/screening-v2-evidence-grounding-fix.md:49-57（2026-10-08 工作树复核）",
+          "excerpt": "首轮 task_success 6/7、关键字段错写 2；最终 f7290a5 为 7/7、关键字段错写 0、veto 0，holdout 未运行。与现存两份冻结报告一致。"
+        }
+      ],
+      "run_names": [
+        "screening-fix-live-devcal-r3-20260924",
+        "screening-fix2-live-devcal-r3-20260924"
+      ]
+    },
+    {
+      "commit": "6c533befbd265e4fd8f761fd80340d2b0eae6e9f",
+      "role": "screening",
+      "title": "修复证据标签与默认值误写",
+      "reason": "发布认证失败暴露：无提案却标成接受建议、照抄预算默认值、已有型号路径错误、无依据清空已有件。",
+      "changes": "指导证据标签判定顺序，禁止照抄系统默认值；补齐已有件证据和路径规则。",
+      "verification": {
+        "kind": "live_record",
+        "summary": "开发/校准首跑：多轮任务 6/7、否决项 0，但关键字段错写仍为 2，总门槛未通过。该失败催生下一次撤销授权修复。",
+        "limitation": "首跑结果保留；提示词与守卫一起修改，不是独立提示词效果测试。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "6c533befbd265e4fd8f761fd80340d2b0eae6e9f",
+          "excerpt": "fix: ground screening evidence handling for v2 requirement collection\n\nFour root causes from the spec6 certification (NO-GO):\n- model mislabelled '那就7500吧' as accepted_proposal with no prior\n  proposal (batch B cv-fps-progressive r3): prompt now fixes the\n  labelling order - a value present in the current utterance is stated;\n  accepted_proposal is only for adopting an actually existing prior\n  assistant proposal; mislabels are still rejected per contract.\n- system default budget_flex=0.1 copied into operations as user fact\n  (batch B cv-composite-9000-start r2): guard downgrades stated ops whose\n  value equals a numeric effective system default unless the value\n  literal appears in this turn's quote; prompt forbids copying\n  effective_defaults.\n- owned model lost via single-segment dot path owned_parts.gpu carrying\n  an object/string (batch B cv-owned-model-flow r2): normalizer now\n  accepts both shapes (category must match the path, quote verbatim);\n  model grounding still enforced by the reducer.\n- '帮我配台电脑' written as existing_parts=[] with no purchase-scope\n  evidence (batch D, human-confirmed): guard requires explicit all-new /\n  no-existing-parts wording in this turn's quote before accepting an\n  empty array; otherwise downgraded to an observation.\n\nverifyAcceptedProposals is unchanged; no stated-degradation path is\nrestored. Adds positive/negative tests for question, refusal, no-proposal,\nexisting-parts and all-new boundaries. Acceptance: one capped dev+cal\nPass^3 run with the current screening model must reach >=6/7 conversation\ntopics, 0 key-field wrong writes, 0 vetoes; frozen gates are unchanged."
+        },
+        {
+          "kind": "test",
+          "reference": "6c533befbd265e4fd8f761fd80340d2b0eae6e9f（新增回归测试）",
+          "excerpt": "TestPrepareEmptyExistingPartsRequiresClearEvidence、TestPrepareRejectsCopiedNumericSystemDefault、TestPrepareNormalizesOwnedCategoryDotPathShapes"
+        },
+        {
+          "kind": "document",
+          "reference": "docs/changes/screening-v2-evidence-grounding-fix.md:49（2026-10-08 工作树复核）",
+          "excerpt": "130 调用，多轮任务 6/7 达标、veto 0，但提交型号时无依据 remove existing_parts 导致关键字段错写 2。"
+        }
+      ],
+      "run_names": [
+        "screening-fix-live-devcal-r3-20260924"
+      ]
+    },
+    {
+      "commit": "a5b2e34564ccc8bf766c00ba807aca248c63303f",
+      "role": "screening",
+      "title": "重构本轮输出与建议接受协议",
+      "reason": "旧 reply/next_action 协议混合模型理解与执行决策，建议接受缺少服务端可核验的授权链。",
+      "changes": "改为需求操作、观察、本轮信号、建议与回答五部分；程序校验建议接受并组合回答。",
+      "verification": {
+        "kind": "live_record",
+        "summary": "文档记载最终开发/校准批次：抽取 25/26、多轮任务 6/7、关键字段错写 0；曾记载门槛 16/16 通过，但现存关联报告总门槛未通过，须以报告逐项核对。",
+        "limitation": "关联运行含未提交修改，题库与判卷版本也有变化；不能作该提交或提示词的单因素前后比较。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "a5b2e34564ccc8bf766c00ba807aca248c63303f",
+          "excerpt": "feat: implement screening v2 turn contract and proposal protocol\n\nReplace the legacy reply/next_action turn with strict operations/\nobservations/turn_signals/proposals/answer decoding; accept assistant\nproposals only after verbatim display, same-transaction persistence,\nadjacent-turn consumption and server-side verification (exact short\nanswers or adoption phrases carrying the proposed value; questions,\nrejections and neutral utterances never write active, failed\naccepted_proposal ops are never demoted to stated). Compose replies\ndeterministically with answer workflow/scope guards, a single domain\nquestion group per turn and short-term presentation actions. Freeze\ngrader-v3 (V9 per-sentence scope-notice fix), fix three conversation\ngold inconsistencies with provenance, and record the final dev/cal\nPass^3 acceptance run (16/16 frozen gate verdicts, zero vetoes).\nholdout stays locked for release certification."
+        },
+        {
+          "kind": "test",
+          "reference": "a5b2e34564ccc8bf766c00ba807aca248c63303f（新增回归测试）",
+          "excerpt": "TestDecodeRequirementTurnContract、TestDecodeLegacyTurnForReplayIsMechanical"
+        },
+        {
+          "kind": "document",
+          "reference": "a5b2e34564ccc8bf766c00ba807aca248c63303f:docs/changes/screening-requirement-collection-v2.md",
+          "excerpt": "文档记载 dev/cal 最终验收：16/16 门槛、零 veto、抽取 25/26、多轮任务 6/7。2026-10-08 复核现存 spec3-final 报告总门槛为未通过，且 code_dirty=true；保留差异，不以文档覆盖冻结报告。"
+        }
+      ],
+      "run_names": [
+        "spec3-final-live-20260923"
+      ]
+    },
+    {
+      "commit": "1e093a5d600f0e3dac2d7a4d39c247257123f79f",
+      "role": "screening",
+      "title": "增加一次同模型格式纠偏",
+      "reason": "严格 JSON 解码失败会直接终止需求采集，需要给格式错误一次可控纠偏机会。",
+      "changes": "增加静态格式纠偏提示；最多重试一次，第二次失败仍终止，记录重试数。",
+      "verification": {
+        "kind": "tests_added",
+        "summary": "提交新增格式纠偏成功与两次失败终止的回归测试。未找到该提示词版本的独立模型通过率记录。",
+        "limitation": "测试存在不等于当时执行通过；主提示词未变，本版变化来自格式纠偏组件。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "1e093a5d600f0e3dac2d7a4d39c247257123f79f",
+          "excerpt": "feat: one same-model format retry for incremental screening decode failures\n\nF4: the requirement-state guard now retries a strict decode failure once\nwith the same model plus a format-correction instruction (existing\nper-op verification stays untouched); a second failure still fails the\nrun. Retry counts are collected through the request context and\npersisted into agent_runs.retry_count alongside the screening model\nidentity."
+        },
+        {
+          "kind": "test",
+          "reference": "1e093a5d600f0e3dac2d7a4d39c247257123f79f（新增回归测试）",
+          "excerpt": "TestScreeningMalformedOutputFailsAfterOneFormatRetry、TestScreeningFormatRetryAcceptsCorrectedOutput"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "306df9f8f8583763d42b74a0e6a4fa329b46185d",
+      "role": "screening",
+      "title": "恢复首次确认与交付边界",
+      "reason": "提交说明记录 r5 中无预算直接交付、讨论被推入执行、未知校验被强行标记可交付的问题。",
+      "changes": "首次消息交回显式确认；讨论与执行分开，收紧无预算、未知校验及硬尺寸条件的交付守卫。",
+      "verification": {
+        "kind": "not_recorded",
+        "summary": "提交修改了需求状态回归测试；未找到可确认属于该提示词版本的执行结果。",
+        "limitation": "属于提示词与交付守卫的组合修改，不能从变更目的推断已提高通过率。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "306df9f8f8583763d42b74a0e6a4fa329b46185d",
+          "excerpt": "fix: restore first-message confirmation handoff and tighten delivery gates\n\nr5 evidence showed the unconditional plan handoff and gate coverage gaps:\na no-budget confirm delivered ready, discussion replies could be pushed\ninto plan, and an unknown-validation proposal could be forced to ready.\nFirst messages now always hand back the explicit confirmation (the\nuser's own follow-up words authorize later), the no-budget gate forces\ncollect, the collect fallback lets the model re-judge deferred\ndiscussion, the stalled gate yields to the unknown gate unless\nvalidation passes, and must size_pref violations are verified\nserver-side into a marked proposal."
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "a0d40f887ce3e3fa28b3f516b3e07f6e0c600143",
+      "role": "screening",
+      "title": "识别用户明确执行请求",
+      "reason": "提交目的为让用户明确要求生成时能够推进，不因缺少先前确认而停留采集。",
+      "changes": "明确执行消息可授权推进；状态可规划但仍停留采集时，允许一次模型重新判断。",
+      "verification": {
+        "kind": "tests_added",
+        "summary": "新增采集回退适用与不适用两类测试；未找到独立真实模型效果记录。",
+        "limitation": "这是当时的执行合同，后续首次确认规则又有调整。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "a0d40f887ce3e3fa28b3f516b3e07f6e0c600143",
+          "excerpt": "fix: let an explicit execution message authorize planning directly\n\nScreening now continues to builder when the user's own message requests\nexecution, without requiring a prior confirmed requirement; the collect\nfallback retries once when authoritative state is already plannable."
+        },
+        {
+          "kind": "test",
+          "reference": "a0d40f887ce3e3fa28b3f516b3e07f6e0c600143（新增回归测试）",
+          "excerpt": "TestScreeningCollectFallbackRetriesOnceWhenStateReady、TestScreeningCollectFallbackStaysOutWhenNotApplicable"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "31c3bbc92d5df75e514df957a34577b66938f28c",
+      "role": "screening",
+      "title": "纠正未定预算与暂缓执行的判断",
+      "reason": "B2-001 的明确生成请求因预算未定被卡在采集；B2-002/003 明确暂缓却被测试要求确认。",
+      "changes": "说明预算未定与用户执行意图分开；删除与用户暂缓意图冲突的测试确认步骤。",
+      "verification": {
+        "kind": "not_recorded",
+        "summary": "提交记录了触发失败题和测试步骤修正；未找到该版本执行后的独立结果。",
+        "limitation": "测试流程也发生调整，不把预期修正计作模型提升。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "31c3bbc92d5df75e514df957a34577b66938f28c",
+          "excerpt": "fix: undecided budget is not a reason to stay collecting; drop mis-placed B2 confirms\n\nB2-001 showed a direct build request held in collecting because budget\nwas undecided, refusing the authored confirm. B2-002/003 step-2 confirms\nwere unwinnable: the user explicitly deferred configuration, so\nscreening correctly stayed collecting. The live suite generator now\ndrops those confirms."
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "e91aad6868839dbb2800606f9b6a3e3fdbfe79e0",
+      "role": "screening",
+      "title": "补充静音偏好的取值示例",
+      "reason": "提交增加静音偏好到枚举值的转换示例，以减少取值与要求强度混淆。",
+      "changes": "补充 noise_pref 映射示例，保留值与 must/prefer 强度的区别。",
+      "verification": {
+        "kind": "not_recorded",
+        "summary": "同次文档记载交付质量旧基线 r1 3/10、r2 4/10；这是既有报告重算，不是本提示词修改后的结果。",
+        "limitation": "未找到独立复测，不将旧基线挂成改后效果。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "e91aad6868839dbb2800606f9b6a3e3fdbfe79e0",
+          "excerpt": "fix: add noise_pref conversion example and log quality-gate baseline"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "2b734030ade99276e52745de4d25059e220b6af8",
+      "role": "screening",
+      "title": "区分采购意图、条件值和强度",
+      "reason": "提交说明记录 live r1/smoke 中把指定购买当已有件、负向品牌写错字段、枚举值写成强度的问题。",
+      "changes": "具名采购不算拥有；负向品牌用独立约束；枚举取值与要求强度分别表达。",
+      "verification": {
+        "kind": "not_recorded",
+        "summary": "找到触发问题的提交说明，未找到该版本独立执行后的结果。",
+        "limitation": "提交还包含 Builder 预算指导变更，不能认定为初筛提示词单因素试验。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "2b734030ade99276e52745de4d25059e220b6af8",
+          "excerpt": "fix: sharpen screening field semantics and builder budget delivery policy\n\nLive r1/smoke evidence drove four prompt fixes: named-purchase wording\n(\"指定X\") must not land in owned_parts; negative brand constraints stay as\nfree.* constraint entries instead of brand_pref; value and strength are\ndistinct fields so enum values cannot be \"prefer\"/\"must\"; and the builder\nmust pull an over-ceiling total back into budget by adjusting unlocked\nparts before delivering it as a user tradeoff."
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "797c2c3cdbf6289a1ba2f1ba09c4453305a6845c",
+      "role": "screening",
+      "title": "优先尊重仅记录与装机对象",
+      "reason": "上一批参考保留测试 1/2：用户明确暂不生成，模型仍要求确认；人工复核还发现漏记帮同事装机。",
+      "changes": "仅记录/暂缓执行优先于确认或规划；预算更新不等于执行授权，独立记录装机对象。",
+      "verification": {
+        "kind": "live_record",
+        "summary": "后续记录明确归属 797c2c3：历史 17/19、新增 1/1，合计 18/20；34 次真实初筛。装机对象与暂缓执行通过，预算参考误写和未知分辨率冲突仍失败。",
+        "limitation": "单批且错误分布变化，不宣称稳定提升；新增题耗时/Token 不能并入历史 32 条消息的直接比较。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "797c2c3cdbf6289a1ba2f1ba09c4453305a6845c",
+          "excerpt": "fix(screening): prioritize recording-only intent and recipient"
+        },
+        {
+          "kind": "document",
+          "reference": "ff1a369875b86af07ac5d7fddeb2778ae5a1b6f0:docs/eval/planning-v2/目标验收进度-20260915.md:312-314",
+          "excerpt": "该批在 797c2c3 完成，历史17/19、新增1/1，合计18/20；34次Screening。人工审阅仍发现预算参考、口径与重复背景条目缺口，不以18/20代表完整语义正确。"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "b5c1535853a79487492802d205dfb5b95fe50609",
+      "role": "screening",
+      "title": "保留购物参考而不覆盖需求",
+      "reason": "已有购物报价等背景需要在后续对话继续可见，但不能被当作预算、已有件或必买条件。",
+      "changes": "将相关参考保存为独立背景条目；无法结构化的原话保留为观察，不增加总结模型。",
+      "verification": {
+        "kind": "live_record",
+        "summary": "提交记录 2 题、4 次真实初筛调用，1/2 通过；参考保留和刷新断言通过，但暂不生成仍误判确认。",
+        "limitation": "局部样本且有剩余失败，不代表完整题库或稳定成功率。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "b5c1535853a79487492802d205dfb5b95fe50609",
+          "excerpt": "fix(screening): retain shopping references in session context"
+        },
+        {
+          "kind": "document",
+          "reference": "b5c1535853a79487492802d205dfb5b95fe50609:docs/eval/planning-v2/目标验收进度-20260915.md",
+          "excerpt": "Screening提示明确要求相关参考进入独立free.* kind=context，未核验报价不能成为预算、已有件或采购必须条件；无法整理的原文仍用已有observations。仍一次模型输出，不增加自动回填或总结模型。散热warning与交付门槛本轮只检查，没有修改规则或改写失败为通过。\n离线通过后执行 `artifacts/planning-reference-retention-live-20260915-r1/`：2题4条消息，最多4次Screening请求，Builder、Embedding、真实外部均0；固定原deepseek-v4-flash-0731、原174件目录和重试0。输入SHA256 `a2a4bab86171b1c72bb752f5d064350dcecb8b07530871434a8fbbe0a0480373`，路径 `artifacts/planning-reference-retention-suite-20260915/live/suite.json`。这是独立完整性审计，不将新评分合入原19题或上一批3/3；结束关闭额度，不反复追跑。"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "77054f9be9ca4722104ed37ea9a887042dffb77a",
+      "role": "screening",
+      "title": "区分已有配件与购物参考",
+      "reason": "已有关系、报价、购物意向和备选被混用，型号信息与拥有关系需要分别理解。",
+      "changes": "先判断原话对象和关系；只有明确拥有才写已有件，预算金额与采购范围独立记录。",
+      "verification": {
+        "kind": "live_record",
+        "summary": "后续文档明确归属 77054f9：定向 3/3、7 次真实初筛；已有关系与预算口径通过，但人工审阅发现报价参考实际未保存，回复声称已保留。",
+        "limitation": "负向断言未覆盖参考留存，3/3 不代表信息完整；不是原 19 题整体复测或稳定成功率。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "77054f9be9ca4722104ed37ea9a887042dffb77a",
+          "excerpt": "fix(screening): distinguish ownership from shopping references"
+        },
+        {
+          "kind": "document",
+          "reference": "b5c1535853a79487492802d205dfb5b95fe50609:docs/eval/planning-v2/目标验收进度-20260915.md（来源关系与预算口径）",
+          "excerpt": "该批在77054f9结束，预登记评分3/3、7次真实Screening；人工审阅发现声称报价已保留但状态未存，因此3/3不代表信息完整。"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "62a665417c910248e0ae348afa102ce5b3c511b7",
+      "role": "screening",
+      "title": "区分购买计划与预算覆盖范围",
+      "reason": "上一版 19 题复测暴露从其他件要新买推断预算口径，以及把普通办公误归生产力用途。",
+      "changes": "分别定义金额、购买计划、费用覆盖范围；区分普通办公与生产力，增加对照例子。",
+      "verification": {
+        "kind": "live_record",
+        "summary": "后续记录明确归属 62a6654：5 题定向复测 4/5、8 次真实初筛；未表达口径保持未知，普通办公已归 general，但首轮仍漏预算口径。",
+        "limitation": "定向小样本，不能合并成 19 题完整成绩；残余失败保留，未追加同题采样。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "62a665417c910248e0ae348afa102ce5b3c511b7",
+          "excerpt": "fix(screening): separate purchase intent from budget accounting scope"
+        },
+        {
+          "kind": "document",
+          "reference": "ff1a369875b86af07ac5d7fddeb2778ae5a1b6f0:docs/eval/planning-v2/目标验收进度-20260915.md:214-218",
+          "excerpt": "针对性批次在62a6654结束，4/5、8次真实请求；L5-305普通办公已正确归general，但首条仍漏budget_basis。"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "4033d1593b39c4ba5cad9b2d546ec8e19f67a231",
+      "role": "screening",
+      "title": "区分明确表达与不可妥协",
+      "reason": "真实原输出把想要安静写成必须，并在新增购买预算原话中漏记费用口径。",
+      "changes": "stated 仅说明来源；普通愿望与硬限制分开，金额和费用范围各自形成操作。",
+      "verification": {
+        "kind": "live_record",
+        "summary": "后续文档明确归属 4033d15：19 题复测 16/19、32 次真实初筛；原静音强度和新增购买口径两题通过，但新出现推断口径与办公用途误判。",
+        "limitation": "同消息范围的两批描述性比较：Token 约增加 12%、耗时约增加 9%，不宣称稳定延迟或整体质量达标。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "4033d1593b39c4ba5cad9b2d546ec8e19f67a231",
+          "excerpt": "fix(screening): distinguish stated preferences and complete budget scope"
+        },
+        {
+          "kind": "document",
+          "reference": "ff1a369875b86af07ac5d7fddeb2778ae5a1b6f0:docs/eval/planning-v2/目标验收进度-20260915.md:210-218",
+          "excerpt": "该批在4033d15完整结束，16/19、32次真实请求；两原错误通过，新增预算口径推断和普通办公分类失败；Token约增加12%、耗时约增加9%。"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "a6537fe16d429c1958e6d686c7eb47767bcba85c",
+      "role": "screening",
+      "title": "保留未知，不制造冲突",
+      "reason": "真实输出的已有型号 null 与分辨率 null 被旧适配转为 must 冲突，回复与服务端状态不一致。",
+      "changes": "未知保持未知；无当前值的缺值更新保留观察；既有明确要求的模糊更正仍需澄清。",
+      "verification": {
+        "kind": "offline_record",
+        "summary": "保存的原 19 题真实回答经现行管道离线重放 17/19；静音强度与预算口径两题仍失败，新增真实模型调用为 0。",
+        "limitation": "相比历史 13/19 的变化包含已有件联动修复；这是重放效果，不是新模型分数。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "a6537fe16d429c1958e6d686c7eb47767bcba85c",
+          "excerpt": "fix(screening): preserve unknown values without manufacturing conflicts"
+        },
+        {
+          "kind": "test",
+          "reference": "a6537fe16d429c1958e6d686c7eb47767bcba85c（新增回归测试）",
+          "excerpt": "TestRecordedUnknownInformationIsNotConflict、TestUnknownValueDoesNotReviveRemovalOrHideCorrection"
+        },
+        {
+          "kind": "document",
+          "reference": "a6537fe16d429c1958e6d686c7eb47767bcba85c:docs/eval/planning-v2/目标验收进度-20260915.md",
+          "excerpt": "Go全源码测试与vet通过。原19题32条真实回答经现行产品、临时数据库和刷新操作离线重放为 **17/19**：`artifacts/planning-screening-unknown-replay-20260915-r1/`，Screening32、Builder0、工具0均为离线协议调用。相比原真实13/19，差别来自此前两题已有件联动修复及本次两题未知状态修复；这不是新真实模型成绩。原强度误判L3-101和预算口径遗漏L4-213仍失败，评分及回答均未改写。原真实13/19及全目标359次模型请求/4169029 tokens累计不变。"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "deeba43b9024f4b027eb0d0ff79bfd36614b40ed",
+      "role": "screening",
+      "title": "同步已有件类别与型号状态",
+      "reason": "已有件类别和型号需要保持一致，同时不能为未知型号制造 null 值；未记录本次具体触发题。",
+      "changes": "明确型号类别由服务端同步，无需重复提交类别；未知型号只记类别，不提交 model:null 或空型号。",
+      "verification": {
+        "kind": "not_recorded",
+        "summary": "未找到该内容版本的独立验证结果。",
+        "limitation": "提交标题与原文能说明修改方向，未记录具体失败题与效果。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "deeba43b9024f4b027eb0d0ff79bfd36614b40ed",
+          "excerpt": "fix(requirements): synchronize owned categories and model state"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "90d1fc0e6018b8dc5dba23e3cd07f747f59ee3e8",
+      "role": "screening",
+      "title": "补回需求操作的格式示例",
+      "reason": "提交为需求增量操作恢复明确 JSON 示例，减少协议表达不清。",
+      "changes": "列出操作、证据、原话和状态的具体输出形状。",
+      "verification": {
+        "kind": "not_recorded",
+        "summary": "同次文档主要登记后续测试计划，未找到该格式示例版本的独立改后结果。",
+        "limitation": "示例增补的实际收益尚无独立模型证据。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "90d1fc0e6018b8dc5dba23e3cd07f747f59ee3e8",
+          "excerpt": "fix(screening): restore explicit operation format examples"
+        },
+        {
+          "kind": "document",
+          "reference": "90d1fc0e6018b8dc5dba23e3cd07f747f59ee3e8:docs/eval/planning-v2/目标验收进度-20260915.md",
+          "excerpt": "该批已结束：32/32请求、93387 tokens、190708毫秒、外部0，原评分仅5/19。供应商请求本身无错误，6条消息因输出协议错误成为产品失败；另有缺失op造成字段未采用、evidence误用嵌套对象、错误observe操作和来源/字段问题。完整JSON操作示例在提示精简中被删去是本轮引入的风险点，已恢复明确op、evidence字符串和顶层observations范例；不靠补猜op或宽松接受错误类型修复。L5-302两轮均直接进入confirm且软静音保留，但L5-301预算修改因错误observe结构未成功，不能报告重复追问问题整体已通过。\n此浏览器批次服务器正常关闭，但同包的TestPlanningProposalPersistentWorkflow仍断言旧3次调用而失败，故原manifest退出1保留。修改为新增复核后的4次调用，其余持久化、版本不变和工具断言不改；独立数据库重跑`artifacts/planning-proposal-review-http-20260915-r1/`通过。浏览器操作本身与该断言失败分开记录。临时Next进程/数据库已清理，自动改动的tsconfig已恢复；共享服务未重启。"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "1455430c8ee73880c29c07afae0023510d201d9d",
+      "role": "screening",
+      "title": "重组采集、确认与执行决策",
+      "reason": "原文将下一步动作与用户意图的关系重新组织；提交未记录初筛这部分改动的单独触发题。",
+      "changes": "将 confirm/plan/collect 分开说明；先理解意图，再决定动作并生成一致回答，明确不是收齐表单。",
+      "verification": {
+        "kind": "not_recorded",
+        "summary": "未找到该初筛内容版本的独立验证结果。",
+        "limitation": "同提交的主要说明是执行侧复核提案；初筛实际变化以原文 diff 为准，不照搬提交标题。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "1455430c8ee73880c29c07afae0023510d201d9d",
+          "excerpt": "fix(planning): review unresolved proposals before ending execution"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "15448d8db29de3f88c9743f7a547cabfdee415a5",
+      "role": "screening",
+      "title": "避免为可选信息反复追问",
+      "reason": "新增规则要求在已有信息足够提出初步方案时推进，不能为填齐游戏名、静音或品牌而停留采集；未留具体触发题。",
+      "changes": "可选信息未知不构成追问理由；必要追问需说明影响哪个决定，未答偏好不能自动设为不限。",
+      "verification": {
+        "kind": "not_recorded",
+        "summary": "同次文档主要记录后续真实复测安排，未找到该版本独立完成结果。",
+        "limitation": "由原文新增规则归纳修改目的，未把计划额度当作行为验证成绩。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "15448d8db29de3f88c9743f7a547cabfdee415a5",
+          "excerpt": "fix(agents): advance actionable requests and qualify performance advice"
+        },
+        {
+          "kind": "document",
+          "reference": "15448d8db29de3f88c9743f7a547cabfdee415a5:docs/eval/planning-v2/目标验收进度-20260915.md",
+          "excerpt": "第二批计划（运行前登记）：`internal/planningeval/testdata/live-followup-20260915/`，Screening/Builder合计最多24次真实请求，外部搜索/读取0次、Embedding 0次，模型及完整174件目录与首批相同。FU-001新增明确的confirm行为断言；FU-002复核正式交付，再要求直接升级CPU，检查不同CPU、其他配件保持、版本2、刷新和幂等重试。该批保留独立分母，不替换首批。CPU不同只证明执行，是否更好还需结合型号与用途审阅；其他配件保持是本次兼容升级的可行性目标，必要联动不能静默算作通过。"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "9d80b4130ccad2ec04fce7ffbdf36725b1bf935f",
+      "role": "screening",
+      "title": "统一自由需求与必要追问语义",
+      "reason": "离线回放发现旧提示仍要求程序追问已有型号，并将负向品牌条件混入 notes。",
+      "changes": "必要追问交由模型判断；独立条件使用 free.*，背景说明与条件分开。",
+      "verification": {
+        "kind": "offline_record",
+        "summary": "提交文档记录新增 3 场景、12 步、147 项检查及原 12 场景通过，真实模型调用 0。",
+        "limitation": "人工 oracle 验证产品机制，不代表真实模型已能稳定理解这些需求。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "9d80b4130ccad2ec04fce7ffbdf36725b1bf935f",
+          "excerpt": "test(planning): freeze product-flow regressions and data comparisons"
+        },
+        {
+          "kind": "document",
+          "reference": "9d80b4130ccad2ec04fce7ffbdf36725b1bf935f:docs/eval/README.md、docs/eval/planning-v2/README.md、docs/eval/planning-v2/behavior-20260915.md、docs/eval/planning-v2/data-pair-20260915.md、docs/eval/planning-v2/legacy-audit.json、docs/eval/planning-v2/legacy-audit.md、docs/eval/planning-v2/validation-20260914.md",
+          "excerpt": "> 当前产品链路的离线评估入口是 `cmd/evalplanning`，见 [planning-v2 回归集与复现](planning-v2/README.md)。它使用冻结资料和独立临时数据库，不依赖正在更新的商品库。`cmd/eval` 的 v1.5 历史执行器基线继续保留，不作为新执行器的通过率声明。\n| [当前 planning 离线回归](planning-v2/README.md) | 12 个场景、42 个步骤；真实产品服务与工具，模型响应为冻结回放，不代表真实模型通过率 |\n这套评估先验证机制是否正确执行，再等待新数据集冻结后评价方案质量。它不读取正在更新的 `scripts/data`，不连接共享数据库，不重启产品服务，不调用真实模型、Embedding 或联网服务。"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "e6e45dc88036988177bedf78e0394e8380bdf33a",
+      "role": "screening",
+      "title": "携带当前配置执行升级请求",
+      "reason": "明确的聊天升级需要当前配置上下文，避免被当作全新配机或反复澄清。",
+      "changes": "补充改单执行及已有配置上下文的交接说明。",
+      "verification": {
+        "kind": "tests_added",
+        "summary": "提交新增升级携带当前配置和自由需求的回归测试；未找到单独提示词效果记录。",
+        "limitation": "上下文组装与执行链也发生变化，不属于单因素对比。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "e6e45dc88036988177bedf78e0394e8380bdf33a",
+          "excerpt": "fix: execute explicit chat upgrades with current build context"
+        },
+        {
+          "kind": "test",
+          "reference": "e6e45dc88036988177bedf78e0394e8380bdf33a（新增回归测试）",
+          "excerpt": "TestScreeningUpgradeHasCurrentConfigurationAndFreeRequirements"
+        },
+        {
+          "kind": "document",
+          "reference": "e6e45dc88036988177bedf78e0394e8380bdf33a:docs/eval/自主规划验收.md",
+          "excerpt": "- 真实会话 `a907b6a0-13ee-48d2-a0ba-a667fb24faef` 中，用户要求“把处理器换更好的，预算还很充足啊，其他配件尽量不动”后连续 5 轮均为 Screening；首轮 evidence 的 `has_build=false`，实际已有 v1。旧协议仅有 collect/confirm，没有直接规划动作；Screening 实际输入也没有已保存配置，且 `RequirementStatePromptView` 漏了 free.*，数据库已保存的 `free.workload_resolution=1080p` 未进入下一轮模型。首轮 priority 操作未通过结构化后只保留了原话，不能当作已采用的 CPU 优先偏好。\n- 修复后 Screening 仍一次调用，传入完整有效需求与基础配置，只通过模型的 plan 动作续跑。首次确认仍必需；备选讨论、仅记录和面板编辑不自动生成。PlanningInput.request 保留本轮执行原话，检索、报价、兼容性、版本落库沿用原工具链。没有 CPU 关键词执行分支，也没有额外总结模型。\n- `TestChatUpgradeContinuesIntoToolsWithoutReconfirmation` 通过：真实 API service、PostgreSQL、工具与报价，人工 oracle 替代模型决策。用保存的 4579.90 元 v1 和本地目录 Ryzen 7 5700X/979 元记录回放，单条消息续跑 search_local → evaluate → v2，报价 4929.90 元，其余选件不变，must/prefer、1080p、撤销状态、来源保留。重复请求只生成一版，刷新不触发执行，v1 原文及候选快照不变。没有首次确认的模型 plan 被保留为确认草稿；“先别执行”只讨论，预算只记录不生成，随后明确继续可执行。"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "451ad002400dff89f8727b6f2154030e068bfb0d",
+      "role": "screening",
+      "title": "接入自主规划与原子交付",
+      "reason": "需要让复杂选配从一次回答扩展为可检索、核价、校验并保存配置的完整流程。",
+      "changes": "明确需求采集与自主规划的职责和交接条件。",
+      "verification": {
+        "kind": "not_recorded",
+        "summary": "提交新增自主规划测试与验收文档；未确认到该初筛原文单独对应的改后成绩。",
+        "limitation": "属于整条规划与保存链路升级，不将整体功能上线视为提示词提升。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "451ad002400dff89f8727b6f2154030e068bfb0d",
+          "excerpt": "feat: enable autonomous planning and atomic configuration delivery"
+        },
+        {
+          "kind": "test",
+          "reference": "451ad002400dff89f8727b6f2154030e068bfb0d（新增回归测试）",
+          "excerpt": "TestPlanningLiveBounded、TestPlanningLiveContinuation、TestPlanningA2APreservesOutcomeAndProgress、TestWorkloadCorrectionReusesStableField、TestWorkloadDuplicateCleanupIsAtomic"
+        },
+        {
+          "kind": "document",
+          "reference": "451ad002400dff89f8727b6f2154030e068bfb0d:docs/eval/README.md、docs/eval/自主规划验收.md",
+          "excerpt": "> 新默认 planning 的测试与限额冒烟见[自主规划流程](../tech/自主规划流程.md)。本目录旧 v2/legacy 基线保留，不作为新执行器的通过率声明。\n- 保存的真实案例：7000 元视频剪辑会话，Builder 返回 proposal、issues 为空、12 项兼容性通过、报价 4579.90 元、100 条 catalog 来源。记录保存在 `internal/planning/testdata/complete_proposal_recording.json`；没有再次请求真实模型。离线 Runner 用原选件重新执行真实校验与报价，结果自动转为 eligible，再由产品事务保存 delivered 和正式版本。\n- Go 回归：`PG_TEST_DSN=... go test ./...`、`go vet ./...` 通过。数据库测试在独立临时库执行全部迁移，验证并发/重复完成仅生成一版、后段消息写入失败整体回滚、需求修订变化只存 stale 方案、历史配置与需求不被覆盖。"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "902b7d822c88ba34fbe6c25f4711152a20fb769b",
+      "role": "builder",
+      "title": "区分用途事实与不可核验硬条件",
+      "reason": "视频剪辑用途被 must notes 证据门禁拒绝，导致无法生成，即使预算/静音是软偏好。",
+      "changes": "用途、背景与可执行约束分开；保留真正硬条件，失败时给出具体业务原因。",
+      "verification": {
+        "kind": "offline_record",
+        "summary": "需求语义与约束验收记录保存真实输入的全链回放、硬条件回归通过，新增真实模型调用 0。",
+        "limitation": "离线使用合成低价显卡候选，不证明真实商品或模型可以稳定交付同一方案。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "902b7d822c88ba34fbe6c25f4711152a20fb769b",
+          "excerpt": "fix(requirements): 解耦语义理解与结构校验并保留生成失败原因"
+        },
+        {
+          "kind": "test",
+          "reference": "902b7d822c88ba34fbe6c25f4711152a20fb769b（新增回归测试）",
+          "excerpt": "TestScreeningOpenLanguageAndPartialUncertainty、TestScreeningInvalidFieldDoesNotRejectOtherFields、TestScreeningNecessaryAmbiguityKeepsReliableFields、TestScreeningAlternativeRemovalAndNoHistoricalResurrection、TestScreeningMalformedOutputStillFailsWithoutRetry、TestScreeningInvalidBudgetCorrectionDoesNotReuseOldBudget、TestScreeningNoChangePreservesConfirmedProjection、TestMalformedNewHardConditionDoesNotInheritOldSoftStrength、TestScreeningEvidenceFailureDoesNotReuseOldHardFields、TestScreeningUncertainUpdateHonorsInheritedHardStrength、TestUsageFactsAndContextReachBuilderWithoutWeakeningStrength、TestUnclassifiedLegacyMandatoryNoteNeedsMeaningNotDowngrade、TestSavedVideoEditingFailureRequirementReachesConfiguration、TestBudgetWindowPreservesExecutionLimitAndPreferenceProvenance、TestMandatoryCandidateShortageIsSpecificBusinessResultBeforeModel、TestMandatoryGPUCannotBeOmittedFromProductivityConfiguration、TestBudgetRepairCannotDropMandatoryGPU、TestAppearanceDetailsDoNotTurnLegacyWorkloadIntoMandatoryProperty"
+        },
+        {
+          "kind": "document",
+          "reference": "902b7d822c88ba34fbe6c25f4711152a20fb769b:docs/eval/README.md、docs/eval/动态需求状态栏验收.md、docs/eval/需求语义与约束验收.md",
+          "excerpt": "上述内容保留为初版和局部修复的历史记录。`7dd1270` 之后已调整当前会话语义理解、部分更新和 Builder 的自由文本处理，补充真实故障输入到生成、刷新及历史版本的离线与浏览器验证；用途事实和补充说明不再仅因 must 标记被拒绝。结果、0 真实调用口径及仍待核验的真实硬条件边界见[需求语义与约束验收](需求语义与约束验收.md)。\n2026-09-10，基于 `7dd1270` 的独立 worktree。此次验证只使用离线模型替身、保存的真实输出和独立临时数据库，没有调用真实模型，没有改动用户会话或现有服务。\n此前初筛失败的真实 `deepseek-v4-flash-0731` 输出继续原样保存在 `internal/agents/pipeline/testdata/requirement_video_editing.json`。本次另将已核对的生成输入关键字段保存在 `internal/buildharness/testdata/video_editing_failure_requirement.json`，注明它是诊断字段转录，不冒充完整数据库导出。未修改历史运行或既有 fixture 的真实价格。"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "902b7d822c88ba34fbe6c25f4711152a20fb769b",
+      "role": "screening",
+      "title": "开放语义理解，保留可靠部分更新",
+      "reason": "剪 4K 视频等用途事实被过严语义门禁拒收；部分模糊字段不应使整轮可靠信息丢失。",
+      "changes": "模型理解开放语言与用途，程序检查结构；保留可靠字段、撤销和模糊更正的语义边界。",
+      "verification": {
+        "kind": "offline_record",
+        "summary": "验收文档记录全链回放、Go 检查与浏览器流程通过，新增真实模型调用 0。",
+        "limitation": "使用保存输出、人工 oracle 和合成候选，不能记作真实模型选件能力。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "902b7d822c88ba34fbe6c25f4711152a20fb769b",
+          "excerpt": "fix(requirements): 解耦语义理解与结构校验并保留生成失败原因"
+        },
+        {
+          "kind": "test",
+          "reference": "902b7d822c88ba34fbe6c25f4711152a20fb769b（新增回归测试）",
+          "excerpt": "TestScreeningOpenLanguageAndPartialUncertainty、TestScreeningInvalidFieldDoesNotRejectOtherFields、TestScreeningNecessaryAmbiguityKeepsReliableFields、TestScreeningAlternativeRemovalAndNoHistoricalResurrection、TestScreeningMalformedOutputStillFailsWithoutRetry、TestScreeningInvalidBudgetCorrectionDoesNotReuseOldBudget、TestScreeningNoChangePreservesConfirmedProjection、TestMalformedNewHardConditionDoesNotInheritOldSoftStrength、TestScreeningEvidenceFailureDoesNotReuseOldHardFields、TestScreeningUncertainUpdateHonorsInheritedHardStrength、TestUsageFactsAndContextReachBuilderWithoutWeakeningStrength、TestUnclassifiedLegacyMandatoryNoteNeedsMeaningNotDowngrade、TestSavedVideoEditingFailureRequirementReachesConfiguration、TestBudgetWindowPreservesExecutionLimitAndPreferenceProvenance、TestMandatoryCandidateShortageIsSpecificBusinessResultBeforeModel、TestMandatoryGPUCannotBeOmittedFromProductivityConfiguration、TestBudgetRepairCannotDropMandatoryGPU、TestAppearanceDetailsDoNotTurnLegacyWorkloadIntoMandatoryProperty"
+        },
+        {
+          "kind": "document",
+          "reference": "902b7d822c88ba34fbe6c25f4711152a20fb769b:docs/eval/README.md、docs/eval/动态需求状态栏验收.md、docs/eval/需求语义与约束验收.md",
+          "excerpt": "上述内容保留为初版和局部修复的历史记录。`7dd1270` 之后已调整当前会话语义理解、部分更新和 Builder 的自由文本处理，补充真实故障输入到生成、刷新及历史版本的离线与浏览器验证；用途事实和补充说明不再仅因 must 标记被拒绝。结果、0 真实调用口径及仍待核验的真实硬条件边界见[需求语义与约束验收](需求语义与约束验收.md)。\n2026-09-10，基于 `7dd1270` 的独立 worktree。此次验证只使用离线模型替身、保存的真实输出和独立临时数据库，没有调用真实模型，没有改动用户会话或现有服务。\n此前初筛失败的真实 `deepseek-v4-flash-0731` 输出继续原样保存在 `internal/agents/pipeline/testdata/requirement_video_editing.json`。本次另将已核对的生成输入关键字段保存在 `internal/buildharness/testdata/video_editing_failure_requirement.json`，注明它是诊断字段转录，不冒充完整数据库导出。未修改历史运行或既有 fixture 的真实价格。"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "7dd1270a40cb0c4f5e912777cd4439da3cd4f819",
+      "role": "screening",
+      "title": "修复剪辑用途识别",
+      "reason": "保存的真实初筛输出暴露视频剪辑用途的识别/表达问题，需要保留为回归样本。",
+      "changes": "补充视频用途理解规则与证据边界，不将用途混成其他要求。",
+      "verification": {
+        "kind": "tests_added",
+        "summary": "提交保存真实输出并新增视频用途回放与证据边界测试；不能用同提交的网页布局测试代替提示词效果验证。",
+        "limitation": "真实输出是故障输入；离线回放不等于修改后的真实模型复测。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "7dd1270a40cb0c4f5e912777cd4439da3cd4f819",
+          "excerpt": "feat(web): 完善会话工作台与消息展示并修复剪辑需求识别"
+        },
+        {
+          "kind": "test",
+          "reference": "7dd1270a40cb0c4f5e912777cd4439da3cd4f819（新增回归测试）",
+          "excerpt": "TestScreeningSingleDiagnostic、TestScreeningVideoWorkloadReplay、TestVideoEditingEvidenceBoundaries、TestVideoWorkloadKeepsExistingNotesWhenAlreadyRecorded"
+        },
+        {
+          "kind": "document",
+          "reference": "7dd1270a40cb0c4f5e912777cd4439da3cd4f819:docs/eval/动态需求状态栏验收.md",
+          "excerpt": "根据实际使用反馈，将固定占据聊天宽度的右侧检查器改为按需展开的详情抽屉。聊天顶部保留简短需求摘要，桌面左侧持续显示会话列表，首页和会话页均可显式新建；窄屏通过顶栏打开会话列表。需求、来源、配置、校验和版本能力保持服务端原有链路。\n- TypeScript、ESLint 和全部 44 项 Web 组件测试通过。\n- 1440、768、375 三档共 6 项浏览器回归最终全部通过，58.5 秒：新建空会话、首条消息后导航保留、切换与浏览器前进后退、刷新、需求编辑与撤销、确认后返回聊天、配置与历史入口、关闭详情和来源跳转的焦点恢复。"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "d0074fb4497b4c03b4b2306eabffbf30eedf4755",
+      "role": "builder",
+      "title": "消费动态需求与强度约束",
+      "reason": "动态需求面板引入可变状态，Builder 需按当前事实和 must/prefer 语义消费约束。",
+      "changes": "明确当前需求、已有件和硬软偏好的选配边界。",
+      "verification": {
+        "kind": "tests_added",
+        "summary": "提交新增软品牌/尺寸、已有件冲突及不可核验硬条件回归测试；未找到 Builder 提示词的独立模型效果。",
+        "limitation": "产品状态同步与硬过滤一起修改，不视为单因素试验。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "d0074fb4497b4c03b4b2306eabffbf30eedf4755",
+          "excerpt": "feat(requirements): 实现会话动态需求面板与状态同步"
+        },
+        {
+          "kind": "test",
+          "reference": "d0074fb4497b4c03b4b2306eabffbf30eedf4755（新增回归测试）",
+          "excerpt": "TestLegacyCannotSilentlySoftenDynamicRequirementStrengths、TestRequirementStateLiveSmoke、TestScreeningStateSavedLiveRemovalBindsExplicitCurrentSource、TestScreeningStateMissingRemovalSourceCannotBorrowUnrelatedIntent、TestRequirementStateReplaysSavedDialogueInputs、TestScreeningStateUsesSingleCallAndAuthoritativeStateWithoutOldMessages、TestScreeningStateRejectsFabricationAndMalformedOutputWithoutExtraCalls、TestScreeningStateOwnedPatchCanKeepOtherGroundedModels、TestScreeningStateDoesNotTurnQuotesIntoUnstatedPreferences、TestScreeningStateExplicitAlternativeCannotSetCurrentRequirement、TestExplicitSoftBrandKeepsAlternativesAndRanksPreferredFirst、TestSoftSizeCanUseAvailableBoardButMustSizeCannot、TestMandatoryBrandConflictWithOwnedGPURequiresClarification、TestMandatoryUnverifiablePreferenceDoesNotClaimSuccessOrCallBuilder"
+        },
+        {
+          "kind": "document",
+          "reference": "d0074fb4497b4c03b4b2306eabffbf30eedf4755:docs/eval/动态需求状态栏验收.md、docs/eval/运行记录.md",
+          "excerpt": "- `go test ./...`、`go vet ./...`、`go build ./...` 通过；真实模型测试默认跳过。\n- `PG_TEST_DSN=… go test ./internal/store -count=1` 全部通过，30.799秒。每个测试使用独立临时数据库，全迁移后运行，保留主库数据卷。\n- `PG_TEST_DSN=… go test ./internal/producthttp -run TestRequirementStatePersistentWorkflow -count=1 -v` 通过，包含实际存储、归并、重新核算、快照与版本保护。"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "d0074fb4497b4c03b4b2306eabffbf30eedf4755",
+      "role": "screening",
+      "title": "引入需求状态增量协议",
+      "reason": "多轮采集需要可追踪的值、状态、来源与强度，避免每轮重写整份需求或复活撤销内容。",
+      "changes": "改为围绕权威需求状态输出本轮操作，保留来源原话、强度与已有件事实。",
+      "verification": {
+        "kind": "offline_record",
+        "summary": "验收记录 Go 与持久化流程检查通过，并重放 14 轮真实输入；增量操作使用明确标注的人工 oracle。",
+        "limitation": "不能把 oracle 操作计作新协议的真实模型准确率。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "d0074fb4497b4c03b4b2306eabffbf30eedf4755",
+          "excerpt": "feat(requirements): 实现会话动态需求面板与状态同步"
+        },
+        {
+          "kind": "test",
+          "reference": "d0074fb4497b4c03b4b2306eabffbf30eedf4755（新增回归测试）",
+          "excerpt": "TestLegacyCannotSilentlySoftenDynamicRequirementStrengths、TestRequirementStateLiveSmoke、TestScreeningStateSavedLiveRemovalBindsExplicitCurrentSource、TestScreeningStateMissingRemovalSourceCannotBorrowUnrelatedIntent、TestRequirementStateReplaysSavedDialogueInputs、TestScreeningStateUsesSingleCallAndAuthoritativeStateWithoutOldMessages、TestScreeningStateRejectsFabricationAndMalformedOutputWithoutExtraCalls、TestScreeningStateOwnedPatchCanKeepOtherGroundedModels、TestScreeningStateDoesNotTurnQuotesIntoUnstatedPreferences、TestScreeningStateExplicitAlternativeCannotSetCurrentRequirement、TestExplicitSoftBrandKeepsAlternativesAndRanksPreferredFirst、TestSoftSizeCanUseAvailableBoardButMustSizeCannot、TestMandatoryBrandConflictWithOwnedGPURequiresClarification、TestMandatoryUnverifiablePreferenceDoesNotClaimSuccessOrCallBuilder"
+        },
+        {
+          "kind": "document",
+          "reference": "d0074fb4497b4c03b4b2306eabffbf30eedf4755:docs/eval/动态需求状态栏验收.md、docs/eval/运行记录.md",
+          "excerpt": "- `go test ./...`、`go vet ./...`、`go build ./...` 通过；真实模型测试默认跳过。\n- `PG_TEST_DSN=… go test ./internal/store -count=1` 全部通过，30.799秒。每个测试使用独立临时数据库，全迁移后运行，保留主库数据卷。\n- `PG_TEST_DSN=… go test ./internal/producthttp -run TestRequirementStatePersistentWorkflow -count=1 -v` 通过，包含实际存储、归并、重新核算、快照与版本保护。"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "1d68569bae71933468214bfc06194583b021f79b",
+      "role": "builder",
+      "title": "完善已有件预算与修复合同",
+      "reason": "评估和预算修复需要区分已有件、新购费用与不可交付结果，并保持变更范围受控。",
+      "changes": "补齐已有件、数量修复、预算范围和非交付输出指导。",
+      "verification": {
+        "kind": "tests_added",
+        "summary": "提交新增预算数量修复、相对变更范围、锁定已有件与必要澄清回归测试；未找到该原文独立模型成绩。",
+        "limitation": "评估设施和确定性修复算法同次变化，不将其通过率归于提示词。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "1d68569bae71933468214bfc06194583b021f79b",
+          "excerpt": "feat(eval): 完善版本化评估与已有配件预算处理\n\n固定评估模型配置，保留显式额度链；加入冻结用例、重放和多次运行统计，完善预算修复、已有件与非交付契约，并同步 Web/API。处理评估文件关闭错误。"
+        },
+        {
+          "kind": "test",
+          "reference": "1d68569bae71933468214bfc06194583b021f79b（新增回归测试）",
+          "excerpt": "TestBudgetSearchCanIncreaseSSDQuantityWhenAllSinglePricesAreMaximal、TestBudgetSearchRespectsRelativeChangeLimit、TestRepairRejectsUnopenedChangesAndCancellation、TestHarnessUsesQuantityRepairThroughModelAndValidator、TestCatalogDecisionProofAndUnknown、TestOwnedBindingAndLockConflict、TestClarificationDoesNotCallModel、TestOwnedPurchaseAndCompatibilityStillValidated、TestPlannerPreservesCheapIGPUAndKnownCoolerOutsideQuantiles、TestPlannerKeepsEligibleBaseWithoutDefeatingSwapBrandFilter"
+        },
+        {
+          "kind": "document",
+          "reference": "1d68569bae71933468214bfc06194583b021f79b:",
+          "excerpt": "\tspec.OwnedParts[0].Model = \"AMD Exact CPU\" // 近似型号不能通过。"
+        }
+      ],
+      "run_names": []
+    },
+    {
+      "commit": "3fff937e5e8a5a5058728a6de84507ca74332f85",
+      "role": "builder",
+      "title": "建立选配与定向修复提示词",
+      "reason": "引入 Harness v2，需要模型按候选范围选择配置并根据确定性校验反馈定向修复。",
+      "changes": "建立静态主提示词及最多三次选配/修复的输出边界。",
+      "verification": {
+        "kind": "not_recorded",
+        "summary": "这是当前可还原历史中的首次内容版本；未找到其独立提示词验证成绩。",
+        "limitation": "首次出现不等于提示词真正创建时间，也不代表已有可比基线。"
+      },
+      "evidence": [
+        {
+          "kind": "commit",
+          "reference": "3fff937e5e8a5a5058728a6de84507ca74332f85",
+          "excerpt": "feat(agent): 实现Harness v2定向修复"
+        },
+        {
+          "kind": "document",
+          "reference": "3fff937e5e8a5a5058728a6de84507ca74332f85:",
+          "excerpt": "\t\t\tmessage := \"连续两次提交完全相同且仍未通过的 selection，Harness v2 已终止以避免死循环。\"\n\treturn \"三次选配后兼容性仍未通过，本轮不保存版本。失败规则:\" + strings.Join(rules, \",\")"
+        }
+      ],
+      "run_names": []
+    }
+  ]
+}

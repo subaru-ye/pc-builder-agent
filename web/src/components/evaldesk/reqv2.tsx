@@ -14,6 +14,7 @@ import { reqv2, reqV2LayerLabels, reqV2ModeLabels, reqV2Sides, reqV2Time,
 import styles from "./workbench.module.css";
 import { PromptWorkspace, SideWorkspace, WorkspaceNav, workspaceSections, type WorkspaceSection } from "./sections";
 import { DatasetCoverage, DatasetWorkspace } from "./datasets";
+import { BadCaseLinks, BadCaseWorkspace, enterBadCases, ReturnToBadCase } from "./bad-cases";
 
 type Navigate = (updates: Record<string, string | null>) => void;
 
@@ -246,11 +247,12 @@ function RunDetail({ run, openCase, openCompare, back, backLabel, panel, setPane
   </section>;
 }
 
-function CaseDetail({ data, back }: { data: NonNullable<ReturnType<typeof useQuery<ReqV2CaseDetail>>["data"]>; back: () => void }) {
+function CaseDetail({ data, back, params, navigate }: { data: NonNullable<ReturnType<typeof useQuery<ReqV2CaseDetail>>["data"]>; back: () => void; params: URLSearchParams; navigate: Navigate }) {
   const failing = data.repeats.find(repeat => !repeat.pass) ?? data.repeats[0];
   const [selected, setSelected] = useState<number | null>(null);
   const repeat = data.repeats.find(r => r.repeat === selected) ?? failing;
   return <section aria-label="逐题证据" className={styles.inspector}>
+    <BadCaseLinks params={params} navigate={navigate} run={data.run} layer={data.layer} caseId={data.case} />
     <div className={styles.sectionHead}><div><h2>{data.layer} / {data.case}</h2><p>{data.split} · session {data.session || "未记录"} · {data.repeats.every(item => item.skipped) ? "已跳过 · 未评估" : `Pass^k ${data.pass_k ? "通过" : "未通过"}`}</p></div>
       <Button variant="outline" onClick={back}><ArrowLeft size={15} />返回运行</Button></div>
     {data.integrity.status !== "complete" && <p className={styles.notice}>本运行证据{data.integrity.status === "invalid" ? "无效" : "不完整"}:{data.integrity.notes.join(";")}</p>}
@@ -294,7 +296,7 @@ function SideLayerCompare({ outcome }: { outcome: ReqV2CompareOutcome }) {
   })}</>;
 }
 
-function CompareView({ params, runs, back }: { params: URLSearchParams; runs: ReqV2RunSummary[]; back: () => void }) {
+function CompareView({ params, runs, back, navigate }: { params: URLSearchParams; runs: ReqV2RunSummary[]; back: () => void; navigate: Navigate }) {
   const a = params.get("va") ?? "", b = params.get("vb") ?? "";
   const compare = useQuery({ queryKey: ["evaldesk", "reqv2", "compare", a, b], queryFn: () => reqv2.compare(a, b), enabled: !!a && !!b, retry: false, refetchOnWindowFocus: false });
   const select = (role: "va" | "vb", id: string) => {
@@ -322,8 +324,8 @@ function CompareView({ params, runs, back }: { params: URLSearchParams; runs: Re
         {compare.data.outcome.sample_note && <p className={styles.notice}>{compare.data.outcome.sample_note}</p>}
         {compare.data.outcome.mcnemar_note && <p className={styles.muted}>{compare.data.outcome.mcnemar_note}</p>}
         {compare.data.strict && compare.data.outcome && <SideLayerCompare outcome={compare.data.outcome} />}
-        {!!compare.data.outcome.regressed.length && <details open className={styles.versionDetails}><summary>退步题目</summary>{compare.data.outcome.regressed.map(key => <p key={key}>{key}</p>)}</details>}
-        {!!compare.data.outcome.newly_passing.length && <details className={styles.versionDetails}><summary>新通过题目</summary>{compare.data.outcome.newly_passing.map(key => <p key={key}>{key}</p>)}</details>}
+        {!!compare.data.outcome.regressed.length && <details open className={styles.versionDetails}><summary>退步题目</summary>{compare.data.outcome.regressed.map(key => <div key={key}><p>{key}</p><BadCaseLinks params={params} navigate={navigate} run={b} layer={key.split("/")[0]} caseId={key.slice(key.indexOf("/") + 1)} /></div>)}</details>}
+        {!!compare.data.outcome.newly_passing.length && <details className={styles.versionDetails}><summary>新通过题目</summary>{compare.data.outcome.newly_passing.map(key => <div key={key}><p>{key}</p><BadCaseLinks params={params} navigate={navigate} run={a} layer={key.split("/")[0]} caseId={key.slice(key.indexOf("/") + 1)} /></div>)}</details>}
       </div>}
       <div className={styles.sideBySide}>
         {[compare.data.baseline, compare.data.candidate].map((run, index) => <div key={index}><h3>{run.dir_name}</h3>
@@ -360,6 +362,8 @@ export function ReqV2Workbench({ params, navigate, onReread }: { params: URLSear
   };
   return <div className={styles.workspaceBody}><WorkspaceNav active={section} select={selectSection} /><main className={styles.content}><div className={styles.titleRow}><div>{section !== "screening" && section !== "builder" && <p className={styles.breadcrumb}>评估工作台 / {selectedSection.group}</p>}<h1 id="eval-page-heading" tabIndex={-1}>{selectedSection.label}</h1>{selectedSection.hint && <p>{selectedSection.hint}</p>}</div>
     <Button variant="outline" onClick={reread}><RefreshCw size={15} />重新读取</Button></div>
+    <ReturnToBadCase params={params} navigate={navigate} />
+    {runId && run.data && !caseId && !comparing && <div className={styles.inlineActions}><Button variant="outline" onClick={() => enterBadCases(params, navigate, { bad_run: runId, bad_side: section === "builder" ? "builder" : section === "screening" ? "screening" : "all" })}>查看本次失败案例</Button></div>}
     {runs.data?.warnings.map((warning, i) => <p key={i} className={styles.notice}>{warning}</p>)}
     {runId && !comparing && run.isPending && <p className={styles.empty} role="status">正在读取运行详情…</p>}
     {runId && !comparing && run.error && <ErrorMessage error={run.error} retry={() => void run.refetch()} />}
@@ -368,14 +372,15 @@ export function ReqV2Workbench({ params, navigate, onReread }: { params: URLSear
       ? <p className={styles.empty} role="status">正在读取逐题证据…</p>
       : caseDetail.error
         ? <ErrorMessage error={caseDetail.error} retry={() => void caseDetail.refetch()} />
-        : caseDetail.data && <CaseDetail data={caseDetail.data} back={() => navigate({ case: null, layer: null })} />)}
-    {comparing && runs.data && <CompareView params={params} runs={runs.data.runs} back={back} />}
+        : caseDetail.data && <CaseDetail data={caseDetail.data} params={params} navigate={navigate} back={() => navigate({ case: null, layer: null })} />)}
+    {comparing && runs.data && <CompareView params={params} runs={runs.data.runs} back={back} navigate={navigate} />}
     {!runId && section !== "runs" && runs.isPending && <p className={styles.empty} role="status">正在读取评估工作区…</p>}
     {!runId && section !== "runs" && runs.error && <ErrorMessage error={runs.error} retry={reread} />}
     {!runId && !comparing && runs.data && <>
       {(section === "screening" || section === "builder") && <SideWorkspace key={section} sideKey={section} runs={runs.data.runs} openRun={openRun} select={selectSection} params={params} navigate={navigate} />}
       {section === "datasets" && <DatasetWorkspace runs={runs.data.runs} openRun={openRun} params={params} navigate={navigate} />}
       {section === "prompts" && <PromptWorkspace runs={runs.data.runs} openRun={openRun} params={params} navigate={navigate} />}
+      {section === "bad-cases" && <BadCaseWorkspace runs={runs.data.runs} params={params} navigate={navigate} />}
     </>}
     {!runId && section === "runs" && <RunCatalog runs={runs.data} pending={runs.isPending} error={runs.error ?? undefined} openRun={openRun} onReread={reread} />}
   </main></div>;

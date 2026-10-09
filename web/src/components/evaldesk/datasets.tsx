@@ -142,7 +142,7 @@ function Expectations({ value }: { value: unknown }) {
     {!!Object.keys(other).length && <details className={styles.versionDetails}><summary>其他判分条件 · {Object.keys(other).length} 项</summary><DesignValue value={other} /></details>}
   </>;
 }
-function QuestionDesign({ question }: { question: ReqV2FrozenCase }) {
+export function QuestionDesign({ question }: { question: ReqV2FrozenCase }) {
   const fields = question.fields;
   const turns = Array.isArray(fields.turns) ? fields.turns as Record<string, unknown>[] : [];
   const turn = fields.turn && typeof fields.turn === "object" ? fields.turn as Record<string, unknown> : null;

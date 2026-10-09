@@ -26,7 +26,7 @@ Next.js 不定义业务 Route Handler 或 Server Action；开发环境由 next.c
 
 本机评估 `/eval` 入口：显式设置 `EVALDESK_API_BASE_URL` 后经 rewrite 连接独立 `cmd/evaldesk`,前后端均绑定 loopback,详见[评估设施](评估设施.md)。页面为 Requirement v2 单桌(历史评估 legacy 桌已移除),只读审阅 `artifacts/reqv2` 冻结证据(门槛三态、初筛 Screening 侧 / 选配 Builder 侧分层、逐题逐轮、同身份对比),Next.js 不做任何评分或比较计算。
 
-评估工作台内部按六个独立工作区导航：Screening（默认）、Builder、评估集与题目、提示词迭代、测试记录、运行对比。`area` 保存分区，`panel` 保存运行详情页签；运行详情不再堆叠所有内容。桌面常驻导航，窄屏转双列入口；测试记录每页 12 条，默认隐藏归档。边界与证据缺口见[工作区改版](../changes/evaldesk-workspaces.md)。
+评估工作台内部按七个独立工作区导航：Screening（默认）、Builder、评估集与题目、提示词迭代、测试记录、失败案例、运行对比。`area` 保存分区，`panel` 保存运行详情页签；运行详情不再堆叠所有内容。桌面常驻导航，窄屏转双列入口；测试记录每页 12 条，默认隐藏归档。边界与证据缺口见[工作区改版](../changes/evaldesk-workspaces.md)。
 
 Screening 按测试目的与实验批次组织运行：模型对比、修复验证、认证检查、程序回归、评分核对、消融与诊断；执行方式独立筛选。`test_purpose` / `test_mode` / `test_result` 保存目的、执行方式与所选结果。历史分组由 `web/src/lib/evaldesk/run-experiments.ts` 按已核对的准确目录名关联，未知记录保留为「未标注目的」，不按模型名或时间自动归因。Flash 修复验收首跑同时作为模型对比基线，分类总数按运行 ID 去重。顶部显示明确的所选测试结果，模型实验默认选择该批基线；不把最新候选当作当前方案表现。摘要新增 `failed_gates`，只投影冻结报告未通过/不可评估项，前端不重判；对比仍由既有接口核对冻结身份。
 
@@ -45,6 +45,10 @@ Builder 复用同一分类与实验视图，仅纳入 policy / ui-contract 有�
 `prompt_view=iterations` 显示内容迭代原因、具体调整、验证记录和依据。每版可选 `review` 来自 Go 对固定 `docs/eval/prompt-iterations.json` 的安全读取，仅以完整提交/角色绑定；验证类型区分真实模型记录、离线回放、仅有测试代码与未记录。当前组成部分仅在原文指纹一致时引用历史说明。记录提及的旧测试与保存原文的测试使用不同说明，不以提交身份代替运行原文或提示词单因素效果。
 
 ## 3. 页面与导航
+
+`area=bad-cases` 按题目案例与运行级问题分别展示冻结事实；对象、实验目的、类型、状态、表现、搜索和归档筛选进入 URL。`bad_id` / `bad_occurrence` / `bad_repeat` / `bad_panel` / `bad_fix` / `bad_pair` 恢复详情位置，`case_return` / `case_origin` 保留来源工作区与案例往返。人工根因和修改记录来自固定索引，验证事实来自明确选择的冻结运行；缺失或不可比时显示缺口，不重算分数。实现合同和首批样例见[失败案例闭环](../changes/evaldesk-bad-case-analysis.md)。
+
+失败案例全量原始记录由 Go 提供 `category`、唯一 `conclusion` 与 `groups` 目录；待处理、已验证修复、历史与模型探索、证据待补齐分别组织。每条原始记录只归类一次，同题/指标的多断言、运行和版本按分类归组；目录归组不等于根因合并。`bad_bucket` 保存分类、默认待处理，旧 `bad_status=all` 不自动展开历史；旧显式 verified 状态映射已验证分类。`bad_group` 保存目录，`bad_id` 仍定位原证据；分组成员切换、返回和刷新均可恢复。反向入口按组去重，列表只显示一个结论，历次通过/失败与模型身份留在详情。主要筛选保留对象/类型/搜索，更多筛选及验收范围折叠。参考按准确索引声明，仅代表冻结批次，未复测今日代码；人工待验证不会因跨模型参考通过而关闭。
 
 ### 3.1 /
 

@@ -68,6 +68,36 @@ export interface ReqV2CompareResponse {
   outcome?: ReqV2CompareOutcome; case_set: ReqV2CompareCaseSet;
 }
 
+export interface BadCaseReference { run_name: string; layer?: string; case?: string; assertion?: string; metric?: string; repeat?: number; turn?: number; context: string }
+export interface BadCaseOccurrence extends BadCaseReference {
+  id: string; run?: ReqV2RunSummary; state: string; detail: string; assertion_index?: number; manifest_sha256?: string;
+}
+export interface BadCaseSource { reference: string; excerpt: string }
+export interface BadCaseValidation { id: string; validation_kind?: "historical"; baseline: string; candidate: string; layer?: string; case?: string; metric?: string; conclusion: string; scope: string; limitations: string[]; accepted: boolean }
+export interface BadCaseFix {
+  id: string; commit: string; reason: string; changes: string; prompt_role?: string; prompt_commit?: string; prompt_base?: string; combination: boolean;
+  tests: { name: string; evidence: string; result: string }[]; sources: BadCaseSource[]; validations: BadCaseValidation[];
+}
+export interface BadCaseReview {
+  id: string; kind: string; side: string; title: string; summary: string; status: string; reviewed_at: string; root_cause: string; confirmed: boolean;
+  unknown: string[]; sources: BadCaseSource[]; references: BadCaseReference[]; fixes: BadCaseFix[]; regression?: BadCaseReference;
+}
+export interface BadCaseSummary {
+  validation_kind?: "historical";
+  id: string; kind: string; side: string; title: string; summary: string; status: string; states: string[]; last_seen: string;
+  run_ids: string[]; occurrences: BadCaseOccurrence[]; commits: string[];
+  reference?: { run_id: string; layer: string; case: string; state: string; passed: number; total: number; matched_run_ids: string[]; note: string };
+  category: string; conclusion: string;
+}
+export interface BadCaseGroup { id: string; category: string; kind: string; side: string; layer?: string; case?: string; metric?: string; title: string; conclusion: string; members: string[]; run_ids: string[]; versions: number; last_seen: string }
+export interface BadCaseCatalog { cases: BadCaseSummary[]; groups: BadCaseGroup[]; notes: string[]; reference?: { run_name: string; label: string; source: string; run?: ReqV2RunSummary } }
+export interface BadCaseVerification extends BadCaseValidation {
+  baseline_run?: ReqV2RunSummary; candidate_run?: ReqV2RunSummary; baseline_case?: ReqV2CaseDetail; candidate_case?: ReqV2CaseDetail;
+  comparison?: ReqV2CompareResponse; checked: boolean; model_same: boolean; notes: string[];
+  baseline_gates: ReqV2GateVerdictRow[]; candidate_gates: ReqV2GateVerdictRow[]; regressed: string[];
+}
+export interface BadCaseDetail extends BadCaseSummary { review?: BadCaseReview; verifications: BadCaseVerification[]; notes: string[] }
+
 async function read<T>(path: string, params?: Record<string, string>): Promise<T> {
   const response = await fetch(`/api/evaldesk/requirement-v2/${path}${params ? `?${new URLSearchParams(params)}` : ""}`, { cache: "no-store" });
   if (!response.ok && path === "prompt-versions" && response.status === 404) throw new Error("当前评估服务尚不支持版本历史，请更新并重启本机 evaldesk 服务后重新读取。");
@@ -77,6 +107,8 @@ async function read<T>(path: string, params?: Record<string, string>): Promise<T
 }
 
 export const reqv2 = {
+  badCases: () => read<BadCaseCatalog>("bad-cases"),
+  badCase: (id: string) => read<BadCaseDetail>("bad-case", { id }),
   prompts: () => read<ReqV2CurrentPrompts>("prompts"),
   promptVersions: () => read<ReqV2PromptVersions>("prompt-versions"),
   runs: async () => {

@@ -10,6 +10,8 @@
 | [Requirement v2 评估](requirement-v2/README.md) | v2 六层契约、split、gates 与冻结基线（当前 v1 实现 red 是预期证据） |
 | [偏好记忆评估](preference-memory/README.md) | 六类场景(隔离/不升级/改主意/删除/白名单拒绝/确认生效)确定性基线,入口 `cmd/evalpreference`,2026-09-29 冻结全绿 |
 | [评估设施](../tech/评估设施.md) | Runner 机制、变更回归、本机工作台、对照实验纪律与反馈回流的单一入口 |
+| [失败案例工作区验收](evaldesk-bad-case-validation-20261008.md) | 冻结失败、人工审阅、修改与前后验证的只读闭环；无新增模型调用 |
+| [失败案例全量目录](evaldesk-case-inventory-20261009.md) | 全部冻结记录唯一归类、同题/指标目录、待处理与历史及证据缺口分开；不合并跨版本根因 |
 | [当前 178 行目录基线](planning-v2/current-178-20260917.md) | 快照 11 构成、ITX SFX 电源规则、办公核显场景、模型能力问题登记及复现 |
 | [planning 离线回归说明](planning-v2/README.md) | 旧 12 个场景、42 个步骤与运行机制；人工响应和真实录制分开，不代表真实模型通过率 |
 | [Builder v2 专项评估](../changes/builder-v2-eval.md) | 给 Builder 一份已核定的 v2 需求（冻结 EffectiveConstraints）的 Builder-only 机制评估；fixture `testdata/builder-v2-20260925/`，第一期 10/10 零模型基线见运行记录 |

@@ -1,12 +1,13 @@
 "use client";
 
-import { ArrowRight, BookOpen, Check, GitCompareArrows, ListChecks, MessageSquareText, ScanLine, Wrench, X } from "lucide-react";
+import { ArrowRight, BookOpen, Check, GitCompareArrows, ListChecks, MessageSquareText, ScanLine, Wrench, X, Bug } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { reqV2ModeLabels, reqV2Sides, reqV2Time, type ReqV2RunSummary } from "@/lib/evaldesk/reqv2";
 import { groupRunExperiments, runPurposes } from "@/lib/evaldesk/run-experiments";
 import styles from "./workbench.module.css";
 import { PromptVersionsView } from "./prompts";
+import { enterBadCases } from "./bad-cases";
 
 export const workspaceSections = [
   { key: "screening", label: "Screening 初筛", group: "评估对象", icon: ScanLine, hint: "" },
@@ -14,6 +15,7 @@ export const workspaceSections = [
   { key: "datasets", label: "评估集与题目", group: "迭代资产", icon: BookOpen, hint: "浏览题目、追踪内容迭代与关联测试。" },
   { key: "prompts", label: "提示词迭代", group: "迭代资产", icon: MessageSquareText, hint: "浏览历史版本、对比原文改动与查看关联测试。" },
   { key: "runs", label: "测试记录", group: "验证", icon: ListChecks, hint: "筛选真实调用、确定性检查与重放记录，定位失败和证据缺口。" },
+  { key: "bad-cases", label: "失败案例", group: "验证", icon: Bug, hint: "查看历史失败、人工修复记录与验收参考，区分模型探索和验证范围。" },
   { key: "compare", label: "运行对比", group: "验证", icon: GitCompareArrows, hint: "选择基线与候选，核对可比性及逐题变化。" },
 ] as const;
 export type WorkspaceSection = typeof workspaceSections[number]["key"];
@@ -93,7 +95,7 @@ export function SideWorkspace({ sideKey, runs, openRun, select, params, navigate
       <div className={styles.catalogHeading}><h2>结果概览</h2><span>{reqV2Time(selected.run.created_at)}</span></div>
       <div className={styles.selectedExperiment}><b>{selected.label}{!builder && ` · ${selected.run.models.find(model => model.role === "screening")?.model ?? (selected.run.zero_model ? "程序检查" : "模型未记录")}`}</b><p>{groupTitle(selected.group)} · {testScope(selected.run)}</p>{selected.run.evidence.status !== "complete" && <small className="status-review">证据需核对</small>}</div>
       <div className={`${styles.layerStrip} ${builder || selected.run.zero_model ? styles.twoLayers : ""}`}>{side.layers.filter(layer => builder || !selected.run.zero_model || (selected.run.layer_scores?.[layer]?.cases ?? 0) > 0).map(layer => <div key={layer}><span>{sideLayerNames[layer]}</span><strong><Score run={selected.run} layer={layer} /></strong>{!builder && <small>{["extraction", "conversations"].includes(layer) ? "模型" : "程序"}</small>}</div>)}</div>
-      <div className={styles.inlineActions}><Button variant="outline" onClick={() => openRun(selected.run.id)}>查看结果<ArrowRight size={14} /></Button></div>
+      <div className={styles.inlineActions}><Button variant="outline" onClick={() => openRun(selected.run.id)}>查看结果<ArrowRight size={14} /></Button><Button variant="outline" onClick={() => enterBadCases(params, navigate, { bad_side: sideKey, bad_run: selected.run.id, bad_purpose: selected.group.purpose, bad_kind: "question" })}>查看失败案例</Button><Button variant="ghost" onClick={() => enterBadCases(params, navigate, { bad_side: "all", bad_run: selected.run.id, bad_kind: "run" })}>整次运行问题</Button></div>
     </section>}
     <section className={styles.turn} aria-label={builder ? "选配测试实验" : "初筛测试实验"}>
       <div className={styles.catalogHeading}><h2>实验批次 <span>{visible.length}</span></h2></div>
@@ -106,7 +108,7 @@ export function SideWorkspace({ sideKey, runs, openRun, select, params, navigate
           {group.runs.map(({ run, label, baseline: isBaseline }) => <div className={styles.experimentRun} data-testid={`experiment-run-${run.dir_name}`} key={run.id} data-selected={latest?.id === run.id || undefined}>
             <div><b>{group.purpose === "unknown" ? run.dir_name : label}</b>{run.models.some(model => model.role === "screening") && <p>{builder && "初筛模型："}{run.models.find(model => model.role === "screening")?.model}</p>}<small>{reqV2Time(run.created_at)}</small>{scopes.size > 1 && <small>{testScope(run)}</small>}</div>
             <div className={styles.layerResults}>{side.layers.filter(layer => builder || (run.layer_scores?.[layer]?.cases ?? 0) > 0 && (run.zero_model || ["extraction", "conversations"].includes(layer))).map(layer => <span key={layer}><small>{sideLayerNames[layer]}</small><Score run={run} layer={layer} /></span>)}</div>
-            <div><RunGates run={run} builder={builder} />{run.evidence.status !== "complete" && <small className="status-review">证据需核对</small>}<div className={styles.inlineActions}><Button variant="ghost" aria-pressed={latest?.id === run.id} onClick={() => selectResult(run.id)}>查看分层</Button><Button variant="ghost" onClick={() => openRun(run.id)}>查看详情</Button>{baseline && !isBaseline && <Button variant="ghost" onClick={() => navigate({ area: "compare", view: null, run: null, va: baseline.id, vb: run.id })}>与基线对比</Button>}</div></div>
+            <div><RunGates run={run} builder={builder} />{run.evidence.status !== "complete" && <small className="status-review">证据需核对</small>}<div className={styles.inlineActions}><Button variant="ghost" aria-pressed={latest?.id === run.id} onClick={() => selectResult(run.id)}>查看分层</Button><Button variant="ghost" onClick={() => openRun(run.id)}>查看详情</Button><Button variant="ghost" onClick={() => enterBadCases(params, navigate, { bad_side: sideKey, bad_run: run.id, bad_purpose: group.purpose, bad_kind: "question" })}>查看失败案例</Button><Button variant="ghost" onClick={() => enterBadCases(params, navigate, { bad_side: "all", bad_run: run.id, bad_purpose: group.purpose, bad_kind: "run" })}>整次运行问题</Button>{baseline && !isBaseline && <Button variant="ghost" onClick={() => navigate({ area: "compare", view: null, run: null, va: baseline.id, vb: run.id })}>与基线对比</Button>}</div></div>
           </div>)}
           <details className={styles.experimentReference}><summary>测试说明</summary>{builder && <p>按整次运行的测试目的分类；本页题数仅反映选配准入与界面行为。总门槛包含初筛等其他检查。</p>}<p>{group.question}</p><p>{group.note}</p><p>题目需在全部重复测试中通过，才计为通过。可比性由运行对比页核对。</p>{group.reference && <p>{group.reference}</p>}</details>
         </details>;

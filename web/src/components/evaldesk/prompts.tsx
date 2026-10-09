@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { reqv2, reqV2Time, type ReqV2CurrentPrompts, type ReqV2RunSummary, type ReqV2PromptReview } from "@/lib/evaldesk/reqv2";
 import { promptDiff, promptLength, type PromptChange } from "@/lib/evaldesk/prompt-diff";
 import styles from "./workbench.module.css";
+import { BadCaseLinks } from "./bad-cases";
 
 export function promptComponentLabel(name: string) {
   if (name === "system") return "主提示词";
@@ -41,11 +42,12 @@ interface Edition {
 
 const verificationLabels = { live_record: "有真实模型记录", offline_record: "有离线回放记录", tests_added: "有回归测试，未确认执行结果", not_recorded: "改后验证未记录" };
 
-function PromptReview({ review, runs, openRun, navigate, showHeading = true }: { review?: ReqV2PromptReview; runs: ReqV2RunSummary[]; openRun: (id: string) => void; navigate: (updates: Record<string, string | null>) => void; showHeading?: boolean }) {
+function PromptReview({ review, runs, openRun, navigate, params, showHeading = true }: { review?: ReqV2PromptReview; runs: ReqV2RunSummary[]; openRun: (id: string) => void; navigate: (updates: Record<string, string | null>) => void; params: URLSearchParams; showHeading?: boolean }) {
   if (!review) return <p className={styles.catalogHelp}>此版本的改动原因与验证结果尚未整理，不从提交标题或相邻运行推断效果。</p>;
   const runNames = review.run_names ?? [];
   const referencedRuns = runNames.map(name => runs.find(run => run.dir_name === name));
   return <section className={styles.promptReview} aria-label="改动原因与验证">
+    <BadCaseLinks params={params} navigate={navigate} commit={review.commit} />
     {showHeading && <div className={styles.catalogHeading}><h3>{review.title}</h3><span>{verificationLabels[review.verification.kind]}</span></div>}
     <dl><div><dt>改动原因</dt><dd>{review.reason}</dd></div><div><dt>具体调整</dt><dd>{review.changes}</dd></div><div><dt>验证与效果</dt><dd>{review.verification.summary}</dd></div><div><dt>结论边界</dt><dd>{review.verification.limitation}</dd></div></dl>
     {referencedRuns.length > 0 && <div className={styles.reviewRuns}><p className={styles.catalogHelp}>记录提及的测试 · 旧运行未保存提示词原文</p>{runNames.map((name, index) => {
@@ -100,7 +102,7 @@ export function PromptVersionsView({ role, params, navigate, runs, openRun }: {
     <p className={styles.catalogHelp}>原因依据提交和原文整理；验证记录分别标注真实模型、离线回放和仅有测试代码，不将它们合成效果提升。</p>
     {editions.filter(version => version.source === "git").map(version => <details key={version.id} className={styles.iterationRow}>
       <summary><span><b>{version.review?.title ?? "改动说明待整理"}</b><small>{reqV2Time(version.created_at ?? null)}</small></span><small>{version.review ? verificationLabels[version.review.verification.kind] : "暂无验证结论"}</small></summary>
-      <PromptReview review={version.review} runs={runs} openRun={openRun} navigate={navigate} showHeading={false} />
+      <PromptReview review={version.review} runs={runs} openRun={openRun} navigate={navigate} params={params} showHeading={false} />
       <div className={styles.selection}><Button variant="outline" onClick={() => navigate({ prompt_view: null, prompt_version: version.id, prompt_base: null, prompt_section: null })}>查看本版原文</Button><Button variant="outline" onClick={() => navigate({ prompt_view: "compare", prompt_version: version.id, prompt_base: null, prompt_section: null })}>查看本次 diff</Button></div>
     </details>)}
     {!history.isPending && !history.error && !editions.some(version => version.source === "git") && <p className={styles.empty}>未找到可读取的内容迭代，请在「版本与原文」查看当前原文或测试保存版本。</p>}
@@ -114,7 +116,7 @@ export function PromptVersionsView({ role, params, navigate, runs, openRun }: {
     {feedback}
     {pending ? <p className={styles.empty} role="status">正在读取提示词原文…</p> : !edition ? <p className={styles.empty}>所选版本不存在或已无法读取，请选择其他版本。</p> : <>
       <div className={styles.scopeNote}><b>{sourceLabel(edition)}</b><p>{edition.source === "current" ? "取自本机评估服务；修改源码后需重启服务更新。" : edition.source === "git" ? "从该提交的字符串常量读取；不代表历史测试已保存完整请求。" : "取自运行前保存的静态提示词；动态用户输入与会话上下文另行组装。"}</p></div>
-      <details className={styles.versionDetails}><summary>改动说明 · {reviewEdition?.review?.title ?? "原因与验证待整理"}</summary>{reviewEdition && reviewEdition.id !== edition.id && <p className={styles.catalogHelp}>所选组成部分与 {reviewEdition.label} 原文一致；以下说明针对该历史版本，可能涉及其他组件与守卫，不代表当前工作区再次验证。</p>}<PromptReview review={reviewEdition?.review} runs={runs} openRun={openRun} navigate={navigate} /></details>
+      <details className={styles.versionDetails}><summary>改动说明 · {reviewEdition?.review?.title ?? "原因与验证待整理"}</summary>{reviewEdition && reviewEdition.id !== edition.id && <p className={styles.catalogHelp}>所选组成部分与 {reviewEdition.label} 原文一致；以下说明针对该历史版本，可能涉及其他组件与守卫，不代表当前工作区再次验证。</p>}<PromptReview review={reviewEdition?.review} runs={runs} openRun={openRun} navigate={navigate} params={params} /></details>
       <div className={styles.filters} aria-label="提示词组成">{[...components].sort((a, b) => a.name === "system" ? -1 : b.name === "system" ? 1 : a.name.localeCompare(b.name)).map(component => <button key={component.name} aria-pressed={selected?.name === component.name} onClick={() => navigate({ prompt_component: component.name, prompt_section: null })}>{promptComponentLabel(component.name)}</button>)}</div>
       {!selected ? <p className={styles.empty}>此版本没有保存这一组成部分，请选择上方可用的原文。</p> : compare ? <section aria-label="提示词内容对比">
         <div className={styles.catalogHeading}><h2>{promptComponentLabel(selected.name)}变化</h2><label className={styles.checkbox}><input type="checkbox" checked={onlyChanges} onChange={event => setOnlyChanges(event.target.checked)} />只看改动</label></div>

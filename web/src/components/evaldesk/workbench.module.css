@@ -3,6 +3,14 @@
 .header { min-height: calc(var(--spacing) * 14); padding: 0 calc(var(--spacing) * 6); display: flex; align-items: center; gap: calc(var(--spacing) * 4); border-bottom: 1px solid var(--hairline); background: var(--surface-1); position: sticky; top: 0; z-index: 30; }
 .brand { display: flex; align-items: center; gap: calc(var(--spacing) * 2); font-weight: 600; }
 .muted { color: var(--ink-muted); }
+.badCaseRow { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, .8fr) minmax(0, 1fr); width: 100%; text-align: left; gap: calc(var(--spacing) * 6); padding: calc(var(--spacing) * 4) var(--spacing); border-bottom: 1px solid var(--hairline); overflow-wrap: anywhere; }
+.caseActions button { max-width: 100%; min-width: 0; height: auto; min-height: calc(var(--spacing) * 11); white-space: normal; overflow-wrap: anywhere; }
+.inspector p, .inspector b, .inspector dd { overflow-wrap: anywhere; }
+.inspector code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.badCaseRow:hover { background: var(--surface-2); }
+.badCaseRow > span { min-width: 0; }
+.badCaseRow small { display: block; color: var(--ink-muted); font-size: var(--text-xs); margin-top: var(--spacing); }
+@media (max-width: 767px) { .badCaseRow { grid-template-columns: minmax(0, 1fr); gap: calc(var(--spacing) * 2); } }
 .theme { margin-left: auto; }
 .theme select { padding: 0 calc(var(--spacing) * 2); background: transparent; border-radius: var(--radius-md); }
 .theme select option { background: var(--surface-1); color: var(--ink); }
@@ -230,7 +238,7 @@
 .filters { display: flex; flex-wrap: wrap; gap: calc(var(--spacing) * 2); margin-bottom: calc(var(--spacing) * 4); }
 .filters button { border-radius: var(--radius-md); padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3); color: var(--ink-muted); }
 .filters button:hover, .caseRow:hover { background: var(--surface-2); }
-.filters button[aria-pressed="true"] { background: var(--interactive-selected); color: var(--ink); }
+.filters button[aria-pressed="true"], .filters button[aria-current="page"] { background: var(--interactive-selected); color: var(--ink); }
 .filters button > span { margin-left: var(--spacing); font-variant-numeric: tabular-nums; }
 .caseGrid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, .8fr); gap: calc(var(--spacing) * 4); overflow-wrap: anywhere; }
 .caseRow { width: 100%; text-align: left; padding: calc(var(--spacing) * 4) 0; border-bottom: 1px solid var(--hairline); align-items: center; }

@@ -97,6 +97,7 @@ const archivedDetail = { ...zeroDetail, ...archivedRun };
 
 async function installFixtureRoutes(page: Page) {
   const json = (route: Route, value: unknown) => route.fulfill({ json: value });
+  await page.route("**/api/evaldesk/requirement-v2/bad-cases", route => json(route, { cases: [], groups: [], notes: [] }));
   await page.route("**/api/evaldesk/requirement-v2/prompt-versions", route => json(route, { versions: [
     { id: "git:old:screening", role: "screening", source: "git", commit: "old-commit", created_at: "2026-09-23T09:36:00Z", subject: "修订需求理解规则", components: [{ role: "screening", name: "system", text: "Screening 原文：旧的需求理解规则。\n保留逐字证据。", sha256: "old-screening" }], review: { commit: "old-commit", role: "screening", title: "修订需求证据规则", reason: "旧输出把系统默认值写成了用户事实。", changes: "禁止将系统默认值照抄到需求操作。", verification: { kind: "tests_added", summary: "新增默认值误写回归测试，未保存当时执行结果。", limitation: "不能将新增测试当成模型效果提升。" }, evidence: [{ kind: "commit", reference: "old-commit", excerpt: "补齐证据判断规则。" }], run_names: [liveRun.dir_name] } },
     { id: "git:old:builder", role: "builder", source: "git", commit: "builder-old", created_at: "2026-09-22T09:36:00Z", components: [{ role: "builder", name: "system", text: "Builder 原文：旧的选配规则。", sha256: "old-builder" }] },
@@ -147,6 +148,232 @@ async function installFixtureRoutes(page: Page) {
     });
   });
 }
+
+async function installBadCaseFixtures(page: Page) {
+  await installFixtureRoutes(page);
+  const occurrence = { id: "occ-first", run: liveRun, run_name: liveRun.dir_name, layer: "reducer", case: "rd-1", repeat: 1, assertion: "reducer:revision", state: "failed", detail: "got delta=0", context: "修复前开发集" };
+  const caseRow = { category: "open", conclusion: "修复验证待补齐", id: "guard-repair", kind: "question", side: "screening", title: "预算修订丢失", summary: "冻结预算未更新", status: "pending", states: ["failed", "passed"], last_seen: liveRun.created_at, run_ids: [liveRun.id], occurrences: [occurrence], commits: ["old-commit"], reference: { run_id: zeroRun.id, layer: "reducer", case: "rd-1", state: "passed", passed: 3, total: 3, matched_run_ids: [liveRun.id], note: "参考通过不自动证明历史失败已修复。" } };
+  const rows = [caseRow,
+    { ...caseRow, id: "run-latency", category: "gaps", conclusion: "冻结证据待核对", kind: "run", side: "all", title: "运行延迟超标", states: ["unevaluable"], occurrences: [{ ...occurrence, id: "run-occ", layer: "model", case: "", repeat: 0, metric: "latency", state: "unevaluable" }] },
+    { ...caseRow, id: "archived-skip", category: "history", conclusion: "该批次未评估此项", title: "历史跳过题", states: ["skipped"], run_ids: [archivedRun.id], occurrences: [{ ...occurrence, id: "archive-occ", run: archivedRun, state: "skipped" }] },
+    { ...caseRow, id: "verified-case", category: "verified", conclusion: "修复验证已确认", title: "已验证题", status: "verified" },
+    { ...caseRow, id: "unreviewed", category: "history", conclusion: "验收参考已通过", title: "尚未分析题", status: "unanalysed" },
+  ];
+  rows.push({ ...rows[4], id: "unreviewed-second", title: "同题另一个历史断言", occurrences: [{ ...occurrence, assertion: "reducer:other" }] });
+  const groups = rows.filter(row => row.id !== "unreviewed-second").map(row => ({ id: `group-${row.id}`, category: row.category, kind: row.kind, side: row.side, layer: row.occurrences[0].layer, case: row.occurrences[0].case, title: row.title, conclusion: row.conclusion, members: row.id === "unreviewed" ? [row.id, "unreviewed-second"] : [row.id], run_ids: row.run_ids, versions: row.id === "unreviewed" ? 2 : 1, last_seen: row.last_seen }));
+  await page.route("**/api/evaldesk/requirement-v2/bad-cases", route => route.fulfill({ json: { cases: rows, groups, notes: [], reference: { run_name: zeroRun.dir_name, label: "历史验收参考", source: "docs/review.md", run: zeroRun } } }));
+  await page.route("**/api/evaldesk/requirement-v2/bad-case?*", route => {
+    const id = new URL(route.request().url()).searchParams.get("id");
+    const row = rows.find(value => value.id === id) ?? caseRow;
+    return route.fulfill({ json: { ...row, notes: ["缺失历史原文不能从当前源码补填。"], verifications: [{ id: "pair", baseline: liveRun.dir_name, candidate: zeroRun.dir_name, layer: "reducer", case: "rd-1", conclusion: "目标案例的局部观察", scope: "开发集", accepted: false, checked: false, model_same: false, notes: ["dirty 身份未核对；不同模型仅并排观察。"], limitations: ["未完成独立保留集验证。"], baseline_run: liveRun, candidate_run: zeroRun, baseline_case: caseDetail, candidate_case: caseDetail, baseline_gates: [{ ...detail.gate_verdicts[3], actual: "2", passed: false }], candidate_gates: [detail.gate_verdicts[3]], regressed: ["reducer/rd-other"], comparison: { strict: true, baseline: liveRun, candidate: zeroRun, case_set: { baseline_cases: 1, candidate_cases: 1, common: 1 } } }], ...(id?.startsWith("unreviewed") ? {} : { review: { id: row.id, kind: row.kind, side: row.side, title: row.title, summary: row.summary, status: row.status, reviewed_at: liveRun.created_at, root_cause: "已保存的修订依据未写入", confirmed: true, unknown: ["没有独立保留集结果"], sources: [{ reference: "docs/review.md", excerpt: "冻结断言与修复审阅" }], references: [occurrence], fixes: [{ id: "code-only", commit: "f".repeat(40), reason: "避免丢失修订", changes: "补齐代码守卫", combination: false, tests: [{ name: "TestRevision", result: "tests_added", evidence: "测试只新增，尚未执行" }], sources: [], validations: [{ id: "pair", baseline: liveRun.dir_name, candidate: zeroRun.dir_name }] }] } }) } });
+  });
+  await page.route("**/api/evaldesk/requirement-v2/case?*", route => route.fulfill({ json: { ...caseDetail, repeats: [{ ...caseDetail.repeats[0], pass: false, assertions: [{ name: "reducer:revision", pass: false, detail: "got delta=0" }] }] } }));
+}
+
+test.describe("失败案例闭环", () => {
+  test("真实撤销案例双向串联提示词 diff、逐题证据与前后报告，探索不改验收状态", async ({ page, request }, testInfo) => {
+    const response = await request.get("/api/evaldesk/requirement-v2/bad-case?id=owned-parts-removal");
+    test.skip(response.status() === 502, "本机 evaldesk 未启动");
+    expect(response.ok()).toBeTruthy();
+    const data = await response.json();
+    expect(data.status).toBe("verified");
+    expect(data.occurrences).toHaveLength(10);
+    expect(data.verifications[0].checked).toBe(true);
+    expect(data.verifications[0].baseline_run.layer_scores.conversations.passed).toBe(6);
+    expect(data.verifications[0].candidate_run.layer_scores.conversations.passed).toBe(7);
+    await page.goto("/eval?area=bad-cases&bad_id=owned-parts-removal&bad_panel=validation");
+    const inspector = page.getByRole("region", { name: "案例详情" });
+    await expect(inspector).toContainText("多轮题目：6/7");
+    await expect(inspector).toContainText("多轮题目：7/7");
+    await page.getByText("修复前冻结门槛", { exact: true }).click();
+    await page.getByText("修复后冻结门槛", { exact: true }).click();
+    await expect(inspector).toContainText("key_field_wrong_write_total：2");
+    await expect(inspector).toContainText("key_field_wrong_write_total：0");
+    await expect(inspector).toContainText("未完成独立保留集验证");
+    const tabs = page.getByRole("navigation", { name: "案例详情分区" });
+    await tabs.getByRole("button", { name: "修复记录" }).click();
+    await expect(inspector).toContainText("组合修改");
+    await expect(inspector).toContainText("TestPrepareRemoveExistingPartsRequiresRemovalEvidence");
+    await page.getByRole("button", { name: "查看提示词原文 diff" }).click();
+    await expect(page.getByLabel("提示词版本", { exact: true })).toHaveValue("git:f7290a5c8ce75e22eb63f454446af178b39fa810:screening");
+    await expect(page.getByRole("region", { name: "提示词内容对比" })).toContainText("existing_parts");
+    await page.getByRole("button", { name: "返回案例", exact: true }).click();
+    await tabs.getByRole("button", { name: "实际与期望" }).click();
+    await expect(page.getByLabel("实际操作与失败断言")).toContainText("第 2 次实际结果");
+    await expect(page.getByLabel("冻结输入与期望")).toContainText("owned");
+    await tabs.getByRole("button", { name: "出现历史" }).click();
+    await expect(inspector).toContainText("Kimi 模型探索");
+    await expect(inspector).toContainText("GLM 模型探索");
+    await expect(inspector).toContainText("不改变 Flash 修复状态");
+    await page.screenshot({ path: testInfo.outputPath("real-bad-case-history.png"), fullPage: true });
+    await expectZeroOutbound(page);
+  });
+
+  test("实验入口携带上下文，冻结证据、纯代码修复与前后验证可往返并刷新", async ({ page }) => {
+    await installBadCaseFixtures(page);
+    await page.goto("/eval?area=screening");
+    await page.getByTestId(`experiment-run-${liveRun.dir_name}`).getByRole("button", { name: "查看失败案例", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`bad_run=${liveRun.id}`));
+    await page.getByTestId("bad-case-group-group-guard-repair").click();
+    const tabs = page.getByRole("navigation", { name: "案例详情分区" });
+    await tabs.getByRole("button", { name: "实际与期望" }).click();
+    await expect(page.getByLabel("冻结输入与期望")).toContainText("预算改成7500");
+    await expect(page.getByLabel("实际操作与失败断言")).toContainText("got delta=0");
+    await page.getByRole("button", { name: "查看原逐题详情" }).click();
+    await page.getByRole("button", { name: "返回案例", exact: true }).click();
+    await tabs.getByRole("button", { name: "修复记录" }).click();
+    await expect(page.getByRole("region", { name: "案例详情" })).toContainText("代码修复；未关联提示词改动");
+    await expect(page.getByText("仅新增测试，未确认执行结果")).toBeVisible();
+    await expect(page.getByRole("link", { name: "查看代码提交与 diff" })).toHaveAttribute("href", new RegExp("f{40}$"));
+    await expect(page.getByRole("button", { name: "查看提示词原文 diff" })).toHaveCount(0);
+    await tabs.getByRole("button", { name: "验证结果" }).click();
+    await expect(page.getByRole("region", { name: "案例详情" })).toContainText("该案例验证尚未确认");
+    await expect(page.getByRole("region", { name: "整批退步项" })).toContainText("reducer/rd-other");
+    await page.getByText("修复前冻结门槛", { exact: true }).click();
+    await expect(page.getByRole("region", { name: "案例详情" })).toContainText("key_field_wrong_write_total：2");
+    await page.reload();
+    await expect(tabs.getByRole("button", { name: "验证结果" })).toHaveAttribute("aria-current", "page");
+    await page.getByRole("button", { name: "查看完整前后运行对比" }).click();
+    await page.getByRole("button", { name: "返回案例", exact: true }).click();
+    await page.getByRole("button", { name: "返回来源工作区" }).click();
+    await expect(page).toHaveURL(/area=screening/);
+    await expectZeroOutbound(page);
+  });
+
+  test("全量分类默认只显示待处理，单行仅有一个结论，归档与错误可恢复", async ({ page }) => {
+    await installBadCaseFixtures(page);
+    await page.goto("/eval?area=bad-cases&bad_status=all");
+    const row = page.getByTestId("bad-case-group-group-guard-repair");
+    await expect(row).toContainText("修复验证待补齐");
+    await expect(row).not.toContainText("通过");
+    await expect(page.getByTestId("bad-case-group-group-verified-case")).toHaveCount(0);
+    await expect(page.getByTestId("bad-case-group-group-unreviewed")).toHaveCount(0);
+    const categories = page.getByRole("navigation", { name: "案例分类" });
+    await categories.getByRole("button", { name: /^已验证修复/ }).click();
+    await expect(page.getByTestId("bad-case-group-group-verified-case")).toContainText("修复验证已确认");
+    await categories.getByRole("button", { name: /^历史与模型探索/ }).click();
+    await page.getByText("更多筛选与验收范围", { exact: true }).click();
+    await page.getByLabel("包含归档记录").check();
+    await page.getByLabel("历史证据表现", { exact: true }).selectOption("skipped");
+    await page.reload();
+    await expect(page.getByTestId("bad-case-group-group-archived-skip")).toContainText("该批次未评估此项");
+    await page.getByText("更多筛选与验收范围", { exact: true }).click();
+    await page.getByLabel("历史证据表现", { exact: true }).selectOption("all");
+    await categories.getByRole("button", { name: /^证据待补齐/ }).click();
+    await page.getByLabel("问题类型", { exact: true }).selectOption("run");
+    await expect(page.getByTestId("bad-case-group-group-run-latency")).toContainText("冻结证据待核对");
+    let failed = true;
+    await page.route("**/api/evaldesk/requirement-v2/bad-cases", route => failed ? route.fulfill({ status: 500 }) : route.fallback());
+    await page.reload();
+    await expect(page.getByRole("main").getByRole("alert")).toContainText("案例数量未知");
+    failed = false;
+    await page.getByRole("button", { name: "重新读取失败案例" }).click();
+    await expect(page.getByTestId("bad-case-group-group-run-latency")).toBeVisible();
+    await expectZeroOutbound(page);
+  });
+
+  test("同题历史断言归组，成员可切换，参考逐题往返与分类刷新恢复", async ({ page }) => {
+    await installBadCaseFixtures(page);
+    await page.goto("/eval?area=bad-cases&bad_bucket=history");
+    const row = page.getByTestId("bad-case-group-group-unreviewed");
+    await expect(row).toContainText("2 条证据记录");
+    await expect(row).toContainText("验收参考已通过");
+    await expect(row).not.toContainText("未通过");
+    await row.click();
+    await page.getByLabel("分组内证据", { exact: true }).selectOption("unreviewed-second");
+    await expect(page.getByRole("heading", { name: "同题另一个历史断言", exact: true })).toBeVisible();
+    await page.getByLabel("分组内证据", { exact: true }).selectOption("unreviewed");
+    await page.getByRole("navigation", { name: "案例详情分区" }).getByRole("button", { name: "验证结果", exact: true }).click();
+    await expect(page.getByRole("region", { name: "验收参考结果" })).toContainText("不自动证明历史失败已修复");
+    await page.getByRole("button", { name: "查看参考题目与全部重复" }).click();
+    await expect(page).toHaveURL(/case=rd-1/);
+    await page.getByRole("button", { name: "返回案例", exact: true }).click();
+    await page.getByRole("button", { name: "返回案例列表", exact: true }).click();
+    await page.reload();
+    await expect(row).toContainText("验收参考已通过");
+    await expect(page.getByRole("navigation", { name: "案例分类" }).getByRole("button", { name: /^历史与模型探索/ })).toHaveAttribute("aria-current", "page");
+    await expectZeroOutbound(page);
+  });
+
+  test("真实历史修复覆盖62个场景，保留集待办独立保留且无通过未通过混列", async ({ page, request }, testInfo) => {
+    const response = await request.get("/api/evaldesk/requirement-v2/bad-cases");
+    test.skip(response.status() === 502, "本机 evaldesk 未启动");
+    expect(response.ok()).toBeTruthy();
+    const catalog = await response.json();
+    const members = catalog.groups.flatMap((group: { members: string[] }) => group.members);
+    expect(members.length).toBe(catalog.cases.length);
+    expect(new Set(members).size).toBe(catalog.cases.length);
+    expect(catalog.groups.length).toBeLessThan(catalog.cases.length);
+    expect(catalog.groups.filter((group: { category: string }) => group.category === "verified")).toHaveLength(62);
+    await page.goto("/eval?area=bad-cases&bad_status=all");
+    await expect(page.locator('[data-testid^="bad-case-group-"]')).toHaveCount(4);
+    await expect(page.getByTestId(/bad-case-group-/).filter({ hasText: "泛购买请求" })).toContainText("修复验证待补齐");
+    await expect(page.getByTestId(/bad-case-group-/).filter({ hasText: "保留集确认夹具" })).toContainText("根因已定位");
+    for (const row of await page.locator('[data-testid^="bad-case-group-"]').all()) await expect(row).not.toContainText("通过");
+    await page.screenshot({ path: testInfo.outputPath("bad-case-default-real.png"), fullPage: true });
+    await page.getByRole("navigation", { name: "案例分类" }).getByRole("button", { name: /^已验证修复 62$/ }).click();
+    await expect(page.getByRole("region", { name: "题目案例" })).toContainText("62");
+    await expect(page.getByText("包含同模型严格对照与已关联实现的历史合同验收", { exact: false })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("bad-case-historical-verified-real.png"), fullPage: true });
+    await page.getByRole("textbox", { name: "搜索失败案例" }).fill("rdy-existing-unknown-blocks");
+    await page.locator('[data-testid^="bad-case-group-"]').click();
+    await expect(page.getByRole("region", { name: "案例详情" })).toContainText("历史修复与验收已核对");
+    await page.getByRole("navigation", { name: "案例详情分区" }).getByRole("button", { name: "修复记录", exact: true }).click();
+    await expect(page.getByRole("link", { name: "查看代码提交与 diff" })).toHaveAttribute("href", /6ee7274e4d00eb207fbc9da7af7feccd28368ca0/);
+    await page.getByRole("navigation", { name: "案例详情分区" }).getByRole("button", { name: "验证结果", exact: true }).click();
+    await expect(page.getByRole("region", { name: "案例详情" })).toContainText("不作为同模型配对实验");
+    await expect(page.getByRole("region", { name: "案例详情" })).toContainText("1 通过 · 2 通过 · 3 通过");
+    for (const caseId of ["ex-owned-gpu-vague", "cv-budget-correction", "cv-monitor-refusal"]) {
+      const item = catalog.cases.find((value: { category: string; occurrences: { case: string; run_name: string }[] }) => value.category === "history" && value.occurrences.some(occurrence => occurrence.case === caseId && ["modelcmp-glm-devcal-r3-20260924", "modelcmp-kimi-devcal-r3-20260924"].includes(occurrence.run_name)));
+      const group = catalog.groups.find((value: { members: string[] }) => value.members.includes(item.id));
+      await page.goto(`/eval?area=bad-cases&bad_bucket=history&bad_search=${caseId}`);
+      const row = page.getByTestId(`bad-case-group-${group.id}`);
+      await expect(row).toContainText("验收参考已通过");
+      await expect(row).not.toContainText("未通过");
+    }
+    await expectZeroOutbound(page);
+  });
+
+  test("逐题与提示词迭代反向关联，未知根因不生成修复结论", async ({ page }) => {
+    await installBadCaseFixtures(page);
+    await page.goto(`/eval?area=runs&run=${liveRun.id}&layer=reducer&case=rd-1`);
+    await page.getByRole("button", { name: "查看案例与修复记录 · 预算修订丢失", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "预算修订丢失", exact: true })).toBeVisible();
+    await page.goto("/eval?area=prompts&prompt_view=iterations");
+    await page.getByText("修订需求证据规则", { exact: true }).click();
+    await page.getByRole("button", { name: "查看案例与修复记录 · 预算修订丢失", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "预算修订丢失", exact: true })).toBeVisible();
+    await page.goto("/eval?area=bad-cases&bad_id=unreviewed&bad_panel=analysis");
+    await expect(page.getByRole("region", { name: "案例详情" })).toContainText("待分析：未记录已确认根因");
+    await page.getByRole("navigation", { name: "案例详情分区" }).getByRole("button", { name: "修复记录" }).click();
+    await expect(page.getByText("未记录修改或回归测试依据。")).toBeVisible();
+    await expectZeroOutbound(page);
+  });
+
+  test("1440/768/375 深浅主题的列表和六分区无溢出，键盘及 axe 通过", async ({ page }, testInfo) => {
+    await installBadCaseFixtures(page);
+    for (const width of [1440, 768, 375]) {
+      await page.setViewportSize({ width, height: 960 });
+      for (const theme of ["light", "dark"]) {
+        await page.goto("/eval?area=bad-cases");
+        await page.evaluate(value => { document.documentElement.classList.toggle("dark", value === "dark"); document.documentElement.classList.toggle("light", value === "light"); }, theme);
+        await expect(page.getByTestId("bad-case-group-group-guard-repair")).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+        await page.getByTestId("bad-case-group-group-guard-repair").focus();
+        await page.keyboard.press("Enter");
+        const tabs = page.getByRole("navigation", { name: "案例详情分区" });
+        for (const label of ["问题概览", "实际与期望", "根因分析", "修复记录", "验证结果", "出现历史"]) {
+          await tabs.getByRole("button", { name: label }).click();
+          expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width} ${theme} ${label}`).toBeTruthy();
+          const result = await new AxeBuilder({ page }).analyze();
+          expect(result.violations.filter(value => ["serious", "critical"].includes(value.impact ?? ""))).toEqual([]);
+        }
+        await page.screenshot({ path: testInfo.outputPath(`bad-case-${theme}-${width}.png`), fullPage: true });
+      }
+    }
+    await expectZeroOutbound(page);
+  });
+});
 
 test.describe("Requirement v2 合成产物", () => {
   test("题目直接浏览未测试分组，迭代逐题比较、版本深链与关联测试可达", async ({ page }, testInfo) => {

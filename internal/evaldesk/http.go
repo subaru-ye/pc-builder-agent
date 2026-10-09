@@ -40,6 +40,15 @@ func Handler(store *Store) http.Handler {
 		}
 		query := r.URL.Query()
 		switch r.URL.Path {
+		case "/api/evaldesk/requirement-v2/bad-cases":
+			writeJSON(w, store.BadCases())
+		case "/api/evaldesk/requirement-v2/bad-case":
+			response, err := store.BadCase(query.Get("id"))
+			if err != nil {
+				apiError(w, http.StatusNotFound, "案例不存在或引用已不可读取")
+				return
+			}
+			writeJSON(w, response)
 		case "/api/evaldesk/requirement-v2/prompt-versions":
 			writeJSON(w, store.PromptVersionsReqV2())
 		case "/api/evaldesk/requirement-v2/prompts":

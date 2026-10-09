@@ -22,24 +22,41 @@ func (s *Store) CaseReqV2(id, layer, caseID string) (*ReqV2CaseDetail, error) {
 	if err != nil {
 		return nil, err
 	}
+	return s.caseReqV2(run, layer, caseID)
+}
+
+type reqV2EvidenceCase struct {
+	ReqV2CaseResultRow
+	Observation json.RawMessage `json:"observation"`
+}
+
+func (s *Store) caseReqV2(run *savedReqV2Run, layer, caseID string) (*ReqV2CaseDetail, error) {
+	key := layer + "/" + caseID
+	if cached := run.caseDetails[key]; cached != nil {
+		return cached, nil
+	}
 	detail := &ReqV2CaseDetail{
 		Run: run.summary.ID, Layer: layer, Case: caseID, PassK: true,
 		Integrity: run.summary.Evidence,
 	}
 	// 从 report.json 重新解码,取到该 case 的完整观测(含 turns)。
-	var report struct {
-		Cases []struct {
-			ReqV2CaseResultRow
-			Observation json.RawMessage `json:"observation"`
-		} `json:"cases"`
-	}
-	raw, err := s.read(run.dir, "report.json")
-	if err != nil || json.Unmarshal(raw, &report) != nil {
-		detail.FrozenNote = "报告不可读取,无法投影逐题观测"
-		return detail, nil
+	rows := run.caseRows
+	if rows == nil {
+		var report struct {
+			Cases []reqV2EvidenceCase `json:"cases"`
+		}
+		raw, err := s.read(run.dir, "report.json")
+		if err != nil || json.Unmarshal(raw, &report) != nil {
+			detail.FrozenNote = "报告不可读取,无法投影逐题观测"
+			return detail, nil
+		}
+		rows = report.Cases
+		if run.caseDetails != nil {
+			run.caseRows = rows
+		}
 	}
 	found := false
-	for _, row := range report.Cases {
+	for _, row := range rows {
 		if row.Layer != layer || row.ID != caseID {
 			continue
 		}
@@ -109,6 +126,9 @@ func (s *Store) CaseReqV2(id, layer, caseID string) (*ReqV2CaseDetail, error) {
 	}
 	sort.Slice(detail.Repeats, func(a, b int) bool { return detail.Repeats[a].Repeat < detail.Repeats[b].Repeat })
 	detail.Frozen, detail.FrozenNote = s.reqV2FrozenCase(run.dir, layer, caseID)
+	if run.caseDetails != nil {
+		run.caseDetails[key] = detail
+	}
 	return detail, nil
 }
 
@@ -305,6 +325,10 @@ func (s *Store) CompareReqV2(a, b string) (*ReqV2CompareResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	return s.compareReqV2Runs(runA, runB)
+}
+
+func (s *Store) compareReqV2Runs(runA, runB *savedReqV2Run) (*ReqV2CompareResponse, error) {
 	response := &ReqV2CompareResponse{Baseline: runA.summary, Candidate: runB.summary}
 	if runA.summary.Evidence.Status == "invalid" {
 		response.Reasons = append(response.Reasons, "基线运行证据无效(损坏或身份不一致),不能进入严格对比")
@@ -321,8 +345,8 @@ func (s *Store) CompareReqV2(a, b string) (*ReqV2CompareResponse, error) {
 		}
 	}
 	compare("判卷版本", runA.summary.Grader, runB.summary.Grader)
-	compare("manifest 冻结哈希", runA.summary.ManifestSHA, runB.summary.ManifestSHA)
-	compare("gates 冻结哈希", runA.summary.GatesSHA, runB.summary.GatesSHA)
+	compare("manifest 冻结哈希", runA.manifestSHA, runB.manifestSHA)
+	compare("gates 冻结哈希", runA.gatesSHA, runB.gatesSHA)
 	compare("splits", strings.Join(runA.summary.Splits, ","), strings.Join(runB.summary.Splits, ","))
 	if runA.summary.Repeats != runB.summary.Repeats {
 		response.Reasons = append(response.Reasons, fmt.Sprintf("repeats 不同(%d vs %d);Pass^k 折叠口径不同,不具备严格可比条件", runA.summary.Repeats, runB.summary.Repeats))

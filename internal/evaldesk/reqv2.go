@@ -279,10 +279,14 @@ type ReqV2CaseResultRow struct {
 }
 
 type savedReqV2Run struct {
-	dir     string
-	stamp   string
-	summary ReqV2RunSummary
-	detail  *ReqV2RunDetail
+	dir         string
+	stamp       string
+	manifestSHA string
+	gatesSHA    string
+	summary     ReqV2RunSummary
+	detail      *ReqV2RunDetail
+	caseRows    []reqV2EvidenceCase
+	caseDetails map[string]*ReqV2CaseDetail // 仅案例目录的请求副本启用，不写共享运行缓存。
 }
 
 // reqV2Integrity 聚合完整性检查;invalid > mismatch > incomplete > ok。
@@ -426,12 +430,13 @@ func (s *Store) loadReqV2(id, dir string) *savedReqV2Run {
 			ig.record("prompts", "ok", "运行原文与记录指纹一致")
 		}
 	}
-	r := &savedReqV2Run{dir: dir, stamp: stamp}
+	r := &savedReqV2Run{dir: dir, stamp: stamp, manifestSHA: report.ManifestSHA256, gatesSHA: report.GatesSHA256}
+	manifest := s.loadReqV2Manifest(dir, report, ig)
 	r.summary = s.buildReqV2Summary(id, dir, plan, report, ig.finalize(), ig.checks)
 	if plan.Prompts != nil {
 		r.summary.PromptSHA = plan.Prompts.SHA256
 	}
-	r.detail = buildReqV2Detail(r.summary, plan, report, ig.checks, s.loadReqV2Manifest(dir, report, ig))
+	r.detail = buildReqV2Detail(r.summary, plan, report, ig.checks, manifest)
 	s.cacheReqV2[id] = r
 	return r
 }

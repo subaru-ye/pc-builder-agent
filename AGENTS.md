@@ -79,6 +79,7 @@
 | `go run ./cmd/api` | 启动产品 API，默认端口 8082 |
 | `cd web && pnpm dev` | 启动 Web，端口由 `web/package.json` 统一维护，当前为 3101 |
 | `go run ./cmd/modelcheck -role screening` | 显式上游探测，会真实调用模型；须在授权范围内 |
+| `go run ./cmd/runstats` | agent_runs 成本分布与 Top 异常 run 只读巡检，不写库、不调用模型 |
 | `uv run --project scripts/data pcdata source check` | 静态来源检查，默认不联网 |
 | `uv run --project scripts/data pcdata price health` | 检查价格快照与动态年龄 |
 | `go build ./...`、`go vet ./...`、`go test ./...` | 按任务范围选择的 Go 检查；CI 要求见 `.github/workflows/` |

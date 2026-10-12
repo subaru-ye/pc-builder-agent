@@ -359,3 +359,19 @@ func TestPrepareSkipsNoiseRemoveNotes(t *testing.T) {
 		t.Fatalf("明确撤销备注应放行: %+v", out.Operations)
 	}
 }
+
+// recentAssistantView:提供列表时按旧→新渲染并声明避免重复询问用途;
+// 未提供时退化为最近一条,旧调用方(评估回放、单测)渲染不变。
+func TestRecentAssistantView(t *testing.T) {
+	listed := recentAssistantView(schemas.ScreeningConversation{
+		LastAssistant:     "最新一条",
+		RecentAssistants: []string{"第一问：预算？", "第二问：用途？"},
+	})
+	if !strings.Contains(listed, "旧→新") || !strings.Contains(listed, "第1条：第一问：预算？") || !strings.Contains(listed, "第2条：第二问：用途？") {
+		t.Fatalf("列表应按旧→新带序号渲染: %q", listed)
+	}
+	fallback := recentAssistantView(schemas.ScreeningConversation{LastAssistant: "只有一条"})
+	if !strings.Contains(fallback, "最近一条助手回复") || !strings.Contains(fallback, "只有一条") {
+		t.Fatalf("无列表时应退化为最近一条: %q", fallback)
+	}
+}

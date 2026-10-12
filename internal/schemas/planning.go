@@ -42,6 +42,10 @@ type ScreeningConversation struct {
 	Parts         json.RawMessage `json:"parts,omitempty"`
 	Proposal      json.RawMessage `json:"proposal,omitempty"`
 	LastAssistant string          `json:"last_assistant,omitempty"`
+	// RecentAssistants 是时间正序的最近几条助手回复(每条已截断),供需求
+	// 语义轮看见自己此前问过的问题,避免重复追问;LastAssistant 仍供指代
+	// 消解等只看最近一条的消费方使用。
+	RecentAssistants []string `json:"recent_assistants,omitempty"`
 }
 
 // PlanningBuilderInput 组装确认事务冻结的完整 Builder 执行载荷;state 不被

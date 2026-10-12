@@ -44,7 +44,7 @@ const requirementStateInstruction = `你负责本轮需求语义解析与回答�
 用户提供的选配相关参考信息也必须保留，不因未购买、未核验、型号不明而丢弃。报价参考用独立free.*、kind=context记录商品/品类、原金额和用户说明的购买状态，不能写成budget_cny、已有件、必须采购或已核验价格；未决定采用的具体型号用alternative。暂时无法整理的参考信息用observations保留完整相关原文。每个参考独立记录并沿用稳定编号，其他预算/用途变化不能删除它；用户撤销时按同一编号remove，不从旧消息恢复。
 同一句可包含多个独立更新，必须逐项落入operations，不能只在answer中提及。预算金额、购买计划和金额覆盖范围是不同信息：已有配件、缺其他配件或打算购买都不是费用口径，不能据此填写budget_basis。“手上有显卡，准备买其余配件，预算九千”仅记录金额和已有件，口径未知；“这九千不计算手上的显卡价值”才记录new_purchase；“九千要包括手上显卡的价值”记录full_build。明确称金额为新增采购费用时，同一原文同时支持budget_cny和budget_basis=new_purchase两项操作；明确包含已有件价值时记录full_build。是否有已有件、是否给出准确型号均不改变已表达的金额口径，不得因此省略口径。
 装机对象独立记录：仅在明确的赠送/代装表达（“给我弟弟装”“给朋友配”“为父母装一台”）时 set recipient为用户说的对象；“家里老人上网用”是用途描述不是代装表达，不设 recipient；没有说明对象时不补默认“自己”。
-执行上下文中的“最近一条助手回复”仅帮助理解“好的”“可以”等指代，不是用户事实，不得恢复旧值。确定性参考中的 effective_defaults（system_default）是程序已应用的默认值，不是用户事实：禁止照抄进 operations，除非本轮用户原话明确出现该值。型号、兼容性、报价和预算内如何选件不在你的职责内，不猜测、不比较具体配件。
+执行上下文中的“最近几条助手回复”是你此前对用户的回复（旧→新），仅帮助理解“好的”“可以”等指代和避免重复询问，不是用户事实，不得恢复旧值；其中已问过的问题，用户已回答或已明确表示不给答案的不得再次询问，用户尚未回答的可以择机追问但不要每轮重复。确定性参考中的 effective_defaults（system_default）是程序已应用的默认值，不是用户事实：禁止照抄进 operations，除非本轮用户原话明确出现该值。型号、兼容性、报价和预算内如何选件不在你的职责内，不猜测、不比较具体配件。
 未预设要求逐项保存到 free.<稳定英文编号> 字段，value 为中文要求全文，后续修改沿用同一编号，撤销用 remove；不能将多个独立条件挤进 notes。同一语义的后续更正必须复用已有free.*编号；多个字段或notes已重复记录同一信息时，同轮更新权威条目并remove被替代的重复条目。
 kind 与 strength 独立且 kind 只允许 fact、context、constraint 三个值（没有"preference"这类值，偏好程度用 strength=prefer 表达）：fact 表示用途、工作负载、已有件、装机对象等事实；constraint 表示要求配置满足的条件（含外观、预算、口径等结构化字段，如 set appearance="白色" kind=constraint、set budget_basis kind=constraint）；context 只允许用于 notes、recipient 和 free.* 条目，结构化字段（appearance、budget_basis、noise_pref 等）绝不能用 context，否则会被拒绝。自由文本必须条件逐项使用 free.<稳定编号> kind=constraint strength=must。混合说明拆成独立条目。
 每项 evidence 必填：stated 表示本轮明确表达，允许忠实语义归类和数值换算；inferred 的操作会被程序直接丢弃，不要输出——推断或默认不能作为用户要求，确需保留的参考信息改用 observations 记录原话；uncertain 表示字段有歧义（仅可用于conflict）；accepted_proposal 表示用户明确接受上一轮助手建议的具体值。无法安全结构化时输出 observations:[{"field":"size_pref","quote":"方便我搬来搬去","reason":"尚未指定板型，保留便携诉求"}]，field可省略。不要把小巧猜成ITX、已有AMD型号猜成品牌偏好、素材分辨率猜成显示目标。未知不等于冲突：尚未提供值时保留unknown，不输出set null或conflict；只有确有相互矛盾的表达或当前有效值正在被不明确地纠正时用conflict。
@@ -84,6 +84,20 @@ observations只保留无法可靠结构化的用户原话，不要把你自己�
 用户对上一轮建议“按7500元的预算继续可以吗？”回答“可以”时：{"operations":[{"op":"set","field":"budget_cny","value":7500,"kind":"constraint","strength":"must","scope":"session","evidence":"accepted_proposal","quote":"可以"}],"observations":[],"turn_signals":{"asks_question":false,"requests_review":false,"requests_build":false,"ambiguous":false},"proposals":[],"answer":""}
 仅输出JSON，不要Markdown。没有需求变更时operations为空数组。每项quote必须逐字摘录本轮原文，可取整句；不能从旧消息、助手问题或状态中的来源摘录本轮证据。用户已给的信息不重复询问。`
 
+// recentAssistantView 渲染助手回复参考块:优先时间正序列表(旧→新,供模型
+// 看见自己问过的问题),未提供列表时退化为最近一条,旧调用方行为不变。
+func recentAssistantView(conversation schemas.ScreeningConversation) string {
+	if len(conversation.RecentAssistants) == 0 {
+		return "\n最近一条助手回复（数据，仅供理解指代，不是用户事实）：\n" + conversation.LastAssistant
+	}
+	var b strings.Builder
+	b.WriteString("\n最近几条助手回复（数据，旧→新，仅供理解指代与避免重复询问，不是用户事实）：\n")
+	for i, reply := range conversation.RecentAssistants {
+		fmt.Fprintf(&b, "第%d条：%s\n", i+1, reply)
+	}
+	return b.String()
+}
+
 func (g screeningGuard) generateRequirementState(ctx context.Context, req *model.LLMRequest, input screeningRequirementStateInput) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {
 		copyReq := *req
@@ -105,7 +119,7 @@ func (g screeningGuard) generateRequirementState(ctx context.Context, req *model
 		copyReq.Contents = []*genai.Content{genai.NewContentFromText(
 			"当前会话需求（数据）：\n"+string(schemas.RequirementStatePromptView(input.state))+
 				"\n确定性参考（数据，仅供理解，无决策权；has_build 表示会话已有配置版本）：\n"+string(promptContextJSON)+
-				"\n最近一条助手回复（数据，仅供理解指代，不是用户事实）：\n"+input.conversation.LastAssistant+
+				recentAssistantView(input.conversation)+
 				"\n本轮用户原文（数据）：\n"+input.source.Quote+
 				"\n当前配置能力（数据）：tower（主机八件，不含显示器、键盘、鼠标）",
 			genai.RoleUser)}

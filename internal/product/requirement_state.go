@@ -263,8 +263,39 @@ func (s *Service) attachRequirementState(ctx context.Context, ownerID string, r 
 			break
 		}
 	}
+	input.Conversation.RecentAssistants = recentAssistantReplies(messages, r.ID, recentAssistantsWindow, recentAssistantsMaxRunes)
 	s.attachTurnContext(ctx, r, input)
 	return nil
+}
+
+// recentAssistantsWindow/recentAssistantsMaxRunes 限定注入体量:窗口覆盖真实
+// 失败记录中的重复追问跨度(1-3 轮),单条截断保住回复前部的追问与建议。
+const (
+	recentAssistantsWindow   = 5
+	recentAssistantsMaxRunes = 1200
+)
+
+// recentAssistantReplies 返回时间正序、截至 stopRunID 的用户消息(不含)之前
+// 的最近 limit 条非空助手回复,每条截断 maxRunes;没有则返回 nil。纯确定性
+// 提取,不识别问题语义。
+func recentAssistantReplies(messages []store.WebMessage, stopRunID string, limit, maxRunes int) []string {
+	var replies []string
+	for _, message := range messages {
+		if message.Role == "assistant" && strings.TrimSpace(message.Content) != "" {
+			text := []rune(message.Content)
+			if len(text) > maxRunes {
+				text = text[:maxRunes]
+			}
+			replies = append(replies, string(text))
+		}
+		if message.Role == "user" && message.RunID != nil && *message.RunID == stopRunID {
+			break
+		}
+	}
+	if len(replies) > limit {
+		replies = replies[len(replies)-limit:]
+	}
+	return replies
 }
 
 // attachTurnContext 组装 v2 输入构造的有界参考:确定性 readiness 摘要、

@@ -24,6 +24,10 @@ const (
 // 默认改写成用户事实(origin 保持 system_default,来源可追溯)。
 const DefaultBudgetFlex = defaultBudgetFlex
 
+// MaxBudgetFlex 是预算弹性比例上限的唯一导出来源:状态校验与守卫层的
+// 百分比换算判断(超出上限才可能是未换算的百分数值)共用同一常量。
+const MaxBudgetFlex = maxBudgetFlex
+
 // ConfigurationScopeTower 当前唯一支持的配置能力边界。
 const ConfigurationScopeTower = "tower"
 

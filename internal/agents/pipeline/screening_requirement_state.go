@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"iter"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"google.golang.org/adk/v2/model"
@@ -46,18 +47,18 @@ const requirementStateInstruction = `你负责本轮需求语义解析与回答�
 执行上下文中的“最近一条助手回复”仅帮助理解“好的”“可以”等指代，不是用户事实，不得恢复旧值。确定性参考中的 effective_defaults（system_default）是程序已应用的默认值，不是用户事实：禁止照抄进 operations，除非本轮用户原话明确出现该值。型号、兼容性、报价和预算内如何选件不在你的职责内，不猜测、不比较具体配件。
 未预设要求逐项保存到 free.<稳定英文编号> 字段，value 为中文要求全文，后续修改沿用同一编号，撤销用 remove；不能将多个独立条件挤进 notes。同一语义的后续更正必须复用已有free.*编号；多个字段或notes已重复记录同一信息时，同轮更新权威条目并remove被替代的重复条目。
 kind 与 strength 独立且 kind 只允许 fact、context、constraint 三个值（没有"preference"这类值，偏好程度用 strength=prefer 表达）：fact 表示用途、工作负载、已有件、装机对象等事实；constraint 表示要求配置满足的条件（含外观、预算、口径等结构化字段，如 set appearance="白色" kind=constraint、set budget_basis kind=constraint）；context 只允许用于 notes、recipient 和 free.* 条目，结构化字段（appearance、budget_basis、noise_pref 等）绝不能用 context，否则会被拒绝。自由文本必须条件逐项使用 free.<稳定编号> kind=constraint strength=must。混合说明拆成独立条目。
-每项 evidence 必填：stated 表示本轮明确表达，允许忠实语义归类和数值换算；inferred 表示模型推断或默认，不能作为用户要求；uncertain 表示字段有歧义（仅可用于conflict）；accepted_proposal 表示用户明确接受上一轮助手建议的具体值。无法安全结构化时输出 observations:[{"field":"size_pref","quote":"方便我搬来搬去","reason":"尚未指定板型，保留便携诉求"}]，field可省略。不要把小巧猜成ITX、已有AMD型号猜成品牌偏好、素材分辨率猜成显示目标。未知不等于冲突：尚未提供值时保留unknown，不输出set null或conflict；只有确有相互矛盾的表达或当前有效值正在被不明确地纠正时用conflict。
+每项 evidence 必填：stated 表示本轮明确表达，允许忠实语义归类和数值换算；inferred 的操作会被程序直接丢弃，不要输出——推断或默认不能作为用户要求，确需保留的参考信息改用 observations 记录原话；uncertain 表示字段有歧义（仅可用于conflict）；accepted_proposal 表示用户明确接受上一轮助手建议的具体值。无法安全结构化时输出 observations:[{"field":"size_pref","quote":"方便我搬来搬去","reason":"尚未指定板型，保留便携诉求"}]，field可省略。不要把小巧猜成ITX、已有AMD型号猜成品牌偏好、素材分辨率猜成显示目标。未知不等于冲突：尚未提供值时保留unknown，不输出set null或conflict；只有确有相互矛盾的表达或当前有效值正在被不明确地纠正时用conflict。
 
 操作语义：
 - set：用户明确新增或修改当前要求，或明确接受建议值。只提交被修改字段，不重发未变字段；同轮先说错又说对的更正（“预算6000吧，哦不对，7000”）只输出最终值的一个 set；预算金额变化不撤销 budget_flex（remove 只用于用户明确撤销该要求）。
 - remove：用户明确撤回、不要、取消某项要求，value 省略。“不要求安静”是 remove noise_pref；“不要噪音”仍是 set silent。
-- alternative：用户明确讨论假设性备选（“如果改成一万呢”“方案B”这类"如果…呢"假设）时记录备选值，不 set 当前字段；单纯询问行情（“7500够吗？”“这个价位行不行”）是问题不是决定，不输出任何 operation，数字只在 answer 中讨论或必要时存 observation；用户后来明确采用才 set。
+- alternative：用户明确讨论假设性备选（“如果改成一万呢”“方案B”这类"如果…呢"假设）时记录备选值，不 set 当前字段；单纯询问行情（“7500够吗？”“这个价位行不行”）是问题不是决定，不输出任何 operation 或 observation，数字只在 answer 中讨论；用户后来明确采用才 set。
 - conflict：同轮相互矛盾、无法判断最终选择时用此操作，evidence=uncertain，value 可省略。多人给出不一致要求（“我爸说预算8000，我妈说不能超过6000”）或同句前后矛盾都属此类；禁止替用户选更严的一方或自创折中。明确的后来更正直接 set，不制造冲突。
 - restore：用户明确恢复被临时例外的原要求（“还是按原来的7500来”“恢复原来的要求”），value省略；不要把恢复表达成新的 set。
 - scope=temporary：“这次先用”“这次可以例外”等明确临时放宽/覆盖；保留原值，直到用户明确恢复。
 - 用户明确接受“未解决建议”中同字段同值的建议时（如对“按7500元的预算继续可以吗？”只回答“可以”“就按这个来”），输出 set 且 evidence=accepted_proposal，quote 逐字摘录用户接受的原话；程序会做服务器端核验。用户复述了具体数值（“可以，就按7500来”）时 evidence=stated——用户亲口给出的值就是明确表达，不是对建议的裸接受。判定顺序：先看本轮原话是否自己给出了完整值，“那就7500吧”“就按1080p来”都是用户亲口的值，一律 evidence=stated，哪怕上一轮助手提过同样的值；只有采纳上一轮助手的建议且该建议确实存在时才用 accepted_proposal。上一轮没有相应建议却标 accepted_proposal，程序会按合同拒收（值不保存、只留观察），不会自动改判 stated。
 - 用户明确要求本次一并购买或配置显示器、键盘、鼠标时，不写任何对应字段，把原话放入顶层 observations 数组（元素只有 field/quote/reason 三个键，field 可省略）：{"quote":"要带显示器","reason":"unsupported_capability:monitor"}（keyboard、mouse 同理）；operations 里不得出现 op=observation 之类的伪操作。“我有显示器”“1080p显示器够用”等已有背景陈述不是购买请求，按普通信息处理，不确定时保留普通 observation。reason 必须逐字是 unsupported_capability:monitor、unsupported_capability:keyboard 或 unsupported_capability:mouse 之一（每个能力一条观察，禁止合并成 monitor/keyboard/mouse 或逗号列表）。用户明确放弃某项时输出 {"op":"remove","field":"unsupported.monitor","quote":"显示器先不要了"} 这类撤销操作。
-- “预算7500”是 set budget_cny=7500；“预算不要超过7500”是 set budget_cny=7500 且 set budget_flex=0（严格不超）。
+- “预算7500”是 set budget_cny=7500；“预算不要超过7500”是 set budget_cny=7500 且 set budget_flex=0（严格不超）。普通“预算7500”没有任何弹性表达，不写 budget_flex（保持未知，由系统默认展开）；用户百分比表达（“最多上浮5%”“可以超10%”）必须先换算为比例（0.05、0.1）再提交，不提交百分数值本身。
 
 turn_signals 是本轮请求事实的多标签，不是授权，同句可并存：
 - asks_question：用户在问问题、需要回答。
@@ -71,11 +72,11 @@ proposals 只在你准备向用户建议一个具体字段值时输出（通常�
 answer 只回答用户当前问题，可为空：不重复已保存信息，不宣称需求已完整，不得声称已开始/正在生成配置，不得承诺配置显示器、键盘、鼠标等主机外品类。用户询问预算是否够而预算未定时，可给有依据的参考区间并说明只是参考；建议值放入 proposals，不写进 operations。
 
 字段与值（必须采用以下点路径）：
-budget_cny 正整数预算金额；budget_flex 非负比例，仅明确预算弹性才给，严格不超设0；budget_basis new_purchase|full_build，仅当用户明确说明金额覆盖口径（“不含已有件价值”“整机总价”“这九千要包括手上显卡的价值”）才设置；“帮我配台全新的主机，配件都新买”只 set existing_parts=[]，绝不设 budget_basis——全新/都新买/打算购买/缺什么配件都不是口径表达。
+budget_cny 正整数预算金额；budget_flex 非负比例（5%是0.05、10%是0.1，不是5或10），仅明确预算弹性才给，严格不超设0；budget_basis new_purchase|full_build，仅当用户明确说明金额覆盖口径（“不含已有件价值”“整机总价”“这九千要包括手上显卡的价值”）才设置；“帮我配台全新的主机，配件都新买”只 set existing_parts=[]，绝不设 budget_basis——全新/都新买/打算购买/缺什么配件都不是口径表达。
 use_case.type：general是普通办公、文档表格、上网影音；gaming是玩游戏；productivity专指专业剪辑、渲染、建模等计算工作负载。“帮我配台电脑”这类泛购买表达不含用途信息，不得猜测任何值。use_case.titles 字符串数组，提到具体游戏名时必须逐个收录（“玩DOTA2和LOL”→["DOTA2","LOL"]，同时 set use_case.type=gaming）；use_case.resolution 1080p|2K|4K，只取明确的显示器/游戏输出目标，“剪4K视频”的4K是素材参数（存free.*）；use_case.performance_goal balanced|fps_first|quality_first：用户表达帧率诉求（“希望帧率高一点”“帧率越高越好”）即 fps_first，不生成具体FPS；画质优先才 quality_first；use_case.fps_target 正整数，用户给出明确帧率数字（“帧数至少144”）时设置，此时不再设 performance_goal。
-existing_parts 本次确实已有且可沿用的主机品类数组(cpu/gpu/motherboard/memory/ssd/psu/case/cooler)，显示器不属于主机品类，“全部新买”是 set []，本轮原话没有全部新买或无已有件的明确表达时禁止输出空数组（程序会拒收无证据的空已有件）；configuration_scope 是系统注入字段，任何情况下都不得出现在你的输出中；owned_parts 是数组字段，确认已有关系且用户给出准确型号后一次提交合并后的完整数组（如[{"category":"gpu","model":"4070 Super"}]），禁止 owned_parts.gpu.model 或 owned_parts.gpu 点路径（误用时程序会按形状纠偏，但不要依赖），不猜SKU；existing_parts（品类）与 owned_parts（准确型号）并存且各自独立记录，把型号提交进 owned_parts 不代表撤销已有件，remove existing_parts 仅用于用户明确表达不再保留旧件（如“旧件都不要了”）；quantity 仅在用户明确表达数量（多根内存、两块硬盘）时携带，单件省略；型号更正替换原件；确认已有但未提供准确型号时只 set existing_parts 品类数组（型号留空待追问），绝不提交 owned_parts——数组项没有 model 就是非法输出。用户某件不再复用时从existing_parts数组移除该品类；撤销全部已有件时remove existing_parts。
+existing_parts 本次确实已有且可沿用的主机品类数组(cpu/gpu/motherboard/memory/ssd/psu/case/cooler)，显示器不属于主机品类，“全部新买”是 set []，本轮原话没有全部新买或无已有件的明确表达时禁止输出空数组（程序会拒收无证据的空已有件）。“旧配件能不能复用还得回家确认”“先别当作全部新买”等否定或待确认表达不是全新购买证据：existing_parts 保持 unknown，用一条 observation 保留完整原话，绝不输出空数组或 remove。“还有块旧的固态也能用”“我有个旧电源”是明确的已有表达：立即把品类追加进 existing_parts；准确型号未知只影响 owned_parts 的追问，不能把“型号未知”当作“已有关系未知”。明确“全部新买”或不再复用旧件时输出 set existing_parts=[]（程序会自动清空关联型号），不要对 owned_parts 单独 remove。configuration_scope 是系统注入字段，任何情况下都不得出现在你的输出中；owned_parts 是数组字段，确认已有关系且用户给出准确型号后一次提交合并后的完整数组（如[{"category":"gpu","model":"4070 Super"}]），禁止 owned_parts.gpu.model 或 owned_parts.gpu 点路径（误用时程序会按形状纠偏，但不要依赖），不猜SKU；existing_parts（品类）与 owned_parts（准确型号）并存且各自独立记录，把型号提交进 owned_parts 不代表撤销已有件，remove existing_parts 仅用于用户明确表达不再保留旧件（如“旧件都不要了”）；quantity 仅在用户明确表达数量（多根内存、两块硬盘）时携带，单件省略；型号更正替换原件；确认已有但未提供准确型号时只 set existing_parts 品类数组（型号留空待追问），绝不提交 owned_parts——数组项没有 model 就是非法输出。用户某件不再复用时从existing_parts数组移除该品类；撤销全部已有件时remove existing_parts。
 brand_pref.cpu any|amd|intel；brand_pref.gpu any|amd|nvidia；未提品牌不能填any。noise_pref silent|normal|any(“都行/无所谓”且无其他取向词才是any；“声音无所谓，正常就行”有明确取向词，取 normal)；size_pref 只能取 atx|matx|itx|any（没有"small"等自造值），“机箱尽量小/要小机箱”→itx；appearance 是颜色、灯效等外观，用提炼后的简洁表达（如“白色”），完整原话留给 quote；“机箱最好是白色的”是 set appearance="白色"，与尺寸无关；recipient 装机对象字符串；notes 仅保留无法结构化进其他字段的补充背景，kind=context；用途已能表达时（“家里老人上网用”是 set use_case.type=general）不要再把原话复述进 notes 或 observations。priority 硬件优先品类数组，“优先把显卡配好/预算紧先保CPU”这类优先级表达用 priority（如["gpu"]），不要自创 free.* 条目重复记录。
-observations只保留无法可靠结构化的用户原话，不要把你自己的推理、取舍说明或可结构化信息的复述存成观察（金标口径：能进 operations 的不进 observations，没有内容就输出空数组）；不得用观察重新激活removed字段、采纳备选或冒充明确偏好。
+observations只保留无法可靠结构化的用户原话，不要把你自己的推理、取舍说明或可结构化信息的复述存成观察（金标口径：能进 operations 的不进 observations，没有内容就输出空数组）；同一句原文只用一条观察保留（可取整句），不把一句话拆成多条重复观察；不得用观察重新激活removed字段、采纳备选或冒充明确偏好。
 
 输出契约（每个操作必须有op和field；evidence是字符串，quote与它同级，不是嵌套对象；turn_signals四项必须全部给出布尔值）：
 用户说“预算8000，主要玩游戏”时：{"operations":[{"op":"set","field":"budget_cny","value":8000,"kind":"constraint","strength":"must","scope":"session","evidence":"stated","quote":"预算8000"},{"op":"set","field":"use_case.type","value":"gaming","kind":"fact","strength":"must","scope":"session","evidence":"stated","quote":"主要玩游戏"}],"observations":[],"turn_signals":{"asks_question":false,"requests_review":false,"requests_build":false,"ambiguous":false},"proposals":[],"answer":""}
@@ -212,8 +213,40 @@ func prepareRequirementUpdate(state schemas.RequirementState, update schemas.Req
 			quote = source.Quote
 		}
 		if strings.TrimSpace(quote) != "" && len(out.Observations) < 32 {
+			// unsupported_capability 观察是结构化能力记录,合同要求每个能力
+			// 一条:同一句原文会合法产生 monitor/keyboard/mouse 多条,不参与
+			// 去重。自由文本观察则同一段原文不重复记录:quote 完全相同
+			// (任意字段)或同字段互为包含片段时合并,保留覆盖更完整的摘录。
+			if !strings.HasPrefix(reason, "unsupported_capability:") {
+				for j, existing := range out.Observations {
+					sameQuote := existing.Quote == quote
+					overlap := existing.Field == field && (strings.Contains(existing.Quote, quote) || strings.Contains(quote, existing.Quote))
+					if sameQuote || overlap {
+						if strings.Contains(quote, existing.Quote) && len(quote) > len(existing.Quote) {
+							out.Observations[j] = schemas.RequirementObservationInput{Field: field, Quote: quote, Reason: reason}
+						}
+						return
+					}
+				}
+			}
 			out.Observations = append(out.Observations, schemas.RequirementObservationInput{Field: field, Quote: quote, Reason: reason})
 		}
+	}
+	// statedByOtherOperation:推断操作的原话片段是否已被本轮明确表达的操作
+	// 覆盖(quote 互为包含)。已结构化的信息不再降级为观察,独立片段保留。
+	statedByOtherOperation := func(index int, quote string) bool {
+		if strings.TrimSpace(quote) == "" {
+			return false
+		}
+		for i, other := range update.Operations {
+			if i == index || other.Op != "set" || other.Evidence == "inferred" {
+				continue
+			}
+			if strings.Contains(quote, other.Quote) || strings.Contains(other.Quote, quote) {
+				return true
+			}
+		}
+		return false
 	}
 	// 结构或身份校验失败且确有当前证据时，需确认生成依赖的字段，
 	// 不能悄悄沿用用户正在纠正的旧值。
@@ -275,9 +308,23 @@ func prepareRequirementUpdate(state schemas.RequirementState, update schemas.Req
 		}
 		// 证据红线(按授权合同降级为观察,不触发纠偏重试):
 		// 空 existing_parts 必须有本轮"全新购买/无已有件"的明确表达——
-		// 泛购买语句("帮我配台电脑")不是采购范围证据。
+		// 泛购买语句("帮我配台电脑")不是采购范围证据。观察绑定完整原文,
+		// 保留否定/待确认语境供后续追问。
 		if op.Op == "set" && op.Field == "existing_parts" && isEmptyJSONArray(op.Value) && !existingPartsClearedEvidence(source.Quote) {
-			observe(op.Field, op.Quote, "本轮未表达全部新买或无已有件，不写入空已有件")
+			observe(op.Field, source.Quote, "本轮未表达全部新买或无已有件，不写入空已有件")
+			continue
+		}
+		// 百分比换算仅在证据匹配时进行:模型把"最多上浮5%"输出为数值 5 时,
+		// 只有本轮原话出现对应百分比字面量才换算为比例,不任意对数值除100。
+		if normalized, ok := normalizePercentBudgetFlex(op, source.Quote); ok {
+			op.Value = normalized
+			update.Operations[i] = op
+		}
+		// 零弹性的证据红线:普通预算金额("预算7500")不是"严格不超"表达,
+		// 该写入是模型幻觉,直接丢弃(金额已由 budget_cny 记录,降级观察
+		// 没有新信息,只会污染本轮观察)。整句或模型摘录的严格表达任一
+		// 命中即放行。
+		if op.Op == "set" && op.Field == "budget_flex" && rawNumberIs(op.Value, 0) && !strictBudgetFlexEvidence(source.Quote, op.Quote) {
 			continue
 		}
 		// 数值型系统默认(如 budget_flex 0.1)已由程序应用,照抄默认不是用户
@@ -290,8 +337,40 @@ func prepareRequirementUpdate(state schemas.RequirementState, update schemas.Req
 		// 只能来自用户明确的撤回表达(意图动词+旧件/已有对象)。
 		// ponytail: 白名单不覆盖"显卡不再沿用"等单品类口语,漏报路径是保留
 		// observation 等追问补证,不会误删用户事实。
-		if op.Op == "remove" && op.Field == "existing_parts" && !existingPartsRemovalEvidence(source.Quote) {
-			observe(op.Field, op.Quote, "本轮未表达撤销已有件，不执行移除")
+		if op.Op == "remove" && op.Field == "existing_parts" {
+			// 明确"全部新买"表达下,remove 的领域语义是赋空值:撤销已有关系
+			// 的标准表达是 active [](可核定的明确值),不是墓碑;程序会级联
+			// 清空关联型号。纯撤销表达("旧件都不要了")仍走 remove。
+			if existingPartsClearedEvidence(source.Quote) {
+				quote := op.Quote
+				if quote == "" || !strings.Contains(source.Quote, quote) {
+					quote = source.Quote
+				}
+				op = schemas.RequirementOperation{Op: "set", Field: "existing_parts", Value: []byte("[]"),
+					Quote: quote, Kind: "fact", Strength: "must", Evidence: "stated"}
+				update.Operations[i] = op
+			} else if !existingPartsRemovalEvidence(source.Quote) {
+				observe(op.Field, op.Quote, "本轮未表达撤销已有件，不执行移除")
+				continue
+			}
+		}
+		// owned_parts 是 existing_parts 的型号明细:撤销全部已有件由
+		// set existing_parts=[] 的确定性级联完成,独立 remove 只会把级联后
+		// 的明确空值退化成墓碑。本轮有"全部新买"证据时静默跳过(与操作
+		// 顺序无关);无该证据的单独 remove 降级观察,旧型号保留待更正。
+		if op.Op == "remove" && op.Field == "owned_parts" {
+			if existingPartsClearedEvidence(source.Quote) {
+				continue
+			}
+			observe(op.Field, op.Quote, "本轮未表达撤销已有件型号，不执行移除")
+			continue
+		}
+		// notes 只承载背景记录:模型自作主张"顺手清空备注"是实录中的噪声
+		// 操作,静默跳过(需求真值无损)。用户真要删备注会给出明确表达,
+		// 那时 quote 含撤销语境词,照常放行。
+		// ponytail: 词表外的等价表达会被跳过一轮,升级路径是显式的备注
+		// 编辑入口,不在此扩 NLU。
+		if op.Op == "remove" && op.Field == "notes" && !notesRemovalEvidence(source.Quote) {
 			continue
 		}
 		// 模型省略 remove 的摘录时，来源仍绑定本轮完整消息，不猜撤销语义。
@@ -299,7 +378,11 @@ func prepareRequirementUpdate(state schemas.RequirementState, update schemas.Req
 			op.Quote = source.Quote
 		}
 		if op.Evidence == "inferred" {
-			observe(op.Field, op.Quote, "模型推断尚未作为用户要求采用")
+			// 推断不能作为用户要求:原话已被同轮明确操作结构化时静默跳过
+			// (降级观察只是重复);独立片段降级为观察保留原文供追问。
+			if !statedByOtherOperation(i, op.Quote) {
+				observe(op.Field, op.Quote, "模型推断尚未作为用户要求采用")
+			}
 			continue
 		}
 		// An absent value cannot conflict with a field that has no current claim.
@@ -435,15 +518,74 @@ func isEmptyJSONArray(value json.RawMessage) bool {
 }
 
 // existingPartsClearedEvidence 是保守的中文证据启发式：空已有件只能来自用户
-// 明确表达全新购买或没有可沿用旧件。ponytail: 白名单不覆盖口语变体（如"一件
-// 不留"），漏报路径是保留 observation 等追问补证，不会误写用户事实。
+// 明确表达全新购买或没有可沿用旧件。否定/待确认语境优先排除("先别当作全部
+// 新买""还得回家确认"表达"尚未决定",清空会过早满足必填并允许核定)。
+// ponytail: 白名单不覆盖口语变体（如"一件不留"），漏报路径是保留
+// observation 等追问补证，不会误写用户事实。
 func existingPartsClearedEvidence(quote string) bool {
+	for _, marker := range []string{"先别", "先不", "别当作", "不当作", "待确认", "还得", "尚未", "还没", "不确定", "说不好", "不一定"} {
+		if strings.Contains(quote, marker) {
+			return false
+		}
+	}
 	for _, marker := range []string{"全新", "新买", "全部新的", "都是新的", "全是新的", "没有已有", "没有旧", "无已有", "不用旧", "不使用旧", "不要旧"} {
 		if strings.Contains(quote, marker) {
 			return true
 		}
 	}
 	return false
+}
+
+// notesRemovalEvidence:撤销备注需要撤销意图动词与备注对象的明确共现。
+func notesRemovalEvidence(quote string) bool {
+	verb, object := false, false
+	for _, marker := range []string{"不要", "不用", "删掉", "删除", "去掉", "撤销", "撤掉", "清除"} {
+		verb = verb || strings.Contains(quote, marker)
+	}
+	for _, marker := range []string{"备注", "补充说明", "背景", "说明"} {
+		object = object || strings.Contains(quote, marker)
+	}
+	return verb && object
+}
+
+// strictBudgetFlexEvidence 要求零弹性来自本轮明确的严格上限表达;普通预算
+// 金额不是零弹性证据。整句与模型摘录的 quote 任一命中即视为有据——摘录是
+// 模型自己的证据主张,整句兜底防止摘录过窄漏掉真实上限语气。
+// ponytail: 口语变体("卡死在")不在词表,漏报路径是丢弃该次幻觉写入,
+// 用户下轮可再表达,不会留下错误状态。
+func strictBudgetFlexEvidence(quotes ...string) bool {
+	for _, quote := range quotes {
+		for _, marker := range []string{"不能超", "不要超", "不得超过", "不得超", "别超过", "别超", "不超", "不超过", "严格", "上限", "封顶", "一分都不能多", "一分都不能超"} {
+			if strings.Contains(quote, marker) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// rawNumberIs 判断 JSON 值是否为指定数值。
+func rawNumberIs(value json.RawMessage, want float64) bool {
+	var n float64
+	return len(value) > 0 && json.Unmarshal(value, &n) == nil && n == want
+}
+
+// normalizePercentBudgetFlex 把百分比表达的数值(模型把"最多上浮5%"输出为 5)
+// 换算为比例:仅当值超出 schema 上限、不超过 100 且本轮原话出现与该数值精确
+// 对应的百分比字面量("5%"或"百分之5")才换算,不任意对所有数值除100。
+func normalizePercentBudgetFlex(op schemas.RequirementOperation, quote string) (json.RawMessage, bool) {
+	if op.Op != "set" || op.Field != "budget_flex" {
+		return nil, false
+	}
+	var n float64
+	if len(op.Value) == 0 || json.Unmarshal(op.Value, &n) != nil || n <= schemas.MaxBudgetFlex || n > 100 {
+		return nil, false
+	}
+	compact := strconv.FormatFloat(n, 'f', -1, 64)
+	if !strings.Contains(quote, compact+"%") && !strings.Contains(quote, "百分之"+compact) {
+		return nil, false
+	}
+	return json.RawMessage(strconv.FormatFloat(n/100, 'f', -1, 64)), true
 }
 
 // existingPartsRemovalEvidence 要求撤销意图动词与旧件/已有对象同时出现，防止

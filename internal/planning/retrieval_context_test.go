@@ -121,7 +121,9 @@ func TestLocalBatchHonorsRemainingBudgetAndPreservesPendingQueries(t *testing.T)
 			return function("search_local", `{"category":"cpu"}`)
 		}
 		if call <= 4 {
-			return function("search_local_batch", `{"queries":[{},{},{},{},{},{},{},{}]}`)
+			// 参数逐次变化以避开无进展守卫:本测试考察额度截断的批量语义,
+			// 不是模型重复调用行为(后者由 runner 的指纹检测测试覆盖)。
+			return function("search_local_batch", fmt.Sprintf(`{"queries":[{"offset":%d},{},{},{},{},{},{},{}]}`, call))
 		}
 		response := req.Contents[len(req.Contents)-1].Parts[0].FunctionResponse.Response
 		if response["executed_queries"] != 7 || len(response["pending_queries"].([]*localSearchQuery)) != 1 || response["remaining"].(map[string]int)["tool_calls"] != 0 {

@@ -329,3 +329,51 @@ func TestConvergenceWarningNearToolCap(t *testing.T) {
 		t.Fatalf("expected warning path exercised: warning=%v toolCalls=%d", sawWarning, result.ToolCalls)
 	}
 }
+
+// 无进展检测:连续参数完全相同的 planning_action,第 2 次执行但带
+// stagnation_warning,第 3 次拒绝执行(error)且不再消耗工具额度。
+func TestRepeatedIdenticalActionsRejectedAsStagnation(t *testing.T) {
+	catalog, draft := fixture(t)
+	state := schemas.NewRequirementState()
+	state.Fields["budget_cny"] = schemas.RequirementField{Value: json.RawMessage(`6000`), Status: "active", Kind: "constraint", Strength: "prefer"}
+	finalJSON := `{"outcome":"proposal","reply":"已停止重复检索。","draft":` + string(draft) + `,"assessments":[],"issues":["示例缺项"],"assumptions":[]}`
+	var sawWarning, sawRejection bool
+	lastResponse := func(r *model.LLMRequest) map[string]any {
+		if part := r.Contents[len(r.Contents)-1].Parts[0]; part.FunctionResponse != nil {
+			return part.FunctionResponse.Response
+		}
+		return nil
+	}
+	m := &scriptedModel{respond: func(call int, r *model.LLMRequest) *genai.Content {
+		switch call {
+		case 1, 2:
+			return function("search_local", `{"category":"cpu"}`)
+		case 3:
+			// call 3 收到的是第 2 次相同调用的响应:已执行但带强警告。
+			if last := lastResponse(r); last != nil {
+				if _, ok := last["stagnation_warning"]; ok {
+					sawWarning = true
+				}
+			}
+			return function("search_local", `{"category":"cpu"}`)
+		default:
+			// call 4 收到的是第 3 次相同调用的响应:拒绝执行且不耗额度。
+			if last := lastResponse(r); last != nil {
+				if msg, ok := last["error"].(string); ok && strings.Contains(msg, "无进展") {
+					sawRejection = true
+				}
+			}
+			return genai.NewContentFromText(finalJSON, genai.RoleModel)
+		}
+	}}
+	result, e := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), schemas.PlanningInput{SchemaVersion: 2, State: state})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if !sawWarning || !sawRejection {
+		t.Fatalf("第2次应有警告、第3次应拒绝: warning=%v rejected=%v", sawWarning, sawRejection)
+	}
+	if result.ToolCalls != 2 {
+		t.Fatalf("拒绝的调用不得消耗工具额度, want 2 got %d", result.ToolCalls)
+	}
+}

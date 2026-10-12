@@ -86,6 +86,21 @@ type execution struct {
 	date       string
 	seen       map[string]bool
 	priceAsc   map[string]bool
+	// lastActionFingerprint/repeatedActions 是无进展检测状态:planning
+	// 工具没有周期性状态查询,参数完全相同的连续调用即是机械重复。
+	lastActionFingerprint string
+	repeatedActions       int
+}
+
+// actionFingerprint 生成 planning_action 参数的稳定指纹:json.Marshal 对
+// map 按键排序,相同参数必然产生相同指纹;marshal 失败退化到 fmt 的
+// 排序 map 输出,仍保持确定性。
+func actionFingerprint(args map[string]any) string {
+	b, err := json.Marshal(args)
+	if err != nil {
+		return fmt.Sprintf("%v", args)
+	}
+	return string(b)
 }
 
 type localSearchQuery struct {
@@ -267,15 +282,31 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 			if part.Thought {
 				continue
 			}
-			if f := part.FunctionCall; f != nil {
-				value := map[string]any{"error": "本轮工具额度已用完，请整理待解决方案"}
-				if x.result.ToolCalls < 24 && turn < turns-1 && f.Name == "planning_action" {
-					x.result.ToolCalls++
-					toolStarted := time.Now()
-					value = x.call(ctx, f.Args)
-					action, _ := f.Args["action"].(string)
-					x.result.StageMS[action] += time.Since(toolStarted).Milliseconds()
-				}
+				if f := part.FunctionCall; f != nil {
+					value := map[string]any{"error": "本轮工具额度已用完，请整理待解决方案"}
+					if x.result.ToolCalls < 24 && turn < turns-1 && f.Name == "planning_action" {
+						// 无进展检测:连续参数完全相同的调用,第 2 次照常执行但
+						// 注入强警告;第 3 次起拒绝执行,强制改变参数或收口。
+						repeated := false
+						if fingerprint := actionFingerprint(f.Args); fingerprint == x.lastActionFingerprint {
+							x.repeatedActions++
+							repeated = true
+						} else {
+							x.lastActionFingerprint, x.repeatedActions = fingerprint, 0
+						}
+						if !repeated || x.repeatedActions == 1 {
+							x.result.ToolCalls++
+							toolStarted := time.Now()
+							value = x.call(ctx, f.Args)
+							action, _ := f.Args["action"].(string)
+							x.result.StageMS[action] += time.Since(toolStarted).Milliseconds()
+							if repeated {
+								value["stagnation_warning"] = "这是连续第 2 次参数完全相同的调用，重复执行不会产生新信息；必须改变查询词、品类或分页参数，或直接整理输出。"
+							}
+						} else {
+							value = map[string]any{"error": "连续第 3 次参数完全相同的调用，已判定无进展并拒绝执行；请改变参数检索不同信息，或按最终 JSON 契约整理输出。"}
+						}
+					}
 				remaining := map[string]int{"model_turns": turns - turn - 1, "tool_turns": max(0, turns-turn-2), "tool_calls": 24 - x.result.ToolCalls, "search_calls": 3 - x.result.SearchCalls, "page_calls": 6 - x.result.PageCalls}
 				value["remaining"] = remaining
 				// 弱模型不看 remaining 数字：额度临界必须以文本硬警告逼收口。

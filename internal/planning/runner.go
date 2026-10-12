@@ -66,7 +66,7 @@ type Runner struct {
 	Model    model.LLM
 	Catalog  Catalog
 	Web      *Web
-	MaxTurns int // Optional smaller diagnostic budget; never exceeds the default 8.
+	MaxTurns int // Optional smaller diagnostic budget; never exceeds maxModelTurns.
 	// ShouldCancel 在每轮开头由 buildsvc 注入检查(读 agent_runs.cancel_requested_at):
 	// 请求断连不会取消 A2A 服务端执行,取消级联必须显式轮询(F6 实测结论)。
 	// 返回 true 时 Runner 以 context.Canceled 结束,由上游按"取消 ≠ 失败"处理。
@@ -75,6 +75,18 @@ type Runner struct {
 	// 超限后立即进入整理轮(摘除工具),未解决问题保留为 proposal。
 	TokenBudget int
 }
+
+// 规划回合预算上限,与 AGENTS.md 及 docs/tech/自主规划流程.md 同步维护:
+// 每次规划至多 maxModelTurns 轮模型往返、maxToolCalls 次工具执行、
+// maxSearchCalls 次外部搜索、maxPageCalls 次网页读取;剩余工具额度降至
+// convergenceWarningRemaining 及以下时向模型发收敛警告。
+const (
+	maxModelTurns               = 8
+	maxToolCalls                = 24
+	maxSearchCalls              = 3
+	maxPageCalls                = 6
+	convergenceWarningRemaining = 6
+)
 
 type execution struct {
 	snapshotID int64
@@ -234,8 +246,8 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 		},
 	}
 	turns := r.MaxTurns
-	if turns <= 0 || turns > 8 {
-		turns = 8
+	if turns <= 0 || turns > maxModelTurns {
+		turns = maxModelTurns
 	}
 	decisionReviewed := false
 	gates := deliveryGateCounters{}
@@ -284,7 +296,7 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 			}
 				if f := part.FunctionCall; f != nil {
 					value := map[string]any{"error": "本轮工具额度已用完，请整理待解决方案"}
-					if x.result.ToolCalls < 24 && turn < turns-1 && f.Name == "planning_action" {
+					if x.result.ToolCalls < maxToolCalls && turn < turns-1 && f.Name == "planning_action" {
 						// 无进展检测:连续参数完全相同的调用,第 2 次照常执行但
 						// 注入强警告;第 3 次起拒绝执行,强制改变参数或收口。
 						repeated := false
@@ -307,10 +319,10 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 							value = map[string]any{"error": "连续第 3 次参数完全相同的调用，已判定无进展并拒绝执行；请改变参数检索不同信息，或按最终 JSON 契约整理输出。"}
 						}
 					}
-				remaining := map[string]int{"model_turns": turns - turn - 1, "tool_turns": max(0, turns-turn-2), "tool_calls": 24 - x.result.ToolCalls, "search_calls": 3 - x.result.SearchCalls, "page_calls": 6 - x.result.PageCalls}
+				remaining := map[string]int{"model_turns": turns - turn - 1, "tool_turns": max(0, turns-turn-2), "tool_calls": maxToolCalls - x.result.ToolCalls, "search_calls": maxSearchCalls - x.result.SearchCalls, "page_calls": maxPageCalls - x.result.PageCalls}
 				value["remaining"] = remaining
 				// 弱模型不看 remaining 数字：额度临界必须以文本硬警告逼收口。
-				if remaining["tool_calls"] <= 6 {
+				if remaining["tool_calls"] <= convergenceWarningRemaining {
 					value["warning"] = "工具额度即将用尽：这是最后的整理机会，下一个响应必须输出最终 JSON（候选能过校验就 ready，否则 proposal 并列出已尝试路径），不要再调用工具。"
 				}
 				responses.Parts = append(responses.Parts, &genai.Part{FunctionResponse: &genai.FunctionResponse{ID: f.ID, Name: f.Name, Response: value}})
@@ -352,7 +364,7 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 		// for an already-authorized change. The model may still keep its question.
 		// Initial questions and searches without an evaluated draft end normally.
 		clarifiesEvaluatedDraft := final.Outcome == "clarify" && x.result.Validation != nil && x.result.ToolCalls > 0
-		reviewDecision := (final.Outcome == "proposal" || clarifiesEvaluatedDraft) && !decisionReviewed && turn < turns-2 && x.result.ToolCalls < 24
+		reviewDecision := (final.Outcome == "proposal" || clarifiesEvaluatedDraft) && !decisionReviewed && turn < turns-2 && x.result.ToolCalls < maxToolCalls
 		if gate := x.deliveryGate(final.Outcome, clarifiesEvaluatedDraft, &gates, turn, turns); gate != "" {
 			decisionReviewed = true
 			request.Contents = append(request.Contents, genai.NewContentFromText(gate, genai.RoleUser))
@@ -475,7 +487,7 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 			// Run reserves the first tool execution before dispatch. Each further
 			// local query consumes another slot; batching never expands the cap.
 			if i > 0 {
-				if x.result.ToolCalls >= 24 {
+				if x.result.ToolCalls >= maxToolCalls {
 					break
 				}
 				x.result.ToolCalls++
@@ -711,7 +723,7 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		if p.Query == "" {
 			return map[string]any{"error": "payload.query 缺失：search_web 须为 {\"query\":\"检索词\"}；请补齐后重试。"}
 		}
-		if x.result.SearchCalls >= 3 || x.runner.Web == nil {
+		if x.result.SearchCalls >= maxSearchCalls || x.runner.Web == nil {
 			return map[string]any{"unavailable": "外部搜索当前不可用，可继续基于已有资料讨论"}
 		}
 		x.result.SearchCalls++
@@ -727,7 +739,7 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		if p.URL == "" {
 			return map[string]any{"error": "payload.url 缺失：read_page 须为 {\"url\":\"https://...\"}（method 可选）；请补齐后重试。"}
 		}
-		if x.result.PageCalls >= 6 || x.runner.Web == nil {
+		if x.result.PageCalls >= maxPageCalls || x.runner.Web == nil {
 			return map[string]any{"unavailable": "本轮网页读取额度已用完"}
 		}
 		x.result.PageCalls++

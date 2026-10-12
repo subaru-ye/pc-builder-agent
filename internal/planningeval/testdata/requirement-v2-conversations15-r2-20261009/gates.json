@@ -1,0 +1,94 @@
+{
+ "version": "reqv2-gates-v1",
+ "frozen_at": "2026-09-22",
+ "vetoes": [
+  {
+   "id": "V1",
+   "rule": "没有用户证据或已验证提案，却把字段写成 active。"
+  },
+  {
+   "id": "V2",
+   "rule": "助手建议未经用户明确接受就成为用户需求。"
+  },
+  {
+   "id": "V3",
+   "rule": "必填字段缺失或存在阻塞冲突，却判定 confirmation_eligible=true。"
+  },
+  {
+   "id": "V4",
+   "rule": "没有当前有效确认快照却启动 Builder。"
+  },
+  {
+   "id": "V5",
+   "rule": "Builder 输入 hash 与核定页面展示的 snapshot hash 不一致。"
+  },
+  {
+   "id": "V6",
+   "rule": "已有 Builder 运行时启动第二个 Builder。"
+  },
+  {
+   "id": "V7",
+   "rule": "过期 revision 的编辑覆盖了较新的需求状态。"
+  },
+  {
+   "id": "V8",
+   "rule": "产品回复宣称已开始生成，但没有对应的合法 build run。"
+  },
+  {
+   "id": "V9",
+   "rule": "当前 scope 仅支持 tower，却生成或承诺显示器、键盘、鼠标配置。"
+  }
+ ],
+ "deterministic_layers": {
+  "names": [
+   "reducer",
+   "readiness",
+   "policy",
+   "ui-contract"
+  ],
+  "required_pass_rate": 1.0
+ },
+ "repetition": {
+  "release_repeats": 3,
+  "metric": "pass^k",
+  "best_of_k_as_gate": false
+ },
+ "minimum_paired_samples": 30,
+ "model_quality_thresholds": {
+  "status": "frozen",
+  "frozen_at": "2026-09-22",
+  "key_fields": [
+   "budget_cny",
+   "use_case.type",
+   "use_case.resolution",
+   "existing_parts",
+   "owned_parts",
+   "budget_basis"
+  ],
+  "key_field_wrong_write_total_max": 0,
+  "extraction": {
+   "operation_precision_min": 0.95,
+   "operation_recall_min": 0.8,
+   "forbidden_op_total_max": 0,
+   "turn_signal_exact_match_min": 0.9,
+   "min_signal_turns": 20,
+   "case_success_min": 0.9,
+   "final_state_exact_match_min": 0.9,
+   "provider_success_min": 0.98,
+   "latency_p95_max_ms": 10000,
+   "max_model_calls_per_turn": 2,
+   "min_cases": 20
+  },
+  "conversations": {
+   "task_success_min": 0.8,
+   "repeated_question_max_per_case": 0,
+   "forbidden_veto_total_max": 0,
+   "min_cases": 5
+  },
+  "notes": "case_success 按 case Pass^3 折叠统计；provider_success、latency_p95、max_model_calls_per_turn 与预算一致性统计 extraction+conversations 的全部真实 provider 轮；latency_p95_max_ms=10000 对齐 PRD 追问响应 ≤10s；max_model_calls_per_turn=2 含 guard 纠偏重调，整轮总调用不得超过 plan.json 的显式预算；数据不足或指标缺失判 UNEVALUABLE 而非默认通过。precision/recall 按 operation 池化（全部轮次的操作合并计算），不是按 case 数描述的允许失败例数；错误写入比信息遗漏更不可接受——漏记进入 recall 且可由追问补救，错写会污染需求真值并触发 veto，因此 precision(0.95) 高于 recall(0.80)。关键字段（预算/用途/gaming 分辨率/已有件/已有件型号/预算口径）的错值或额外写入零容忍；完全漏记只计入 recall，不按错误写入处理。重复追问每例 0 次。forbidden op 与 veto 零容忍。此后不得因结果下调。"
+ },
+ "limitations": [
+  "V8/V9 的产品侧检测基于中文关键词启发式，命中需人工复核原文；grader 金丝雀保证可检测。",
+  "当前基线不运行 holdout；holdout 只评最终锁定候选。"
+ ]
+}

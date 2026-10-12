@@ -686,8 +686,12 @@ func describeOperations(ops []schemas.RequirementOperation) string {
 }
 
 // asksAboutField 是追问检测的保守关键字启发式；命中需人工复核原文。
+// reqv2-grader-v5:budget_cny 的关键词从裸"预算"收紧为金额索求类表达——
+// 预算弹性(budget_flex)的冲突确认、预算口径(budget_basis)的追问都以
+// "预算"为主语,但不是再次索要金额;漏报方向安全(该检测只用于
+// repeated_question 零容忍门槛,不作为通过依据)。
 var reqV2QuestionKeywords = map[string][]string{
-	"budget_cny":          {"预算"},
+	"budget_cny":          {"预算是多少", "预算多少", "多少预算", "预算金额", "提供预算", "告知预算", "说一下预算", "报个预算", "你的预算", "预算范围", "预算大概"},
 	"use_case.type":       {"用途", "用来做", "主要用于", "做什么用"},
 	"use_case.resolution": {"分辨率"},
 	"use_case.titles":     {"软件", "游戏名", "玩什么", "任务"},

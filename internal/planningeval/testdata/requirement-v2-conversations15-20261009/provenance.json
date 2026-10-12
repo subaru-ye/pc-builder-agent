@@ -1,0 +1,48 @@
+{
+ "dataset": "requirement-v2",
+ "revision": "conversations15-20261009",
+ "created_at": "2026-10-09",
+ "grader_version": "reqv2-grader-v5",
+ "parent": {
+  "path": "internal/planningeval/testdata/requirement-v2",
+  "manifest_sha256": "bb03c00b7ee5724da89658459908a6936a5eb930b27aa3a734b069e5bac7ac59",
+  "provenance_sha256": "dc2529a16febb2245961c7901b1e6755f33b0cf37cccd300f4c63244cc2838b8"
+ },
+ "labeling": {
+  "method": "AI按现行状态、所有权联动、readiness和能力撤销合同起草确定性用户脚本；未使用模型响应修改金标。",
+  "human_review": {
+   "status": "pending"
+  },
+  "sources": [
+   "internal/schemas/requirement_state.go",
+   "internal/schemas/requirement_readiness.go",
+   "internal/schemas/requirement_owned_state.go",
+   "internal/agents/pipeline/screening_requirement_state.go"
+  ],
+  "added_cases": [
+   "cv-budget-question-keeps-state",
+   "cv-use-case-switch",
+   "cv-owned-model-correction",
+   "cv-ownership-unknown-keeps-gate",
+   "cv-budget-flex-revision",
+   "cv-owned-parts-withdrawal",
+   "cv-resolution-withdrawal",
+   "cv-game-title-replacement"
+  ],
+  "extended_cases": [
+   "cv-premature-ready",
+   "cv-monitor-refusal"
+  ]
+ },
+ "evaluation": {
+  "status": "not_run",
+  "model_calls": 0,
+  "pass_cubed": null
+ },
+ "known_boundaries": [
+  "15项是development场景数量；另保留1项历史holdout，不计入15项，不作新盲测集。",
+  "原题库、门槛、grader及历史产物未改；其他层字节级复用，只有新版本多轮金标变化。",
+  "金标可执行性检查不代表模型理解通过；15项Pass^3需完整45段独立对话实测。",
+  "新增8项金标未经人工逐项复核；未来失败不能通过放宽金标或挑选重复结果消除。"
+ ]
+}

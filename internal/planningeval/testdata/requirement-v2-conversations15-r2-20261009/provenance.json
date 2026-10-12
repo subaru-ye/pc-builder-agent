@@ -1,0 +1,52 @@
+{
+ "dataset": "requirement-v2",
+ "revision": "conversations15-r2-20261009",
+ "created_at": "2026-10-09",
+ "grader_version": "reqv2-grader-v5",
+ "parent": {
+  "path": "internal/planningeval/testdata/requirement-v2-conversations15-20261009",
+  "manifest_sha256": "9d89a58b8d73a7a9be5f8bd5cf84e91a11c42c0fbd1b2b9b037416ff34a44481"
+ },
+ "correction": {
+  "reason": "撤销合同要求本轮用户quote，不要求可选evidence标记；原金标误将set的stated断言通用于remove。",
+  "source_contracts": [
+   "internal/schemas/requirement_state.go:ApplyRequirementUpdate",
+   "docs/changes/requirement-state-readiness-v2.md:Always required user evidence"
+  ],
+  "fields": [
+   {
+    "case": "cv-monitor-refusal",
+    "turn": 3,
+    "field": "unsupported.monitor"
+   },
+   {
+    "case": "cv-monitor-refusal",
+    "turn": 3,
+    "field": "unsupported.keyboard"
+   },
+   {
+    "case": "cv-monitor-refusal",
+    "turn": 3,
+    "field": "unsupported.mouse"
+   },
+   {
+    "case": "cv-resolution-withdrawal",
+    "turn": 2,
+    "field": "use_case.resolution"
+   }
+  ],
+  "unchanged": "全部操作、引用、状态、缺失项、核定资格、其他金标、grader、gates及原始冻结产物不变。"
+ },
+ "labeling": {
+  "human_review": {
+   "status": "pending"
+  }
+ },
+ "evaluation": {
+  "method": "零模型重判首轮真实输出，不能称为新一次live运行；源报告及源hash在重判plan中记录。"
+ },
+ "known_boundaries": [
+  "只纠正撤销元数据要求；其他失败不得以此关闭。",
+  "15项仍为开发集，历史holdout未测试，不能作为完整发布认证。"
+ ]
+}

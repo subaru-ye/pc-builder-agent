@@ -870,3 +870,29 @@ func TestReqV2ReplayRestoresRepeats(t *testing.T) {
 		t.Fatalf("per-repeat verdicts must match records: %+v", repeatResults)
 	}
 }
+
+// reqv2-grader-v5:repeated_question 检测不再把"预算弹性/预算口径"的追问或
+// 冲突确认误计为重复询问预算金额;真正的金额类重复询问仍命中。
+func TestAsksAboutFieldBudgetCompoundWords(t *testing.T) {
+	state := ReqV2StateProjection{Fields: map[string]ReqV2FieldProjection{
+		"budget_cny": {Status: "active", Value: json.RawMessage(`7500`)},
+	}}
+	for _, reply := range []string{
+		"本轮可确认的信息和原文已保存。请确认预算弹性应采用哪个要求。",
+		"这笔预算是只用于新增购买配件，还是包含已有配件价值的整机参考总价？",
+		"预算弹性可以上浮多少由你决定。",
+	} {
+		if asksAboutField(reply, "budget_cny", state) {
+			t.Fatalf("复合词语境被误判为重复询问预算: %q", reply)
+		}
+	}
+	for _, reply := range []string{
+		"请提供预算金额，单位元。",
+		"你的预算是多少呢？",
+		"再说一下预算吧。",
+	} {
+		if !asksAboutField(reply, "budget_cny", state) {
+			t.Fatalf("金额类重复询问应命中: %q", reply)
+		}
+	}
+}

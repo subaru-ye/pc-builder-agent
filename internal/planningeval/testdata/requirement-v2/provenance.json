@@ -1,7 +1,7 @@
 {
  "dataset": "requirement-v2",
  "created_at": "2026-09-22",
- "grader_version": "reqv2-grader-v3",
+ "grader_version": "reqv2-grader-v5",
  "labeling": {
   "method": "AI 辅助起草（Clapears agent, 2026-09-22），依据 requirement-v2 系列五份 change spec 的契约条款逐条标注。",
   "human_review": {
@@ -72,6 +72,16 @@
    "version": "reqv2-grader-v2",
    "date": "2026-09-22",
    "change": "provider_success/latency_p95/max_model_calls_per_turn 与预算一致性改为统计全部真实 provider 轮。"
+  },
+  {
+   "version": "reqv2-grader-v4",
+   "date": "2026-09-23",
+   "change": "policy:admission_reason 稳定 reason code;ui-contract 结构化真值;V5 改为完整 Builder 载荷 hash 对比(当时漏记,现补录)。"
+  },
+  {
+   "version": "reqv2-grader-v5",
+   "date": "2026-10-09",
+   "change": "repeated_question 检测修正:asksAboutField 对 budget_cny 从裸“预算”收紧为金额索求类关键词,消除把预算弹性/口径追问误计为重复询问预算金额的误报;阈值与金标不变。"
   }
  ],
  "gold_fixes": [

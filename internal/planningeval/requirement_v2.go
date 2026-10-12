@@ -26,7 +26,12 @@ import (
 // 有稳定 reason code(confirm API 真实拒绝原因),ui-contract 的结构化
 // readiness 块/三轴状态/confirm payload 全部来自后端真值,V5 改为"实际发送
 // 的完整 Builder 载荷 hash vs run 冻结 builder_input_hash"。
-const ReqV2GraderVersion = "reqv2-grader-v4"
+// reqv2-grader-v5(2026-10-09):repeated_question 检测修正——asksAboutField 对
+// budget_cny 检查前先摘除"预算弹性""预算口径"复合词:这两类追问/冲突确认句
+// 携带"预算"字样但不是再次索要预算金额,旧规则把它们误计为重复询问预算
+// (实录见 conversations15-live 报告的 repeated_question 归因)。阈值与金标
+// 不变,该修正只消除误报。
+const ReqV2GraderVersion = "reqv2-grader-v5"
 
 // ReqV2Layer 是 fixture 的判定对象分层；live 层需要模型，其余零模型。
 var ReqV2Layers = []string{"extraction", "reducer", "readiness", "policy", "conversations", "ui-contract"}

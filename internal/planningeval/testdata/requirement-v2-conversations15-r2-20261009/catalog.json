@@ -1,0 +1,146 @@
+{
+ "date": "2026-09-17",
+ "candidates": [
+  {
+   "id": "cpu-i3-12100f",
+   "category": "cpu",
+   "brand": "Intel",
+   "model": "Core i3-12100F",
+   "specs": {
+    "tdp_w": 58,
+    "socket": "LGA1700",
+    "has_igpu": false,
+    "supported_chipsets": [
+     "H610",
+     "B660",
+     "H670",
+     "Z690",
+     "B760",
+     "H770",
+     "Z790"
+    ]
+   },
+   "price_cny": "603.68",
+   "external": false,
+   "evidence": []
+  },
+  {
+   "id": "gpu-asus-4070tis-tuf",
+   "category": "gpu",
+   "brand": "Asus",
+   "model": "TUF Gaming GeForce RTX 4070 Ti SUPER 16GB OC",
+   "specs": {
+    "tdp_w": 285,
+    "length_mm": 305,
+    "power_connectors": [
+     "pcie_16pin"
+    ]
+   },
+   "price_cny": "7479.0",
+   "external": false,
+   "evidence": []
+  },
+  {
+   "id": "mb-asus-b650e-f-strix",
+   "category": "motherboard",
+   "brand": "Asus",
+   "model": "ROG STRIX B650E-F GAMING WIFI",
+   "specs": {
+    "socket": "AM5",
+    "chipset": "B650E",
+    "m2_slots": 3,
+    "form_factor": "atx",
+    "memory_generation": "ddr5",
+    "memory_speed_max_mts": 6400
+   },
+   "price_cny": "1799.0",
+   "external": false,
+   "evidence": []
+  },
+  {
+   "id": "mem-corsair-lpx-16-3200",
+   "category": "memory",
+   "brand": "Corsair",
+   "model": "Vengeance LPX 16GB (2x8GB) DDR4-3200 CL16",
+   "specs": {
+    "speed_mts": 3200,
+    "generation": "ddr4"
+   },
+   "price_cny": "1149.0",
+   "external": false,
+   "evidence": []
+  },
+  {
+   "id": "ssd-crucial-bx500-1tb",
+   "category": "ssd",
+   "brand": "Crucial",
+   "model": "BX500 1TB SATA 2.5\"",
+   "specs": {
+    "form_factor": "sata_2_5"
+   },
+   "price_cny": "549.0",
+   "external": false,
+   "evidence": []
+  },
+  {
+   "id": "psu-asus-rog-loki-850p-white",
+   "category": "psu",
+   "brand": "ASUS",
+   "model": "ROG Loki SFX-L 850P White",
+   "specs": {
+    "length_mm": 125,
+    "wattage_w": 850,
+    "form_factor": "sfx_l",
+    "power_connectors": [
+     "pcie_16pin",
+     "pcie_8pin",
+     "pcie_8pin",
+     "pcie_8pin"
+    ]
+   },
+   "price_cny": "1649.0",
+   "external": false,
+   "evidence": []
+  },
+  {
+   "id": "case-asus-prime-ap201",
+   "category": "case",
+   "brand": "Asus",
+   "model": "Prime AP201 (Black, Mesh)",
+   "specs": {
+    "gpu_length_max_mm": 338,
+    "radiator_sizes_mm": [
+     120,
+     140,
+     240,
+     280,
+     360
+    ],
+    "cooler_height_max_mm": 170,
+    "supported_form_factors": [
+     "matx",
+     "itx"
+    ]
+   },
+   "price_cny": "412.0",
+   "external": false,
+   "evidence": []
+  },
+  {
+   "id": "cooler-arctic-lf3-240",
+   "category": "cooler",
+   "brand": "Arctic",
+   "model": "Liquid Freezer III 240",
+   "specs": {
+    "type": "aio",
+    "height_mm": null,
+    "radiator_size_mm": 240,
+    "cooling_capacity_w": null
+   },
+   "price_cny": "905.3",
+   "external": false,
+   "evidence": []
+  }
+ ],
+ "evidence": []
+}

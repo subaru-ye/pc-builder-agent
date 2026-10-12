@@ -1,0 +1,476 @@
+[
+ {
+  "id": "pol-incomplete-chat-start",
+  "title": "信息不足时聊天要求开始不得启动 Builder",
+  "split": "development",
+  "session": "pol-dev-1",
+  "rationale": "scripted screening 宣称 next_action=plan；v2 要求 readiness incomplete 时 admission=false 并聚焦缺失项。当前 next_action 有权威，预期 V4。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "我想配台打游戏的电脑",
+  "state_next_action": "plan",
+  "turn": {
+   "kind": "message",
+   "text": "帮我配一台吧",
+   "signals": {
+    "requests_build": true
+   }
+  },
+  "expected": {
+   "builder_admission": false,
+   "admission_reason": "readiness_incomplete",
+   "presentation_action": "focus_missing_requirement",
+   "forbidden_vetoes": [
+    "V4"
+   ]
+  }
+ },
+ {
+  "id": "pol-ready-chat-start",
+  "title": "聊天“开始吧”只打开核定不启动",
+  "split": "development",
+  "session": "pol-dev-2",
+  "rationale": "ready+unconfirmed 时 requests_build 产生 open_requirement_review；聊天文字不是确认。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "budget_cny",
+    "value": 7500,
+    "quote": "预算7500",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，预算7500，配件全新买",
+  "state_next_action": "plan",
+  "turn": {
+   "kind": "message",
+   "text": "就这样，开始吧",
+   "signals": {
+    "requests_build": true
+   }
+  },
+  "expected": {
+   "builder_admission": false,
+   "admission_reason": "no_confirmation",
+   "presentation_action": "open_requirement_review",
+   "forbidden_vetoes": [
+    "V4"
+   ]
+  }
+ },
+ {
+  "id": "pol-ready-confirm",
+  "title": "核定面板确认可启动",
+  "split": "development",
+  "session": "pol-dev-3",
+  "rationale": "confirm API 提交且 readiness 通过时 admission=true；当前 StartConfirm 行为一致，应通过。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "budget_cny",
+    "value": 7500,
+    "quote": "预算7500",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，预算7500，配件全新买",
+  "state_next_action": "confirm",
+  "turn": {
+   "kind": "confirm"
+  },
+  "expected": {
+   "builder_admission": true,
+   "admission_reason": "ok"
+  }
+ },
+ {
+  "id": "pol-second-builder-running",
+  "title": "运行中第二个确认被拒",
+  "split": "development",
+  "session": "pol-dev-4",
+  "rationale": "builder 运行中再次确认 admission=false；当前 store 以会话忙拒绝，应通过且无 V6。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "budget_cny",
+    "value": 7500,
+    "quote": "预算7500",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，预算7500，配件全新买",
+  "state_next_action": "confirm",
+  "pre_turns": [
+   {
+    "kind": "confirm"
+   }
+  ],
+  "hold_builder": true,
+  "turn": {
+   "kind": "confirm"
+  },
+  "expected": {
+   "builder_admission": false,
+   "admission_reason": "builder_running",
+   "forbidden_vetoes": [
+    "V6"
+   ]
+  }
+ },
+ {
+  "id": "pol-stale-revision-edit",
+  "title": "过期 revision 编辑被拒",
+  "split": "development",
+  "session": "pol-dev-5",
+  "rationale": "expected_revision 落后时编辑必须失败；当前实现有乐观并发检查，应通过且无 V7。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "budget_cny",
+    "value": 7500,
+    "quote": "预算7500",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，预算7500，配件全新买",
+  "state_next_action": "confirm",
+  "turn": {
+   "kind": "edit",
+   "edit": [
+    {
+     "op": "set",
+     "field": "budget_cny",
+     "value": 9000
+    }
+   ],
+   "edit_expected_revision_delta": -1
+  },
+  "expected": {
+   "builder_admission": false,
+   "edit_accepted": false,
+   "forbidden_vetoes": [
+    "V7"
+   ]
+  }
+ },
+ {
+  "id": "pol-edit-while-running",
+  "title": "运行中草稿编辑仍可保存",
+  "split": "calibration",
+  "session": "pol-cal-1",
+  "rationale": "v2 允许生成期间编辑草稿；当前实现对执行中会话统一拒绝，预期 red。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "budget_cny",
+    "value": 7500,
+    "quote": "预算7500",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，预算7500，配件全新买",
+  "state_next_action": "confirm",
+  "pre_turns": [
+   {
+    "kind": "confirm"
+   }
+  ],
+  "hold_builder": true,
+  "turn": {
+   "kind": "edit",
+   "edit": [
+    {
+     "op": "set",
+     "field": "budget_cny",
+     "value": 9000
+    }
+   ],
+   "edit_expected_revision_delta": 0
+  },
+  "expected": {
+   "builder_admission": false,
+   "edit_accepted": true
+  }
+ },
+ {
+  "id": "pol-edit-after-confirm-rebuild",
+  "title": "确认后修改需重新核定",
+  "split": "calibration",
+  "session": "pol-cal-2",
+  "rationale": "确认生成失败后修改预算再从聊天续跑：v2 要求重新核定；当前按新草稿直接续跑，预期 V5。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "budget_cny",
+    "value": 7500,
+    "quote": "预算7500",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，预算7500，配件全新买",
+  "state_next_action": "confirm",
+  "pre_turns": [
+   {
+    "kind": "confirm"
+   }
+  ],
+  "turn": {
+   "kind": "message",
+   "text": "预算改成9000，重新配",
+   "ops": [
+    {
+     "op": "set",
+     "field": "budget_cny",
+     "value": 9000,
+     "quote": "9000",
+     "evidence": "stated"
+    }
+   ],
+   "signals": {
+    "requests_build": true
+   }
+  },
+  "expected": {
+   "builder_admission": false,
+   "admission_reason": "no_confirmation",
+   "presentation_action": "open_requirement_review",
+   "forbidden_vetoes": [
+    "V5"
+   ]
+  }
+ },
+ {
+  "id": "pol-monitor-promise-guard",
+  "title": "scope 外品类不得被承诺",
+  "split": "development",
+  "session": "pol-dev-6",
+  "rationale": "scripted 回复承诺配显示器；v2 要求确定性 scope 守卫拦截，当前直接透传，预期 V9。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "gaming",
+    "quote": "打游戏",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "use_case.resolution",
+    "value": "1080p",
+    "quote": "1080p",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "budget_cny",
+    "value": 7500,
+    "quote": "预算7500",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "打游戏用，1080p，预算7500，配件全新买",
+  "state_next_action": "collect",
+  "turn": {
+   "kind": "message",
+   "text": "顺便把显示器也配了",
+   "scripted_reply": "好的，显示器和主机一起给你配。"
+  },
+  "expected": {
+   "builder_admission": false,
+   "forbidden_vetoes": [
+    "V9"
+   ]
+  }
+ },
+ {
+  "id": "pol-holdout-confirm-incomplete",
+  "title": "信息不足时确认提交被拒",
+  "split": "holdout",
+  "session": "pol-hold-1",
+  "rationale": "productivity 缺 titles 时 confirm API 必须以 readiness 拒绝；当前 planningProjection 忽略 missing，预期启动即 red。",
+  "seed": [
+   {
+    "op": "set",
+    "field": "use_case.type",
+    "value": "productivity",
+    "quote": "做剪辑",
+    "kind": "fact",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "budget_cny",
+    "value": 7500,
+    "quote": "预算7500",
+    "evidence": "stated"
+   },
+   {
+    "op": "set",
+    "field": "existing_parts",
+    "value": [],
+    "quote": "全新买",
+    "evidence": "stated"
+   }
+  ],
+  "seed_user_message": "做视频剪辑，预算7500，全新买",
+  "state_next_action": "confirm",
+  "turn": {
+   "kind": "confirm"
+  },
+  "expected": {
+   "builder_admission": false,
+   "admission_reason": "readiness_incomplete",
+   "forbidden_vetoes": [
+    "V4"
+   ]
+  }
+ }
+]

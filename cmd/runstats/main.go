@@ -36,15 +36,20 @@ func main() {
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 
-	fmt.Fprintln(w, "按 kind/status 的 token 分布(仅统计已结束且落库 tokens 的 run):")
+	fmt.Fprintln(w, "按 kind/status 的 token 分布(统计已结束 run;中断 run 的 agent_runs 统计列为空,计数从 planning_artifacts 回填):")
 	fmt.Fprintln(w, "kind\tstatus\truns\ttokens_p50\ttokens_p95\ttokens_max\ttokens_sum\t模型调用p95\t耗时ms_p95")
-	rows, err := conn.Query(`SELECT kind, status, count(*),
-		coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY tokens), 0),
-		coalesce(percentile_cont(0.95) WITHIN GROUP (ORDER BY tokens), 0),
-		coalesce(max(tokens), 0), coalesce(sum(tokens), 0),
-		coalesce(percentile_cont(0.95) WITHIN GROUP (ORDER BY model_calls), 0),
-		coalesce(percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms), 0)
-		FROM agent_runs WHERE tokens IS NOT NULL
+	rows, err := conn.Query(`WITH usage AS (
+			SELECT r.id, r.kind, r.status, r.duration_ms,
+				coalesce(r.tokens, NULLIF(a.payload->>'tokens','')::int) AS tokens,
+				coalesce(r.model_calls, NULLIF(a.payload->>'model_calls','')::int) AS model_calls
+			FROM agent_runs r LEFT JOIN planning_artifacts a ON a.run_id = r.id::text)
+		SELECT kind, status, count(*),
+			coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY tokens), 0),
+			coalesce(percentile_cont(0.95) WITHIN GROUP (ORDER BY tokens), 0),
+			coalesce(max(tokens), 0), coalesce(sum(tokens), 0),
+			coalesce(percentile_cont(0.95) WITHIN GROUP (ORDER BY model_calls), 0),
+			coalesce(percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms), 0)
+		FROM usage WHERE tokens IS NOT NULL
 		GROUP BY kind, status ORDER BY kind, status`)
 	if err != nil {
 		log.Fatalf("查询分布失败: %v", err)
@@ -64,11 +69,19 @@ func main() {
 
 	fmt.Fprintln(w, "Top 10 高成本 run(异常高成本≈循环失控信号,结合 retry/model_calls 归因):")
 	fmt.Fprintln(w, "started_at(本地)\tkind\tstatus\ttokens\tmodel\ttool\tsearch\tpage\tretries\tms\trun_id")
-	rows, err = conn.Query(`SELECT started_at, kind, status,
-		coalesce(tokens, 0), coalesce(model_calls, 0), coalesce(tool_calls, 0),
-		coalesce(search_calls, 0), coalesce(page_calls, 0), coalesce(retry_count, 0),
-		coalesce(duration_ms, 0), id
-		FROM agent_runs ORDER BY tokens DESC NULLS LAST, model_calls DESC NULLS LAST LIMIT 10`)
+	rows, err = conn.Query(`WITH usage AS (
+			SELECT r.started_at, r.kind, r.status, r.id, r.retry_count, r.duration_ms,
+				coalesce(r.tokens, NULLIF(a.payload->>'tokens','')::int) AS tokens,
+				coalesce(r.model_calls, NULLIF(a.payload->>'model_calls','')::int) AS model_calls,
+				coalesce(r.tool_calls, NULLIF(a.payload->>'tool_calls','')::int) AS tool_calls,
+				coalesce(r.search_calls, NULLIF(a.payload->>'search_calls','')::int) AS search_calls,
+				coalesce(r.page_calls, NULLIF(a.payload->>'page_calls','')::int) AS page_calls
+			FROM agent_runs r LEFT JOIN planning_artifacts a ON a.run_id = r.id::text)
+		SELECT started_at, kind, status,
+			coalesce(tokens, 0), coalesce(model_calls, 0), coalesce(tool_calls, 0),
+			coalesce(search_calls, 0), coalesce(page_calls, 0), coalesce(retry_count, 0),
+			coalesce(duration_ms, 0), id
+		FROM usage ORDER BY tokens DESC NULLS LAST, model_calls DESC NULLS LAST LIMIT 10`)
 	if err != nil {
 		log.Fatalf("查询 Top run 失败: %v", err)
 	}

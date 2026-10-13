@@ -187,6 +187,49 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 	if e.NextAction != "" {
 		check("next_action", r.StateNextAction == e.NextAction, r.StateNextAction)
 	}
+	gradeStateChecks(r, e, check)
+	gradeToolAndReplyChecks(r, e, check)
+	gradeSearchAndOutcomeChecks(r, e, check)
+	gradeSelectionChecks(r, e, check)
+	gradePreservationChecks(r, e, previous, check)
+	// A delivered result must be server linked, not merely model 'ready'.
+	if r.Result != nil && r.Result.Outcome == "ready" {
+		check("server_delivery", r.Result.Delivery != nil && r.Result.Delivery.Status == "delivered" && r.Result.BuildVersion > 0, r.Result.Delivery)
+	}
+	r.Classification = "continued_collection"
+	if r.Error != "" {
+		r.Classification = "technical_fault"
+	} else if r.Kind == "refresh" || r.Kind == "retry" {
+		r.Classification = "read_or_retry"
+	} else if r.Kind == "edit" {
+		r.Classification = "requirement_edit"
+	} else if r.PlanningInput != nil && r.Result != nil {
+		switch r.Result.Outcome {
+		case "ready":
+			r.Classification = "delivered"
+		case "clarify":
+			r.Classification = "clarification"
+		case "proposal":
+			r.Classification = "stalled"
+			if len(r.Result.Issues) > 0 && len(r.Result.Candidates) > 0 && (len(e.IssuesContain) > 0 || len(e.IssuesAny) > 0) {
+				r.Classification = "pending_with_evidence"
+			}
+		}
+	}
+	if r.Classification == "stalled" {
+		check("meaningful_planning_progress", false, "proposal needs concrete candidates and independently expected unresolved issues")
+	}
+	for _, c := range r.Checks {
+		if !c.Pass && r.Error == "" {
+			r.Classification = "behavior_failure"
+			break
+		}
+	}
+}
+
+// gradeStateChecks 判状态字段族:期望状态/强度/语义/值/包含片段,
+// active 字段须有本轮来源,Builder 实收状态须与会话真值语义一致。
+func gradeStateChecks(r *StepRecord, e Expect, check func(string, bool, any)) {
 	for name, want := range e.Fields {
 		got, ok := r.State.Fields[name]
 		if want.Status == "absent" {
@@ -214,8 +257,13 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 			check("builder_state:"+name, jsonEqual(gotJSON, sentJSON), sent)
 		}
 	}
+}
+
+// gradeToolAndReplyChecks 判工具与回复族:必需/禁用工具(含批量检索折算)、
+// 观察性工具指标、Builder 调用数、回复禁词与模型实收输入包含。
+func gradeToolAndReplyChecks(r *StepRecord, e Expect, check func(string, bool, any)) {
 	actions := toolActions(*r)
-	searched, searchResponse, batchExecuted := localSearchResults(*r)
+	_, _, batchExecuted := localSearchResults(*r)
 	for _, a := range e.RequireTools {
 		executed := false
 		if r.Result != nil && r.PlanningInput != nil {
@@ -264,6 +312,12 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 		}
 		check("actual_model_input:"+s, found, s)
 	}
+}
+
+// gradeSearchAndOutcomeChecks 判检索命中与交付形态族:检索候选出现、
+// 备选数、保留引文、最终 outcome/issues/核验/缺价与预算上限。
+func gradeSearchAndOutcomeChecks(r *StepRecord, e Expect, check func(string, bool, any)) {
+	searched, searchResponse, _ := localSearchResults(*r)
 	for id, present := range e.SearchCandidates {
 		check("search_candidate:"+id, searchResponse && searched[id] == present, present)
 	}
@@ -313,6 +367,11 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 		}
 		check("budget_ceiling", within, e.BudgetCeilingCNY)
 	}
+}
+
+// gradeSelectionChecks 判选型事实族:从实际入选候选读取品类/型号/品牌/
+// 规格事实(不以模型自述为准),锁定件比对精确 ID,CPU 目标比对交付草稿。
+func gradeSelectionChecks(r *StepRecord, e Expect, check func(string, bool, any)) {
 	// Selection facts are read from the chosen candidate, not its rationale or
 	// the model's self-assessment. Locked parts also compare exact IDs.
 	selected := map[string]planning.Candidate{}
@@ -373,6 +432,11 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 		}
 		check("selected_cpu", ok, e.CPU)
 	}
+}
+
+// gradePreservationChecks 判保持性族:改单不动其他配件、不降级 GPU/内存、
+// CPU 变更与目标件断言,以及冻结约束的逐字段核对。
+func gradePreservationChecks(r *StepRecord, e Expect, previous *StepRecord, check func(string, bool, any)) {
 	if e.PreserveOtherParts {
 		ok := false
 		if r.Result != nil && previous != nil && previous.Result != nil {
@@ -440,39 +504,6 @@ func Grade(r *StepRecord, e Expect, previous *StepRecord) {
 	}
 	if e.FrozenConstraints != nil {
 		gradeFrozenConstraints(r, e.FrozenConstraints, check)
-	}
-	// A delivered result must be server linked, not merely model 'ready'.
-	if r.Result != nil && r.Result.Outcome == "ready" {
-		check("server_delivery", r.Result.Delivery != nil && r.Result.Delivery.Status == "delivered" && r.Result.BuildVersion > 0, r.Result.Delivery)
-	}
-	r.Classification = "continued_collection"
-	if r.Error != "" {
-		r.Classification = "technical_fault"
-	} else if r.Kind == "refresh" || r.Kind == "retry" {
-		r.Classification = "read_or_retry"
-	} else if r.Kind == "edit" {
-		r.Classification = "requirement_edit"
-	} else if r.PlanningInput != nil && r.Result != nil {
-		switch r.Result.Outcome {
-		case "ready":
-			r.Classification = "delivered"
-		case "clarify":
-			r.Classification = "clarification"
-		case "proposal":
-			r.Classification = "stalled"
-			if len(r.Result.Issues) > 0 && len(r.Result.Candidates) > 0 && (len(e.IssuesContain) > 0 || len(e.IssuesAny) > 0) {
-				r.Classification = "pending_with_evidence"
-			}
-		}
-	}
-	if r.Classification == "stalled" {
-		check("meaningful_planning_progress", false, "proposal needs concrete candidates and independently expected unresolved issues")
-	}
-	for _, c := range r.Checks {
-		if !c.Pass && r.Error == "" {
-			r.Classification = "behavior_failure"
-			break
-		}
 	}
 }
 

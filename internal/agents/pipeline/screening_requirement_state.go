@@ -216,262 +216,295 @@ func recordScreeningRetry(ctx context.Context) {
 	}
 }
 
+// requirementGuard 承载一轮需求更新的守卫上下文:本轮源证据、原始输入
+// (改写需回写)、已接受操作与工作状态。红线在 guardOperation 中按固定
+// 顺序执行("先改写、后拦截"),任何一步拦截即结束该操作的处理;顺序与
+// conversations15 金标锁定的行为对应,调整须全量复测。
+type requirementGuard struct {
+	source  schemas.RequirementSource
+	update  *schemas.RequirementUpdate
+	out     *schemas.RequirementUpdate
+	working *schemas.RequirementState
+}
+
+// observe 记录一条降级观察:自由文本观察对同一段原文去重(quote 完全相同
+// 或同字段互为包含时合并,保留覆盖更完整的摘录);unsupported_capability
+// 是每能力一条的结构化记录,不参与去重。
+func (g *requirementGuard) observe(field, quote, reason string) {
+	if !knownStateField(field) {
+		field = "notes"
+	}
+	if strings.TrimSpace(quote) == "" || !strings.Contains(g.source.Quote, quote) {
+		quote = g.source.Quote
+	}
+	if strings.TrimSpace(quote) != "" && len(g.out.Observations) < 32 {
+		if !strings.HasPrefix(reason, "unsupported_capability:") {
+			for j, existing := range g.out.Observations {
+				sameQuote := existing.Quote == quote
+				overlap := existing.Field == field && (strings.Contains(existing.Quote, quote) || strings.Contains(quote, existing.Quote))
+				if sameQuote || overlap {
+					if strings.Contains(quote, existing.Quote) && len(quote) > len(existing.Quote) {
+						g.out.Observations[j] = schemas.RequirementObservationInput{Field: field, Quote: quote, Reason: reason}
+					}
+					return
+				}
+			}
+		}
+		g.out.Observations = append(g.out.Observations, schemas.RequirementObservationInput{Field: field, Quote: quote, Reason: reason})
+	}
+}
+
+// statedByOtherOperation 判断推断操作的原话片段是否已被本轮明确表达的
+// 操作覆盖(quote 互为包含)。已结构化的信息不再降级为观察,独立片段保留。
+func (g *requirementGuard) statedByOtherOperation(index int, quote string) bool {
+	if strings.TrimSpace(quote) == "" {
+		return false
+	}
+	for i, other := range g.update.Operations {
+		if i == index || other.Op != "set" || other.Evidence == "inferred" {
+			continue
+		}
+		if strings.Contains(quote, other.Quote) || strings.Contains(other.Quote, quote) {
+			return true
+		}
+	}
+	return false
+}
+
+// statedByActiveOperation 判断观察原文是否已被本轮实际生效的明确操作
+// 结构化(quote 互为包含);被拦截/推断的操作未成为真值,不计入。
+func (g *requirementGuard) statedByActiveOperation(quote string) bool {
+	if strings.TrimSpace(quote) == "" {
+		return false
+	}
+	for _, op := range g.out.Operations {
+		if op.Op != "set" || strings.TrimSpace(op.Quote) == "" {
+			continue
+		}
+		if strings.Contains(quote, op.Quote) || strings.Contains(op.Quote, quote) {
+			return true
+		}
+	}
+	return false
+}
+
+// requiresConfirmation:结构或身份校验失败且确有当前证据时,需确认生成
+// 依赖的字段,不能悄悄沿用用户正在纠正的旧值。
+func (g *requirementGuard) requiresConfirmation(op schemas.RequirementOperation) bool {
+	before := g.working.Fields[op.Field]
+	required := op.Strength == "must" || before.Strength == "must"
+	switch op.Field {
+	case "budget_cny", "budget_flex", "budget_basis", "use_case.type", "existing_parts", "owned_parts":
+		required = true
+	case "use_case.resolution":
+		required = required || string(g.working.Fields["use_case.type"].Value) == `"gaming"`
+	}
+	return required
+}
+
+func (g *requirementGuard) markConflict(op schemas.RequirementOperation) {
+	if op.Op != "set" || strings.TrimSpace(op.Quote) == "" || !strings.Contains(g.source.Quote, op.Quote) {
+		return
+	}
+	if !g.requiresConfirmation(op) {
+		return
+	}
+	conflict := schemas.RequirementOperation{Op: "conflict", Field: op.Field, Quote: op.Quote, Evidence: "uncertain"}
+	// A malformed new hard value must not inherit an older soft strength.
+	// Preserve a known hard obligation while only the disputed value is pending.
+	if op.Strength == "must" || g.working.Fields[op.Field].Strength == "must" {
+		conflict.Strength = "must"
+	}
+	if schemas.ValidRequirementKind(op.Kind) {
+		conflict.Kind = op.Kind
+	}
+	if pending, err := schemas.ApplyRequirementUpdate(*g.working, schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{conflict}}, g.source); err == nil {
+		g.out.Operations = append(g.out.Operations, conflict)
+		*g.working = pending
+	}
+}
+
+// guardOperation 处理一条模型操作:身份归一与形状纠偏、证据红线、应用与
+// 来源校验。返回 keep=false 表示该操作被拦截(观察已记录或静默丢弃)。
+func (g *requirementGuard) guardOperation(i int, op schemas.RequirementOperation) (schemas.RequirementOperation, bool) {
+	source := g.source
+	working := g.working
+	// 模型重发与当前 active 值完全相同的字段是 no-op:跳过,不重复计入
+	// 本轮变更(值与强度/语义都未变时状态本就不变)。
+	if op.Op == "set" {
+		before := working.Fields[op.Field]
+		if before.Status == "active" && sameJSONValue(before.Value, op.Value) &&
+			(op.Strength == "" || op.Strength == before.Strength) &&
+			(op.Kind == "" || op.Kind == before.Kind) {
+			return op, false
+		}
+	}
+	// 型号更正的摘录出错但型号确实出现在本轮原文时,把证据绑定到本轮
+	// 完整原文(服务器验证型号 grounding,不采用模型幻觉的旧句子)。
+	if op.Field == "owned_parts" && op.Op == "set" && len(op.Value) > 0 &&
+		(op.Quote == "" || !strings.Contains(source.Quote, op.Quote)) && ownedModelsGrounded(op.Value, source.Quote) {
+		op.Quote = source.Quote
+	}
+	// 形状纠偏:确定性参考的追问字段是 owned_parts.<category>.model,
+	// 模型会模仿该形状(含单段 owned_parts.<category> 携带对象/字符串);
+	// 规范化为 owned_parts 数组合并操作,值仍来自本轮原话。
+	if normalized, ok := normalizeOwnedModelPath(*working, op, source); ok {
+		g.update.Operations[i] = normalized
+		op = normalized
+	}
+	// 证据红线(按授权合同拦截空已有件,不触发纠偏重试):
+	// 空 existing_parts 必须有本轮"全新购买/无已有件"的明确表达——
+	// 泛购买语句("帮我配台电脑")不是采购范围证据。原文处于已有件
+	// 讨论语境(提到旧件/新买/复用等)时保留完整原文观察供后续追问
+	// (conversations15 cv-ownership 金标依赖);原文与已有件完全无关
+	// (如"预算9000，开始配吧")时,观察对追问没有信息量,静默丢弃
+	// (ex-composite 金标:能进 operations 的信息不进 observations)。
+	if op.Op == "set" && op.Field == "existing_parts" && isEmptyJSONArray(op.Value) && !existingPartsClearedEvidence(source.Quote) {
+		if existingPartsMentioned(source.Quote) {
+			g.observe(op.Field, source.Quote, "本轮未表达全部新买或无已有件，不写入空已有件")
+		}
+		return op, false
+	}
+	// 百分比换算仅在证据匹配时进行:模型把"最多上浮5%"输出为数值 5 时,
+	// 只有本轮原话出现对应百分比字面量才换算为比例,不任意对数值除100。
+	if normalized, ok := normalizePercentBudgetFlex(op, source.Quote); ok {
+		op.Value = normalized
+		g.update.Operations[i] = op
+	}
+	// 零弹性的证据红线:普通预算金额("预算7500")不是"严格不超"表达,
+	// 该写入是模型幻觉,直接丢弃(金额已由 budget_cny 记录,降级观察
+	// 没有新信息,只会污染本轮观察)。整句或模型摘录的严格表达任一
+	// 命中即放行。
+	if op.Op == "set" && op.Field == "budget_flex" && rawNumberIs(op.Value, 0) && !strictBudgetFlexEvidence(source.Quote, op.Quote) {
+		return op, false
+	}
+	// 数值型系统默认(如 budget_flex 0.1)已由程序应用,照抄默认不是用户
+	// 事实;仅当本轮原话出现该值字面量时才接受写入。拦截后静默丢弃:
+	// 该值已由确定性默认生效,降级观察没有新信息,只污染本轮观察
+	// (金标口径:能进 operations 的信息不进 observations)。
+	if op.Op == "set" && defaultCopiedWithoutEvidence(*working, op, source.Quote) {
+		return op, false
+	}
+	// 无证据的 remove existing_parts 同样是关键字段错写:撤销全部已有件
+	// 只能来自用户明确的撤回表达(意图动词+旧件/已有对象)。
+	// ponytail: 白名单不覆盖"显卡不再沿用"等单品类口语,漏报路径是保留
+	// observation 等追问补证,不会误删用户事实。
+	if op.Op == "remove" && op.Field == "existing_parts" {
+		// 明确"全部新买"表达下,remove 的领域语义是赋空值:撤销已有关系
+		// 的标准表达是 active [](可核定的明确值),不是墓碑;程序会级联
+		// 清空关联型号。纯撤销表达("旧件都不要了")仍走 remove。
+		if existingPartsClearedEvidence(source.Quote) {
+			quote := op.Quote
+			if quote == "" || !strings.Contains(source.Quote, quote) {
+				quote = source.Quote
+			}
+			op = schemas.RequirementOperation{Op: "set", Field: "existing_parts", Value: []byte("[]"),
+				Quote: quote, Kind: "fact", Strength: "must", Evidence: "stated"}
+			g.update.Operations[i] = op
+		} else if !existingPartsRemovalEvidence(source.Quote) {
+			g.observe(op.Field, op.Quote, "本轮未表达撤销已有件，不执行移除")
+			return op, false
+		}
+	}
+	// owned_parts 是 existing_parts 的型号明细:撤销全部已有件由
+	// set existing_parts=[] 的确定性级联完成,独立 remove 只会把级联后
+	// 的明确空值退化成墓碑。本轮有"全部新买"证据时静默跳过(与操作
+	// 顺序无关);无该证据的单独 remove 降级观察,旧型号保留待更正。
+	if op.Op == "remove" && op.Field == "owned_parts" {
+		if existingPartsClearedEvidence(source.Quote) {
+			return op, false
+		}
+		g.observe(op.Field, op.Quote, "本轮未表达撤销已有件型号，不执行移除")
+		return op, false
+	}
+	// notes 只承载背景记录:模型自作主张"顺手清空备注"是实录中的噪声
+	// 操作,静默跳过(需求真值无损)。用户真要删备注会给出明确表达,
+	// 那时 quote 含撤销语境词,照常放行。
+	// ponytail: 词表外的等价表达会被跳过一轮,升级路径是显式的备注
+	// 编辑入口,不在此扩 NLU。
+	if op.Op == "remove" && op.Field == "notes" && !notesRemovalEvidence(source.Quote) {
+		return op, false
+	}
+	// 模型省略 remove 的摘录时，来源仍绑定本轮完整消息，不猜撤销语义。
+	if op.Op == "remove" && op.Quote == "" && working.Fields[op.Field].Status == "active" {
+		op.Quote = source.Quote
+	}
+	if op.Evidence == "inferred" {
+		// 推断不能作为用户要求:原话已被同轮明确操作结构化时静默跳过
+		// (降级观察只是重复);独立片段降级为观察保留原文供追问。
+		if !g.statedByOtherOperation(i, op.Quote) {
+			g.observe(op.Field, op.Quote, "模型推断尚未作为用户要求采用")
+		}
+		return op, false
+	}
+	// An absent value cannot conflict with a field that has no current claim.
+	// Preserve the source without inventing a preference or reviving removal.
+	// A correction to an active/conflicting value still follows the guard below.
+	before := working.Fields[op.Field]
+	if op.Op == "set" && before.Status != "active" && before.Status != "conflict" && missingRequirementValue(op) {
+		g.observe(op.Field, op.Quote, "尚未提供可用值，保留未知信息原文")
+		return op, false
+	}
+	if op.Evidence == "uncertain" && op.Op == "set" {
+		if g.requiresConfirmation(op) {
+			op.Op, op.Value = "conflict", nil
+		} else {
+			g.observe(op.Field, op.Quote, "可选信息尚未明确，保留原文供后续理解")
+			return op, false
+		}
+	}
+	if sameSourceWorkloadResolution(op, *g.update) {
+		g.observe("notes", op.Quote, "工作负载参数原文，未作为显示器目标采用")
+		return op, false
+	}
+	next, err := schemas.ApplyRequirementUpdate(*working, schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{op}}, source)
+	if err != nil {
+		if errors.Is(err, schemas.ErrRequirementContextField) {
+			// Keep the source as background, not as a disputed budget/preference.
+			// Associate it with notes so updating the real field cannot erase it.
+			g.observe("notes", op.Quote, "这段信息被标记为补充背景，未作为"+schemas.RequirementFieldLabel(op.Field)+"采用")
+			return op, false
+		}
+		g.markConflict(op)
+		g.observe(op.Field, op.Quote, "该字段尚未安全结构化，原文已保留")
+		return op, false
+	}
+	if err := guardRequirementUpdateEvidence(*working, schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{op}}); err != nil {
+		g.markConflict(op)
+		g.observe(op.Field, op.Quote, "该字段未通过来源或准确型号校验，原文已保留")
+		return op, false
+	}
+	*g.working = next
+	return op, true
+}
+
+// mergeObservations 合并模型自报观察:原文已被本轮实际生效操作结构化的
+// 复述观察丢弃(金标口径"能进 operations 的不进 observations"的代码侧
+// 兜底;被拦截/推断的操作没有成为真值,其观察保留),其余经 observe 去重
+// 后进入本轮更新。
+func (g *requirementGuard) mergeObservations() {
+	for _, observation := range g.update.Observations {
+		if !strings.HasPrefix(observation.Reason, "unsupported_capability:") && g.statedByActiveOperation(observation.Quote) {
+			continue
+		}
+		g.observe(observation.Field, observation.Quote, observation.Reason)
+	}
+}
+
 // 校验每个字段后一起提交。坏字段只保留原文，不撤回同轮其他可靠信息。
 // 用户语义由已有 Screening 理解；这里没有用途、偏好或撤销的关键词词表。
 func prepareRequirementUpdate(state schemas.RequirementState, update schemas.RequirementUpdate, source schemas.RequirementSource) schemas.RequirementUpdate {
 	out := schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{}}
 	working := state
-	observe := func(field, quote, reason string) {
-		if !knownStateField(field) {
-			field = "notes"
-		}
-		if strings.TrimSpace(quote) == "" || !strings.Contains(source.Quote, quote) {
-			quote = source.Quote
-		}
-		if strings.TrimSpace(quote) != "" && len(out.Observations) < 32 {
-			// unsupported_capability 观察是结构化能力记录,合同要求每个能力
-			// 一条:同一句原文会合法产生 monitor/keyboard/mouse 多条,不参与
-			// 去重。自由文本观察则同一段原文不重复记录:quote 完全相同
-			// (任意字段)或同字段互为包含片段时合并,保留覆盖更完整的摘录。
-			if !strings.HasPrefix(reason, "unsupported_capability:") {
-				for j, existing := range out.Observations {
-					sameQuote := existing.Quote == quote
-					overlap := existing.Field == field && (strings.Contains(existing.Quote, quote) || strings.Contains(quote, existing.Quote))
-					if sameQuote || overlap {
-						if strings.Contains(quote, existing.Quote) && len(quote) > len(existing.Quote) {
-							out.Observations[j] = schemas.RequirementObservationInput{Field: field, Quote: quote, Reason: reason}
-						}
-						return
-					}
-				}
-			}
-			out.Observations = append(out.Observations, schemas.RequirementObservationInput{Field: field, Quote: quote, Reason: reason})
-		}
-	}
-	// statedByOtherOperation:推断操作的原话片段是否已被本轮明确表达的操作
-	// 覆盖(quote 互为包含)。已结构化的信息不再降级为观察,独立片段保留。
-	statedByOtherOperation := func(index int, quote string) bool {
-		if strings.TrimSpace(quote) == "" {
-			return false
-		}
-		for i, other := range update.Operations {
-			if i == index || other.Op != "set" || other.Evidence == "inferred" {
-				continue
-			}
-			if strings.Contains(quote, other.Quote) || strings.Contains(other.Quote, quote) {
-				return true
-			}
-		}
-		return false
-	}
-	// 结构或身份校验失败且确有当前证据时，需确认生成依赖的字段，
-	// 不能悄悄沿用用户正在纠正的旧值。
-	requiresConfirmation := func(op schemas.RequirementOperation) bool {
-		before := working.Fields[op.Field]
-		required := op.Strength == "must" || before.Strength == "must"
-		switch op.Field {
-		case "budget_cny", "budget_flex", "budget_basis", "use_case.type", "existing_parts", "owned_parts":
-			required = true
-		case "use_case.resolution":
-			required = required || string(working.Fields["use_case.type"].Value) == `"gaming"`
-		}
-		return required
-	}
-	markConflict := func(op schemas.RequirementOperation) {
-		if op.Op != "set" || strings.TrimSpace(op.Quote) == "" || !strings.Contains(source.Quote, op.Quote) {
-			return
-		}
-		if !requiresConfirmation(op) {
-			return
-		}
-		conflict := schemas.RequirementOperation{Op: "conflict", Field: op.Field, Quote: op.Quote, Evidence: "uncertain"}
-		// A malformed new hard value must not inherit an older soft strength.
-		// Preserve a known hard obligation while only the disputed value is pending.
-		if op.Strength == "must" || working.Fields[op.Field].Strength == "must" {
-			conflict.Strength = "must"
-		}
-		if schemas.ValidRequirementKind(op.Kind) {
-			conflict.Kind = op.Kind
-		}
-		if pending, err := schemas.ApplyRequirementUpdate(working, schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{conflict}}, source); err == nil {
-			out.Operations = append(out.Operations, conflict)
-			working = pending
-		}
-	}
+	g := &requirementGuard{source: source, update: &update, out: &out, working: &working}
 	for i, op := range update.Operations {
-		// 模型重发与当前 active 值完全相同的字段是 no-op:跳过,不重复计入
-		// 本轮变更(值与强度/语义都未变时状态本就不变)。
-		if op.Op == "set" {
-			before := working.Fields[op.Field]
-			if before.Status == "active" && sameJSONValue(before.Value, op.Value) &&
-				(op.Strength == "" || op.Strength == before.Strength) &&
-				(op.Kind == "" || op.Kind == before.Kind) {
-				continue
-			}
-		}
-		// 型号更正的摘录出错但型号确实出现在本轮原文时,把证据绑定到本轮
-		// 完整原文(服务器验证型号 grounding,不采用模型幻觉的旧句子)。
-		if op.Field == "owned_parts" && op.Op == "set" && len(op.Value) > 0 &&
-			(op.Quote == "" || !strings.Contains(source.Quote, op.Quote)) && ownedModelsGrounded(op.Value, source.Quote) {
-			op.Quote = source.Quote
-		}
-		// 形状纠偏:确定性参考的追问字段是 owned_parts.<category>.model,
-		// 模型会模仿该形状(含单段 owned_parts.<category> 携带对象/字符串);
-		// 规范化为 owned_parts 数组合并操作,值仍来自本轮原话。
-		if normalized, ok := normalizeOwnedModelPath(working, op, source); ok {
-			update.Operations[i] = normalized
-			op = normalized
-		}
-		// 证据红线(按授权合同拦截空已有件,不触发纠偏重试):
-		// 空 existing_parts 必须有本轮"全新购买/无已有件"的明确表达——
-		// 泛购买语句("帮我配台电脑")不是采购范围证据。原文处于已有件
-		// 讨论语境(提到旧件/新买/复用等)时保留完整原文观察供后续追问
-		// (conversations15 cv-ownership 金标依赖);原文与已有件完全无关
-		// (如"预算9000，开始配吧")时,观察对追问没有信息量,静默丢弃
-		// (ex-composite 金标:能进 operations 的信息不进 observations)。
-		if op.Op == "set" && op.Field == "existing_parts" && isEmptyJSONArray(op.Value) && !existingPartsClearedEvidence(source.Quote) {
-			if existingPartsMentioned(source.Quote) {
-				observe(op.Field, source.Quote, "本轮未表达全部新买或无已有件，不写入空已有件")
-			}
-			continue
-		}
-		// 百分比换算仅在证据匹配时进行:模型把"最多上浮5%"输出为数值 5 时,
-		// 只有本轮原话出现对应百分比字面量才换算为比例,不任意对数值除100。
-		if normalized, ok := normalizePercentBudgetFlex(op, source.Quote); ok {
-			op.Value = normalized
-			update.Operations[i] = op
-		}
-		// 零弹性的证据红线:普通预算金额("预算7500")不是"严格不超"表达,
-		// 该写入是模型幻觉,直接丢弃(金额已由 budget_cny 记录,降级观察
-		// 没有新信息,只会污染本轮观察)。整句或模型摘录的严格表达任一
-		// 命中即放行。
-		if op.Op == "set" && op.Field == "budget_flex" && rawNumberIs(op.Value, 0) && !strictBudgetFlexEvidence(source.Quote, op.Quote) {
-			continue
-		}
-		// 数值型系统默认(如 budget_flex 0.1)已由程序应用,照抄默认不是用户
-		// 事实;仅当本轮原话出现该值字面量时才接受写入。拦截后静默丢弃:
-		// 该值已由确定性默认生效,降级观察没有新信息,只污染本轮观察
-		// (金标口径:能进 operations 的信息不进 observations)。
-		if op.Op == "set" && defaultCopiedWithoutEvidence(working, op, source.Quote) {
-			continue
-		}
-		// 无证据的 remove existing_parts 同样是关键字段错写:撤销全部已有件
-		// 只能来自用户明确的撤回表达(意图动词+旧件/已有对象)。
-		// ponytail: 白名单不覆盖"显卡不再沿用"等单品类口语,漏报路径是保留
-		// observation 等追问补证,不会误删用户事实。
-		if op.Op == "remove" && op.Field == "existing_parts" {
-			// 明确"全部新买"表达下,remove 的领域语义是赋空值:撤销已有关系
-			// 的标准表达是 active [](可核定的明确值),不是墓碑;程序会级联
-			// 清空关联型号。纯撤销表达("旧件都不要了")仍走 remove。
-			if existingPartsClearedEvidence(source.Quote) {
-				quote := op.Quote
-				if quote == "" || !strings.Contains(source.Quote, quote) {
-					quote = source.Quote
-				}
-				op = schemas.RequirementOperation{Op: "set", Field: "existing_parts", Value: []byte("[]"),
-					Quote: quote, Kind: "fact", Strength: "must", Evidence: "stated"}
-				update.Operations[i] = op
-			} else if !existingPartsRemovalEvidence(source.Quote) {
-				observe(op.Field, op.Quote, "本轮未表达撤销已有件，不执行移除")
-				continue
-			}
-		}
-		// owned_parts 是 existing_parts 的型号明细:撤销全部已有件由
-		// set existing_parts=[] 的确定性级联完成,独立 remove 只会把级联后
-		// 的明确空值退化成墓碑。本轮有"全部新买"证据时静默跳过(与操作
-		// 顺序无关);无该证据的单独 remove 降级观察,旧型号保留待更正。
-		if op.Op == "remove" && op.Field == "owned_parts" {
-			if existingPartsClearedEvidence(source.Quote) {
-				continue
-			}
-			observe(op.Field, op.Quote, "本轮未表达撤销已有件型号，不执行移除")
-			continue
-		}
-		// notes 只承载背景记录:模型自作主张"顺手清空备注"是实录中的噪声
-		// 操作,静默跳过(需求真值无损)。用户真要删备注会给出明确表达,
-		// 那时 quote 含撤销语境词,照常放行。
-		// ponytail: 词表外的等价表达会被跳过一轮,升级路径是显式的备注
-		// 编辑入口,不在此扩 NLU。
-		if op.Op == "remove" && op.Field == "notes" && !notesRemovalEvidence(source.Quote) {
-			continue
-		}
-		// 模型省略 remove 的摘录时，来源仍绑定本轮完整消息，不猜撤销语义。
-		if op.Op == "remove" && op.Quote == "" && working.Fields[op.Field].Status == "active" {
-			op.Quote = source.Quote
-		}
-		if op.Evidence == "inferred" {
-			// 推断不能作为用户要求:原话已被同轮明确操作结构化时静默跳过
-			// (降级观察只是重复);独立片段降级为观察保留原文供追问。
-			if !statedByOtherOperation(i, op.Quote) {
-				observe(op.Field, op.Quote, "模型推断尚未作为用户要求采用")
-			}
-			continue
-		}
-		// An absent value cannot conflict with a field that has no current claim.
-		// Preserve the source without inventing a preference or reviving removal.
-		// A correction to an active/conflicting value still follows the guard below.
-		before := working.Fields[op.Field]
-		if op.Op == "set" && before.Status != "active" && before.Status != "conflict" && missingRequirementValue(op) {
-			observe(op.Field, op.Quote, "尚未提供可用值，保留未知信息原文")
-			continue
-		}
-		if op.Evidence == "uncertain" && op.Op == "set" {
-			if requiresConfirmation(op) {
-				op.Op, op.Value = "conflict", nil
-			} else {
-				observe(op.Field, op.Quote, "可选信息尚未明确，保留原文供后续理解")
-				continue
-			}
-		}
-		if sameSourceWorkloadResolution(op, update) {
-			observe("notes", op.Quote, "工作负载参数原文，未作为显示器目标采用")
-			continue
-		}
-		next, err := schemas.ApplyRequirementUpdate(working, schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{op}}, source)
-		if err != nil {
-			if errors.Is(err, schemas.ErrRequirementContextField) {
-				// Keep the source as background, not as a disputed budget/preference.
-				// Associate it with notes so updating the real field cannot erase it.
-				observe("notes", op.Quote, "这段信息被标记为补充背景，未作为"+schemas.RequirementFieldLabel(op.Field)+"采用")
-				continue
-			}
-			markConflict(op)
-			observe(op.Field, op.Quote, "该字段尚未安全结构化，原文已保留")
-			continue
-		}
-		if err := guardRequirementUpdateEvidence(working, schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{op}}); err != nil {
-			markConflict(op)
-			observe(op.Field, op.Quote, "该字段未通过来源或准确型号校验，原文已保留")
+		op, keep := g.guardOperation(i, op)
+		if !keep {
 			continue
 		}
 		out.Operations = append(out.Operations, op)
-		working = next
 	}
-	statedByActiveOperation := func(quote string) bool {
-		if strings.TrimSpace(quote) == "" {
-			return false
-		}
-		for _, op := range out.Operations {
-			if op.Op != "set" || strings.TrimSpace(op.Quote) == "" {
-				continue
-			}
-			if strings.Contains(quote, op.Quote) || strings.Contains(op.Quote, quote) {
-				return true
-			}
-		}
-		return false
-	}
-	for _, observation := range update.Observations {
-		// 金标口径"能进 operations 的不进 observations"的代码侧兜底:观察
-		// 的原文已被本轮实际生效的明确操作结构化(quote 互为包含)时丢弃
-		// ——该信息已是需求真值,复述成观察(常见形态:reason 里声明"撤销
-		// 之前的观察"之类的元操作)只是噪声。被拦截/推断的操作没有成为
-		// 真值,不参与该判定,保留观察等追问。
-		if !strings.HasPrefix(observation.Reason, "unsupported_capability:") && statedByActiveOperation(observation.Quote) {
-			continue
-		}
-		observe(observation.Field, observation.Quote, observation.Reason)
-	}
+	g.mergeObservations()
 	return out
 }
 

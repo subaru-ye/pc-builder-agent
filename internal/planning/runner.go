@@ -482,337 +482,27 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 			return map[string]any{"error": fmt.Sprintf("payload 含未知字段 %q；%s 允许的字段：%s。请移除或更正后整体重试。", key, action, strings.Join(known, ", "))}
 		}
 	}
-	var p struct {
-		Query    string              `json:"query"`
-		Category string              `json:"category"`
-		OrderBy  string              `json:"order_by"`
-		Offset   int                 `json:"offset"`
-		Limit    int                 `json:"limit"`
-		URL      string              `json:"url"`
-		Method   string              `json:"method"`
-		ID       string              `json:"id"`
-		Draft    json.RawMessage     `json:"draft"`
-		Queries  []*localSearchQuery `json:"queries"`
-	}
+	p := callParams{}
 	if json.Unmarshal([]byte(payload), &p) != nil {
 		return map[string]any{"error": "payload须为JSON对象字符串"}
 	}
 	switch action {
 	case "search_local_batch":
-		if len(p.Queries) == 0 || len(p.Queries) > 8 {
-			return map[string]any{"error": "queries 须含 1 至 8 个本地查询（格式 queries:[{query,category,order_by,offset,limit},...]）；请按范围修正后整体重试。"}
-		}
-		for _, query := range p.Queries {
-			if query == nil {
-				return map[string]any{"error": "每个本地查询须为JSON对象"}
-			}
-		}
-		// 子查询的未知字段必须在批量入口拦截：类型化解码会静默丢弃它们，
-		// 随后的逐项执行（重新序列化）永远看不到拼错字段。
-		var rawQueries []json.RawMessage
-		if err := json.Unmarshal(rawFields["queries"], &rawQueries); err == nil {
-			for i, item := range rawQueries {
-				var itemFields map[string]json.RawMessage
-				if json.Unmarshal(item, &itemFields) != nil {
-					continue // null/非对象项由上方 nil 检查或逐项执行报错。
-				}
-				for key := range itemFields {
-					if !slices.Contains(paramActions["search_local"], key) {
-						return map[string]any{"error": fmt.Sprintf("queries[%d] 含未知字段 %q；子查询允许的字段：%s。请移除或更正后整体重试。", i, key, strings.Join(paramActions["search_local"], ", "))}
-					}
-				}
-			}
-		}
-		results := []map[string]any{}
-		for i, query := range p.Queries {
-			// Run reserves the first tool execution before dispatch. Each further
-			// local query consumes another slot; batching never expands the cap.
-			if i > 0 {
-				if x.result.ToolCalls >= maxToolCalls {
-					break
-				}
-				x.result.ToolCalls++
-			}
-			raw, _ := json.Marshal(query)
-			started := time.Now()
-			result := x.call(ctx, map[string]any{"action": "search_local", "payload": string(raw)})
-			x.result.StageMS["search_local"] += time.Since(started).Milliseconds()
-			results = append(results, map[string]any{"index": i, "query": query, "result": result})
-		}
-		return map[string]any{"results": results, "executed_queries": len(results), "pending_queries": p.Queries[len(results):]}
+		return x.doSearchLocalBatch(ctx, p, rawFields, payload)
 	case "read_evidence":
-		if errMsg := checkWindowParams(rawFields); errMsg != "" {
-			return map[string]any{"error": errMsg}
-		}
-		if p.ID == "" {
-			return map[string]any{"error": "payload.id 缺失：read_evidence 须为 {\"id\":\"来源编号\"}（如 local:候选编号 或 source-N）；请补齐后重试。"}
-		}
-		if strings.HasPrefix(p.ID, "local:") {
-			for _, candidate := range x.candidates {
-				if candidate.External || p.ID != "local:"+candidate.ID {
-					continue
-				}
-				x.captureSelectedEvidence(ctx, []string{candidate.ID})
-				sources := []map[string]string{}
-				for _, e := range x.evidence {
-					if e.CandidateID == candidate.ID && e.Kind == "catalog" {
-						sources = append(sources, map[string]string{"id": e.ID, "field": e.Field, "kind": e.Kind})
-					}
-				}
-				return map[string]any{"id": p.ID, "kind": "local_snapshot", "candidate": candidate, "snapshot_date": x.date, "sources": sources,
-					"instruction": "这是本轮本地候选快照，可能含field_evidence标注的会话规格补充；报价来自本地目录。未发起联网或读取额外正文，缺失字段仍未知。sources及field_evidence可按编号继续read_evidence。"}
-			}
-		}
-		for _, e := range x.evidence {
-			if e.ID == p.ID {
-				return evidenceWindow(e, p.Query, p.Offset, p.Limit)
-			}
-		}
-		return map[string]any{"error": "没有找到该来源编号"}
+		return x.doReadEvidence(ctx, p, rawFields, payload)
 	case "search_local":
-		if p.OrderBy == "" {
-			p.OrderBy = "relevance"
-		}
-		if p.OrderBy != "relevance" && p.OrderBy != "price_asc" && p.OrderBy != "price_desc" {
-			return map[string]any{"error": "order_by 仅允许 relevance、price_asc 或 price_desc；请修正后整体重试。"}
-		}
-		if p.Category != "" && !slices.Contains(schemas.AllCategories, schemas.Category(p.Category)) {
-			return map[string]any{"error": fmt.Sprintf("category %q 不是合法品类；合法品类：%s。请修正后整体重试（省略 category 表示全品类）。", p.Category, strings.Join(categoryNames(), ", "))}
-		}
-		if _, explicit := rawFields["limit"]; explicit && (p.Limit <= 0 || p.Limit > 24) {
-			return map[string]any{"error": fmt.Sprintf("limit 显式值 %d 越界：允许 1 至 24（缺席时默认 16）；请修正后整体重试。", p.Limit)}
-		}
-		if _, explicit := rawFields["offset"]; explicit && p.Offset < 0 {
-			return map[string]any{"error": fmt.Sprintf("offset 显式值 %d 非法：必须 ≥ 0（缺席时默认 0）；请修正后整体重试。", p.Offset)}
-		}
-		if p.OrderBy == "price_asc" {
-			if x.priceAsc == nil {
-				x.priceAsc = map[string]bool{}
-			}
-			if p.Category == "" {
-				x.priceAsc["*"] = true
-			} else {
-				x.priceAsc[p.Category] = true
-			}
-		}
-		found := []Candidate{}
-		for _, c := range x.candidates {
-			if p.Category != "" && string(c.Category) != p.Category {
-				continue
-			}
-			found = append(found, c)
-		}
-		prices := map[string]*big.Rat{}
-		var low, high *string
-		for _, c := range found {
-			if c.Price == nil {
-				continue
-			}
-			price, ok := new(big.Rat).SetString(*c.Price)
-			if !ok || price.Sign() < 0 {
-				continue
-			}
-			prices[c.ID] = price
-			if low == nil {
-				low, high = c.Price, c.Price
-				continue
-			}
-			minimum, _ := new(big.Rat).SetString(*low)
-			maximum, _ := new(big.Rat).SetString(*high)
-			if price.Cmp(minimum) < 0 {
-				low = c.Price
-			}
-			if price.Cmp(maximum) > 0 {
-				high = c.Price
-			}
-		}
-		// 评分只用于 keyword_hits 与同价并列：价格语义是刻意设计，query 词不得变成过滤条件。
-		score := func(c Candidate) int {
-			n := 0
-			hay := strings.ToLower(c.ID + " " + c.Brand + " " + c.Model + " " + string(c.Specs))
-			for _, term := range strings.Fields(strings.ToLower(p.Query)) {
-				if strings.Contains(hay, term) {
-					n++
-				}
-			}
-			return n
-		}
-		scores := make(map[string]int, len(found))
-		matched := 0
-		for _, c := range found {
-			s := score(c)
-			scores[c.ID] = s
-			if s > 0 {
-				matched++
-			}
-		}
-		sort.SliceStable(found, func(i, j int) bool {
-			if p.OrderBy != "relevance" {
-				a, b := prices[found[i].ID], prices[found[j].ID]
-				if (a == nil) != (b == nil) {
-					return a != nil
-				}
-				if a != nil && b != nil && a.Cmp(b) != 0 {
-					if p.OrderBy == "price_desc" {
-						return a.Cmp(b) > 0
-					}
-					return a.Cmp(b) < 0
-				}
-			}
-			a, b := scores[found[i].ID], scores[found[j].ID]
-			if a != b {
-				return a > b
-			}
-			return found[i].ID < found[j].ID
-		})
-		// 显式越界值已在参数校验层报错；此处只剩缺席默认（limit=16）。
-		if p.Limit <= 0 {
-			p.Limit = 16
-		}
-		if p.Offset < 0 {
-			p.Offset = 0
-		}
-		if p.Offset > len(found) {
-			p.Offset = len(found)
-		}
-		end := min(p.Offset+p.Limit, len(found))
-		newCount := 0
-		for _, c := range found[p.Offset:end] {
-			if !x.seen[c.ID] {
-				newCount++
-			}
-			x.seen[c.ID] = true
-		}
-		seenInScope := 0
-		for _, c := range found {
-			if x.seen[c.ID] {
-				seenInScope++
-			}
-		}
-		sources := map[string][]map[string]string{}
-		if source, ok := x.runner.Catalog.(interface {
-			CandidateEvidence(context.Context, []string) ([]store.CandidateEvidence, error)
-		}); ok {
-			ids := []string{}
-			for _, c := range found[p.Offset:end] {
-				ids = append(ids, c.ID)
-			}
-			rows, err := source.CandidateEvidence(ctx, ids)
-			if err == nil {
-				for _, row := range rows {
-					e := Evidence{ID: "catalog-" + row.ID, CandidateID: row.SKU, Field: row.Field, URL: row.URL, Title: row.SKU + " · " + row.Field + " · " + row.Status, Text: row.Text, CapturedAt: row.CapturedAt.UTC().Format(time.RFC3339), Kind: "catalog"}
-					// Catalog queries expose field references, not repeated URLs,
-					// titles and excerpts for every field on the same product page.
-					sources[row.SKU] = append(sources[row.SKU], map[string]string{"id": e.ID, "field": row.Field, "status": row.Status})
-					seen := false
-					for _, old := range x.evidence {
-						if old.ID == e.ID {
-							seen = true
-							break
-						}
-					}
-					if !seen {
-						x.evidence = append(x.evidence, e)
-					}
-				}
-			}
-		}
-		result := map[string]any{"candidates": found[p.Offset:end], "sources": sources, "total": len(found), "next_offset": end, "truncated": len(found) - end, "snapshot_date": x.date,
-			"new_count": newCount, "previously_returned_count": end - p.Offset - newCount, "seen_in_scope": seenInScope, "scope_category": p.Category, "query_is_ranking_only": true,
-			"order_by": p.OrderBy, "price_range_cny": map[string]any{"min": low, "max": high, "priced_count": len(prices), "unknown_count": len(found) - len(prices)},
-			"query_matched_count": matched}
-		if matched > 0 && p.OrderBy != "relevance" {
-			// 价格页之外另附关键词命中者，避免规格匹配项被低价截断后误判目录无货。
-			hits := []Candidate{}
-			for _, c := range found {
-				if scores[c.ID] > 0 {
-					hits = append(hits, c)
-					if len(hits) == 8 {
-						break
-					}
-				}
-			}
-			result["keyword_hits"] = hits
-		}
-		return result
+		return x.doSearchLocal(ctx, p, rawFields, payload)
 	case "search_semantic":
-		source, ok := x.runner.Catalog.(interface {
-			SemanticCandidates(context.Context, store.SemanticQuery) (store.SemanticResult, error)
-		})
-		if !ok || x.runner.Embedder == nil {
-			return map[string]any{"unavailable": "语义检索当前不可用，可继续使用本地检索"}
-		}
-		vector, e := x.runner.Embedder.EmbedOne(ctx, p.Query)
-		if e != nil {
-			return map[string]any{"unavailable": "语义检索暂时不可用"}
-		}
-		found, e := source.SemanticCandidates(ctx, store.SemanticQuery{Category: schemas.Category(p.Category), QueryEmbedding: vector, TopN: 16})
-		if e != nil {
-			return map[string]any{"unavailable": "语义检索暂时不可用"}
-		}
-		rows := []map[string]any{}
-		for _, hit := range found.Candidates {
-			for _, c := range x.candidates {
-				if c.ID == hit.SKU {
-					x.seen[c.ID] = true
-					rows = append(rows, map[string]any{"candidate": c, "match_text": hit.MatchText, "similarity": hit.Similarity})
-				}
-			}
-		}
-		return map[string]any{"candidates": rows, "truncated": found.Truncated}
+		return x.doSearchSemantic(ctx, p, rawFields, payload)
 	case "search_web":
-		if p.Query == "" {
-			return map[string]any{"error": "payload.query 缺失：search_web 须为 {\"query\":\"检索词\"}；请补齐后重试。"}
-		}
-		if x.result.SearchCalls >= maxSearchCalls || x.runner.Web == nil {
-			return map[string]any{"unavailable": "外部搜索当前不可用，可继续基于已有资料讨论"}
-		}
-		x.result.SearchCalls++
-		rows, e := x.runner.Web.Search(ctx, p.Query)
-		if e != nil {
-			return map[string]any{"unavailable": e.Error()}
-		}
-		return x.addEvidence(rows)
+		return x.doSearchWeb(ctx, p, rawFields, payload)
 	case "read_page":
-		if errMsg := checkWindowParams(rawFields); errMsg != "" {
-			return map[string]any{"error": errMsg}
-		}
-		if p.URL == "" {
-			return map[string]any{"error": "payload.url 缺失：read_page 须为 {\"url\":\"https://...\"}（method 可选）；请补齐后重试。"}
-		}
-		if x.result.PageCalls >= maxPageCalls || x.runner.Web == nil {
-			return map[string]any{"unavailable": "本轮网页读取额度已用完"}
-		}
-		x.result.PageCalls++
-		row, e := x.runner.Web.ReadPage(ctx, p.URL, p.Method)
-		if e != nil {
-			return map[string]any{"unavailable": e.Error()}
-		}
-		row.ID = fmt.Sprintf("source-%d", len(x.evidence)+1)
-		x.evidence = append(x.evidence, row)
-		view := evidenceWindow(row, p.Query, p.Offset, p.Limit)
-		view["sources"] = []Evidence{view["source"].(Evidence)}
-		delete(view, "source")
-		return view
+		return x.doReadPage(ctx, p, rawFields, payload)
 	case "register_candidate":
-		var c Candidate
-		if json.Unmarshal([]byte(payload), &c) != nil {
-			return map[string]any{"error": "候选格式无效"}
-		}
-		if e := x.register(c); e != nil {
-			return map[string]any{"error": e.Error()}
-		}
-		for _, saved := range x.candidates {
-			if saved.ID == c.ID {
-				return map[string]any{"registered": c.ID, "candidate": saved, "instruction": "candidate是实际保存的参数；unknown中的规格可补查官网正文后重新注册。价格仅用本地快照，缺价保留未知，不联网补价。注册成功不等于兼容性通过。"}
-			}
-		}
-		return map[string]any{"error": "候选注册后未找到"}
+		return x.doRegisterCandidate(ctx, p, rawFields, payload)
 	case "evaluate":
-		if len(p.Draft) == 0 || string(p.Draft) == "null" {
-			return map[string]any{"error": "payload.draft 缺失：evaluate 须为 {\"draft\":{\"schema_version\":1,\"requirement_ref\":\"current\",\"build_ref\":...,\"selection\":{...七类必选 SKU...}}}；请把 draft 包裹在 payload 内后整体重试，七类必选槽位不得为 null。"}
-		}
-		return x.evaluate(ctx, p.Draft)
+		return x.doEvaluate(ctx, p, rawFields, payload)
 	default:
 		names := make([]string, 0, len(paramActions))
 		for name := range paramActions {
@@ -821,6 +511,360 @@ func (x *execution) call(ctx context.Context, args map[string]any) map[string]an
 		sort.Strings(names)
 		return map[string]any{"error": fmt.Sprintf("未知工具操作 %q；合法 action：%s。请修正 action 后整体重试。", action, strings.Join(names, ", "))}
 	}
+}
+
+// callParams 是 planning_action payload 的类型化投影;各 action 只读自己
+// 声明的字段,未知字段已在进入分支前拦截。
+type callParams struct {
+	Query    string              `json:"query"`
+	Category string              `json:"category"`
+	OrderBy  string              `json:"order_by"`
+	Offset   int                 `json:"offset"`
+	Limit    int                 `json:"limit"`
+	URL      string              `json:"url"`
+	Method   string              `json:"method"`
+	ID       string              `json:"id"`
+	Draft    json.RawMessage     `json:"draft"`
+	Queries  []*localSearchQuery `json:"queries"`
+}
+
+// doSearchLocalBatch 执行 search_local_batch 工具分支,参数合同校验后的业务体。
+func (x *execution) doSearchLocalBatch(ctx context.Context, p callParams, rawFields map[string]json.RawMessage, payload string) map[string]any {
+	if len(p.Queries) == 0 || len(p.Queries) > 8 {
+		return map[string]any{"error": "queries 须含 1 至 8 个本地查询（格式 queries:[{query,category,order_by,offset,limit},...]）；请按范围修正后整体重试。"}
+	}
+	for _, query := range p.Queries {
+		if query == nil {
+			return map[string]any{"error": "每个本地查询须为JSON对象"}
+		}
+	}
+	// 子查询的未知字段必须在批量入口拦截：类型化解码会静默丢弃它们，
+	// 随后的逐项执行（重新序列化）永远看不到拼错字段。
+	var rawQueries []json.RawMessage
+	if err := json.Unmarshal(rawFields["queries"], &rawQueries); err == nil {
+		for i, item := range rawQueries {
+			var itemFields map[string]json.RawMessage
+			if json.Unmarshal(item, &itemFields) != nil {
+				continue // null/非对象项由上方 nil 检查或逐项执行报错。
+			}
+			for key := range itemFields {
+				if !slices.Contains(paramActions["search_local"], key) {
+					return map[string]any{"error": fmt.Sprintf("queries[%d] 含未知字段 %q；子查询允许的字段：%s。请移除或更正后整体重试。", i, key, strings.Join(paramActions["search_local"], ", "))}
+				}
+			}
+		}
+	}
+	results := []map[string]any{}
+	for i, query := range p.Queries {
+		// Run reserves the first tool execution before dispatch. Each further
+		// local query consumes another slot; batching never expands the cap.
+		if i > 0 {
+			if x.result.ToolCalls >= maxToolCalls {
+				break
+			}
+			x.result.ToolCalls++
+		}
+		raw, _ := json.Marshal(query)
+		started := time.Now()
+		result := x.call(ctx, map[string]any{"action": "search_local", "payload": string(raw)})
+		x.result.StageMS["search_local"] += time.Since(started).Milliseconds()
+		results = append(results, map[string]any{"index": i, "query": query, "result": result})
+	}
+	return map[string]any{"results": results, "executed_queries": len(results), "pending_queries": p.Queries[len(results):]}
+}
+
+// doReadEvidence 执行 read_evidence 工具分支,参数合同校验后的业务体。
+func (x *execution) doReadEvidence(ctx context.Context, p callParams, rawFields map[string]json.RawMessage, payload string) map[string]any {
+	if errMsg := checkWindowParams(rawFields); errMsg != "" {
+		return map[string]any{"error": errMsg}
+	}
+	if p.ID == "" {
+		return map[string]any{"error": "payload.id 缺失：read_evidence 须为 {\"id\":\"来源编号\"}（如 local:候选编号 或 source-N）；请补齐后重试。"}
+	}
+	if strings.HasPrefix(p.ID, "local:") {
+		for _, candidate := range x.candidates {
+			if candidate.External || p.ID != "local:"+candidate.ID {
+				continue
+			}
+			x.captureSelectedEvidence(ctx, []string{candidate.ID})
+			sources := []map[string]string{}
+			for _, e := range x.evidence {
+				if e.CandidateID == candidate.ID && e.Kind == "catalog" {
+					sources = append(sources, map[string]string{"id": e.ID, "field": e.Field, "kind": e.Kind})
+				}
+			}
+			return map[string]any{"id": p.ID, "kind": "local_snapshot", "candidate": candidate, "snapshot_date": x.date, "sources": sources,
+				"instruction": "这是本轮本地候选快照，可能含field_evidence标注的会话规格补充；报价来自本地目录。未发起联网或读取额外正文，缺失字段仍未知。sources及field_evidence可按编号继续read_evidence。"}
+		}
+	}
+	for _, e := range x.evidence {
+		if e.ID == p.ID {
+			return evidenceWindow(e, p.Query, p.Offset, p.Limit)
+		}
+	}
+	return map[string]any{"error": "没有找到该来源编号"}
+}
+
+// doSearchLocal 执行 search_local 工具分支,参数合同校验后的业务体。
+func (x *execution) doSearchLocal(ctx context.Context, p callParams, rawFields map[string]json.RawMessage, payload string) map[string]any {
+	if p.OrderBy == "" {
+		p.OrderBy = "relevance"
+	}
+	if p.OrderBy != "relevance" && p.OrderBy != "price_asc" && p.OrderBy != "price_desc" {
+		return map[string]any{"error": "order_by 仅允许 relevance、price_asc 或 price_desc；请修正后整体重试。"}
+	}
+	if p.Category != "" && !slices.Contains(schemas.AllCategories, schemas.Category(p.Category)) {
+		return map[string]any{"error": fmt.Sprintf("category %q 不是合法品类；合法品类：%s。请修正后整体重试（省略 category 表示全品类）。", p.Category, strings.Join(categoryNames(), ", "))}
+	}
+	if _, explicit := rawFields["limit"]; explicit && (p.Limit <= 0 || p.Limit > 24) {
+		return map[string]any{"error": fmt.Sprintf("limit 显式值 %d 越界：允许 1 至 24（缺席时默认 16）；请修正后整体重试。", p.Limit)}
+	}
+	if _, explicit := rawFields["offset"]; explicit && p.Offset < 0 {
+		return map[string]any{"error": fmt.Sprintf("offset 显式值 %d 非法：必须 ≥ 0（缺席时默认 0）；请修正后整体重试。", p.Offset)}
+	}
+	if p.OrderBy == "price_asc" {
+		if x.priceAsc == nil {
+			x.priceAsc = map[string]bool{}
+		}
+		if p.Category == "" {
+			x.priceAsc["*"] = true
+		} else {
+			x.priceAsc[p.Category] = true
+		}
+	}
+	found := []Candidate{}
+	for _, c := range x.candidates {
+		if p.Category != "" && string(c.Category) != p.Category {
+			continue
+		}
+		found = append(found, c)
+	}
+	prices := map[string]*big.Rat{}
+	var low, high *string
+	for _, c := range found {
+		if c.Price == nil {
+			continue
+		}
+		price, ok := new(big.Rat).SetString(*c.Price)
+		if !ok || price.Sign() < 0 {
+			continue
+		}
+		prices[c.ID] = price
+		if low == nil {
+			low, high = c.Price, c.Price
+			continue
+		}
+		minimum, _ := new(big.Rat).SetString(*low)
+		maximum, _ := new(big.Rat).SetString(*high)
+		if price.Cmp(minimum) < 0 {
+			low = c.Price
+		}
+		if price.Cmp(maximum) > 0 {
+			high = c.Price
+		}
+	}
+	// 评分只用于 keyword_hits 与同价并列：价格语义是刻意设计，query 词不得变成过滤条件。
+	score := func(c Candidate) int {
+		n := 0
+		hay := strings.ToLower(c.ID + " " + c.Brand + " " + c.Model + " " + string(c.Specs))
+		for _, term := range strings.Fields(strings.ToLower(p.Query)) {
+			if strings.Contains(hay, term) {
+				n++
+			}
+		}
+		return n
+	}
+	scores := make(map[string]int, len(found))
+	matched := 0
+	for _, c := range found {
+		s := score(c)
+		scores[c.ID] = s
+		if s > 0 {
+			matched++
+		}
+	}
+	sort.SliceStable(found, func(i, j int) bool {
+		if p.OrderBy != "relevance" {
+			a, b := prices[found[i].ID], prices[found[j].ID]
+			if (a == nil) != (b == nil) {
+				return a != nil
+			}
+			if a != nil && b != nil && a.Cmp(b) != 0 {
+				if p.OrderBy == "price_desc" {
+					return a.Cmp(b) > 0
+				}
+				return a.Cmp(b) < 0
+			}
+		}
+		a, b := scores[found[i].ID], scores[found[j].ID]
+		if a != b {
+			return a > b
+		}
+		return found[i].ID < found[j].ID
+	})
+	// 显式越界值已在参数校验层报错；此处只剩缺席默认（limit=16）。
+	if p.Limit <= 0 {
+		p.Limit = 16
+	}
+	if p.Offset < 0 {
+		p.Offset = 0
+	}
+	if p.Offset > len(found) {
+		p.Offset = len(found)
+	}
+	end := min(p.Offset+p.Limit, len(found))
+	newCount := 0
+	for _, c := range found[p.Offset:end] {
+		if !x.seen[c.ID] {
+			newCount++
+		}
+		x.seen[c.ID] = true
+	}
+	seenInScope := 0
+	for _, c := range found {
+		if x.seen[c.ID] {
+			seenInScope++
+		}
+	}
+	sources := map[string][]map[string]string{}
+	if source, ok := x.runner.Catalog.(interface {
+		CandidateEvidence(context.Context, []string) ([]store.CandidateEvidence, error)
+	}); ok {
+		ids := []string{}
+		for _, c := range found[p.Offset:end] {
+			ids = append(ids, c.ID)
+		}
+		rows, err := source.CandidateEvidence(ctx, ids)
+		if err == nil {
+			for _, row := range rows {
+				e := Evidence{ID: "catalog-" + row.ID, CandidateID: row.SKU, Field: row.Field, URL: row.URL, Title: row.SKU + " · " + row.Field + " · " + row.Status, Text: row.Text, CapturedAt: row.CapturedAt.UTC().Format(time.RFC3339), Kind: "catalog"}
+				// Catalog queries expose field references, not repeated URLs,
+				// titles and excerpts for every field on the same product page.
+				sources[row.SKU] = append(sources[row.SKU], map[string]string{"id": e.ID, "field": row.Field, "status": row.Status})
+				seen := false
+				for _, old := range x.evidence {
+					if old.ID == e.ID {
+						seen = true
+						break
+					}
+				}
+				if !seen {
+					x.evidence = append(x.evidence, e)
+				}
+			}
+		}
+	}
+	result := map[string]any{"candidates": found[p.Offset:end], "sources": sources, "total": len(found), "next_offset": end, "truncated": len(found) - end, "snapshot_date": x.date,
+		"new_count": newCount, "previously_returned_count": end - p.Offset - newCount, "seen_in_scope": seenInScope, "scope_category": p.Category, "query_is_ranking_only": true,
+		"order_by": p.OrderBy, "price_range_cny": map[string]any{"min": low, "max": high, "priced_count": len(prices), "unknown_count": len(found) - len(prices)},
+		"query_matched_count": matched}
+	if matched > 0 && p.OrderBy != "relevance" {
+		// 价格页之外另附关键词命中者，避免规格匹配项被低价截断后误判目录无货。
+		hits := []Candidate{}
+		for _, c := range found {
+			if scores[c.ID] > 0 {
+				hits = append(hits, c)
+				if len(hits) == 8 {
+					break
+				}
+			}
+		}
+		result["keyword_hits"] = hits
+	}
+	return result
+}
+
+// doSearchSemantic 执行 search_semantic 工具分支,参数合同校验后的业务体。
+func (x *execution) doSearchSemantic(ctx context.Context, p callParams, rawFields map[string]json.RawMessage, payload string) map[string]any {
+	source, ok := x.runner.Catalog.(interface {
+		SemanticCandidates(context.Context, store.SemanticQuery) (store.SemanticResult, error)
+	})
+	if !ok || x.runner.Embedder == nil {
+		return map[string]any{"unavailable": "语义检索当前不可用，可继续使用本地检索"}
+	}
+	vector, e := x.runner.Embedder.EmbedOne(ctx, p.Query)
+	if e != nil {
+		return map[string]any{"unavailable": "语义检索暂时不可用"}
+	}
+	found, e := source.SemanticCandidates(ctx, store.SemanticQuery{Category: schemas.Category(p.Category), QueryEmbedding: vector, TopN: 16})
+	if e != nil {
+		return map[string]any{"unavailable": "语义检索暂时不可用"}
+	}
+	rows := []map[string]any{}
+	for _, hit := range found.Candidates {
+		for _, c := range x.candidates {
+			if c.ID == hit.SKU {
+				x.seen[c.ID] = true
+				rows = append(rows, map[string]any{"candidate": c, "match_text": hit.MatchText, "similarity": hit.Similarity})
+			}
+		}
+	}
+	return map[string]any{"candidates": rows, "truncated": found.Truncated}
+}
+
+// doSearchWeb 执行 search_web 工具分支,参数合同校验后的业务体。
+func (x *execution) doSearchWeb(ctx context.Context, p callParams, rawFields map[string]json.RawMessage, payload string) map[string]any {
+	if p.Query == "" {
+		return map[string]any{"error": "payload.query 缺失：search_web 须为 {\"query\":\"检索词\"}；请补齐后重试。"}
+	}
+	if x.result.SearchCalls >= maxSearchCalls || x.runner.Web == nil {
+		return map[string]any{"unavailable": "外部搜索当前不可用，可继续基于已有资料讨论"}
+	}
+	x.result.SearchCalls++
+	rows, e := x.runner.Web.Search(ctx, p.Query)
+	if e != nil {
+		return map[string]any{"unavailable": e.Error()}
+	}
+	return x.addEvidence(rows)
+}
+
+// doReadPage 执行 read_page 工具分支,参数合同校验后的业务体。
+func (x *execution) doReadPage(ctx context.Context, p callParams, rawFields map[string]json.RawMessage, payload string) map[string]any {
+	if errMsg := checkWindowParams(rawFields); errMsg != "" {
+		return map[string]any{"error": errMsg}
+	}
+	if p.URL == "" {
+		return map[string]any{"error": "payload.url 缺失：read_page 须为 {\"url\":\"https://...\"}（method 可选）；请补齐后重试。"}
+	}
+	if x.result.PageCalls >= maxPageCalls || x.runner.Web == nil {
+		return map[string]any{"unavailable": "本轮网页读取额度已用完"}
+	}
+	x.result.PageCalls++
+	row, e := x.runner.Web.ReadPage(ctx, p.URL, p.Method)
+	if e != nil {
+		return map[string]any{"unavailable": e.Error()}
+	}
+	row.ID = fmt.Sprintf("source-%d", len(x.evidence)+1)
+	x.evidence = append(x.evidence, row)
+	view := evidenceWindow(row, p.Query, p.Offset, p.Limit)
+	view["sources"] = []Evidence{view["source"].(Evidence)}
+	delete(view, "source")
+	return view
+}
+
+// doRegisterCandidate 执行 register_candidate 工具分支,参数合同校验后的业务体。
+func (x *execution) doRegisterCandidate(ctx context.Context, p callParams, rawFields map[string]json.RawMessage, payload string) map[string]any {
+	var c Candidate
+	if json.Unmarshal([]byte(payload), &c) != nil {
+		return map[string]any{"error": "候选格式无效"}
+	}
+	if e := x.register(c); e != nil {
+		return map[string]any{"error": e.Error()}
+	}
+	for _, saved := range x.candidates {
+		if saved.ID == c.ID {
+			return map[string]any{"registered": c.ID, "candidate": saved, "instruction": "candidate是实际保存的参数；unknown中的规格可补查官网正文后重新注册。价格仅用本地快照，缺价保留未知，不联网补价。注册成功不等于兼容性通过。"}
+		}
+	}
+	return map[string]any{"error": "候选注册后未找到"}
+}
+
+// doEvaluate 执行 evaluate 工具分支,参数合同校验后的业务体。
+func (x *execution) doEvaluate(ctx context.Context, p callParams, rawFields map[string]json.RawMessage, payload string) map[string]any {
+	if len(p.Draft) == 0 || string(p.Draft) == "null" {
+		return map[string]any{"error": "payload.draft 缺失：evaluate 须为 {\"draft\":{\"schema_version\":1,\"requirement_ref\":\"current\",\"build_ref\":...,\"selection\":{...七类必选 SKU...}}}；请把 draft 包裹在 payload 内后整体重试，七类必选槽位不得为 null。"}
+	}
+	return x.evaluate(ctx, p.Draft)
 }
 
 // paramActions 是各 action 的合法 payload 字段集（合同 v3）。缺席字段走文档化

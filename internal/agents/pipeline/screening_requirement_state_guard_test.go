@@ -21,15 +21,16 @@ func op(field string, value json.RawMessage) schemas.RequirementOperation {
 // ④ 泛购买语句不得写成空已有件；“全部新买/无已有件”原话才允许。
 func TestPrepareEmptyExistingPartsRequiresClearEvidence(t *testing.T) {
 	state := schemas.NewRequirementState()
-	// 反例：认证批次 D 实录失败原话，无任何采购范围表达。
+	// 反例：认证批次 D 实录失败原话，无任何采购范围表达;原文与已有件
+	// 无语境关联,拦截静默丢弃(金标 ex-composite:零观察)。
 	out := prepareRequirementUpdate(state, schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{
 		op("existing_parts", json.RawMessage(`[]`)),
 	}}, guardSource("帮我配台电脑，还要显示器和键鼠"))
 	if len(out.Operations) != 0 {
 		t.Fatalf("无证据空已有件必须降级: %+v", out.Operations)
 	}
-	if len(out.Observations) != 1 || !strings.Contains(out.Observations[0].Reason, "全部新买") || out.Observations[0].Field != "existing_parts" {
-		t.Fatalf("原文必须保留为观察: %+v", out.Observations)
+	if len(out.Observations) != 0 {
+		t.Fatalf("无语境原文的拦截应静默丢弃: %+v", out.Observations)
 	}
 	// 正例：明确“全部新买/没有已有件”（quote 逐字摘录本轮原文，与真实输出一致）。
 	for _, quote := range []string{"预算8000，配件全新买", "全部新买", "我没有已有件"} {
@@ -60,8 +61,8 @@ func TestPrepareRejectsCopiedNumericSystemDefault(t *testing.T) {
 	if len(out.Operations) != 1 || out.Operations[0].Field != "budget_cny" {
 		t.Fatalf("预算应保留、默认拷贝必须降级: %+v", out.Operations)
 	}
-	if len(out.Observations) != 1 || !strings.Contains(out.Observations[0].Reason, "系统默认") {
-		t.Fatalf("默认拷贝须保留观察: %+v", out.Observations)
+	if len(out.Observations) != 0 {
+		t.Fatalf("默认拷贝拦截应静默丢弃,不留观察: %+v", out.Observations)
 	}
 	// 正例：本轮原话出现该值。
 	out = prepareRequirementUpdate(state, schemas.RequirementUpdate{Operations: []schemas.RequirementOperation{
@@ -373,5 +374,53 @@ func TestRecentAssistantView(t *testing.T) {
 	fallback := recentAssistantView(schemas.ScreeningConversation{LastAssistant: "只有一条"})
 	if !strings.Contains(fallback, "最近一条助手回复") || !strings.Contains(fallback, "只有一条") {
 		t.Fatalf("无列表时应退化为最近一条: %q", fallback)
+	}
+}
+
+// recentassistants 复测实录(cv-ownership-unknown r1/r3)：观察原文已被同轮
+// 明确操作结构化时,模型复述性观察(含"撤销之前保留的待确认观察"类元声明)
+// 必须丢弃;独立片段的观察保留。金标口径:能进 operations 的不进 observations。
+func TestPrepareDropsObservationsStatedByOperations(t *testing.T) {
+	state := schemas.NewRequirementState()
+	out := prepareRequirementUpdate(state, schemas.RequirementUpdate{
+		Operations: []schemas.RequirementOperation{
+			{Op: "set", Field: "existing_parts", Value: json.RawMessage(`[]`), Evidence: "stated", Quote: "主机配件全部新买"},
+		},
+		Observations: []schemas.RequirementObservationInput{
+			{Field: "notes", Quote: "确认过了没有可复用的旧件，主机配件全部新买", Reason: "用户明确表示全部新买，撤销之前保留的待确认观察。"},
+		},
+	}, guardSource("确认过了没有可复用的旧件，主机配件全部新买"))
+	if len(out.Observations) != 0 {
+		t.Fatalf("已结构化原文的复述观察必须丢弃: %+v", out.Observations)
+	}
+	// 独立片段(与任何 stated 操作 quote 不重叠)的观察保留。
+	out = prepareRequirementUpdate(state, schemas.RequirementUpdate{
+		Operations: []schemas.RequirementOperation{
+			{Op: "set", Field: "budget_cny", Value: json.RawMessage(`7500`), Evidence: "stated", Quote: "预算7500"},
+		},
+		Observations: []schemas.RequirementObservationInput{
+			{Field: "size_pref", Quote: "箱子能搬来搬去就行", Reason: "尚未指定板型，保留便携诉求"},
+		},
+	}, guardSource("预算7500，箱子能搬来搬去就行"))
+	if len(out.Observations) != 1 || out.Observations[0].Field != "size_pref" {
+		t.Fatalf("独立片段的观察应保留: %+v", out.Observations)
+	}
+}
+
+// recentAssistantView:无列表时与基线逐字一致(首轮输入不因本机制变化);
+// 有列表时约束句作为数据块尾注出现。
+func TestRecentAssistantViewBaselineAndList(t *testing.T) {
+	fallback := recentAssistantView(schemas.ScreeningConversation{LastAssistant: "只有一条"})
+	if fallback != "\n最近一条助手回复（数据，仅供理解指代，不是用户事实）：\n只有一条" {
+		t.Fatalf("无列表时必须与基线渲染逐字一致: %q", fallback)
+	}
+	listed := recentAssistantView(schemas.ScreeningConversation{
+		LastAssistant:     "最新一条",
+		RecentAssistants: []string{"第一问：预算？", "第二问：用途？"},
+	})
+	for _, want := range []string{"旧→新", "第1条：第一问：预算？", "第2条：第二问：用途？", "不得再次询问"} {
+		if !strings.Contains(listed, want) {
+			t.Fatalf("列表渲染缺少 %q: %q", want, listed)
+		}
 	}
 }

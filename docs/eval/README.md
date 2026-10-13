@@ -14,6 +14,7 @@
 | [真实链路验证与追问复测计划](真实链路验证与追问复测计划-20261013.md) | 批次执行计划：取消级联/token 预算/无进展干预判据 + 追问修复复测；合计上限 290 次调用 |
 | [真实链路验证三合一](真实链路验证-20261013.md) | 取消级联与 token 预算真实链路判据通过；无进展两次诱导未触发转观察；中断 run 不计成本、收口效率低两项新发现；约 30 次调用 |
 | [conversations15 追问修复复测](requirement-v2/conversations15-recentassistants-20261013.md) | 复测未通过(12/15、25/26)：repeated_question 零命中但同提交提示词修改伴随行为漂移；211 次调用，修复方向已列 |
+| [conversations15 修复迭代复测](requirement-v2/conversations15-recentassistants-fix-20261013.md) | 五项共享修复后收敛：conversations 15/15 全 3/3 连续两批、repeated_question 零命中；两轮 422 次如实记录 |
 | [偏好记忆评估](preference-memory/README.md) | 六类场景(隔离/不升级/改主意/删除/白名单拒绝/确认生效)确定性基线,入口 `cmd/evalpreference`,2026-09-29 冻结全绿 |
 | [评估设施](../tech/评估设施.md) | Runner 机制、变更回归、本机工作台、对照实验纪律与反馈回流的单一入口 |
 | [失败案例工作区验收](evaldesk-bad-case-validation-20261008.md) | 冻结失败、人工审阅、修改与前后验证的只读闭环；无新增模型调用 |

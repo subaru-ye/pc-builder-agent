@@ -64,7 +64,10 @@ func TestScreeningOpenLanguageAndPartialUncertainty(t *testing.T) {
 		t.Fatalf("projection failed: %v %v", readiness.MissingFields, err)
 	}
 	spec, _ := schemas.DecodeRequirementSpec(raw)
-	if spec.RequirementSemantics["use_case.type"] != "fact" || len(spec.RequirementObservations) != 3 || next.Fields["budget_flex"].Status != "unknown" {
+	// 观察为 2 条:uncertain/inferred 的降级观察保留;同 quote 已被 stated
+	// 操作结构化的复述观察按金标口径(能进 operations 的不进 observations,
+	// 与提示词合同一致)由守卫丢弃。
+	if spec.RequirementSemantics["use_case.type"] != "fact" || len(spec.RequirementObservations) != 2 || next.Fields["budget_flex"].Status != "unknown" {
 		t.Fatalf("lost semantics/source or stated defaults: %+v", spec)
 	}
 	if schemas.NewRequirementState().Fields["recipient"].Status != "unknown" {

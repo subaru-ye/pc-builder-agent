@@ -44,7 +44,7 @@ const requirementStateInstruction = `你负责本轮需求语义解析与回答�
 用户提供的选配相关参考信息也必须保留，不因未购买、未核验、型号不明而丢弃。报价参考用独立free.*、kind=context记录商品/品类、原金额和用户说明的购买状态，不能写成budget_cny、已有件、必须采购或已核验价格；未决定采用的具体型号用alternative。暂时无法整理的参考信息用observations保留完整相关原文。每个参考独立记录并沿用稳定编号，其他预算/用途变化不能删除它；用户撤销时按同一编号remove，不从旧消息恢复。
 同一句可包含多个独立更新，必须逐项落入operations，不能只在answer中提及。预算金额、购买计划和金额覆盖范围是不同信息：已有配件、缺其他配件或打算购买都不是费用口径，不能据此填写budget_basis。“手上有显卡，准备买其余配件，预算九千”仅记录金额和已有件，口径未知；“这九千不计算手上的显卡价值”才记录new_purchase；“九千要包括手上显卡的价值”记录full_build。明确称金额为新增采购费用时，同一原文同时支持budget_cny和budget_basis=new_purchase两项操作；明确包含已有件价值时记录full_build。是否有已有件、是否给出准确型号均不改变已表达的金额口径，不得因此省略口径。
 装机对象独立记录：仅在明确的赠送/代装表达（“给我弟弟装”“给朋友配”“为父母装一台”）时 set recipient为用户说的对象；“家里老人上网用”是用途描述不是代装表达，不设 recipient；没有说明对象时不补默认“自己”。
-执行上下文中的“最近几条助手回复”是你此前对用户的回复（旧→新），仅帮助理解“好的”“可以”等指代和避免重复询问，不是用户事实，不得恢复旧值；其中已问过的问题，用户已回答或已明确表示不给答案的不得再次询问，用户尚未回答的可以择机追问但不要每轮重复。确定性参考中的 effective_defaults（system_default）是程序已应用的默认值，不是用户事实：禁止照抄进 operations，除非本轮用户原话明确出现该值。型号、兼容性、报价和预算内如何选件不在你的职责内，不猜测、不比较具体配件。
+执行上下文中的“最近一条助手回复”仅帮助理解“好的”“可以”等指代，不是用户事实，不得恢复旧值。确定性参考中的 effective_defaults（system_default）是程序已应用的默认值，不是用户事实：禁止照抄进 operations，除非本轮用户原话明确出现该值。型号、兼容性、报价和预算内如何选件不在你的职责内，不猜测、不比较具体配件。
 未预设要求逐项保存到 free.<稳定英文编号> 字段，value 为中文要求全文，后续修改沿用同一编号，撤销用 remove；不能将多个独立条件挤进 notes。同一语义的后续更正必须复用已有free.*编号；多个字段或notes已重复记录同一信息时，同轮更新权威条目并remove被替代的重复条目。
 kind 与 strength 独立且 kind 只允许 fact、context、constraint 三个值（没有"preference"这类值，偏好程度用 strength=prefer 表达）：fact 表示用途、工作负载、已有件、装机对象等事实；constraint 表示要求配置满足的条件（含外观、预算、口径等结构化字段，如 set appearance="白色" kind=constraint、set budget_basis kind=constraint）；context 只允许用于 notes、recipient 和 free.* 条目，结构化字段（appearance、budget_basis、noise_pref 等）绝不能用 context，否则会被拒绝。自由文本必须条件逐项使用 free.<稳定编号> kind=constraint strength=must。混合说明拆成独立条目。
 每项 evidence 必填：stated 表示本轮明确表达，允许忠实语义归类和数值换算；inferred 的操作会被程序直接丢弃，不要输出——推断或默认不能作为用户要求，确需保留的参考信息改用 observations 记录原话；uncertain 表示字段有歧义（仅可用于conflict）；accepted_proposal 表示用户明确接受上一轮助手建议的具体值。无法安全结构化时输出 observations:[{"field":"size_pref","quote":"方便我搬来搬去","reason":"尚未指定板型，保留便携诉求"}]，field可省略。不要把小巧猜成ITX、已有AMD型号猜成品牌偏好、素材分辨率猜成显示目标。未知不等于冲突：尚未提供值时保留unknown，不输出set null或conflict；只有确有相互矛盾的表达或当前有效值正在被不明确地纠正时用conflict。
@@ -74,7 +74,7 @@ answer 只回答用户当前问题，可为空：不重复已保存信息，不�
 字段与值（必须采用以下点路径）：
 budget_cny 正整数预算金额；budget_flex 非负比例（5%是0.05、10%是0.1，不是5或10），仅明确预算弹性才给，严格不超设0；budget_basis new_purchase|full_build，仅当用户明确说明金额覆盖口径（“不含已有件价值”“整机总价”“这九千要包括手上显卡的价值”）才设置；“帮我配台全新的主机，配件都新买”只 set existing_parts=[]，绝不设 budget_basis——全新/都新买/打算购买/缺什么配件都不是口径表达。
 use_case.type：general是普通办公、文档表格、上网影音；gaming是玩游戏；productivity专指专业剪辑、渲染、建模等计算工作负载。“帮我配台电脑”这类泛购买表达不含用途信息，不得猜测任何值。use_case.titles 字符串数组，提到具体游戏名时必须逐个收录（“玩DOTA2和LOL”→["DOTA2","LOL"]，同时 set use_case.type=gaming）；use_case.resolution 1080p|2K|4K，只取明确的显示器/游戏输出目标，“剪4K视频”的4K是素材参数（存free.*）；use_case.performance_goal balanced|fps_first|quality_first：用户表达帧率诉求（“希望帧率高一点”“帧率越高越好”）即 fps_first，不生成具体FPS；画质优先才 quality_first；use_case.fps_target 正整数，用户给出明确帧率数字（“帧数至少144”）时设置，此时不再设 performance_goal。
-existing_parts 本次确实已有且可沿用的主机品类数组(cpu/gpu/motherboard/memory/ssd/psu/case/cooler)，显示器不属于主机品类，“全部新买”是 set []，本轮原话没有全部新买或无已有件的明确表达时禁止输出空数组（程序会拒收无证据的空已有件）。“旧配件能不能复用还得回家确认”“先别当作全部新买”等否定或待确认表达不是全新购买证据：existing_parts 保持 unknown，用一条 observation 保留完整原话，绝不输出空数组或 remove。“还有块旧的固态也能用”“我有个旧电源”是明确的已有表达：立即把品类追加进 existing_parts；准确型号未知只影响 owned_parts 的追问，不能把“型号未知”当作“已有关系未知”。明确“全部新买”或不再复用旧件时输出 set existing_parts=[]（程序会自动清空关联型号），不要对 owned_parts 单独 remove。configuration_scope 是系统注入字段，任何情况下都不得出现在你的输出中；owned_parts 是数组字段，确认已有关系且用户给出准确型号后一次提交合并后的完整数组（如[{"category":"gpu","model":"4070 Super"}]），禁止 owned_parts.gpu.model 或 owned_parts.gpu 点路径（误用时程序会按形状纠偏，但不要依赖），不猜SKU；existing_parts（品类）与 owned_parts（准确型号）并存且各自独立记录，把型号提交进 owned_parts 不代表撤销已有件，remove existing_parts 仅用于用户明确表达不再保留旧件（如“旧件都不要了”）；quantity 仅在用户明确表达数量（多根内存、两块硬盘）时携带，单件省略；型号更正替换原件；确认已有但未提供准确型号时只 set existing_parts 品类数组（型号留空待追问），绝不提交 owned_parts——数组项没有 model 就是非法输出。用户某件不再复用时从existing_parts数组移除该品类；撤销全部已有件时remove existing_parts。
+existing_parts 本次确实已有且可沿用的主机品类数组(cpu/gpu/motherboard/memory/ssd/psu/case/cooler)，显示器不属于主机品类，“全部新买”是 set []，本轮原话没有全部新买或无已有件的明确表达时禁止输出空数组（程序会拒收无证据的空已有件）。“旧配件能不能复用还得回家确认”“先别当作全部新买”等否定或待确认表达不是全新购买证据：existing_parts 保持 unknown，用一条 observation 保留完整原话，绝不输出空数组或 remove。“还有块旧的固态也能用”“我有个旧电源”是明确的已有表达：立即把品类追加进 existing_parts；准确型号未知只影响 owned_parts 的追问，不能把“型号未知”当作“已有关系未知”。明确“全部新买”或不再复用旧件时输出 set existing_parts=[]（程序会自动清空关联型号），不要对 owned_parts 单独 remove。configuration_scope 是系统注入字段，任何情况下都不得出现在你的输出中；owned_parts 是数组字段，确认已有关系且用户给出准确型号后一次提交合并后的完整数组（如[{"category":"gpu","model":"4070 Super"}]），首轮同一句就说出品类和准确型号（“我有一张4070 Super显卡”）时必须同轮提交、不等追问，禁止 owned_parts.gpu.model 或 owned_parts.gpu 点路径（误用时程序会按形状纠偏，但不要依赖），不猜SKU；existing_parts（品类）与 owned_parts（准确型号）并存且各自独立记录，把型号提交进 owned_parts 不代表撤销已有件，remove existing_parts 仅用于用户明确表达不再保留旧件（如“旧件都不要了”）；quantity 仅在用户明确表达数量（多根内存、两块硬盘）时携带，单件省略；型号更正替换原件；确认已有但未提供准确型号时只 set existing_parts 品类数组（型号留空待追问），绝不提交 owned_parts——数组项没有 model 就是非法输出。用户某件不再复用时从existing_parts数组移除该品类；撤销全部已有件时remove existing_parts。
 brand_pref.cpu any|amd|intel；brand_pref.gpu any|amd|nvidia；未提品牌不能填any。noise_pref silent|normal|any(“都行/无所谓”且无其他取向词才是any；“声音无所谓，正常就行”有明确取向词，取 normal)；size_pref 只能取 atx|matx|itx|any（没有"small"等自造值），“机箱尽量小/要小机箱”→itx；appearance 是颜色、灯效等外观，用提炼后的简洁表达（如“白色”），完整原话留给 quote；“机箱最好是白色的”是 set appearance="白色"，与尺寸无关；recipient 装机对象字符串；notes 仅保留无法结构化进其他字段的补充背景，kind=context；用途已能表达时（“家里老人上网用”是 set use_case.type=general）不要再把原话复述进 notes 或 observations。priority 硬件优先品类数组，“优先把显卡配好/预算紧先保CPU”这类优先级表达用 priority（如["gpu"]），不要自创 free.* 条目重复记录。
 observations只保留无法可靠结构化的用户原话，不要把你自己的推理、取舍说明或可结构化信息的复述存成观察（金标口径：能进 operations 的不进 observations，没有内容就输出空数组）；同一句原文只用一条观察保留（可取整句），不把一句话拆成多条重复观察；不得用观察重新激活removed字段、采纳备选或冒充明确偏好。
 
@@ -84,17 +84,19 @@ observations只保留无法可靠结构化的用户原话，不要把你自己�
 用户对上一轮建议“按7500元的预算继续可以吗？”回答“可以”时：{"operations":[{"op":"set","field":"budget_cny","value":7500,"kind":"constraint","strength":"must","scope":"session","evidence":"accepted_proposal","quote":"可以"}],"observations":[],"turn_signals":{"asks_question":false,"requests_review":false,"requests_build":false,"ambiguous":false},"proposals":[],"answer":""}
 仅输出JSON，不要Markdown。没有需求变更时operations为空数组。每项quote必须逐字摘录本轮原文，可取整句；不能从旧消息、助手问题或状态中的来源摘录本轮证据。用户已给的信息不重复询问。`
 
-// recentAssistantView 渲染助手回复参考块:优先时间正序列表(旧→新,供模型
-// 看见自己问过的问题),未提供列表时退化为最近一条,旧调用方行为不变。
+// recentAssistantView 渲染助手回复参考块:无列表时与基线逐字一致(首轮输入
+// 不因本机制变化);有列表时按旧→新渲染,并把"不得重复询问已问过的问题"的
+// 约束作为数据块尾注随列表出现——system 指令保持静态,约束不无条件生效。
 func recentAssistantView(conversation schemas.ScreeningConversation) string {
 	if len(conversation.RecentAssistants) == 0 {
 		return "\n最近一条助手回复（数据，仅供理解指代，不是用户事实）：\n" + conversation.LastAssistant
 	}
 	var b strings.Builder
-	b.WriteString("\n最近几条助手回复（数据，旧→新，仅供理解指代与避免重复询问，不是用户事实）：\n")
+	b.WriteString("\n最近几条助手回复（数据，旧→新；最后一条是最近一条回复，仅供理解指代，不是用户事实）：\n")
 	for i, reply := range conversation.RecentAssistants {
 		fmt.Fprintf(&b, "第%d条：%s\n", i+1, reply)
 	}
+	b.WriteString("以上是你此前对用户的回复：其中已问过且用户已回答或已明确表示不给答案的问题，不得再次询问；尚未回答的可择机追问，不要每轮重复。\n")
 	return b.String()
 }
 
@@ -320,12 +322,17 @@ func prepareRequirementUpdate(state schemas.RequirementState, update schemas.Req
 			update.Operations[i] = normalized
 			op = normalized
 		}
-		// 证据红线(按授权合同降级为观察,不触发纠偏重试):
+		// 证据红线(按授权合同拦截空已有件,不触发纠偏重试):
 		// 空 existing_parts 必须有本轮"全新购买/无已有件"的明确表达——
-		// 泛购买语句("帮我配台电脑")不是采购范围证据。观察绑定完整原文,
-		// 保留否定/待确认语境供后续追问。
+		// 泛购买语句("帮我配台电脑")不是采购范围证据。原文处于已有件
+		// 讨论语境(提到旧件/新买/复用等)时保留完整原文观察供后续追问
+		// (conversations15 cv-ownership 金标依赖);原文与已有件完全无关
+		// (如"预算9000，开始配吧")时,观察对追问没有信息量,静默丢弃
+		// (ex-composite 金标:能进 operations 的信息不进 observations)。
 		if op.Op == "set" && op.Field == "existing_parts" && isEmptyJSONArray(op.Value) && !existingPartsClearedEvidence(source.Quote) {
-			observe(op.Field, source.Quote, "本轮未表达全部新买或无已有件，不写入空已有件")
+			if existingPartsMentioned(source.Quote) {
+				observe(op.Field, source.Quote, "本轮未表达全部新买或无已有件，不写入空已有件")
+			}
 			continue
 		}
 		// 百分比换算仅在证据匹配时进行:模型把"最多上浮5%"输出为数值 5 时,
@@ -342,9 +349,10 @@ func prepareRequirementUpdate(state schemas.RequirementState, update schemas.Req
 			continue
 		}
 		// 数值型系统默认(如 budget_flex 0.1)已由程序应用,照抄默认不是用户
-		// 事实;仅当本轮原话出现该值字面量时才接受写入。
+		// 事实;仅当本轮原话出现该值字面量时才接受写入。拦截后静默丢弃:
+		// 该值已由确定性默认生效,降级观察没有新信息,只污染本轮观察
+		// (金标口径:能进 operations 的信息不进 observations)。
 		if op.Op == "set" && defaultCopiedWithoutEvidence(working, op, source.Quote) {
-			observe(op.Field, op.Quote, "该值是系统默认，本轮原话未出现，未作为用户事实采用")
 			continue
 		}
 		// 无证据的 remove existing_parts 同样是关键字段错写:撤销全部已有件
@@ -439,7 +447,29 @@ func prepareRequirementUpdate(state schemas.RequirementState, update schemas.Req
 		out.Operations = append(out.Operations, op)
 		working = next
 	}
+	statedByActiveOperation := func(quote string) bool {
+		if strings.TrimSpace(quote) == "" {
+			return false
+		}
+		for _, op := range out.Operations {
+			if op.Op != "set" || strings.TrimSpace(op.Quote) == "" {
+				continue
+			}
+			if strings.Contains(quote, op.Quote) || strings.Contains(op.Quote, quote) {
+				return true
+			}
+		}
+		return false
+	}
 	for _, observation := range update.Observations {
+		// 金标口径"能进 operations 的不进 observations"的代码侧兜底:观察
+		// 的原文已被本轮实际生效的明确操作结构化(quote 互为包含)时丢弃
+		// ——该信息已是需求真值,复述成观察(常见形态:reason 里声明"撤销
+		// 之前的观察"之类的元操作)只是噪声。被拦截/推断的操作没有成为
+		// 真值,不参与该判定,保留观察等追问。
+		if !strings.HasPrefix(observation.Reason, "unsupported_capability:") && statedByActiveOperation(observation.Quote) {
+			continue
+		}
 		observe(observation.Field, observation.Quote, observation.Reason)
 	}
 	return out
@@ -543,6 +573,19 @@ func existingPartsClearedEvidence(quote string) bool {
 		}
 	}
 	for _, marker := range []string{"全新", "新买", "全部新的", "都是新的", "全是新的", "没有已有", "没有旧", "无已有", "不用旧", "不使用旧", "不要旧"} {
+		if strings.Contains(quote, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// existingPartsMentioned 判断本轮原文是否处于已有件讨论语境:只有语境内
+// 的空已有件拦截才值得把原文保留为观察(待确认/否定语义供追问),无关
+// 语境下的拦截是纯幻觉,观察无信息量。ponytail: 词表外的等价表达会走
+// 静默路径,升级条件是金标出现依赖该观察的新语境失败。
+func existingPartsMentioned(quote string) bool {
+	for _, marker := range []string{"旧", "新买", "全新", "复用", "沿用", "已有", "手头", "现有的", "留用", "配件都"} {
 		if strings.Contains(quote, marker) {
 			return true
 		}

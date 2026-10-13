@@ -497,53 +497,78 @@ func evaluateQualityGates(report *ReqV2Report, gates ReqV2Gates) {
 		q.OpRecall = ratio(q.OpMatched, q.OpExpected)
 		report.ModelQuality[layer] = q
 	}
-	verdict := func(layer, metric, actual, threshold string, passed, evaluable bool, note string) {
-		report.GateVerdicts = append(report.GateVerdicts, ReqV2GateVerdict{
-			Layer: layer, Metric: metric, Actual: actual, Threshold: threshold,
-			Passed: passed, Evaluable: evaluable, Note: note,
-		})
-	}
-	insufficient := func(layer, metric string, actual, want int) {
-		verdict(layer, metric, fmt.Sprintf("%d", actual), fmt.Sprintf("≥%d", want), false, false, "样本不足：门槛不可评估，按不可发布处理")
-	}
+
+	g := gateSession{report: report, gates: gates}
 	e := gates.ModelQualityThresholds.Extraction
 	c := gates.ModelQualityThresholds.Conversations
 	ex := report.ModelQuality["extraction"]
 	cv := report.ModelQuality["conversations"]
+	g.extractionGates(e, ex)
+	g.extractionFoldGates(e, ex)
+	g.providerGates(e)
+	g.conversationsGates(c, cv)
+	g.totalGates(ex, cv, c)
+	g.conclude(c)
+}
 
+// gateSession 承载一次门槛评估的输出端与阈值,verdict/insufficient 是
+// 全部门槛共用的判定记录辅助。
+type gateSession struct {
+	report *ReqV2Report
+	gates  ReqV2Gates
+}
+
+func (g gateSession) verdict(layer, metric, actual, threshold string, passed, evaluable bool, note string) {
+	g.report.GateVerdicts = append(g.report.GateVerdicts, ReqV2GateVerdict{
+		Layer: layer, Metric: metric, Actual: actual, Threshold: threshold,
+		Passed: passed, Evaluable: evaluable, Note: note,
+	})
+}
+
+func (g gateSession) insufficient(layer, metric string, actual, want int) {
+	g.verdict(layer, metric, fmt.Sprintf("%d", actual), fmt.Sprintf("≥%d", want), false, false, "样本不足：门槛不可评估，按不可发布处理")
+}
+
+// extractionGates 评估 extraction 层样本量、操作 precision/recall、
+// 禁用操作与 turn signal 门槛。
+func (g gateSession) extractionGates(e ReqV2ExtractionGate, ex ReqV2ModelQuality) {
 	// extraction：样本门槛
 	if ex.Cases < e.MinCases {
-		insufficient("extraction", "min_cases", ex.Cases, e.MinCases)
+		g.insufficient("extraction", "min_cases", ex.Cases, e.MinCases)
 	} else {
-		verdict("extraction", "min_cases", fmt.Sprintf("%d", ex.Cases), fmt.Sprintf("≥%d", e.MinCases), true, true, "")
+		g.verdict("extraction", "min_cases", fmt.Sprintf("%d", ex.Cases), fmt.Sprintf("≥%d", e.MinCases), true, true, "")
 	}
 	// op precision / recall（池化）
 	if ex.OpEmitted == 0 {
-		insufficient("extraction", "operation_precision", 0, 1)
+		g.insufficient("extraction", "operation_precision", 0, 1)
 	} else {
-		verdict("extraction", "operation_precision", fmt.Sprintf("%.3f", *ex.OpPrecision), fmt.Sprintf("≥%.2f", e.OperationPrecisionMin), *ex.OpPrecision >= e.OperationPrecisionMin, true, "")
+		g.verdict("extraction", "operation_precision", fmt.Sprintf("%.3f", *ex.OpPrecision), fmt.Sprintf("≥%.2f", e.OperationPrecisionMin), *ex.OpPrecision >= e.OperationPrecisionMin, true, "")
 	}
 	if ex.OpExpected == 0 {
-		insufficient("extraction", "operation_recall", 0, 1)
+		g.insufficient("extraction", "operation_recall", 0, 1)
 	} else {
-		verdict("extraction", "operation_recall", fmt.Sprintf("%.3f", *ex.OpRecall), fmt.Sprintf("≥%.2f", e.OperationRecallMin), *ex.OpRecall >= e.OperationRecallMin, true, "")
+		g.verdict("extraction", "operation_recall", fmt.Sprintf("%.3f", *ex.OpRecall), fmt.Sprintf("≥%.2f", e.OperationRecallMin), *ex.OpRecall >= e.OperationRecallMin, true, "")
 	}
-	verdict("extraction", "forbidden_op_total", fmt.Sprintf("%d", ex.ForbiddenOps), fmt.Sprintf("≤%d", e.ForbiddenOpTotalMax), ex.ForbiddenOps <= e.ForbiddenOpTotalMax, true, "")
+	g.verdict("extraction", "forbidden_op_total", fmt.Sprintf("%d", ex.ForbiddenOps), fmt.Sprintf("≤%d", e.ForbiddenOpTotalMax), ex.ForbiddenOps <= e.ForbiddenOpTotalMax, true, "")
 	// turn signal：独立样本门槛 min_signal_turns
 	if ex.SignalTurns < e.MinSignalTurns {
-		insufficient("extraction", "min_signal_turns", ex.SignalTurns, e.MinSignalTurns)
+		g.insufficient("extraction", "min_signal_turns", ex.SignalTurns, e.MinSignalTurns)
 	} else {
 		rate := float64(ex.SignalMatches) / float64(ex.SignalTurns)
-		verdict("extraction", "turn_signal_exact_match", fmt.Sprintf("%.3f (%d/%d)", rate, ex.SignalMatches, ex.SignalTurns), fmt.Sprintf("≥%.2f", e.TurnSignalExactMatchMin), rate >= e.TurnSignalExactMatchMin, true, "")
+		g.verdict("extraction", "turn_signal_exact_match", fmt.Sprintf("%.3f (%d/%d)", rate, ex.SignalMatches, ex.SignalTurns), fmt.Sprintf("≥%.2f", e.TurnSignalExactMatchMin), rate >= e.TurnSignalExactMatchMin, true, "")
 	}
+}
 
+// extractionFoldGates 评估 extraction 层的 case 折叠门槛(case_success 与
+// final_state_exact_match);样本不足一律不可评估,不得默认通过。
+func (g gateSession) extractionFoldGates(e ReqV2ExtractionGate, ex ReqV2ModelQuality) {
 	// extraction 补充门槛（数据不足一律 UNEVALUABLE，不得默认通过）。
 	// case_success：case 级 Pass^k 折叠成功率（TaskTotal/TaskPassed 已折叠）。
 	if ex.TaskTotal == 0 {
-		insufficient("extraction", "case_success", 0, 1)
+		g.insufficient("extraction", "case_success", 0, 1)
 	} else {
 		rate := float64(ex.TaskPassed) / float64(ex.TaskTotal)
-		verdict("extraction", "case_success", fmt.Sprintf("%.3f (%d/%d)", rate, ex.TaskPassed, ex.TaskTotal), fmt.Sprintf("≥%.2f", e.CaseSuccessMin), rate >= e.CaseSuccessMin, true, "")
+		g.verdict("extraction", "case_success", fmt.Sprintf("%.3f (%d/%d)", rate, ex.TaskPassed, ex.TaskTotal), fmt.Sprintf("≥%.2f", e.CaseSuccessMin), rate >= e.CaseSuccessMin, true, "")
 	}
 	// final_state_exact_match：断言了最终状态的 case 中，全部 repeat 的
 	// state 断言都通过的占比。
@@ -551,7 +576,7 @@ func evaluateQualityGates(report *ReqV2Report, gates ReqV2Gates) {
 		hasState, allPass bool
 	}
 	stateCases := map[string]*stateFold{}
-	for _, cr := range report.Cases {
+	for _, cr := range g.report.Cases {
 		if cr.Layer != "extraction" || cr.Observation.Skipped != "" {
 			continue
 		}
@@ -582,18 +607,23 @@ func evaluateQualityGates(report *ReqV2Report, gates ReqV2Gates) {
 		}
 	}
 	if stateTotal == 0 {
-		insufficient("extraction", "final_state_exact_match", 0, 1)
+		g.insufficient("extraction", "final_state_exact_match", 0, 1)
 	} else {
 		rate := float64(stateExact) / float64(stateTotal)
-		verdict("extraction", "final_state_exact_match", fmt.Sprintf("%.3f (%d/%d)", rate, stateExact, stateTotal), fmt.Sprintf("≥%.2f", e.FinalStateExactMatchMin), rate >= e.FinalStateExactMatchMin, true, "")
+		g.verdict("extraction", "final_state_exact_match", fmt.Sprintf("%.3f (%d/%d)", rate, stateExact, stateTotal), fmt.Sprintf("≥%.2f", e.FinalStateExactMatchMin), rate >= e.FinalStateExactMatchMin, true, "")
 	}
+}
+
+// providerGates 统计 extraction+conversations 的全部真实 provider 轮,评估
+// 成功率、延迟 p95、单轮调用上限与总预算一致性。
+func (g gateSession) providerGates(e ReqV2ExtractionGate) {
 	// provider_success / latency_p95 / max_model_calls_per_turn / 预算一致性：
 	// 统计 extraction+conversations 的全部真实 provider 轮（ScreenModelCalled），
-	// 与 report.usage 的延迟/调用样本范围一致。
+	// 与 g.report.usage 的延迟/调用样本范围一致。
 	providerTurns, providerOK := 0, 0
 	var latencies []int64
 	maxPerTurn := 0
-	for _, cr := range report.Cases {
+	for _, cr := range g.report.Cases {
 		if cr.Layer != "extraction" && cr.Layer != "conversations" {
 			continue
 		}
@@ -612,45 +642,49 @@ func evaluateQualityGates(report *ReqV2Report, gates ReqV2Gates) {
 		}
 	}
 	if providerTurns == 0 {
-		insufficient("model", "provider_success", 0, 1)
+		g.insufficient("model", "provider_success", 0, 1)
 	} else {
 		rate := float64(providerOK) / float64(providerTurns)
-		verdict("model", "provider_success", fmt.Sprintf("%.3f (%d/%d)", rate, providerOK, providerTurns), fmt.Sprintf("≥%.2f", e.ProviderSuccessMin), rate >= e.ProviderSuccessMin, true, "")
+		g.verdict("model", "provider_success", fmt.Sprintf("%.3f (%d/%d)", rate, providerOK, providerTurns), fmt.Sprintf("≥%.2f", e.ProviderSuccessMin), rate >= e.ProviderSuccessMin, true, "")
 	}
 	if len(latencies) == 0 {
-		insufficient("model", "latency_p95", 0, 1)
+		g.insufficient("model", "latency_p95", 0, 1)
 	} else {
 		_, p95 := percentiles(latencies)
-		verdict("model", "latency_p95_ms", fmt.Sprintf("%dms", p95), fmt.Sprintf("≤%dms", e.LatencyP95MaxMS), p95 <= e.LatencyP95MaxMS, true, "")
+		g.verdict("model", "latency_p95_ms", fmt.Sprintf("%dms", p95), fmt.Sprintf("≤%dms", e.LatencyP95MaxMS), p95 <= e.LatencyP95MaxMS, true, "")
 	}
 	if providerTurns == 0 {
-		insufficient("model", "max_model_calls_per_turn", 0, 1)
+		g.insufficient("model", "max_model_calls_per_turn", 0, 1)
 	} else {
-		verdict("model", "max_model_calls_per_turn", fmt.Sprintf("%d", maxPerTurn), fmt.Sprintf("≤%d", e.MaxModelCallsPerTurn), maxPerTurn <= e.MaxModelCallsPerTurn, true, "")
+		g.verdict("model", "max_model_calls_per_turn", fmt.Sprintf("%d", maxPerTurn), fmt.Sprintf("≤%d", e.MaxModelCallsPerTurn), maxPerTurn <= e.MaxModelCallsPerTurn, true, "")
 	}
 	// 预算一致性：整轮总调用不得超过 plan 显式预算；预算未声明即不可评估。
-	if report.MaxModelRequests <= 0 {
-		verdict("model", "total_calls_within_budget", fmt.Sprintf("%d", report.Usage.ModelCalls), "plan 未声明预算", false, false, "max_model_requests 缺失：门槛不可评估，按不可发布处理")
+	if g.report.MaxModelRequests <= 0 {
+		g.verdict("model", "total_calls_within_budget", fmt.Sprintf("%d", g.report.Usage.ModelCalls), "plan 未声明预算", false, false, "max_model_requests 缺失：门槛不可评估，按不可发布处理")
 	} else {
-		verdict("model", "total_calls_within_budget", fmt.Sprintf("%d", report.Usage.ModelCalls), fmt.Sprintf("≤%d", report.MaxModelRequests), report.Usage.ModelCalls <= report.MaxModelRequests, true, "")
+		g.verdict("model", "total_calls_within_budget", fmt.Sprintf("%d", g.report.Usage.ModelCalls), fmt.Sprintf("≤%d", g.report.MaxModelRequests), g.report.Usage.ModelCalls <= g.report.MaxModelRequests, true, "")
 	}
+}
 
+// conversationsGates 评估 conversations 层样本量、任务成功与重复追问门槛
+// (重复追问按 case 的最差 repeat 计数)。
+func (g gateSession) conversationsGates(c ReqV2ConversationGate, cv ReqV2ModelQuality) {
 	// conversations：样本门槛与任务成功
 	if cv.Cases < c.MinCases {
-		insufficient("conversations", "min_cases", cv.Cases, c.MinCases)
+		g.insufficient("conversations", "min_cases", cv.Cases, c.MinCases)
 	} else {
-		verdict("conversations", "min_cases", fmt.Sprintf("%d", cv.Cases), fmt.Sprintf("≥%d", c.MinCases), true, true, "")
+		g.verdict("conversations", "min_cases", fmt.Sprintf("%d", cv.Cases), fmt.Sprintf("≥%d", c.MinCases), true, true, "")
 	}
 	if cv.TaskTotal == 0 {
-		insufficient("conversations", "task_success", 0, 1)
+		g.insufficient("conversations", "task_success", 0, 1)
 	} else {
 		rate := float64(cv.TaskPassed) / float64(cv.TaskTotal)
-		verdict("conversations", "task_success", fmt.Sprintf("%.3f (%d/%d)", rate, cv.TaskPassed, cv.TaskTotal), fmt.Sprintf("≥%.2f", c.TaskSuccessMin), rate >= c.TaskSuccessMin, true, "")
+		g.verdict("conversations", "task_success", fmt.Sprintf("%.3f (%d/%d)", rate, cv.TaskPassed, cv.TaskTotal), fmt.Sprintf("≥%.2f", c.TaskSuccessMin), rate >= c.TaskSuccessMin, true, "")
 	}
 	// 重复追问：按 case 的最差 repeat 计数（repeat 折叠口径）
 	worstRepeat := 0
 	perCase := map[string]map[int]int{}
-	for _, cr := range report.Cases {
+	for _, cr := range g.report.Cases {
 		if cr.Layer != "conversations" {
 			continue
 		}
@@ -670,24 +704,36 @@ func evaluateQualityGates(report *ReqV2Report, gates ReqV2Gates) {
 			}
 		}
 	}
-	verdict("conversations", "repeated_question_max_per_case", fmt.Sprintf("%d", worstRepeat), fmt.Sprintf("≤%d", c.RepeatedQuestionMaxPerCase), worstRepeat <= c.RepeatedQuestionMaxPerCase, true, "")
+	g.verdict("conversations", "repeated_question_max_per_case", fmt.Sprintf("%d", worstRepeat), fmt.Sprintf("≤%d", c.RepeatedQuestionMaxPerCase), worstRepeat <= c.RepeatedQuestionMaxPerCase, true, "")
+}
 
+// totalGates 评估跨层 veto 零容忍与关键字段错写零容忍(模型层池化),
+// 跨层阈值取自 gates.ModelQualityThresholds 顶层字段。
+func (g gateSession) totalGates(ex, cv ReqV2ModelQuality, c ReqV2ConversationGate) {
 	// veto 零容忍（全层）
 	totalVetoes := 0
 	for _, layer := range ReqV2Layers {
-		totalVetoes += report.PerLayer[layer].Vetoes
+		totalVetoes += g.report.PerLayer[layer].Vetoes
 	}
-	verdict("all", "veto_total", fmt.Sprintf("%d", totalVetoes), fmt.Sprintf("≤%d", c.ForbiddenVetoTotalMax), totalVetoes <= c.ForbiddenVetoTotalMax, true, "")
+	g.verdict("all", "veto_total", fmt.Sprintf("%d", totalVetoes), fmt.Sprintf("≤%d", c.ForbiddenVetoTotalMax), totalVetoes <= c.ForbiddenVetoTotalMax, true, "")
 
 	// 关键字段错写零容忍（模型层池化）
 	keyWrong := ex.KeyFieldWrites + cv.KeyFieldWrites
-	k := gates.ModelQualityThresholds
-	verdict("extraction+conversations", "key_field_wrong_write_total", fmt.Sprintf("%d", keyWrong), fmt.Sprintf("≤%d", k.KeyFieldWrongWriteTotalMax), keyWrong <= k.KeyFieldWrongWriteTotalMax, ex.OpEmitted+cv.OpEmitted > 0, "")
+	k := g.gates.ModelQualityThresholds
+	g.verdict("extraction+conversations", "key_field_wrong_write_total", fmt.Sprintf("%d", keyWrong), fmt.Sprintf("≤%d", k.KeyFieldWrongWriteTotalMax), keyWrong <= k.KeyFieldWrongWriteTotalMax, ex.OpEmitted+cv.OpEmitted > 0, "")
+}
 
+// conclude 汇总全部 verdict、确定性层与 veto,写出最终发布结论:
+// 任一门槛失败或不可评估即不可发布。
+func (g gateSession) conclude(c ReqV2ConversationGate) {
+	totalVetoes := 0
+	for _, layer := range ReqV2Layers {
+		totalVetoes += g.report.PerLayer[layer].Vetoes
+	}
 	// 最终结论：veto / 确定性层 / 任一质量门槛失败或不可评估 → 不可发布。
 	passed := true
 	var failures, unevaluable []string
-	for _, v := range report.GateVerdicts {
+	for _, v := range g.report.GateVerdicts {
 		if v.Passed && v.Evaluable {
 			continue
 		}
@@ -701,7 +747,7 @@ func evaluateQualityGates(report *ReqV2Report, gates ReqV2Gates) {
 	}
 	deterministicAll := true
 	for _, layer := range ReqV2DeterministicLayers {
-		sl := report.PerLayer[layer]
+		sl := g.report.PerLayer[layer]
 		if sl.Cases == 0 || sl.Passed != sl.Cases {
 			deterministicAll = false
 		}
@@ -709,15 +755,15 @@ func evaluateQualityGates(report *ReqV2Report, gates ReqV2Gates) {
 	if !deterministicAll {
 		passed = false
 	}
-	report.GatePassed = &passed
+	g.report.GatePassed = &passed
 	switch {
 	case totalVetoes > 0:
-		report.Conclusion = fmt.Sprintf("veto 违规 %d 项：候选不可发布。", totalVetoes)
+		g.report.Conclusion = fmt.Sprintf("veto 违规 %d 项：候选不可发布。", totalVetoes)
 	case !passed:
 		parts := append(append([]string{}, failures...), unevaluable...)
-		report.Conclusion = fmt.Sprintf("门槛未全过（%d 项失败/不可评估）：候选不可发布。明细：%s", len(parts), strings.Join(parts, "；"))
+		g.report.Conclusion = fmt.Sprintf("门槛未全过（%d 项失败/不可评估）：候选不可发布。明细：%s", len(parts), strings.Join(parts, "；"))
 	default:
-		report.Conclusion = "全部冻结门槛通过：确定性层 100%、无 veto、模型层指标达标。"
+		g.report.Conclusion = "全部冻结门槛通过：确定性层 100%、无 veto、模型层指标达标。"
 	}
 }
 

@@ -102,88 +102,14 @@ func (s *Store) StartConfirmRun(ctx context.Context, p StartConfirmRunParams) (A
 	var builderInputHash string
 	confirmationID := p.ConfirmationID
 	if p.RetryOfRunID != "" {
-		// 失败重试:目标必须属于本会话、kind=build 且已失败,其快照仍与当前
-		// 核定预览一致;复用快照与冻结选型上下文,仅为新 run 标识另冻载荷
-		// 与新 hash。
-		var kind RunKind
-		var status RunStatus
-		var targetConfirmation string
-		var targetReviewHash string
-		var inheritedPayload json.RawMessage
-		err := tx.QueryRow(ctx, `SELECT r.kind, r.status, COALESCE(r.confirmation_id::text, ''), COALESCE(c.review_hash, ''),
-			r.builder_input_payload
-			FROM agent_runs r LEFT JOIN requirement_confirmations c ON c.id = r.confirmation_id
-			WHERE r.id = $1 AND r.session_id = $2`, p.RetryOfRunID, p.SessionID).Scan(&kind, &status, &targetConfirmation, &targetReviewHash, &inheritedPayload)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return AgentRun{}, StartConfirmRunResult{}, false, ErrRunNotFound
-		}
-		if err != nil {
-			return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 读取重试目标失败: %w", err)
-		}
-		if kind != RunBuild || status != RunFailed || targetConfirmation == "" || len(inheritedPayload) == 0 {
-			return AgentRun{}, StartConfirmRunResult{}, false, ErrRetryTargetInvalid
-		}
-		if targetReviewHash != reviewHash {
-			return AgentRun{}, StartConfirmRunResult{}, false, ErrRequirementReviewConflict
-		}
-		confirmationID = targetConfirmation
-		// 继承冻结载荷:state/base_draft/previous_proposal/previous_run_id
-		// 原样保留,只替换本轮 run 标识(PlanningInput 中唯一随 run 变化的
-		// 字段);先前 run 的载荷/hash 不修改。
-		var inherited schemas.PlanningInput
-		if err := json.Unmarshal(inheritedPayload, &inherited); err != nil {
-			return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 解析重试目标载荷失败: %w", err)
-		}
-		inherited.RunID = p.RunID
-		payload, err = json.Marshal(inherited)
+		payload, confirmationID, err = confirmPayloadForRetry(ctx, tx, p, reviewHash)
 		if err != nil {
 			return AgentRun{}, StartConfirmRunResult{}, false, err
 		}
 	} else {
-		var previous struct {
-			Result json.RawMessage `json:"result"`
-			RunID  string          `json:"run_id"`
-		}
-		var previousProposal json.RawMessage
-		var previousRunID string
-		err = tx.QueryRow(ctx, `SELECT result, run_id::text FROM session_proposals
-			WHERE session_id = $1 ORDER BY id DESC LIMIT 1`, p.SessionID).Scan(&previous.Result, &previous.RunID)
-		switch {
-		case errors.Is(err, pgx.ErrNoRows):
-		case err != nil:
-			return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 读取上一提案失败: %w", err)
-		default:
-			previousProposal, previousRunID = previous.Result, previous.RunID
-		}
-		var baseDraft json.RawMessage
-		var version *int
-		if err := tx.QueryRow(ctx, `SELECT max(version) FROM builds WHERE session_id = $1`, p.SessionID).Scan(&version); err != nil {
-			return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 查询最新配置版本失败: %w", err)
-		}
-		if version != nil {
-			if err := tx.QueryRow(ctx, `SELECT draft FROM builds WHERE session_id = $1 AND version = $2`, p.SessionID, *version).Scan(&baseDraft); err != nil {
-				return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 读取基线草稿失败: %w", err)
-			}
-		}
-		payload, err = schemas.PlanningBuilderInput(p.RunID, state, &schemas.EffectiveConstraints{
-			Spec: reviewSpec, Defaults: readiness.EffectiveDefaults,
-		}, baseDraft, previousProposal, previousRunID)
+		payload, err = confirmPayloadFresh(ctx, tx, p, state, reviewSpec, requirementState, reviewHash, readiness)
 		if err != nil {
 			return AgentRun{}, StartConfirmRunResult{}, false, err
-		}
-		var specObject map[string]json.RawMessage
-		if err := json.Unmarshal(reviewSpec, &specObject); err != nil {
-			return AgentRun{}, StartConfirmRunResult{}, false, err
-		}
-		scope := specObject["configuration_scope"]
-		if scope == nil {
-			scope = json.RawMessage(`[]`)
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO requirement_confirmations
-			(id, session_id, requirement_spec, requirement_state, review_hash, revision, configuration_scope, schema_version)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, confirmationID, p.SessionID, reviewSpec, requirementState,
-			reviewHash, state.Revision, scope, schemas.RequirementStateSchemaVersion); err != nil {
-			return AgentRun{}, StartConfirmRunResult{}, false, fmt.Errorf("store: 冻结确认快照失败: %w", err)
 		}
 	}
 	builderInputHash, err = schemas.CanonicalHash(payload)
@@ -214,6 +140,95 @@ func (s *Store) StartConfirmRun(ctx context.Context, p StartConfirmRunParams) (A
 	}
 	return r, StartConfirmRunResult{ConfirmationID: confirmationID, ReviewHash: reviewHash,
 		BuilderInputPayload: payload, BuilderInputHash: builderInputHash}, false, nil
+}
+
+// confirmPayloadForRetry 构造失败重试的 Builder 载荷:目标必须属于本会话、
+// kind=build 且已失败,其快照仍与当前核定预览一致;复用快照与冻结选型
+// 上下文,继承载荷原样保留,只替换本轮 run 标识(PlanningInput 中唯一随
+// run 变化的字段),先前 run 的载荷/hash 不修改。
+func confirmPayloadForRetry(ctx context.Context, tx pgx.Tx, p StartConfirmRunParams, reviewHash string) (json.RawMessage, string, error) {
+	var kind RunKind
+	var status RunStatus
+	var targetConfirmation string
+	var targetReviewHash string
+	var inheritedPayload json.RawMessage
+	err := tx.QueryRow(ctx, `SELECT r.kind, r.status, COALESCE(r.confirmation_id::text, ''), COALESCE(c.review_hash, ''),
+		r.builder_input_payload
+		FROM agent_runs r LEFT JOIN requirement_confirmations c ON c.id = r.confirmation_id
+		WHERE r.id = $1 AND r.session_id = $2`, p.RetryOfRunID, p.SessionID).Scan(&kind, &status, &targetConfirmation, &targetReviewHash, &inheritedPayload)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, "", ErrRunNotFound
+	}
+	if err != nil {
+		return nil, "", fmt.Errorf("store: 读取重试目标失败: %w", err)
+	}
+	if kind != RunBuild || status != RunFailed || targetConfirmation == "" || len(inheritedPayload) == 0 {
+		return nil, "", ErrRetryTargetInvalid
+	}
+	if targetReviewHash != reviewHash {
+		return nil, "", ErrRequirementReviewConflict
+	}
+	var inherited schemas.PlanningInput
+	if err := json.Unmarshal(inheritedPayload, &inherited); err != nil {
+		return nil, "", fmt.Errorf("store: 解析重试目标载荷失败: %w", err)
+	}
+	inherited.RunID = p.RunID
+	payload, err := json.Marshal(inherited)
+	if err != nil {
+		return nil, "", err
+	}
+	return payload, targetConfirmation, nil
+}
+
+// confirmPayloadFresh 组装新确认的 Builder 载荷:上一提案、基线草稿与冻结
+// 约束一起进入不可变载荷,并插入本轮的 requirement_confirmations 快照。
+func confirmPayloadFresh(ctx context.Context, tx pgx.Tx, p StartConfirmRunParams, state schemas.RequirementState, reviewSpec, requirementState json.RawMessage, reviewHash string, readiness schemas.RequirementReadiness) (json.RawMessage, error) {
+	var previous struct {
+		Result json.RawMessage `json:"result"`
+		RunID  string          `json:"run_id"`
+	}
+	var previousProposal json.RawMessage
+	var previousRunID string
+	err := tx.QueryRow(ctx, `SELECT result, run_id::text FROM session_proposals
+		WHERE session_id = $1 ORDER BY id DESC LIMIT 1`, p.SessionID).Scan(&previous.Result, &previous.RunID)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+	case err != nil:
+		return nil, fmt.Errorf("store: 读取上一提案失败: %w", err)
+	default:
+		previousProposal, previousRunID = previous.Result, previous.RunID
+	}
+	var baseDraft json.RawMessage
+	var version *int
+	if err := tx.QueryRow(ctx, `SELECT max(version) FROM builds WHERE session_id = $1`, p.SessionID).Scan(&version); err != nil {
+		return nil, fmt.Errorf("store: 查询最新配置版本失败: %w", err)
+	}
+	if version != nil {
+		if err := tx.QueryRow(ctx, `SELECT draft FROM builds WHERE session_id = $1 AND version = $2`, p.SessionID, *version).Scan(&baseDraft); err != nil {
+			return nil, fmt.Errorf("store: 读取基线草稿失败: %w", err)
+		}
+	}
+	payload, err := schemas.PlanningBuilderInput(p.RunID, state, &schemas.EffectiveConstraints{
+		Spec: reviewSpec, Defaults: readiness.EffectiveDefaults,
+	}, baseDraft, previousProposal, previousRunID)
+	if err != nil {
+		return nil, err
+	}
+	var specObject map[string]json.RawMessage
+	if err := json.Unmarshal(reviewSpec, &specObject); err != nil {
+		return nil, err
+	}
+	scope := specObject["configuration_scope"]
+	if scope == nil {
+		scope = json.RawMessage(`[]`)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO requirement_confirmations
+		(id, session_id, requirement_spec, requirement_state, review_hash, revision, configuration_scope, schema_version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, p.ConfirmationID, p.SessionID, reviewSpec, requirementState,
+		reviewHash, state.Revision, scope, schemas.RequirementStateSchemaVersion); err != nil {
+		return nil, fmt.Errorf("store: 冻结确认快照失败: %w", err)
+	}
+	return payload, nil
 }
 
 // RequirementConfirmation 是不可变的确认快照:review_spec 是用户核定时看到的

@@ -213,172 +213,202 @@ func ApplyRequirementUpdate(state RequirementState, update RequirementUpdate, so
 	}
 	for _, op := range update.Operations {
 		if capability, reserved := unsupportedCapabilityField(op.Field); reserved {
-			if op.Op != "remove" || len(op.Value) > 0 {
-				return state, fmt.Errorf("requirement update: %s 仅支持携带本轮证据的撤销(remove)", op.Field)
-			}
-			evidence := source
-			if source.Kind == "chat" {
-				if strings.TrimSpace(op.Quote) == "" || !strings.Contains(source.Quote, op.Quote) {
-					return state, fmt.Errorf("requirement update: %s 缺少本轮用户原文证据", op.Field)
-				}
-				evidence.Quote = op.Quote
-			}
-			withdrawn := false
-			for i := range next.Observations {
-				if name, coded := unsupportedCapabilityName(next.Observations[i].Reason); coded && name == capability && !next.Observations[i].Resolved {
-					next.Observations[i].Resolved = true
-					withdrawn = true
-				}
-			}
-			if !withdrawn {
-				return state, fmt.Errorf("requirement update: %s 没有可撤销的 unsupported 观察记录", op.Field)
-			}
-			change := RequirementChange{Revision: next.Revision, Op: "remove", Field: op.Field, Source: evidence}
-			next.Changes = append(next.Changes, change)
-			next.History = append(next.History, change)
-			continue
-		}
-		before, ok := next.Fields[op.Field]
-		if !ok && knownRequirementField(op.Field) {
-			// 已知字段允许缺席于旧状态映射(v1 外形/部分构造状态):
-			// 按 unknown 起算,只有操作实际落地时才写入该键,
-			// 不为未触碰字段凭空补 unknown 键。
-			before = RequirementField{Status: "unknown"}
-			ok = true
-		}
-		if !ok && FreeField(op.Field) {
-			before = RequirementField{Status: "unknown"}
-			next.Fields[op.Field] = before
-			ok = true
-		}
-		if !ok || !knownRequirementField(op.Field) {
-			return state, fmt.Errorf("requirement update: 未知字段 %q", op.Field)
-		}
-		if op.Evidence != "" && op.Evidence != "stated" && op.Evidence != "uncertain" && op.Evidence != "inferred" && op.Evidence != "accepted_proposal" {
-			return state, fmt.Errorf("requirement update: 非法 evidence")
-		}
-		if op.Evidence == "inferred" || (op.Evidence == "uncertain" && op.Op != "conflict") {
-			return state, fmt.Errorf("requirement update: 推断或不确定信息不能作为已表达要求")
-		}
-		// accepted_proposal 是用户明确接受助手建议的表达:领域层只做合同校验
-		// (仅 set、仅 chat 来源、绑定本轮原文);proposal 的存在、字段/值/归属
-		// 与紧邻轮次由产品层在持久化边界验证,模型标签本身不构成证据。
-		if op.Evidence == "accepted_proposal" && (op.Op != "set" || source.Kind != "chat") {
-			return state, fmt.Errorf("requirement update: accepted_proposal 仅支持聊天轮的 set 操作")
-		}
-		kind := op.Kind
-		// 强度编辑沿用同一值的语义；换成新文本却缺少分类时不得把旧 fact/context
-		// 偷带到可能的新硬条件上。旧协议的未分类状态由下游明确处理。
-		if kind == "" && (op.Op != "set" || bytes.Equal(bytes.TrimSpace(before.Value), bytes.TrimSpace(op.Value))) {
-			kind = before.Kind
-		}
-		if kind != "" && !ValidRequirementKind(kind) {
-			return state, fmt.Errorf("requirement update: kind 仅允许 fact、context 或 constraint")
-		}
-		evidence := source
-		if source.Kind == "chat" {
-			if strings.TrimSpace(op.Quote) == "" || !strings.Contains(source.Quote, op.Quote) {
-				return state, fmt.Errorf("requirement update: %s 缺少本轮用户原文证据", op.Field)
-			}
-			evidence.Quote = op.Quote
-		} else if op.Quote != "" {
-			evidence.Quote = op.Quote
-		}
-		strength := op.Strength
-		if strength == "" {
-			strength = before.Strength
-			if strength == "" {
-				strength = defaultRequirementStrength(op.Field)
-			}
-		}
-		if strength != "must" && strength != "prefer" {
-			return state, fmt.Errorf("requirement update: strength 仅允许 must 或 prefer")
-		}
-		scope := op.Scope
-		if scope == "" {
-			scope = before.Scope
-			if scope == "" {
-				scope = "session"
-			}
-		}
-		if scope != "session" && scope != "temporary" {
-			return state, fmt.Errorf("requirement update: scope 仅允许 session 或 temporary")
-		}
-		if kind == "context" && op.Field != "notes" && op.Field != "recipient" && !FreeField(op.Field) && (op.Op == "set" || op.Op == "alternative" || op.Op == "conflict") {
-			return state, fmt.Errorf("%w: %s", ErrRequirementContextField, op.Field)
-		}
-		if op.Op == "set" || op.Op == "alternative" || (op.Op == "conflict" && len(op.Value) > 0) {
-			if err := validateRequirementValue(op.Field, op.Value); err != nil {
+			if err := withdrawUnsupportedCapability(&next, op, capability, source); err != nil {
 				return state, err
 			}
-			op.Value = normalizeRequirementValue(op.Field, op.Value)
+			continue
 		}
-		after := RequirementField{Value: append(json.RawMessage(nil), op.Value...), Status: "active", Strength: strength, Scope: scope, Source: &evidence, Kind: kind, Evidence: op.Evidence}
-		switch op.Op {
-		case "set":
-			if scope == "temporary" {
-				if before.Scope == "temporary" && before.Previous != nil {
-					after.Previous = before.Previous
-				} else {
-					after.Previous = &before
-				}
-			}
-		case "remove":
-			after = RequirementField{Status: "removed", Source: &evidence}
-		case "restore":
-			if before.Previous == nil {
-				return state, fmt.Errorf("requirement update: %s 没有可恢复的临时覆盖", op.Field)
-			}
-			after = *before.Previous
-			if after.Kind == "context" && op.Field != "notes" && op.Field != "recipient" && !FreeField(op.Field) {
-				return state, fmt.Errorf("%w: %s", ErrRequirementContextField, op.Field)
-			}
-			after.Source = &evidence
-		case "alternative":
-			next.Alternatives = append(next.Alternatives, RequirementAlternative{Field: op.Field, Value: after.Value, Strength: strength, Scope: scope, Source: evidence, Kind: kind})
-			after = before // 备选不参与当前字段投影。
-		case "conflict":
-			after.Status = "conflict"
-			after.Previous = &before
-		default:
-			return state, fmt.Errorf("requirement update: 未知操作 %q", op.Op)
+		if err := applyRequirementOperation(&next, op, source); err != nil {
+			return state, err
 		}
-		recordRequirementChange(&next, op.Field, op.Op, before, after, evidence)
-		syncOwnershipFields(&next, op, after, evidence)
 	}
 	for _, observation := range update.Observations {
-		if observation.Field == "" {
-			observation.Field = "notes"
+		if err := appendRequirementObservation(&next, observation, source); err != nil {
+			return state, err
 		}
-		if strings.TrimSpace(observation.Quote) == "" || !strings.Contains(source.Quote, observation.Quote) || len([]rune(observation.Quote)) > 4000 {
-			return state, fmt.Errorf("requirement update: observation 缺少本轮原文证据")
-		}
-		if observation.Field != "" && !knownRequirementField(observation.Field) {
-			return state, fmt.Errorf("requirement update: observation 未知字段")
-		}
-		if len([]rune(observation.Reason)) > 500 {
-			return state, fmt.Errorf("requirement update: observation 原因过长")
-		}
-		if name, structured := strings.CutPrefix(observation.Reason, unsupportedCapabilityPrefix); structured &&
-			!slices.Contains(unsupportedCapabilityNames, name) {
-			return state, fmt.Errorf("requirement update: unsupported_capability 仅允许 %s", strings.Join(unsupportedCapabilityNames, "|"))
-		}
-		evidence := source
-		evidence.Quote = observation.Quote
-		removedThisTurn := false
-		if _, coded := unsupportedCapabilityName(observation.Reason); !coded && next.Fields[observation.Field].Status == "removed" {
-			for _, change := range next.Changes {
-				if change.Field == observation.Field && change.Op == "remove" {
-					removedThisTurn = true
-				}
-			}
-		}
-		next.Observations = append(next.Observations, RequirementObservation{Field: observation.Field, Text: observation.Quote, Reason: observation.Reason, Source: evidence, Resolved: removedThisTurn})
 	}
 	if err := validateOwnershipInvariant(next); err != nil {
 		return state, err
 	}
 	return next, nil
+}
+
+// withdrawUnsupportedCapability 处理 unsupported.<capability> 的撤销操作:
+// 仅 remove、仅携带本轮原文证据;把对应能力的未解决观察标记 Resolved,
+// 没有可撤销记录时整批拒绝。
+func withdrawUnsupportedCapability(next *RequirementState, op RequirementOperation, capability string, source RequirementSource) error {
+	if op.Op != "remove" || len(op.Value) > 0 {
+		return fmt.Errorf("requirement update: %s 仅支持携带本轮证据的撤销(remove)", op.Field)
+	}
+	evidence := source
+	if source.Kind == "chat" {
+		if strings.TrimSpace(op.Quote) == "" || !strings.Contains(source.Quote, op.Quote) {
+			return fmt.Errorf("requirement update: %s 缺少本轮用户原文证据", op.Field)
+		}
+		evidence.Quote = op.Quote
+	}
+	withdrawn := false
+	for i := range next.Observations {
+		if name, coded := unsupportedCapabilityName(next.Observations[i].Reason); coded && name == capability && !next.Observations[i].Resolved {
+			next.Observations[i].Resolved = true
+			withdrawn = true
+		}
+	}
+	if !withdrawn {
+		return fmt.Errorf("requirement update: %s 没有可撤销的 unsupported 观察记录", op.Field)
+	}
+	change := RequirementChange{Revision: next.Revision, Op: "remove", Field: op.Field, Source: evidence}
+	next.Changes = append(next.Changes, change)
+	next.History = append(next.History, change)
+	return nil
+}
+
+// applyRequirementOperation 校验并落地一条字段操作:身份归一、证据合同、
+// kind/strength/scope 校验、值校验与归一,再按操作类型更新字段投影并记录
+// 变更与已有件联动。任一校验失败整批拒绝。
+func applyRequirementOperation(next *RequirementState, op RequirementOperation, source RequirementSource) error {
+	before, ok := next.Fields[op.Field]
+	if !ok && knownRequirementField(op.Field) {
+		// 已知字段允许缺席于旧状态映射(v1 外形/部分构造状态):
+		// 按 unknown 起算,只有操作实际落地时才写入该键,
+		// 不为未触碰字段凭空补 unknown 键。
+		before = RequirementField{Status: "unknown"}
+		ok = true
+	}
+	if !ok && FreeField(op.Field) {
+		before = RequirementField{Status: "unknown"}
+		next.Fields[op.Field] = before
+		ok = true
+	}
+	if !ok || !knownRequirementField(op.Field) {
+		return fmt.Errorf("requirement update: 未知字段 %q", op.Field)
+	}
+	if op.Evidence != "" && op.Evidence != "stated" && op.Evidence != "uncertain" && op.Evidence != "inferred" && op.Evidence != "accepted_proposal" {
+		return fmt.Errorf("requirement update: 非法 evidence")
+	}
+	if op.Evidence == "inferred" || (op.Evidence == "uncertain" && op.Op != "conflict") {
+		return fmt.Errorf("requirement update: 推断或不确定信息不能作为已表达要求")
+	}
+	// accepted_proposal 是用户明确接受助手建议的表达:领域层只做合同校验
+	// (仅 set、仅 chat 来源、绑定本轮原文);proposal 的存在、字段/值/归属
+	// 与紧邻轮次由产品层在持久化边界验证,模型标签本身不构成证据。
+	if op.Evidence == "accepted_proposal" && (op.Op != "set" || source.Kind != "chat") {
+		return fmt.Errorf("requirement update: accepted_proposal 仅支持聊天轮的 set 操作")
+	}
+	kind := op.Kind
+	// 强度编辑沿用同一值的语义；换成新文本却缺少分类时不得把旧 fact/context
+	// 偷带到可能的新硬条件上。旧协议的未分类状态由下游明确处理。
+	if kind == "" && (op.Op != "set" || bytes.Equal(bytes.TrimSpace(before.Value), bytes.TrimSpace(op.Value))) {
+		kind = before.Kind
+	}
+	if kind != "" && !ValidRequirementKind(kind) {
+		return fmt.Errorf("requirement update: kind 仅允许 fact、context 或 constraint")
+	}
+	evidence := source
+	if source.Kind == "chat" {
+		if strings.TrimSpace(op.Quote) == "" || !strings.Contains(source.Quote, op.Quote) {
+			return fmt.Errorf("requirement update: %s 缺少本轮用户原文证据", op.Field)
+		}
+		evidence.Quote = op.Quote
+	} else if op.Quote != "" {
+		evidence.Quote = op.Quote
+	}
+	strength := op.Strength
+	if strength == "" {
+		strength = before.Strength
+		if strength == "" {
+			strength = defaultRequirementStrength(op.Field)
+		}
+	}
+	if strength != "must" && strength != "prefer" {
+		return fmt.Errorf("requirement update: strength 仅允许 must 或 prefer")
+	}
+	scope := op.Scope
+	if scope == "" {
+		scope = before.Scope
+		if scope == "" {
+			scope = "session"
+		}
+	}
+	if scope != "session" && scope != "temporary" {
+		return fmt.Errorf("requirement update: scope 仅允许 session 或 temporary")
+	}
+	if kind == "context" && op.Field != "notes" && op.Field != "recipient" && !FreeField(op.Field) && (op.Op == "set" || op.Op == "alternative" || op.Op == "conflict") {
+		return fmt.Errorf("%w: %s", ErrRequirementContextField, op.Field)
+	}
+	if op.Op == "set" || op.Op == "alternative" || (op.Op == "conflict" && len(op.Value) > 0) {
+		if err := validateRequirementValue(op.Field, op.Value); err != nil {
+			return err
+		}
+		op.Value = normalizeRequirementValue(op.Field, op.Value)
+	}
+	after := RequirementField{Value: append(json.RawMessage(nil), op.Value...), Status: "active", Strength: strength, Scope: scope, Source: &evidence, Kind: kind, Evidence: op.Evidence}
+	switch op.Op {
+	case "set":
+		if scope == "temporary" {
+			if before.Scope == "temporary" && before.Previous != nil {
+				after.Previous = before.Previous
+			} else {
+				after.Previous = &before
+			}
+		}
+	case "remove":
+		after = RequirementField{Status: "removed", Source: &evidence}
+	case "restore":
+		if before.Previous == nil {
+			return fmt.Errorf("requirement update: %s 没有可恢复的临时覆盖", op.Field)
+		}
+		after = *before.Previous
+		if after.Kind == "context" && op.Field != "notes" && op.Field != "recipient" && !FreeField(op.Field) {
+			return fmt.Errorf("%w: %s", ErrRequirementContextField, op.Field)
+		}
+		after.Source = &evidence
+	case "alternative":
+		next.Alternatives = append(next.Alternatives, RequirementAlternative{Field: op.Field, Value: after.Value, Strength: strength, Scope: scope, Source: evidence, Kind: kind})
+		after = before // 备选不参与当前字段投影。
+	case "conflict":
+		after.Status = "conflict"
+		after.Previous = &before
+	default:
+		return fmt.Errorf("requirement update: 未知操作 %q", op.Op)
+	}
+	recordRequirementChange(next, op.Field, op.Op, before, after, evidence)
+	syncOwnershipFields(next, op, after, evidence)
+	return nil
+}
+
+// appendRequirementObservation 校验并追加一条原文观察:证据绑定本轮原文,
+// unsupported_capability 的 reason 受能力白名单约束;字段本轮被撤销的
+// 自由文本观察直接以 Resolved 落库。
+func appendRequirementObservation(next *RequirementState, observation RequirementObservationInput, source RequirementSource) error {
+	if observation.Field == "" {
+		observation.Field = "notes"
+	}
+	if strings.TrimSpace(observation.Quote) == "" || !strings.Contains(source.Quote, observation.Quote) || len([]rune(observation.Quote)) > 4000 {
+		return fmt.Errorf("requirement update: observation 缺少本轮原文证据")
+	}
+	if observation.Field != "" && !knownRequirementField(observation.Field) {
+		return fmt.Errorf("requirement update: observation 未知字段")
+	}
+	if len([]rune(observation.Reason)) > 500 {
+		return fmt.Errorf("requirement update: observation 原因过长")
+	}
+	if name, structured := strings.CutPrefix(observation.Reason, unsupportedCapabilityPrefix); structured &&
+		!slices.Contains(unsupportedCapabilityNames, name) {
+		return fmt.Errorf("requirement update: unsupported_capability 仅允许 %s", strings.Join(unsupportedCapabilityNames, "|"))
+	}
+	evidence := source
+	evidence.Quote = observation.Quote
+	removedThisTurn := false
+	if _, coded := unsupportedCapabilityName(observation.Reason); !coded && next.Fields[observation.Field].Status == "removed" {
+		for _, change := range next.Changes {
+			if change.Field == observation.Field && change.Op == "remove" {
+				removedThisTurn = true
+			}
+		}
+	}
+	next.Observations = append(next.Observations, RequirementObservation{Field: observation.Field, Text: observation.Quote, Reason: observation.Reason, Source: evidence, Resolved: removedThisTurn})
+	return nil
 }
 
 // validateOwnershipInvariant 拒绝 existing/owned 联动被破坏的批结果:

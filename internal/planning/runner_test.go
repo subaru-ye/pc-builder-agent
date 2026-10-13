@@ -377,3 +377,41 @@ func TestRepeatedIdenticalActionsRejectedAsStagnation(t *testing.T) {
 		t.Fatalf("拒绝的调用不得消耗工具额度, want 2 got %d", result.ToolCalls)
 	}
 }
+
+// 收口反馈附具体失败原因(低预算对照批实录:模型连续多轮未出合规最终
+// JSON):非法 JSON 与字段不合规的反馈必须携带可定位的错误信息。
+func TestFinalJSONFeedbackCarriesFailureReason(t *testing.T) {
+	catalog, draft := fixture(t)
+	state := schemas.NewRequirementState()
+	state.Fields["budget_cny"] = schemas.RequirementField{Value: json.RawMessage(`6000`), Status: "active", Kind: "constraint", Strength: "prefer"}
+	good := `{"outcome":"proposal","reply":"已按候选整理。","draft":` + string(draft) + `,"assessments":[],"issues":["示例"],"assumptions":[]}`
+	var sawJSONError, sawFieldError bool
+	m := &scriptedModel{respond: func(call int, r *model.LLMRequest) *genai.Content {
+		switch call {
+		case 1:
+			return genai.NewContentFromText(`{"outcome":"ready","reply":"截断`, genai.RoleModel)
+		case 2:
+			last := r.Contents[len(r.Contents)-1].Parts[0].Text
+			if strings.Contains(last, "不是合法 JSON") {
+				sawJSONError = true
+			}
+			return genai.NewContentFromText(`{"outcome":"DONE","reply":"","draft":null,"assessments":[],"issues":[],"assumptions":[]}`, genai.RoleModel)
+		default:
+			last := r.Contents[len(r.Contents)-1].Parts[0].Text
+			if strings.Contains(last, "字段不合规") && strings.Contains(last, `"DONE"`) {
+				sawFieldError = true
+			}
+			return genai.NewContentFromText(good, genai.RoleModel)
+		}
+	}}
+	result, e := (Runner{Model: m, Catalog: catalog}).Run(context.Background(), schemas.PlanningInput{SchemaVersion: 2, State: state})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if !sawJSONError || !sawFieldError {
+		t.Fatalf("反馈应附具体原因: json=%v field=%v", sawJSONError, sawFieldError)
+	}
+	if result.Outcome != "proposal" {
+		t.Fatalf("修正后应正常收口: %+v", result)
+	}
+}

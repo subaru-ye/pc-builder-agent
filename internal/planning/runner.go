@@ -349,8 +349,16 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 				t = t[:j+1]
 			}
 		}
-		if json.Unmarshal([]byte(t), &final) != nil || final.Reply == "" || !strings.Contains("|collect|clarify|proposal|ready|", "|"+final.Outcome+"|") {
-			request.Contents = append(request.Contents, genai.NewContentFromText("请按最终JSON契约返回，保留已知结果。", genai.RoleUser))
+		// 收口反馈附具体失败原因:不带原因的通用纠偏让模型盲试
+		// (2026-10-13 低预算对照批实测:连续 7 轮未出合规最终 JSON)。
+		if err := json.Unmarshal([]byte(t), &final); err != nil {
+			request.Contents = append(request.Contents, genai.NewContentFromText(
+				"最终输出不是合法 JSON："+err.Error()+"。请只输出一个合法 JSON 对象（outcome/reply/draft/assessments/issues/assumptions），保留已知结果。", genai.RoleUser))
+			continue
+		}
+		if final.Reply == "" || !strings.Contains("|collect|clarify|proposal|ready|", "|"+final.Outcome+"|") {
+			request.Contents = append(request.Contents, genai.NewContentFromText(fmt.Sprintf(
+				"最终 JSON 字段不合规：reply=%q，outcome=%q。reply 必须是非空字符串，outcome 只能是 collect|clarify|proposal|ready 之一；请修正后重新输出完整 JSON，保留已知结果。", final.Reply, final.Outcome), genai.RoleUser))
 			continue
 		}
 		x.result.Outcome, x.result.ModelOutcome, x.result.Reply = final.Outcome, final.Outcome, final.Reply

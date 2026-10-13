@@ -123,17 +123,47 @@ type localSearchQuery struct {
 	Limit    int    `json:"limit,omitempty"`
 }
 
-func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Result, err error) {
+// modelFinal 是模型收口轮的最终决策 JSON。
+type modelFinal struct {
+	Outcome     string          `json:"outcome"`
+	Reply       string          `json:"reply"`
+	Draft       json.RawMessage `json:"draft"`
+	Assessments []Assessment    `json:"assessments"`
+	Issues      []string        `json:"issues"`
+	Assumptions []string        `json:"assumptions"`
+}
+
+// finalizeModelText 从模型收口文本解析最终决策:失败反馈携带具体原因
+// (非法 JSON 附解析错误,字段不合规附实际值与合法集)——不带原因的通用
+// 纠偏让模型盲试(2026-10-13 低预算对照批实测:连续 7 轮未出合规最终 JSON)。
+func finalizeModelText(text string) (modelFinal, string, bool) {
+	var final modelFinal
+	t := strings.TrimSpace(text)
+	if i := strings.Index(t, "{"); i >= 0 {
+		t = t[i:]
+		if j := strings.LastIndex(t, "}"); j >= 0 {
+			t = t[:j+1]
+		}
+	}
+	if err := json.Unmarshal([]byte(t), &final); err != nil {
+		return final, "最终输出不是合法 JSON：" + err.Error() + "。请只输出一个合法 JSON 对象（outcome/reply/draft/assessments/issues/assumptions），保留已知结果。", false
+	}
+	if final.Reply == "" || !strings.Contains("|collect|clarify|proposal|ready|", "|"+final.Outcome+"|") {
+		return final, fmt.Sprintf("最终 JSON 字段不合规：reply=%q，outcome=%q。reply 必须是非空字符串，outcome 只能是 collect|clarify|proposal|ready 之一；请修正后重新输出完整 JSON，保留已知结果。", final.Reply, final.Outcome), false
+	}
+	return final, "", true
+}
+
+// prepareRun 完成一次规划执行的初始化:冻结约束校验、web 钩子、目录快照、
+// 上一轮证据恢复与初始模型请求组装。冻结载荷无效立即报错——不回退原始
+// state、不得关闭预算门槛后继续调用模型或工具;nil 的历史载荷(归档/评估
+// 回放)保留旧路径。
+func (x *execution) prepareRun(ctx context.Context) (*model.LLMRequest, error) {
 	started := time.Now()
-	x := execution{runner: r, input: input, result: Result{SchemaVersion: 1, Outcome: "proposal", Reply: "已保存本轮选配进展，可以继续补充或调整。", Issues: []string{}, Assessments: []Assessment{}, Assumptions: []string{}, StageMS: map[string]int64{}}}
-	x.seen = map[string]bool{}
-	x.priceAsc = map[string]bool{}
-	defer func() { out.DurationMS = time.Since(started).Milliseconds() }()
-	// 确认/Builder gate v2:确认事务冻结的有效选型约束必须严格可解码。
-	// 无效载荷立即返回错误——不回退原始 state、不得关闭预算门槛后继续
-	// 调用模型或工具。nil 的历史载荷(归档/评估回放)保留旧路径。
+	r := x.runner
+	input := x.input
 	if _, err := x.frozenSpec(); err != nil {
-		return Result{}, err
+		return nil, err
 	}
 	if r.Web != nil {
 		web := *r.Web
@@ -238,12 +268,24 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 			"payload": map[string]any{"type": "string"},
 		}, "required": []string{"action", "payload"}, "additionalProperties": false},
 	}
-	request := &model.LLMRequest{Model: r.Model.Name(),
+	return &model.LLMRequest{Model: r.Model.Name(),
 		Contents: []*genai.Content{genai.NewContentFromText(string(raw), genai.RoleUser)},
 		Config: &genai.GenerateContentConfig{
 			SystemInstruction: genai.NewContentFromText(instruction, genai.RoleUser),
 			Tools:             []*genai.Tool{{FunctionDeclarations: []*genai.FunctionDeclaration{declaration}}},
 		},
+	}, nil
+}
+
+func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Result, err error) {
+	started := time.Now()
+	x := execution{runner: r, input: input, result: Result{SchemaVersion: 1, Outcome: "proposal", Reply: "已保存本轮选配进展，可以继续补充或调整。", Issues: []string{}, Assessments: []Assessment{}, Assumptions: []string{}, StageMS: map[string]int64{}}}
+	x.seen = map[string]bool{}
+	x.priceAsc = map[string]bool{}
+	defer func() { out.DurationMS = time.Since(started).Milliseconds() }()
+	request, err := x.prepareRun(ctx)
+	if err != nil {
+		return Result{}, err
 	}
 	turns := r.MaxTurns
 	if turns <= 0 || turns > maxModelTurns {
@@ -294,38 +336,8 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 			if part.Thought {
 				continue
 			}
-				if f := part.FunctionCall; f != nil {
-					value := map[string]any{"error": "本轮工具额度已用完，请整理待解决方案"}
-					if x.result.ToolCalls < maxToolCalls && turn < turns-1 && f.Name == "planning_action" {
-						// 无进展检测:连续参数完全相同的调用,第 2 次照常执行但
-						// 注入强警告;第 3 次起拒绝执行,强制改变参数或收口。
-						repeated := false
-						if fingerprint := actionFingerprint(f.Args); fingerprint == x.lastActionFingerprint {
-							x.repeatedActions++
-							repeated = true
-						} else {
-							x.lastActionFingerprint, x.repeatedActions = fingerprint, 0
-						}
-						if !repeated || x.repeatedActions == 1 {
-							x.result.ToolCalls++
-							toolStarted := time.Now()
-							value = x.call(ctx, f.Args)
-							action, _ := f.Args["action"].(string)
-							x.result.StageMS[action] += time.Since(toolStarted).Milliseconds()
-							if repeated {
-								value["stagnation_warning"] = "这是连续第 2 次参数完全相同的调用，重复执行不会产生新信息；必须改变查询词、品类或分页参数，或直接整理输出。"
-							}
-						} else {
-							value = map[string]any{"error": "连续第 3 次参数完全相同的调用，已判定无进展并拒绝执行；请改变参数检索不同信息，或按最终 JSON 契约整理输出。"}
-						}
-					}
-				remaining := map[string]int{"model_turns": turns - turn - 1, "tool_turns": max(0, turns-turn-2), "tool_calls": maxToolCalls - x.result.ToolCalls, "search_calls": maxSearchCalls - x.result.SearchCalls, "page_calls": maxPageCalls - x.result.PageCalls}
-				value["remaining"] = remaining
-				// 弱模型不看 remaining 数字：额度临界必须以文本硬警告逼收口。
-				if remaining["tool_calls"] <= convergenceWarningRemaining {
-					value["warning"] = "工具额度即将用尽：这是最后的整理机会，下一个响应必须输出最终 JSON（候选能过校验就 ready，否则 proposal 并列出已尝试路径），不要再调用工具。"
-				}
-				responses.Parts = append(responses.Parts, &genai.Part{FunctionResponse: &genai.FunctionResponse{ID: f.ID, Name: f.Name, Response: value}})
+			if f := part.FunctionCall; f != nil {
+				responses.Parts = append(responses.Parts, &genai.Part{FunctionResponse: &genai.FunctionResponse{ID: f.ID, Name: f.Name, Response: x.executePlanningAction(ctx, f, turn, turns)}})
 			} else {
 				text.WriteString(part.Text)
 			}
@@ -334,31 +346,9 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 			request.Contents = append(request.Contents, responses)
 			continue
 		}
-		var final struct {
-			Outcome     string          `json:"outcome"`
-			Reply       string          `json:"reply"`
-			Draft       json.RawMessage `json:"draft"`
-			Assessments []Assessment    `json:"assessments"`
-			Issues      []string        `json:"issues"`
-			Assumptions []string        `json:"assumptions"`
-		}
-		t := strings.TrimSpace(text.String())
-		if i := strings.Index(t, "{"); i >= 0 {
-			t = t[i:]
-			if j := strings.LastIndex(t, "}"); j >= 0 {
-				t = t[:j+1]
-			}
-		}
-		// 收口反馈附具体失败原因:不带原因的通用纠偏让模型盲试
-		// (2026-10-13 低预算对照批实测:连续 7 轮未出合规最终 JSON)。
-		if err := json.Unmarshal([]byte(t), &final); err != nil {
-			request.Contents = append(request.Contents, genai.NewContentFromText(
-				"最终输出不是合法 JSON："+err.Error()+"。请只输出一个合法 JSON 对象（outcome/reply/draft/assessments/issues/assumptions），保留已知结果。", genai.RoleUser))
-			continue
-		}
-		if final.Reply == "" || !strings.Contains("|collect|clarify|proposal|ready|", "|"+final.Outcome+"|") {
-			request.Contents = append(request.Contents, genai.NewContentFromText(fmt.Sprintf(
-				"最终 JSON 字段不合规：reply=%q，outcome=%q。reply 必须是非空字符串，outcome 只能是 collect|clarify|proposal|ready 之一；请修正后重新输出完整 JSON，保留已知结果。", final.Reply, final.Outcome), genai.RoleUser))
+		final, feedback, ok := finalizeModelText(text.String())
+		if !ok {
+			request.Contents = append(request.Contents, genai.NewContentFromText(feedback, genai.RoleUser))
 			continue
 		}
 		x.result.Outcome, x.result.ModelOutcome, x.result.Reply = final.Outcome, final.Outcome, final.Reply
@@ -393,16 +383,7 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 		}
 		if (final.Outcome == "ready" || (final.Outcome == "proposal" && len(final.Issues) == 0) || reviewDecision) && finished.Outcome != "ready" && turn < turns-1 {
 			decisionReviewed = true
-			feedbackMap := map[string]any{"validation": finished.Validation, "quote": finished.Quote, "issues": finished.Issues}
-			if finished.Quote != nil {
-				if draft, err := schemas.DecodeBuildDraft(x.result.Draft); err == nil {
-					if alts := x.budgetAlternatives(*finished.Quote, draft); alts != nil {
-						feedbackMap["budget_alternatives"] = alts
-					}
-				}
-			}
-			feedback, _ := json.Marshal(feedbackMap)
-			request.Contents = append(request.Contents, genai.NewContentFromText("交付核验反馈："+string(feedback)+"\n请复核是否还能用剩余额度检索或修正，例如比较其他有报价的候选解决超预算；由你决定取舍，不预设替换型号。追问前核对权威需求与来源：已有方案不等于必须保留，软偏好不等于额外授权门槛，不要把自己的执行假设当作用户限制。已授权的调整先检索并核验替代，真正缺少用户信息或需要改变其必须条件才追问。issues只保留用户有效条件或交付事实的缺项，未要求具体性能实测时可把选型局限写进说明。若仍不能解决，可直接保持proposal并说明已尝试的路径；真正需用户决定用clarify。不得编造证据、放宽必须条件或把未知改为已通过。", genai.RoleUser))
+			request.Contents = append(request.Contents, genai.NewContentFromText(x.deliveryReviewFeedback(finished), genai.RoleUser))
 			continue
 		}
 		return finished, nil
@@ -415,6 +396,58 @@ func (r Runner) Run(ctx context.Context, input schemas.PlanningInput) (out Resul
 	}
 	x.result.Issues = append(x.result.Issues, "本轮处理额度已用完，已保留候选，可继续讨论。")
 	return x.finish(), nil
+}
+
+// executePlanningAction 处理一次模型的工具调用:planning_action 的配额
+// 检查、无进展指纹检测、执行与 remaining 预算回喂;配额用尽或非
+// planning_action 调用返回整理提示,仍附带预算回喂。
+func (x *execution) executePlanningAction(ctx context.Context, f *genai.FunctionCall, turn, turns int) map[string]any {
+	value := map[string]any{"error": "本轮工具额度已用完，请整理待解决方案"}
+	if x.result.ToolCalls < maxToolCalls && turn < turns-1 && f.Name == "planning_action" {
+		// 无进展检测:连续参数完全相同的调用,第 2 次照常执行但
+		// 注入强警告;第 3 次起拒绝执行,强制改变参数或收口。
+		repeated := false
+		if fingerprint := actionFingerprint(f.Args); fingerprint == x.lastActionFingerprint {
+			x.repeatedActions++
+			repeated = true
+		} else {
+			x.lastActionFingerprint, x.repeatedActions = fingerprint, 0
+		}
+		if !repeated || x.repeatedActions == 1 {
+			x.result.ToolCalls++
+			toolStarted := time.Now()
+			value = x.call(ctx, f.Args)
+			action, _ := f.Args["action"].(string)
+			x.result.StageMS[action] += time.Since(toolStarted).Milliseconds()
+			if repeated {
+				value["stagnation_warning"] = "这是连续第 2 次参数完全相同的调用，重复执行不会产生新信息；必须改变查询词、品类或分页参数，或直接整理输出。"
+			}
+		} else {
+			value = map[string]any{"error": "连续第 3 次参数完全相同的调用，已判定无进展并拒绝执行；请改变参数检索不同信息，或按最终 JSON 契约整理输出。"}
+		}
+	}
+	remaining := map[string]int{"model_turns": turns - turn - 1, "tool_turns": max(0, turns-turn-2), "tool_calls": maxToolCalls - x.result.ToolCalls, "search_calls": maxSearchCalls - x.result.SearchCalls, "page_calls": maxPageCalls - x.result.PageCalls}
+	value["remaining"] = remaining
+	// 弱模型不看 remaining 数字：额度临界必须以文本硬警告逼收口。
+	if remaining["tool_calls"] <= convergenceWarningRemaining {
+		value["warning"] = "工具额度即将用尽：这是最后的整理机会，下一个响应必须输出最终 JSON（候选能过校验就 ready，否则 proposal 并列出已尝试路径），不要再调用工具。"
+	}
+	return value
+}
+
+// deliveryReviewFeedback 组装交付核验反馈:校验报告、报价与超预算时的
+// 替代候选,连同复核指令一次性回喂模型。
+func (x *execution) deliveryReviewFeedback(finished Result) string {
+	feedbackMap := map[string]any{"validation": finished.Validation, "quote": finished.Quote, "issues": finished.Issues}
+	if finished.Quote != nil {
+		if draft, err := schemas.DecodeBuildDraft(x.result.Draft); err == nil {
+			if alts := x.budgetAlternatives(*finished.Quote, draft); alts != nil {
+				feedbackMap["budget_alternatives"] = alts
+			}
+		}
+	}
+	feedback, _ := json.Marshal(feedbackMap)
+	return "交付核验反馈：" + string(feedback) + "\n请复核是否还能用剩余额度检索或修正，例如比较其他有报价的候选解决超预算；由你决定取舍，不预设替换型号。追问前核对权威需求与来源：已有方案不等于必须保留，软偏好不等于额外授权门槛，不要把自己的执行假设当作用户限制。已授权的调整先检索并核验替代，真正缺少用户信息或需要改变其必须条件才追问。issues只保留用户有效条件或交付事实的缺项，未要求具体性能实测时可把选型局限写进说明。若仍不能解决，可直接保持proposal并说明已尝试的路径；真正需用户决定用clarify。不得编造证据、放宽必须条件或把未知改为已通过。"
 }
 
 func (x *execution) call(ctx context.Context, args map[string]any) map[string]any {

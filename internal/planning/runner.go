@@ -1151,10 +1151,30 @@ func (x *execution) finish() Result {
 // （applyBudgetFix）在预算回环耗尽后的目录内确定性替换，其每笔替换以独立
 // issue 留痕于 Issues。
 func (x *execution) finalize() Result {
-	// 已有件保留 vs 改购是用户计价取舍：选中件与已有件型号/数量未核实时，
-	// 不得仅凭同品类把选中 SKU 当已有件免计价后交付。结构化检测不依赖模型
-	// 自述措辞，也拦截模型直接宣称的 ready（BV2-104：proposal+措辞绕过 →
-	// ready 交付账实不一致）。
+	x.clarifyOwnershipTradeoffs()
+	wasReady := x.result.Outcome == "ready" || x.result.Outcome == "proposal"
+	if wasReady {
+		x.result.Outcome = "ready"
+	}
+	x.projectResult(wasReady)
+	var notes []string
+	if wasReady || len(x.result.Draft) > 0 {
+		issues, n := x.deliveryIssues()
+		notes = n
+		x.result.Issues = append(x.result.Issues, issues...)
+		x.normalizeUnresolvedClaims()
+		x.result.Issues = stripInternalIssueCodes(x.result.Issues)
+	}
+	x.verifyReadyGates()
+	x.normalizeResultShape(wasReady, notes)
+	return x.result
+}
+
+// clarifyOwnershipTradeoffs 是已有件保留 vs 改购的用户计价取舍拦截：选中件
+// 与已有件型号/数量未核实时，不得仅凭同品类把选中 SKU 当已有件免计价后
+// 交付。结构化检测不依赖模型自述措辞，也拦截模型直接宣称的 ready
+// （BV2-104：proposal+措辞绕过 → ready 交付账实不一致）。
+func (x *execution) clarifyOwnershipTradeoffs() {
 	if (x.result.Outcome == "proposal" || x.result.Outcome == "ready") && len(x.result.Draft) > 0 {
 		draft, err := schemas.DecodeBuildDraft(x.result.Draft)
 		if err == nil {
@@ -1174,10 +1194,11 @@ func (x *execution) finalize() Result {
 			}
 		}
 	}
-	wasReady := x.result.Outcome == "ready" || x.result.Outcome == "proposal"
-	if wasReady {
-		x.result.Outcome = "ready"
-	}
+}
+
+// projectResult 投影最终 Result 的证据与候选：评估项清洗、按草稿选中/外部
+// 候选保留规则填充 Candidates。
+func (x *execution) projectResult(wasReady bool) {
 	x.result.Evidence = x.evidence
 	x.result.Candidates = nil
 	for i := range x.result.Assessments {
@@ -1210,13 +1231,12 @@ func (x *execution) finalize() Result {
 			}
 		}
 	}
-	issues, notes := []string(nil), []string(nil)
-	if wasReady || len(x.result.Draft) > 0 {
-		issues, notes = x.deliveryIssues()
-		x.result.Issues = append(x.result.Issues, issues...)
-		x.normalizeUnresolvedClaims()
-		x.result.Issues = stripInternalIssueCodes(x.result.Issues)
-	}
+}
+
+// verifyReadyGates 是 ready 的确定性降级门槛：核验/报价/零 issues 三重前提,
+// 再逐 must 字段核验证据支持;size_pref 由服务端数据规则三态裁定。
+// 任一不满足降级为 proposal 并追加 issue。
+func (x *execution) verifyReadyGates() {
 	if x.result.Outcome == "ready" {
 		// deliveryIssues checks missing prices using the user's budget basis
 		// after exact ownership verification. Full-machine missing prices must
@@ -1285,6 +1305,12 @@ func (x *execution) finalize() Result {
 		x.result.Outcome = "proposal"
 		x.result.Issues = append(x.result.Issues, "尚未形成完整候选配置")
 	}
+}
+
+// normalizeResultShape 完成 Result 的收尾归一：未决时的回复文案、未完成
+// 会话的外部候选保留、nil 切片归一、候选按品类排序、issues 去重与交付
+// 状态折叠。
+func (x *execution) normalizeResultShape(wasReady bool, notes []string) {
 	if (wasReady || (len(x.result.Draft) > 0 && len(x.result.Issues) > 0)) && x.result.Outcome != "ready" {
 		x.result.Reply = "候选方案已保存，仍有项目需要解决。" + strings.Join(x.result.Issues, "；") + "。可以继续调整，已确认配置保持不变。"
 	}
@@ -1345,7 +1371,6 @@ func (x *execution) finalize() Result {
 		}
 	}
 	x.result.Delivery = &Delivery{Status: status, Issues: append([]string{}, deduped...), Notes: notes}
-	return x.result
 }
 
 // checkWindowParams 校验 read_evidence/read_page 的显式窗口参数：limit 允许

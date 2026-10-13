@@ -173,33 +173,8 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 		report.Limitations = []string{"Real fixed chat models, fixture-only web; embedding disabled.", "Graded against predeclared live expectations, not oracle outputs.", "Cash cost is unknown; actual provider token usage is retained.", "No UI or production capacity claim."}
 	}
 	liveRequested := models.Screening != nil || models.Builder != nil
-	if suite.BuilderV2 {
-		// Builder v2：Screening 必须离线（种子轮是核定需求的适配器输入），
-		// Builder 必须真实；调用预算跨 case 共享。
-		if models.Screening != nil {
-			return report, fmt.Errorf("builder-v2 runs keep screening offline; seeds are scripted adapter inputs")
-		}
-		if models.Builder == nil || models.MaxCalls <= 0 {
-			return report, fmt.Errorf("builder-v2 runs require a real builder model and a positive shared call limit")
-		}
-		report.Mode = "live_builder_offline_seeds"
-		report.Limitations = []string{
-			"Builder-only 诊断口径：需求以 scripted 种子轮写入并经真实确认事务冻结，Screening 零 provider 调用。",
-			"固定目录与离线工具（网页/语义检索 fail-closed）；结论是诊断与用量观测，不是通过率宣称。",
-		}
-	} else if suite.Live != liveRequested || (suite.Live && (models.Screening == nil || models.Builder == nil || models.MaxCalls <= 0)) {
-		return report, fmt.Errorf("live suite requires both real models and a positive shared call limit; replay requires offline suite")
-	}
-	if models.Intent != nil {
-		if models.MaxIntentCalls <= 0 {
-			return report, fmt.Errorf("a Jev observer requires a positive intent call cap")
-		}
-		if !liveRequested {
-			report.Mode = "shadow_live_intent"
-			report.Limitations = append(report.Limitations, "Jev 影子调用是真实网络调用；Screening/Builder 仍为录制 oracle，产品结果与离线重放同口径。")
-		} else {
-			report.Limitations = append(report.Limitations, "Jev 影子调用独立于真实模型调用记账，其结果不参与产品判定。")
-		}
+	if err := configureRunMode(&report, suite, models, liveRequested); err != nil {
+		return report, err
 	}
 	if err := Prepare(ctx, dsn, suite.Catalog); err != nil {
 		return report, err
@@ -211,171 +186,10 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 	defer st.Close()
 	g := &gateway{store: st, pages: suite.Pages, models: models}
 	for _, c := range suite.Cases {
-		cr := CaseRecord{ID: c.ID, Pass: true}
-		svc, err := product.NewService(ctx, st, g, runevents.NewMemory())
+		cr, err := runCase(ctx, g, st, suite, c)
 		if err != nil {
 			return report, err
 		}
-		owner := uuid.NewString()
-		ws, err := svc.CreateSession(ctx, owner, uuid.NewString())
-		if err != nil {
-			return report, err
-		}
-		if c.PreviousBuild != nil {
-			base, e := seedPreviousBuild(ctx, st, ws.ID, *c.PreviousBuild)
-			if e == nil && c.PreviousBuild.Snapshot != nil {
-				e = seedSnapshotConfirmation(ctx, st, svc, owner, ws.ID, *c.PreviousBuild)
-			}
-			if e == nil {
-				e = g.journal(map[string]any{"event": "historical_precondition", "case_id": c.ID, "source": c.PreviousBuild.Source, "build": base})
-			}
-			if e != nil {
-				_ = svc.Shutdown(ctx)
-				return report, e
-			}
-		}
-		var lastStart product.StartResult
-		var lastStep Step
-		var lastRequest string
-		for _, step := range c.Steps {
-			stepStart := time.Now()
-			g.begin(step)
-			if e := g.journal(map[string]any{"event": "step_started", "case_id": c.ID, "step": len(cr.Steps) + 1, "kind": step.Kind, "text": step.Text}); e != nil {
-				_ = svc.Shutdown(ctx)
-				return report, e
-			}
-			before, err := svc.GetSession(ctx, owner, ws.ID)
-			if err != nil {
-				return report, err
-			}
-			history := map[int]store.BuildVersion{}
-			for v := 1; v <= before.Session.VersionCount; v++ {
-				b, e := st.BuildByVersion(ctx, ws.ID, v)
-				if e != nil {
-					return report, e
-				}
-				history[v] = b
-			}
-			requestID := uuid.NewString()
-			var started product.StartResult
-			switch step.Kind {
-			case "message":
-				started, err = svc.StartMessage(ctx, owner, ws.ID, requestID, step.Text)
-			case "confirm":
-				started, err = svc.StartConfirm(ctx, owner, ws.ID, requestID, confirmRequestFromDetail(before))
-			case "edit":
-				var state schemas.RequirementState
-				_ = json.Unmarshal(before.Session.RequirementState, &state)
-				_, err = svc.EditRequirement(ctx, owner, ws.ID, requestID, product.RequirementEdit{ExpectedRevision: state.Revision, Operations: step.Edit})
-			case "retry":
-				if lastStep.Kind == "message" {
-					started, err = svc.StartMessage(ctx, owner, ws.ID, lastRequest, lastStep.Text)
-				} else {
-					started, err = svc.StartConfirm(ctx, owner, ws.ID, lastRequest, confirmRequestFromDetail(before))
-				}
-			case "refresh": // The following GetSession exercises the production read model.
-			}
-			if err == nil && started.Run.ID != "" {
-				err = waitRun(ctx, svc, owner, started.Run.ID, suite.Live)
-			}
-			record := g.snapshot()
-			record.DurationMS = time.Since(stepStart).Milliseconds()
-			if err != nil {
-				record.Error = err.Error()
-			}
-			after, readErr := svc.GetSession(ctx, owner, ws.ID)
-			if readErr != nil {
-				return report, readErr
-			}
-			record.Versions = after.Session.VersionCount
-			_ = json.Unmarshal(after.Session.RequirementState, &record.State)
-			var legacyAction struct {
-				NextAction string `json:"next_action"`
-			}
-			_ = json.Unmarshal(after.Session.RequirementState, &legacyAction)
-			record.StateNextAction = legacyAction.NextAction
-			if len(after.Messages) > 0 {
-				record.Reply = after.Messages[len(after.Messages)-1].Content
-			}
-			var envelope struct{ Result planning.Result }
-			if len(after.Proposal) > 0 && json.Unmarshal(after.Proposal, &envelope) == nil {
-				record.Result = &envelope.Result
-			}
-			for v, b := range history {
-				now, e := st.BuildByVersion(ctx, ws.ID, v)
-				record.Checks = append(record.Checks, Check{fmt.Sprintf("immutable_version:%d", v), e == nil && reflect.DeepEqual(now, b), "historical build, evidence, requirement and quote snapshot"})
-			}
-			if record.PlanningInput != nil && before.Session.VersionCount > 0 {
-				base := history[before.Session.VersionCount]
-				record.Checks = append(record.Checks, Check{"builder_received_base", jsonEqual(record.PlanningInput.BaseDraft, base.Draft), "actual Builder input must retain the latest formal configuration"})
-				if record.Versions == before.Session.VersionCount+1 {
-					now, e := st.BuildByVersion(ctx, ws.ID, record.Versions)
-					record.Checks = append(record.Checks, Check{"formal_parent_link", e == nil && now.ParentID != nil && *now.ParentID == base.ID, "new formal version must link its actual prior build"})
-				}
-			}
-			if step.Kind == "retry" {
-				record.Checks = append(record.Checks, Check{"idempotent_run", started.Duplicate && started.Run.ID == lastStart.Run.ID, "retry must not create another run"})
-			}
-			if step.Kind == "refresh" || step.Kind == "retry" {
-				record.Checks = append(record.Checks, Check{"read_without_execution", len(record.Trace) == 0 && reflect.DeepEqual(before.Session.RequirementState, after.Session.RequirementState) && reflect.DeepEqual(before.Proposal, after.Proposal), "no model call or snapshot rewrite"})
-			}
-			var previous *StepRecord
-			if len(cr.Steps) > 0 {
-				previous = &cr.Steps[len(cr.Steps)-1]
-			}
-			if (previous == nil || previous.Result == nil) && before.Session.VersionCount > 0 {
-				// A seeded formal version is also a comparison baseline, even
-				// when this is the first message or a preceding step only read it.
-				baseRecord := StepRecord{}
-				if previous != nil {
-					baseRecord = *previous
-				}
-				baseRecord.Result = &planning.Result{Draft: history[before.Session.VersionCount].Draft}
-				previous = &baseRecord
-			}
-			Grade(&record, step.Expect, previous)
-			if record.Intent != nil {
-				// Fill the comparison fields after the step settles: the
-				// existing decision is the final reduced state action.
-				o := record.Intent
-				o.ExistingDecision = record.StateNextAction
-				o.GroundTruth = step.Expect.NextAction
-				o.Agreement = o.ErrorClass == "" && o.ExistingDecision != "" && o.Prediction == o.ExistingDecision
-				o.Correct = o.ErrorClass == "" && o.GroundTruth != "" && o.Prediction == o.GroundTruth
-			}
-			for _, check := range record.Checks {
-				cr.Pass = cr.Pass && check.Pass
-			}
-			cr.Steps = append(cr.Steps, record)
-			if e := g.journal(map[string]any{"event": "step_completed", "case_id": c.ID, "step": len(cr.Steps), "record": record}); e != nil {
-				_ = svc.Shutdown(ctx)
-				return report, e
-			}
-			if step.Kind == "message" || step.Kind == "confirm" {
-				lastStart, lastStep, lastRequest = started, step, requestID
-			}
-		}
-		// A new session for the same owner must not inherit a friend's requirements.
-		fresh, e := svc.CreateSession(ctx, owner, uuid.NewString())
-		if e != nil {
-			return report, e
-		}
-		d, e := svc.GetSession(ctx, owner, fresh.ID)
-		if e != nil {
-			return report, e
-		}
-		var freshState schemas.RequirementState
-		_ = json.Unmarshal(d.Session.RequirementState, &freshState)
-		isolated := true
-		for _, f := range freshState.Fields {
-			if f.Status == "active" {
-				isolated = false
-			}
-		}
-		last := &cr.Steps[len(cr.Steps)-1]
-		last.Checks = append(last.Checks, Check{"new_session_has_no_personal_requirements", isolated, "same owner, new session"})
-		cr.Pass = cr.Pass && isolated
-		_ = svc.Shutdown(ctx)
 		if cr.Pass {
 			report.Passed++
 		}
@@ -386,6 +200,224 @@ func Run(ctx context.Context, dsn string, suite Suite, raw []byte, models Models
 	report.Intent = buildIntentReport(suite, &report, models)
 	report.DurationMS = time.Since(start).Milliseconds()
 	return report, nil
+}
+
+// configureRunMode 按套件与模型组合判定运行模式、限制声明与前置合同:
+// builder-v2 口径、live/replay 模型要求与 Jev 影子观察者的调用上限。
+func configureRunMode(report *Report, suite Suite, models Models, liveRequested bool) error {
+	if suite.BuilderV2 {
+		// Builder v2：Screening 必须离线（种子轮是核定需求的适配器输入），
+		// Builder 必须真实；调用预算跨 case 共享。
+		if models.Screening != nil {
+			return fmt.Errorf("builder-v2 runs keep screening offline; seeds are scripted adapter inputs")
+		}
+		if models.Builder == nil || models.MaxCalls <= 0 {
+			return fmt.Errorf("builder-v2 runs require a real builder model and a positive shared call limit")
+		}
+		report.Mode = "live_builder_offline_seeds"
+		report.Limitations = []string{
+			"Builder-only 诊断口径：需求以 scripted 种子轮写入并经真实确认事务冻结，Screening 零 provider 调用。",
+			"固定目录与离线工具（网页/语义检索 fail-closed）；结论是诊断与用量观测，不是通过率宣称。",
+		}
+	} else if suite.Live != liveRequested || (suite.Live && (models.Screening == nil || models.Builder == nil || models.MaxCalls <= 0)) {
+		return fmt.Errorf("live suite requires both real models and a positive shared call limit; replay requires offline suite")
+	}
+	if models.Intent != nil {
+		if models.MaxIntentCalls <= 0 {
+			return fmt.Errorf("a Jev observer requires a positive intent call cap")
+		}
+		if !liveRequested {
+			report.Mode = "shadow_live_intent"
+			report.Limitations = append(report.Limitations, "Jev 影子调用是真实网络调用；Screening/Builder 仍为录制 oracle，产品结果与离线重放同口径。")
+		} else {
+			report.Limitations = append(report.Limitations, "Jev 影子调用独立于真实模型调用记账，其结果不参与产品判定。")
+		}
+	}
+	return nil
+}
+
+// runCase 执行单个评估 case:会话种子、逐步执行与判分、同 owner 新会话的
+// 需求隔离核验;任一步失败整批中止。
+func runCase(ctx context.Context, g *gateway, st *store.Store, suite Suite, c Case) (CaseRecord, error) {
+	cr := CaseRecord{ID: c.ID, Pass: true}
+	svc, err := product.NewService(ctx, st, g, runevents.NewMemory())
+	if err != nil {
+		return cr, err
+	}
+	owner := uuid.NewString()
+	ws, err := svc.CreateSession(ctx, owner, uuid.NewString())
+	if err != nil {
+		return cr, err
+	}
+	if c.PreviousBuild != nil {
+		base, e := seedPreviousBuild(ctx, st, ws.ID, *c.PreviousBuild)
+		if e == nil && c.PreviousBuild.Snapshot != nil {
+			e = seedSnapshotConfirmation(ctx, st, svc, owner, ws.ID, *c.PreviousBuild)
+		}
+		if e == nil {
+			e = g.journal(map[string]any{"event": "historical_precondition", "case_id": c.ID, "source": c.PreviousBuild.Source, "build": base})
+		}
+		if e != nil {
+			_ = svc.Shutdown(ctx)
+			return cr, e
+		}
+	}
+	var lastStart product.StartResult
+	var lastStep Step
+	var lastRequest string
+	for _, step := range c.Steps {
+		started, requestID, err := runSuiteStep(ctx, g, svc, st, owner, ws.ID, suite, c, &cr, step, lastStep, lastRequest, lastStart)
+		if err != nil {
+			return cr, err
+		}
+		if step.Kind == "message" || step.Kind == "confirm" {
+			lastStart, lastStep, lastRequest = started, step, requestID
+		}
+	}
+	// A new session for the same owner must not inherit a friend's requirements.
+	fresh, e := svc.CreateSession(ctx, owner, uuid.NewString())
+	if e != nil {
+		return cr, e
+	}
+	d, e := svc.GetSession(ctx, owner, fresh.ID)
+	if e != nil {
+		return cr, e
+	}
+	var freshState schemas.RequirementState
+	_ = json.Unmarshal(d.Session.RequirementState, &freshState)
+	isolated := true
+	for _, f := range freshState.Fields {
+		if f.Status == "active" {
+			isolated = false
+		}
+	}
+	last := &cr.Steps[len(cr.Steps)-1]
+	last.Checks = append(last.Checks, Check{"new_session_has_no_personal_requirements", isolated, "same owner, new session"})
+	cr.Pass = cr.Pass && isolated
+	_ = svc.Shutdown(ctx)
+	_ = lastStart
+	return cr, nil
+}
+
+// runSuiteStep 执行评估套件的单个 step:journal 开始、读取前态、按 step 类型
+// 分发产品入口、等待 run 终态,快照记录、版本不变量检查、基线构造与判分,
+// 最后写 step_completed journal。
+func runSuiteStep(ctx context.Context, g *gateway, svc *product.Service, st *store.Store, owner, wsID string, suite Suite, c Case, cr *CaseRecord, step Step, lastStep Step, lastRequest string, lastStart product.StartResult) (product.StartResult, string, error) {
+	stepStart := time.Now()
+	var started product.StartResult
+	var requestID string
+	g.begin(step)
+	if e := g.journal(map[string]any{"event": "step_started", "case_id": c.ID, "step": len(cr.Steps) + 1, "kind": step.Kind, "text": step.Text}); e != nil {
+		_ = svc.Shutdown(ctx)
+		return started, requestID, e
+	}
+	before, err := svc.GetSession(ctx, owner, wsID)
+	if err != nil {
+		return started, requestID, err
+	}
+	history := map[int]store.BuildVersion{}
+	for v := 1; v <= before.Session.VersionCount; v++ {
+		b, e := st.BuildByVersion(ctx, wsID, v)
+		if e != nil {
+			return started, requestID, e
+		}
+		history[v] = b
+	}
+	requestID = uuid.NewString()
+	switch step.Kind {
+	case "message":
+		started, err = svc.StartMessage(ctx, owner, wsID, requestID, step.Text)
+	case "confirm":
+		started, err = svc.StartConfirm(ctx, owner, wsID, requestID, confirmRequestFromDetail(before))
+	case "edit":
+		var state schemas.RequirementState
+		_ = json.Unmarshal(before.Session.RequirementState, &state)
+		_, err = svc.EditRequirement(ctx, owner, wsID, requestID, product.RequirementEdit{ExpectedRevision: state.Revision, Operations: step.Edit})
+	case "retry":
+		if lastStep.Kind == "message" {
+			started, err = svc.StartMessage(ctx, owner, wsID, lastRequest, lastStep.Text)
+		} else {
+			started, err = svc.StartConfirm(ctx, owner, wsID, lastRequest, confirmRequestFromDetail(before))
+		}
+	case "refresh": // The following GetSession exercises the production read model.
+	}
+	if err == nil && started.Run.ID != "" {
+		err = waitRun(ctx, svc, owner, started.Run.ID, suite.Live)
+	}
+	record := g.snapshot()
+	record.DurationMS = time.Since(stepStart).Milliseconds()
+	if err != nil {
+		record.Error = err.Error()
+	}
+	after, readErr := svc.GetSession(ctx, owner, wsID)
+	if readErr != nil {
+		return started, requestID, readErr
+	}
+	record.Versions = after.Session.VersionCount
+	_ = json.Unmarshal(after.Session.RequirementState, &record.State)
+	var legacyAction struct {
+		NextAction string `json:"next_action"`
+	}
+	_ = json.Unmarshal(after.Session.RequirementState, &legacyAction)
+	record.StateNextAction = legacyAction.NextAction
+	if len(after.Messages) > 0 {
+		record.Reply = after.Messages[len(after.Messages)-1].Content
+	}
+	var envelope struct{ Result planning.Result }
+	if len(after.Proposal) > 0 && json.Unmarshal(after.Proposal, &envelope) == nil {
+		record.Result = &envelope.Result
+	}
+	for v, b := range history {
+		now, e := st.BuildByVersion(ctx, wsID, v)
+		record.Checks = append(record.Checks, Check{fmt.Sprintf("immutable_version:%d", v), e == nil && reflect.DeepEqual(now, b), "historical build, evidence, requirement and quote snapshot"})
+	}
+	if record.PlanningInput != nil && before.Session.VersionCount > 0 {
+		base := history[before.Session.VersionCount]
+		record.Checks = append(record.Checks, Check{"builder_received_base", jsonEqual(record.PlanningInput.BaseDraft, base.Draft), "actual Builder input must retain the latest formal configuration"})
+		if record.Versions == before.Session.VersionCount+1 {
+			now, e := st.BuildByVersion(ctx, wsID, record.Versions)
+			record.Checks = append(record.Checks, Check{"formal_parent_link", e == nil && now.ParentID != nil && *now.ParentID == base.ID, "new formal version must link its actual prior build"})
+		}
+	}
+	if step.Kind == "retry" {
+		record.Checks = append(record.Checks, Check{"idempotent_run", started.Duplicate && started.Run.ID == lastStart.Run.ID, "retry must not create another run"})
+	}
+	if step.Kind == "refresh" || step.Kind == "retry" {
+		record.Checks = append(record.Checks, Check{"read_without_execution", len(record.Trace) == 0 && reflect.DeepEqual(before.Session.RequirementState, after.Session.RequirementState) && reflect.DeepEqual(before.Proposal, after.Proposal), "no model call or snapshot rewrite"})
+	}
+	var previous *StepRecord
+	if len(cr.Steps) > 0 {
+		previous = &cr.Steps[len(cr.Steps)-1]
+	}
+	if (previous == nil || previous.Result == nil) && before.Session.VersionCount > 0 {
+		// A seeded formal version is also a comparison baseline, even
+		// when this is the first message or a preceding step only read it.
+		baseRecord := StepRecord{}
+		if previous != nil {
+			baseRecord = *previous
+		}
+		baseRecord.Result = &planning.Result{Draft: history[before.Session.VersionCount].Draft}
+		previous = &baseRecord
+	}
+	Grade(&record, step.Expect, previous)
+	if record.Intent != nil {
+		// Fill the comparison fields after the step settles: the
+		// existing decision is the final reduced state action.
+		o := record.Intent
+		o.ExistingDecision = record.StateNextAction
+		o.GroundTruth = step.Expect.NextAction
+		o.Agreement = o.ErrorClass == "" && o.ExistingDecision != "" && o.Prediction == o.ExistingDecision
+		o.Correct = o.ErrorClass == "" && o.GroundTruth != "" && o.Prediction == o.GroundTruth
+	}
+	for _, check := range record.Checks {
+		cr.Pass = cr.Pass && check.Pass
+	}
+	cr.Steps = append(cr.Steps, record)
+	if e := g.journal(map[string]any{"event": "step_completed", "case_id": c.ID, "step": len(cr.Steps), "record": record}); e != nil {
+		_ = svc.Shutdown(ctx)
+		return started, requestID, e
+	}
+	return started, requestID, nil
 }
 
 // Count failed planning attempts too, without treating them as saved results.
